@@ -1,0 +1,257 @@
+import { useState } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Library, BarChart2, List, Music, Users, Mail, X, Loader2, UserCircle, MessageCircle } from 'lucide-react'
+import clsx from 'clsx'
+import { useUser } from '../context/UserContext'
+import { fetchFriends, sendInvite } from '../api'
+
+const nav = [
+  { to: '/library', label: 'Library', icon: Library },
+  { to: '/ratings', label: 'Ratings', icon: List },
+  { to: '/stats', label: 'Stats', icon: BarChart2 },
+]
+
+function InviteModal({ onClose }: { onClose: () => void }) {
+  const { activeUser } = useUser()
+  const [email, setEmail] = useState('')
+  const [loadingEmail, setLoadingEmail] = useState(false)
+  const [loadingIMessage, setLoadingIMessage] = useState(false)
+  const [result, setResult] = useState<{ link: string; viaEmail: boolean } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleIMessage() {
+    setLoadingIMessage(true)
+    setError(null)
+    try {
+      const res = await sendInvite(activeUser.id)
+      setResult({ link: res.link, viaEmail: false })
+      const msg = `Join me on Press'd, a music rating app! Create your account here: ${res.link}`
+      window.location.href = `sms:?body=${encodeURIComponent(msg)}`
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate invite')
+    } finally {
+      setLoadingIMessage(false)
+    }
+  }
+
+  async function handleEmail(e: React.FormEvent) {
+    e.preventDefault()
+    if (!email.trim()) return
+    setLoadingEmail(true)
+    setError(null)
+    try {
+      const res = await sendInvite(activeUser.id, email.trim())
+      setResult({ link: res.link, viaEmail: true })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send invite')
+    } finally {
+      setLoadingEmail(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white border border-[#e2e2e2] rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-[#111] font-semibold">Invite Someone</h2>
+          <button onClick={onClose} className="text-[#aaa] hover:text-[#555] transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        {result ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-[#444]">
+              {result.viaEmail ? "Invite sent! Share this link as a backup:" : "Invite link created — opening iMessage…"}
+            </p>
+            <div className="bg-[#f5f5f5] rounded-lg px-3 py-2 text-xs text-[#555] break-all font-mono">
+              {result.link}
+            </div>
+            <button
+              onClick={() => navigator.clipboard.writeText(result.link)}
+              className="w-full py-2 rounded-xl text-sm font-semibold bg-[#2d6a4f] hover:bg-[#245c43] text-white transition-colors"
+            >
+              Copy Link
+            </button>
+            {!result.viaEmail && (
+              <button
+                onClick={() => {
+                  const msg = `Join me on Press'd, a music rating app! Create your account here: ${result.link}`
+                  window.location.href = `sms:?body=${encodeURIComponent(msg)}`
+                }}
+                className="w-full py-2 rounded-xl text-sm font-semibold bg-[#f5f5f5] border border-[#e2e2e2] hover:bg-[#ececec] text-[#333] transition-colors flex items-center justify-center gap-2"
+              >
+                <MessageCircle size={14} /> Open iMessage again
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={handleIMessage}
+              disabled={loadingIMessage}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#2d6a4f] hover:bg-[#245c43] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {loadingIMessage ? <><Loader2 size={14} className="animate-spin" /> Generating…</> : <><MessageCircle size={14} /> Share via iMessage</>}
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-[#e2e2e2]" />
+              <span className="text-[11px] text-[#bbb]">or send by email</span>
+              <div className="flex-1 h-px bg-[#e2e2e2]" />
+            </div>
+
+            <form onSubmit={handleEmail} className="flex flex-col gap-2">
+              <input
+                type="email"
+                placeholder="Their email address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="bg-[#f5f5f5] border border-[#e2e2e2] text-[#111] text-sm px-4 py-2.5 rounded-lg focus:outline-none focus:border-[#2d6a4f] transition-colors placeholder:text-[#bbb]"
+              />
+              <button
+                type="submit"
+                disabled={loadingEmail || !email.trim()}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#f5f5f5] border border-[#e2e2e2] hover:bg-[#ececec] text-[#333] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loadingEmail ? <><Loader2 size={14} className="animate-spin" /> Sending…</> : 'Send Email Invite'}
+              </button>
+            </form>
+
+            {error && <p className="text-[#c0392b] text-xs">{error}</p>}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function Layout({ children }: { children: React.ReactNode }) {
+  const { activeUser, viewingUser, setViewingUser, isViewingFriend } = useUser()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [showInvite, setShowInvite] = useState(false)
+
+  const { data: friends = [] } = useQuery({
+    queryKey: ['friends', activeUser.id],
+    queryFn: () => fetchFriends(activeUser.id),
+    staleTime: 60_000,
+  })
+
+  function viewFriend(id: number, name: string) {
+    setViewingUser({ id, name })
+    navigate('/stats')
+  }
+
+  function returnToSelf() {
+    setViewingUser(activeUser)
+    queryClient.invalidateQueries()
+  }
+
+  return (
+    <div className="flex min-h-screen bg-white">
+      <aside className="w-56 shrink-0 border-r border-[#e2e2e2] flex flex-col py-6 px-4 sticky top-0 h-screen bg-white overflow-y-auto">
+        <div className="flex items-center gap-2 mb-8 px-2">
+          <Music size={20} className="text-[#2d6a4f]" />
+          <span className="text-[#111] font-semibold tracking-wide text-lg">Press'd</span>
+        </div>
+
+        <nav className="flex flex-col gap-1">
+          {nav.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              onClick={returnToSelf}
+              className={({ isActive }) =>
+                clsx(
+                  'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                  isActive && !isViewingFriend
+                    ? 'bg-[#2d6a4f]/10 text-[#2d6a4f]'
+                    : 'text-[#777] hover:text-[#111] hover:bg-[#f0f0f0]',
+                )
+              }
+            >
+              <Icon size={16} />
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+
+        {/* Friends section */}
+        <div className="mt-6 pt-5 border-t border-[#e2e2e2]">
+          <div className="flex items-center justify-between px-2 mb-2">
+            <span className="text-[10px] font-semibold text-[#aaa] uppercase tracking-wider">Friends</span>
+            <button
+              onClick={() => setShowInvite(true)}
+              title="Invite someone"
+              className="text-[#aaa] hover:text-[#2d6a4f] transition-colors"
+            >
+              <Mail size={13} />
+            </button>
+          </div>
+
+          {friends.length === 0 ? (
+            <p className="text-[11px] text-[#bbb] px-2">No friends yet — invite someone!</p>
+          ) : (
+            <div className="flex flex-col gap-0.5">
+              {friends.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => viewFriend(f.id, f.name)}
+                  className={clsx(
+                    'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full text-left',
+                    viewingUser.id === f.id
+                      ? 'bg-[#2d6a4f]/10 text-[#2d6a4f]'
+                      : 'text-[#777] hover:text-[#111] hover:bg-[#f0f0f0]',
+                  )}
+                >
+                  <Users size={14} />
+                  {f.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Active user / viewing indicator at bottom */}
+        <div className="mt-auto pt-4 border-t border-[#e2e2e2]">
+          {isViewingFriend ? (
+            <div className="px-2">
+              <p className="text-[10px] text-[#aaa] uppercase tracking-wider mb-1">Viewing</p>
+              <p className="text-sm font-medium text-[#2d6a4f]">{viewingUser.name}</p>
+              <button
+                onClick={returnToSelf}
+                className="text-[11px] text-[#aaa] hover:text-[#555] transition-colors mt-0.5"
+              >
+                ← Back to your data
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-2">
+              <UserCircle size={15} className="text-[#bbb]" />
+              <span className="text-sm text-[#777]">{activeUser.name}</span>
+            </div>
+          )}
+        </div>
+      </aside>
+
+      <main className="flex-1 overflow-y-auto">
+        {isViewingFriend && (
+          <div className="bg-[#2d6a4f]/8 border-b border-[#2d6a4f]/20 px-6 py-2 flex items-center gap-3">
+            <span className="text-xs text-[#2d6a4f] font-medium">
+              Viewing {viewingUser.name}'s data (read-only)
+            </span>
+            <button onClick={returnToSelf} className="text-xs text-[#aaa] hover:text-[#555] transition-colors ml-auto">
+              ← Back to your data
+            </button>
+          </div>
+        )}
+        {children}
+      </main>
+
+      {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
+    </div>
+  )
+}
