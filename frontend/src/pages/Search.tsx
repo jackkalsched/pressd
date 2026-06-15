@@ -58,7 +58,7 @@ export default function Search() {
   function setAction(key: string, field: 'add' | 'rate', state: ActionState) {
     setActions((prev) => ({
       ...prev,
-      [key]: { add: 'idle', rate: 'idle', ...prev[key], [field]: state },
+      [key]: Object.assign({ add: 'idle', rate: 'idle' }, prev[key], { [field]: state }),
     }))
   }
 
