@@ -180,11 +180,12 @@ export default function Stats() {
       </h1>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
         {[
           { label: 'Albums Rated', value: summary?.total_albums_rated ?? '—' },
           { label: 'Songs Rated', value: summary?.total_songs_rated ?? '—' },
           { label: 'Avg Album Score', value: summary?.avg_album_score?.toFixed(2) ?? '—' },
+          { label: 'Avg Song Score', value: summary?.avg_song_score?.toFixed(2) ?? '—' },
           { label: 'Top Album', value: summary?.top_album?.name ?? '—', small: true },
         ].map(({ label, value, small }) => (
           <div key={label} className="bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl p-5">

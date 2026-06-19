@@ -43,6 +43,7 @@ def summary(user_id: int = Query(1), session: Session = Depends(get_session)):
         "avg_album_score": round(sum(scores) / len(scores), 4) if scores else None,
         "top_album": {"name": top_album.album_name, "artist": top_album.artist, "score": top_album.score} if top_album else None,
         "top_song": {"title": top_song.title, "artist": top_song.artist, "score": top_song.score} if top_song else None,
+        "avg_song_score": _avg([s.score for s in all_songs]),
         "avg_theme": _avg([a.theme for a in rated]),
         "avg_replay": _avg([a.replay_value for a in rated]),
         "avg_production": _avg([a.production for a in rated]),

@@ -63,6 +63,7 @@ class Album(SQLModel, table=True):
     predicted_distinctness: Optional[float] = None
     predicted_replay: Optional[float] = None
     predicted_score: Optional[float] = None
+    predicted_song_mean: Optional[float] = None
 
     date_added: Optional[date] = Field(default_factory=date.today)
     date_rated: Optional[date] = None

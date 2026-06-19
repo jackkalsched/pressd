@@ -316,6 +316,7 @@ export interface Summary {
   total_albums_rated: number
   total_songs_rated: number
   avg_album_score: number | null
+  avg_song_score: number | null
   top_album: { name: string; artist: string; score: number } | null
   top_song: { title: string; artist: string; score: number } | null
   avg_theme: number | null

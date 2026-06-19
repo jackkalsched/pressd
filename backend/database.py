@@ -52,6 +52,7 @@ def init_db():
             "ALTER TABLE pressuser ADD COLUMN apple_sub VARCHAR",
             "ALTER TABLE pressuser ADD COLUMN email VARCHAR",
             "ALTER TABLE pressuser ADD COLUMN google_sub VARCHAR",
+            "ALTER TABLE album ADD COLUMN predicted_song_mean REAL",
             "ALTER TABLE album ADD COLUMN extra_artists TEXT",
             "ALTER TABLE album ADD COLUMN predicted_theme REAL",
             "ALTER TABLE album ADD COLUMN predicted_theme_reasoning TEXT",
