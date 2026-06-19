@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 interface UserInfo {
   id: number
   name: string
+  avatarUrl?: string
 }
 
 interface UserContextValue {

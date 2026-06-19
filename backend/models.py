@@ -6,6 +6,7 @@ from sqlmodel import Field, Relationship, SQLModel
 class PressUser(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
+    avatar_url: Optional[str] = None
 
     albums: list["Album"] = Relationship(back_populates="user")
 

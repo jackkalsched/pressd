@@ -84,6 +84,7 @@ export async function updateAlbum(id: number, patch: Record<string, unknown>): P
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
   })
+  if (!res.ok) throw new Error('Failed to update album')
   return transformAlbum(await res.json())
 }
 
@@ -458,6 +459,7 @@ export async function refreshAotyArtist(artist: string): Promise<void> {
 export interface UserInfo {
   id: number
   name: string
+  avatarUrl?: string
 }
 
 export async function fetchUsers(): Promise<UserInfo[]> {
@@ -494,10 +496,28 @@ export async function acceptInvite(token: string, name: string): Promise<UserInf
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { detail?: string }).detail ?? 'Failed to accept invite')
   }
-  return res.json()
+  const u = await res.json()
+  return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined }
 }
 
 export async function fetchFriends(userId: number): Promise<UserInfo[]> {
   const res = await fetch(`${BASE}/users/${userId}/friends`)
-  return res.json()
+  const data = await res.json()
+  return data.map((u: { id: number; name: string; avatar_url?: string }) => ({
+    id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined,
+  }))
+}
+
+export async function updateUser(userId: number, data: { name?: string; avatarUrl?: string }): Promise<UserInfo> {
+  const res = await fetch(`${BASE}/users/${userId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: data.name, avatar_url: data.avatarUrl }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? 'Failed to update profile')
+  }
+  const u = await res.json()
+  return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined }
 }

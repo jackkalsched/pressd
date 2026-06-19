@@ -122,6 +122,27 @@ def accept_invite(token: str, data: dict, session: Session = Depends(get_session
     return {"id": new_user.id, "name": new_user.name}
 
 
+@router.patch("/{user_id}")
+def update_user(user_id: int, data: dict, session: Session = Depends(get_session)):
+    user = session.get(PressUser, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if "name" in data:
+        name = (data["name"] or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="name cannot be empty")
+        existing = session.exec(select(PressUser).where(PressUser.name == name, PressUser.id != user_id)).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="Name already taken")
+        user.name = name
+    if "avatar_url" in data:
+        user.avatar_url = (data["avatar_url"] or "").strip() or None
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return {"id": user.id, "name": user.name, "avatar_url": user.avatar_url}
+
+
 @router.get("/{user_id}/friends")
 def list_friends(user_id: int, session: Session = Depends(get_session)):
     friendships = session.exec(
@@ -134,4 +155,4 @@ def list_friends(user_id: int, session: Session = Depends(get_session)):
         for f in friendships
     ]
     friends = [session.get(PressUser, fid) for fid in friend_ids]
-    return [{"id": u.id, "name": u.name} for u in friends if u]
+    return [{"id": u.id, "name": u.name, "avatar_url": u.avatar_url} for u in friends if u]

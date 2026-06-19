@@ -1,10 +1,39 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Library, BarChart2, List, Music, Users, Mail, X, Loader2, UserCircle, MessageCircle } from 'lucide-react'
+import { Library, BarChart2, List, Music, Mail, X, Loader2, MessageCircle, Pencil } from 'lucide-react'
 import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
-import { fetchFriends, sendInvite } from '../api'
+import { fetchFriends, sendInvite, updateUser } from '../api'
+import type { UserInfo } from '../api'
+
+function avatarColor(name: string): string {
+  const colors = ['#2d6a4f', '#1d4ed8', '#7c3aed', '#b45309', '#0f766e', '#be185d', '#c2410c']
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % colors.length
+  return colors[h]
+}
+
+function Avatar({ user, size = 28 }: { user: Pick<UserInfo, 'name' | 'avatarUrl'>; size?: number }) {
+  if (user.avatarUrl) {
+    return (
+      <img
+        src={user.avatarUrl}
+        alt={user.name}
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+      />
+    )
+  }
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', background: avatarColor(user.name),
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: '#fff', fontSize: size * 0.4, fontWeight: 700, flexShrink: 0,
+    }}>
+      {user.name[0].toUpperCase()}
+    </div>
+  )
+}
 
 const nav = [
   { to: '/library', label: 'Library', icon: Library },
@@ -128,11 +157,86 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+function ProfileModal({ onClose }: { onClose: () => void }) {
+  const { activeUser, setActiveUser } = useUser()
+  const [name, setName] = useState(activeUser.name)
+  const [avatarUrl, setAvatarUrl] = useState(activeUser.avatarUrl ?? '')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    try {
+      const updated = await updateUser(activeUser.id, {
+        name: name.trim() !== activeUser.name ? name.trim() : undefined,
+        avatarUrl: avatarUrl.trim() !== (activeUser.avatarUrl ?? '') ? avatarUrl.trim() : undefined,
+      })
+      setActiveUser(updated)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const preview: UserInfo = { id: activeUser.id, name: name || activeUser.name, avatarUrl: avatarUrl || undefined }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white border border-[#e2e2e2] rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-[#111] font-semibold">Edit Profile</h2>
+          <button onClick={onClose} className="text-[#aaa] hover:text-[#555] transition-colors"><X size={18} /></button>
+        </div>
+
+        <div className="flex justify-center mb-5">
+          <Avatar user={preview} size={72} />
+        </div>
+
+        <form onSubmit={handleSave} className="flex flex-col gap-3">
+          <div>
+            <label className="text-xs text-[#888] mb-1 block">Display name</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full bg-[#f5f5f5] border border-[#e2e2e2] text-[#111] text-sm px-4 py-2.5 rounded-lg focus:outline-none focus:border-[#2d6a4f] transition-colors"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-[#888] mb-1 block">Photo URL</label>
+            <input
+              type="url"
+              placeholder="https://..."
+              value={avatarUrl}
+              onChange={(e) => setAvatarUrl(e.target.value)}
+              className="w-full bg-[#f5f5f5] border border-[#e2e2e2] text-[#111] text-sm px-4 py-2.5 rounded-lg focus:outline-none focus:border-[#2d6a4f] transition-colors placeholder:text-[#bbb]"
+            />
+            <p className="text-[11px] text-[#bbb] mt-1">Paste any image URL — profile photo, etc.</p>
+          </div>
+          {error && <p className="text-[#c0392b] text-xs">{error}</p>}
+          <button
+            type="submit"
+            disabled={loading || !name.trim()}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#2d6a4f] hover:bg-[#245c43] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {loading ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { activeUser, viewingUser, setViewingUser, isViewingFriend } = useUser()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [showInvite, setShowInvite] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
 
   const { data: friends = [] } = useQuery({
     queryKey: ['friends', activeUser.id],
@@ -207,7 +311,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       : 'text-[#777] hover:text-[#111] hover:bg-[#f0f0f0]',
                   )}
                 >
-                  <Users size={14} />
+                  <Avatar user={f} size={18} />
                   {f.name}
                 </button>
               ))}
@@ -220,19 +324,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {isViewingFriend ? (
             <div className="px-2">
               <p className="text-[10px] text-[#aaa] uppercase tracking-wider mb-1">Viewing</p>
-              <p className="text-sm font-medium text-[#2d6a4f]">{viewingUser.name}</p>
-              <button
-                onClick={returnToSelf}
-                className="text-[11px] text-[#aaa] hover:text-[#555] transition-colors mt-0.5"
-              >
+              <div className="flex items-center gap-2 mb-0.5">
+                <Avatar user={viewingUser} size={22} />
+                <p className="text-sm font-medium text-[#2d6a4f]">{viewingUser.name}</p>
+              </div>
+              <button onClick={returnToSelf} className="text-[11px] text-[#aaa] hover:text-[#555] transition-colors">
                 ← Back to your data
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 px-2">
-              <UserCircle size={15} className="text-[#bbb]" />
-              <span className="text-sm text-[#777]">{activeUser.name}</span>
-            </div>
+            <button
+              onClick={() => setShowProfile(true)}
+              className="flex items-center gap-2 px-2 w-full group hover:bg-[#f5f5f5] rounded-lg py-1.5 transition-colors"
+            >
+              <Avatar user={activeUser} size={26} />
+              <span className="text-sm text-[#777] group-hover:text-[#111] transition-colors flex-1 text-left truncate">{activeUser.name}</span>
+              <Pencil size={12} className="text-[#ccc] group-hover:text-[#aaa] transition-colors shrink-0" />
+            </button>
           )}
         </div>
       </aside>
@@ -252,6 +360,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </main>
 
       {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
+      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
     </div>
   )
 }

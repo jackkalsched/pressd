@@ -48,6 +48,7 @@ def init_db():
             pass
 
         for stmt in [
+            "ALTER TABLE pressuser ADD COLUMN avatar_url VARCHAR",
             "ALTER TABLE album ADD COLUMN extra_artists TEXT",
             "ALTER TABLE album ADD COLUMN predicted_theme REAL",
             "ALTER TABLE album ADD COLUMN predicted_theme_reasoning TEXT",
