@@ -24,15 +24,35 @@ export default function Join() {
       setLoadingInvite(false)
       return
     }
-    fetchInvite(token)
-      .then((data) => {
-        setInviterName(data.inviter_name)
-        setLoadingInvite(false)
-      })
-      .catch((err) => {
-        setInviteError(err instanceof Error ? err.message : 'Invalid invite link.')
-        setLoadingInvite(false)
-      })
+    let cancelled = false
+    async function load() {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          const data = await fetchInvite(token)
+          if (!cancelled) {
+            setInviterName(data.inviter_name)
+            setLoadingInvite(false)
+          }
+          return
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : ''
+          const isNetwork = msg === 'Failed to fetch' || msg === 'Load failed' || msg === 'NetworkError when attempting to fetch resource.'
+          if (isNetwork && attempt < 3) {
+            await new Promise(r => setTimeout(r, 4000))
+            continue
+          }
+          if (!cancelled) {
+            setInviteError(isNetwork
+              ? 'Server is waking up — please wait a moment and refresh the page.'
+              : (msg || 'Invalid invite link.'))
+            setLoadingInvite(false)
+          }
+          return
+        }
+      }
+    }
+    load()
+    return () => { cancelled = true }
   }, [token])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -40,13 +60,25 @@ export default function Join() {
     if (!name.trim()) return
     setSubmitting(true)
     setError(null)
-    try {
-      const user = await acceptInvite(token, name.trim())
-      setActiveUser({ id: user.id, name: user.name })
-      navigate('/library')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
-      setSubmitting(false)
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const user = await acceptInvite(token, name.trim())
+        setActiveUser({ id: user.id, name: user.name })
+        navigate('/library')
+        return
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : ''
+        const isNetwork = msg === 'Failed to fetch' || msg === 'Load failed' || msg === 'NetworkError when attempting to fetch resource.'
+        if (isNetwork && attempt < 2) {
+          await new Promise(r => setTimeout(r, 3000))
+          continue
+        }
+        setError(isNetwork
+          ? 'Connection failed — the server may be waking up. Please try again in a moment.'
+          : (msg || 'Something went wrong.'))
+        setSubmitting(false)
+        return
+      }
     }
   }
 
