@@ -1,8 +1,6 @@
-import json
 import os
 
 import httpx
-import jwt
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
@@ -11,96 +9,79 @@ from ..models import PressUser
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-APPLE_KEYS_URL = "https://appleid.apple.com/auth/keys"
-APPLE_ISSUER = "https://appleid.apple.com"
-
-_apple_jwks_cache: dict | None = None
+GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
 
 
-def _get_apple_public_key(kid: str):
-    global _apple_jwks_cache
-    for attempt in range(2):
-        if not _apple_jwks_cache or attempt == 1:
-            resp = httpx.get(APPLE_KEYS_URL, timeout=10)
-            _apple_jwks_cache = resp.json()
-        key_data = next((k for k in _apple_jwks_cache["keys"] if k["kid"] == kid), None)
-        if key_data:
-            return jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key_data))
-    raise HTTPException(status_code=401, detail="Apple signing key not found")
-
-
-def _verify_apple_token(id_token: str) -> dict:
-    client_id = os.getenv("APPLE_CLIENT_ID")
+def _verify_google_token(id_token: str) -> dict:
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
     if not client_id:
-        raise HTTPException(status_code=500, detail="APPLE_CLIENT_ID not configured on server")
-    header = jwt.get_unverified_header(id_token)
-    pub_key = _get_apple_public_key(header["kid"])
-    return jwt.decode(
-        id_token,
-        pub_key,
-        algorithms=["RS256"],
-        audience=client_id,
-        issuer=APPLE_ISSUER,
-    )
+        raise HTTPException(status_code=500, detail="GOOGLE_CLIENT_ID not configured on server")
+    resp = httpx.get(GOOGLE_TOKENINFO_URL, params={"id_token": id_token}, timeout=10)
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+    payload = resp.json()
+    if payload.get("aud") != client_id:
+        raise HTTPException(status_code=401, detail="Token was not issued for this app")
+    return payload
 
 
-@router.post("/apple")
-def sign_in_with_apple(data: dict, session: Session = Depends(get_session)):
+@router.post("/google")
+def sign_in_with_google(data: dict, session: Session = Depends(get_session)):
     id_token: str = data.get("id_token", "")
-    display_name: str | None = (data.get("name") or "").strip() or None
     link_user_id: int | None = data.get("link_user_id")
 
     if not id_token:
         raise HTTPException(status_code=400, detail="id_token required")
 
     try:
-        payload = _verify_apple_token(id_token)
+        payload = _verify_google_token(id_token)
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Invalid Apple token: {e}")
+        raise HTTPException(status_code=401, detail=f"Google token error: {e}")
 
-    apple_sub: str = payload["sub"]
-    apple_email: str | None = payload.get("email")
+    google_sub: str = payload["sub"]
+    google_email: str | None = payload.get("email")
+    google_name: str | None = payload.get("name")
 
     def _user_response(u: PressUser) -> dict:
         return {"id": u.id, "name": u.name, "avatar_url": u.avatar_url}
 
-    # 1. Existing account already linked to this Apple ID
-    user = session.exec(select(PressUser).where(PressUser.apple_sub == apple_sub)).first()
+    # 1. Existing account already linked to this Google ID
+    user = session.exec(select(PressUser).where(PressUser.google_sub == google_sub)).first()
     if user:
         return _user_response(user)
 
-    # 2. Caller has an existing local account and wants to link it
+    # 2. Caller wants to link their existing local account
     if link_user_id:
         user = session.get(PressUser, link_user_id)
         if user:
-            user.apple_sub = apple_sub
-            if apple_email and not user.email:
-                user.email = apple_email
+            user.google_sub = google_sub
+            if google_email and not user.email:
+                user.email = google_email
             session.add(user)
             session.commit()
             session.refresh(user)
             return _user_response(user)
 
-    # 3. Match by email Apple provided
-    if apple_email:
-        user = session.exec(select(PressUser).where(PressUser.email == apple_email)).first()
+    # 3. Match by email Google provided
+    if google_email:
+        user = session.exec(select(PressUser).where(PressUser.email == google_email)).first()
         if user:
-            user.apple_sub = apple_sub
+            user.google_sub = google_sub
             session.add(user)
             session.commit()
             session.refresh(user)
             return _user_response(user)
 
     # 4. Create new account
-    name = display_name or (apple_email.split("@")[0] if apple_email else "User")
+    name = google_name or (google_email.split("@")[0] if google_email else "User")
     base, suffix = name, 1
     while session.exec(select(PressUser).where(PressUser.name == name)).first():
         name = f"{base}{suffix}"
         suffix += 1
 
-    user = PressUser(name=name, apple_sub=apple_sub, email=apple_email)
+    user = PressUser(name=name, google_sub=google_sub, email=google_email)
     session.add(user)
     session.commit()
     session.refresh(user)

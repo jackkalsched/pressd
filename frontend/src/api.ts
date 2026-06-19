@@ -480,15 +480,14 @@ export async function refreshAotyArtist(artist: string): Promise<void> {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-export async function signInWithApple(
+export async function signInWithGoogle(
   idToken: string,
-  name?: string,
   linkUserId?: number,
 ): Promise<{ id: number; name: string; avatarUrl?: string }> {
-  const res = await fetch(`${BASE}/auth/apple`, {
+  const res = await fetch(`${BASE}/auth/google`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id_token: idToken, name, link_user_id: linkUserId }),
+    body: JSON.stringify({ id_token: idToken, link_user_id: linkUserId }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
