@@ -1,7 +1,7 @@
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Loader2, Pencil, Trash2, MessageCircle } from 'lucide-react'
-import { fetchAlbum, deleteAlbum } from '../api'
+import { fetchAlbum, deleteAlbum, fetchFriendRatings } from '../api'
 import { useUser } from '../context/UserContext'
 import { BANG_THRESHOLD, SKIP_THRESHOLD, songScoreColor } from '../types'
 
@@ -38,7 +38,7 @@ export default function AlbumDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { isViewingFriend, viewingUser } = useUser()
+  const { isViewingFriend, viewingUser, activeUser } = useUser()
 
   const { data: album, isLoading, error } = useQuery({
     queryKey: ['album', Number(id)],
@@ -46,6 +46,13 @@ export default function AlbumDetail() {
   })
 
   const { color: accentColor, color2 } = useAlbumColors(album?.albumName ?? null, album?.artist ?? null)
+
+  const { data: friendRatings = [] } = useQuery({
+    queryKey: ['friend-ratings', album?.albumName, album?.artist, activeUser.id],
+    queryFn: () => fetchFriendRatings(album!.albumName, album!.artist, activeUser.id),
+    enabled: !!album && !isViewingFriend,
+    staleTime: 60_000,
+  })
 
   if (isLoading) {
     return (
@@ -218,6 +225,87 @@ export default function AlbumDetail() {
           </div>
         ))}
       </div>
+
+      {/* Friends' ratings */}
+      {!isViewingFriend && friendRatings.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-4">Friends' Ratings</h2>
+          <div className="flex flex-col gap-6">
+            {friendRatings.map(({ friend, album: fa }) => {
+              const friendSorted = [...fa.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
+              const friendRated = fa.songs.filter(s => s.score !== null)
+              const friendAvg = friendRated.length > 0
+                ? friendRated.reduce((s, s2) => s + s2.score!, 0) / friendRated.length
+                : null
+              const friendBangs = friendRated.filter(s => s.score! >= BANG_THRESHOLD)
+              const friendSkips = friendRated.filter(s => s.score! < SKIP_THRESHOLD)
+              return (
+                <div key={friend.id} className="border border-[#e8e8e8] rounded-xl p-5">
+                  {/* Friend header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
+                        style={{ backgroundColor: '#2d6a4f' }}
+                      >
+                        {friend.name[0].toUpperCase()}
+                      </div>
+                      <span className="text-sm font-semibold text-[#111]">{friend.name}</span>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-[#777]">
+                      {friendAvg !== null && <span>Avg <span className="font-semibold text-[#111]">{friendAvg.toFixed(2)}</span></span>}
+                      {friendRated.length > 0 && <span>Bang% <span className="font-semibold text-[#2d6a4f]">{Math.round(friendBangs.length / friendRated.length * 100)}%</span></span>}
+                      {friendRated.length > 0 && <span>Skip% <span className="font-semibold text-[#c0392b]">{Math.round(friendSkips.length / friendRated.length * 100)}%</span></span>}
+                      {fa.score !== null && (
+                        <span className="text-2xl font-bold tabular-nums text-[#2d6a4f]">{fa.score.toFixed(2)}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Friend's factor ratings (LP only) */}
+                  {fa.songs.length > 6 && (fa.theme ?? fa.replayValue ?? fa.production ?? fa.distinctness) && (
+                    <div className="grid grid-cols-4 gap-2 mb-4">
+                      {[
+                        { label: 'Theme', value: fa.theme },
+                        { label: 'Replay', value: fa.replayValue },
+                        { label: 'Production', value: fa.production },
+                        { label: 'Distinct', value: fa.distinctness },
+                      ].map(({ label, value }) => (
+                        <div key={label} className="bg-[#f8f8f8] rounded-lg p-3 text-center">
+                          <p className="text-[10px] text-[#aaa] uppercase tracking-wide mb-1">{label}</p>
+                          <p className="text-lg font-bold text-[#111] tabular-nums">{value ?? '—'}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Friend's song scores */}
+                  <div className="flex flex-col gap-0.5">
+                    {friendSorted.map((song) => (
+                      <div key={song.id} className="flex items-center gap-3 px-1 py-1.5">
+                        <span className="text-[#bbb] text-xs w-5 text-right shrink-0">{song.trackNumber}</span>
+                        <span className="flex-1 text-sm text-[#555] truncate">{song.title}</span>
+                        {song.score !== null && song.score >= BANG_THRESHOLD && (
+                          <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: songScoreColor(song.score) }}>bang</span>
+                        )}
+                        {song.score !== null && song.score < SKIP_THRESHOLD && (
+                          <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: songScoreColor(song.score) }}>skip</span>
+                        )}
+                        <span
+                          className="text-sm font-semibold tabular-nums w-10 text-right"
+                          style={{ color: song.score !== null ? songScoreColor(song.score) : '#ddd' }}
+                        >
+                          {song.score ?? '—'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

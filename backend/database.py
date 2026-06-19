@@ -49,6 +49,8 @@ def init_db():
 
         for stmt in [
             "ALTER TABLE pressuser ADD COLUMN avatar_url VARCHAR",
+            "ALTER TABLE pressuser ADD COLUMN apple_sub VARCHAR",
+            "ALTER TABLE pressuser ADD COLUMN email VARCHAR",
             "ALTER TABLE album ADD COLUMN extra_artists TEXT",
             "ALTER TABLE album ADD COLUMN predicted_theme REAL",
             "ALTER TABLE album ADD COLUMN predicted_theme_reasoning TEXT",

@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { UserProvider } from './context/UserContext'
+import { UserProvider, useUser } from './context/UserContext'
 import Layout from './components/Layout'
 import Library from './pages/Library'
 import Ratings from './pages/Ratings'
@@ -8,6 +8,24 @@ import RatingScreen from './pages/RatingScreen'
 import AlbumDetail from './pages/AlbumDetail'
 import ArtistPage from './pages/ArtistPage'
 import Join from './pages/Join'
+import Login from './pages/Login'
+
+function ProtectedRoutes() {
+  const { activeUser } = useUser()
+  if (!activeUser) return <Navigate to="/login" replace />
+  return (
+    <Layout>
+      <Routes>
+        <Route path="/" element={<Navigate to="/library" replace />} />
+        <Route path="/library" element={<Library />} />
+        <Route path="/ratings" element={<Ratings />} />
+        <Route path="/stats" element={<Stats />} />
+        <Route path="/album/:id" element={<AlbumDetail />} />
+        <Route path="/artist/:name" element={<ArtistPage />} />
+      </Routes>
+    </Layout>
+  )
+}
 
 export default function App() {
   return (
@@ -16,21 +34,8 @@ export default function App() {
         <Routes>
           <Route path="/rate/:id" element={<RatingScreen />} />
           <Route path="/join" element={<Join />} />
-          <Route
-            path="/*"
-            element={
-              <Layout>
-                <Routes>
-                  <Route path="/" element={<Navigate to="/library" replace />} />
-                  <Route path="/library" element={<Library />} />
-                  <Route path="/ratings" element={<Ratings />} />
-                  <Route path="/stats" element={<Stats />} />
-                  <Route path="/album/:id" element={<AlbumDetail />} />
-                  <Route path="/artist/:name" element={<ArtistPage />} />
-                </Routes>
-              </Layout>
-            }
-          />
+          <Route path="/login" element={<Login />} />
+          <Route path="/*" element={<ProtectedRoutes />} />
         </Routes>
       </BrowserRouter>
     </UserProvider>

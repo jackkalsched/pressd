@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Library, BarChart2, List, Music, Mail, X, Loader2, MessageCircle, Pencil } from 'lucide-react'
 import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
-import { fetchFriends, sendInvite, updateUser } from '../api'
+import { fetchFriends, sendInvite, updateUser, signInWithApple } from '../api'
 import type { UserInfo } from '../api'
 
 function avatarColor(name: string): string {
@@ -53,7 +53,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
     setLoadingIMessage(true)
     setError(null)
     try {
-      const res = await sendInvite(activeUser.id)
+      const res = await sendInvite(activeUser!.id)
       setResult({ link: res.link, viaEmail: false })
       const msg = `Join me on Press'd, a music rating app! Create your account here: ${res.link}`
       window.location.href = `sms:?body=${encodeURIComponent(msg)}`
@@ -70,7 +70,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
     setLoadingEmail(true)
     setError(null)
     try {
-      const res = await sendInvite(activeUser.id, email.trim())
+      const res = await sendInvite(activeUser!.id, email.trim())
       setResult({ link: res.link, viaEmail: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send invite')
@@ -179,11 +179,37 @@ function resizeImageToBase64(file: File, size = 200): Promise<string> {
 }
 
 function ProfileModal({ onClose }: { onClose: () => void }) {
-  const { activeUser, setActiveUser } = useUser()
-  const [name, setName] = useState(activeUser.name)
-  const [avatarUrl, setAvatarUrl] = useState(activeUser.avatarUrl ?? '')
+  const { activeUser, setActiveUser, signOut } = useUser()
+  const navigate = useNavigate()
+  const [name, setName] = useState(activeUser?.name ?? '')
+  const [avatarUrl, setAvatarUrl] = useState(activeUser?.avatarUrl ?? '')
   const [loading, setLoading] = useState(false)
+  const [linkLoading, setLinkLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  async function handleLinkApple() {
+    if (!window.AppleID || !activeUser) return
+    setLinkLoading(true)
+    setError(null)
+    try {
+      const response = await window.AppleID.auth.signIn()
+      const { id_token } = response.authorization
+      const user = await signInWithApple(id_token, undefined, activeUser.id)
+      setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl })
+    } catch (err: unknown) {
+      if ((err as { error?: string })?.error !== 'popup_closed_by_user') {
+        setError(err instanceof Error ? err.message : 'Failed to link Apple ID')
+      }
+    } finally {
+      setLinkLoading(false)
+    }
+  }
+
+  function handleSignOut() {
+    signOut()
+    onClose()
+    navigate('/login', { replace: true })
+  }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -200,6 +226,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
+    if (!activeUser) return
     setLoading(true)
     setError(null)
     try {
@@ -216,6 +243,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
     }
   }
 
+  if (!activeUser) return null
   const preview: UserInfo = { id: activeUser.id, name: name || activeUser.name, avatarUrl: avatarUrl || undefined }
 
   return (
@@ -254,6 +282,27 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
             {loading ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save'}
           </button>
         </form>
+
+        <div className="mt-4 pt-4 border-t border-[#f0f0f0] flex flex-col gap-2">
+          {window.AppleID && (
+            <button
+              onClick={handleLinkApple}
+              disabled={linkLoading}
+              className="w-full py-2 rounded-xl text-sm font-medium bg-[#000] hover:bg-[#1a1a1a] text-white transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+            >
+              {linkLoading ? <Loader2 size={13} className="animate-spin" /> : (
+                <svg width="13" height="16" viewBox="0 0 16 20" fill="none"><path d="M13.173 10.535c-.022-2.459 2.004-3.646 2.094-3.703-1.142-1.668-2.916-1.896-3.547-1.921-1.516-.156-2.963.896-3.732.896-.77 0-1.961-.872-3.222-.848-1.655.025-3.182.97-4.032 2.462C-.133 9.88 1.088 14.98 2.72 17.78c.814 1.178 1.784 2.502 3.063 2.455 1.228-.05 1.692-.793 3.178-.793s1.903.793 3.208.768c1.32-.025 2.157-1.2 2.97-2.38.94-1.364 1.325-2.691 1.349-2.76-.03-.014-2.585-1.002-2.615-3.535zM10.803 3.3c.674-.828 1.13-1.972.999-3.113-.968.04-2.146.651-2.842 1.467-.621.718-1.169 1.882-1.022 2.99 1.082.083 2.185-.553 2.865-1.344z" fill="currentColor"/></svg>
+              )}
+              {linkLoading ? 'Linking…' : 'Link Apple ID'}
+            </button>
+          )}
+          <button
+            onClick={handleSignOut}
+            className="w-full py-2 rounded-xl text-sm font-medium text-[#c0392b] hover:bg-[#fdf0ee] transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -267,14 +316,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [showProfile, setShowProfile] = useState(false)
 
   const { data: friends = [] } = useQuery({
-    queryKey: ['friends', activeUser.id],
-    queryFn: () => fetchFriends(activeUser.id),
+    queryKey: ['friends', activeUser?.id],
+    queryFn: () => fetchFriends(activeUser!.id),
+    enabled: !!activeUser,
     staleTime: 60_000,
   })
 
-  function viewFriend(id: number, name: string) {
-    setViewingUser({ id, name })
-    navigate('/stats')
+  function viewFriend(id: number, name: string, avatarUrl?: string) {
+    setViewingUser({ id, name, avatarUrl })
+    navigate('/library')
   }
 
   function returnToSelf() {
@@ -295,11 +345,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <NavLink
               key={to}
               to={to}
-              onClick={returnToSelf}
               className={({ isActive }) =>
                 clsx(
                   'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
-                  isActive && !isViewingFriend
+                  isActive
                     ? 'bg-[#2d6a4f]/10 text-[#2d6a4f]'
                     : 'text-[#777] hover:text-[#111] hover:bg-[#f0f0f0]',
                 )
@@ -331,10 +380,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               {friends.map((f) => (
                 <button
                   key={f.id}
-                  onClick={() => viewFriend(f.id, f.name)}
+                  onClick={() => viewFriend(f.id, f.name, f.avatarUrl)}
                   className={clsx(
                     'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full text-left',
-                    viewingUser.id === f.id
+                    viewingUser?.id === f.id
                       ? 'bg-[#2d6a4f]/10 text-[#2d6a4f]'
                       : 'text-[#777] hover:text-[#111] hover:bg-[#f0f0f0]',
                   )}
@@ -354,7 +403,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <p className="text-[10px] text-[#aaa] uppercase tracking-wider mb-1">Viewing</p>
               <div className="flex items-center gap-2 mb-0.5">
                 <Avatar user={viewingUser} size={22} />
-                <p className="text-sm font-medium text-[#2d6a4f]">{viewingUser.name}</p>
+                <p className="text-sm font-medium text-[#2d6a4f]">{viewingUser?.name}</p>
               </div>
               <button onClick={returnToSelf} className="text-[11px] text-[#aaa] hover:text-[#555] transition-colors">
                 ← Back to your data
@@ -366,7 +415,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               className="flex items-center gap-2 px-2 w-full group hover:bg-[#f5f5f5] rounded-lg py-1.5 transition-colors"
             >
               <Avatar user={activeUser} size={26} />
-              <span className="text-sm text-[#777] group-hover:text-[#111] transition-colors flex-1 text-left truncate">{activeUser.name}</span>
+              <span className="text-sm text-[#777] group-hover:text-[#111] transition-colors flex-1 text-left truncate">{activeUser?.name}</span>
               <Pencil size={12} className="text-[#ccc] group-hover:text-[#aaa] transition-colors shrink-0" />
             </button>
           )}
@@ -377,7 +426,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {isViewingFriend && (
           <div className="bg-[#2d6a4f]/8 border-b border-[#2d6a4f]/20 px-6 py-2 flex items-center gap-3">
             <span className="text-xs text-[#2d6a4f] font-medium">
-              Viewing {viewingUser.name}'s data (read-only)
+              Viewing {viewingUser?.name}'s data (read-only)
             </span>
             <button onClick={returnToSelf} className="text-xs text-[#aaa] hover:text-[#555] transition-colors ml-auto">
               ← Back to your data

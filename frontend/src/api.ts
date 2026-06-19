@@ -59,17 +59,37 @@ function transformAlbum(a: Record<string, unknown>): Album {
 export async function fetchAlbums(params?: {
   status?: string
   artist?: string
+  albumName?: string
   genre?: string
   userId?: number
 }): Promise<Album[]> {
   const qs = new URLSearchParams()
   if (params?.status) qs.set('status', params.status)
   if (params?.artist) qs.set('artist', params.artist)
+  if (params?.albumName) qs.set('album_name', params.albumName)
   if (params?.genre) qs.set('genre', params.genre)
   qs.set('user_id', String(params?.userId ?? 1))
   const res = await fetch(`${BASE}/albums/?${qs}`)
   const data = await res.json()
   return (data as Record<string, unknown>[]).map(transformAlbum)
+}
+
+export async function fetchFriendRatings(
+  albumName: string,
+  artist: string,
+  activeUserId: number,
+): Promise<{ friend: UserInfo; album: Album }[]> {
+  const friends = await fetchFriends(activeUserId)
+  const results = await Promise.all(
+    friends.map(async (friend) => {
+      try {
+        const albums = await fetchAlbums({ status: 'rated', albumName, artist, userId: friend.id })
+        if (albums.length > 0) return { friend, album: albums[0] }
+      } catch { /* friend may not have the album */ }
+      return null
+    })
+  )
+  return results.filter((r): r is { friend: UserInfo; album: Album } => r !== null)
 }
 
 export async function fetchAlbum(id: number): Promise<Album> {
@@ -298,6 +318,10 @@ export interface Summary {
   avg_album_score: number | null
   top_album: { name: string; artist: string; score: number } | null
   top_song: { title: string; artist: string; score: number } | null
+  avg_theme: number | null
+  avg_replay: number | null
+  avg_production: number | null
+  avg_distinctness: number | null
 }
 
 export async function fetchFactorStats(): Promise<FactorStats> {
@@ -452,6 +476,26 @@ export async function fetchAotyAlbums(artist: string): Promise<AotyData> {
 
 export async function refreshAotyArtist(artist: string): Promise<void> {
   await fetch(`${BASE}/aoty/artist/${encodeURIComponent(artist)}/refresh`, { method: 'POST' })
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+export async function signInWithApple(
+  idToken: string,
+  name?: string,
+  linkUserId?: number,
+): Promise<{ id: number; name: string; avatarUrl?: string }> {
+  const res = await fetch(`${BASE}/auth/apple`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id_token: idToken, name, link_user_id: linkUserId }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? 'Sign in failed')
+  }
+  const u = await res.json()
+  return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined }
 }
 
 // ── Users / Invites / Friends ─────────────────────────────────────────────────

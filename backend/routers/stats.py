@@ -33,12 +33,20 @@ def summary(user_id: int = Query(1), session: Session = Depends(get_session)):
     top_album = max(rated, key=lambda a: a.score or 0, default=None)
     top_song = max(all_songs, key=lambda s: s.score or 0, default=None)
 
+    def _avg(vals):
+        v = [x for x in vals if x is not None]
+        return round(sum(v) / len(v), 2) if v else None
+
     return {
         "total_albums_rated": len(rated),
         "total_songs_rated": len(all_songs),
         "avg_album_score": round(sum(scores) / len(scores), 4) if scores else None,
         "top_album": {"name": top_album.album_name, "artist": top_album.artist, "score": top_album.score} if top_album else None,
         "top_song": {"title": top_song.title, "artist": top_song.artist, "score": top_song.score} if top_song else None,
+        "avg_theme": _avg([a.theme for a in rated]),
+        "avg_replay": _avg([a.replay_value for a in rated]),
+        "avg_production": _avg([a.production for a in rated]),
+        "avg_distinctness": _avg([a.distinctness for a in rated]),
     }
 
 

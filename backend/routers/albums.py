@@ -29,6 +29,7 @@ def artist_in_album(album: Album, name: str) -> bool:
 def list_albums(
     status: Optional[str] = Query(None),
     artist: Optional[str] = Query(None),
+    album_name: Optional[str] = Query(None),
     genre: Optional[str] = Query(None),
     user_id: int = Query(1),
     session: Session = Depends(get_session),
@@ -47,6 +48,8 @@ def list_albums(
         q = q.where(Album.status == status)
     if genre:
         q = q.where(Album.genre == genre)
+    if album_name:
+        q = q.where(Album.album_name == album_name)
     albums = session.exec(q.order_by(Album.score.desc())).all()
     if artist:
         albums = [a for a in albums if artist_in_album(a, artist)]
