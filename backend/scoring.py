@@ -78,7 +78,7 @@ def recompute_all_scores(session) -> None:
     from sqlalchemy.orm import selectinload
     from .models import Album, PressUser
 
-    user_ids = [uid for (uid,) in session.exec(select(PressUser.id)).all()]
+    user_ids = list(session.exec(select(PressUser.id)).all())
 
     for user_id in user_ids:
         factor_stats = get_factor_stats(session, user_id=user_id)
