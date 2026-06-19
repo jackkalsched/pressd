@@ -9,7 +9,7 @@ export default function Join() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token') ?? ''
   const navigate = useNavigate()
-  const { setActiveUser } = useUser()
+  const { setActiveUser, activeUser } = useUser()
 
   const [inviterName, setInviterName] = useState<string | null>(null)
   const [loadingInvite, setLoadingInvite] = useState(true)
@@ -54,20 +54,34 @@ export default function Join() {
     return () => { cancelled = true }
   }, [token])
 
+  async function finishJoin(userId: number) {
+    try {
+      await acceptInvite(token, undefined, userId)
+    } catch {
+      // Invite may already be used or friendship may already exist — that's fine
+    }
+    navigate('/library', { replace: true })
+  }
+
+  // If already logged in, just accept the invite and go
+  useEffect(() => {
+    if (activeUser && inviterName !== null) {
+      finishJoin(activeUser.id)
+    }
+  }, [activeUser, inviterName])
+
   const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       setSubmitting(true)
       setError(null)
       try {
         const user = await signInWithGoogle(tokenResponse.access_token)
-        await acceptInvite(token, undefined, user.id)
+        // Log in first — invite accept is best-effort
         setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl })
-        navigate('/library', { replace: true })
+        await finishJoin(user.id)
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Something went wrong.'
-        setError(msg === 'Invite already used'
-          ? 'This invite link has already been used.'
-          : msg)
+        setError(msg)
         setSubmitting(false)
       }
     },
