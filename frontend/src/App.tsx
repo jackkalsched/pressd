@@ -5,6 +5,7 @@ import Layout from './components/Layout'
 import Library from './pages/Library'
 import Ratings from './pages/Ratings'
 import Stats from './pages/Stats'
+import Social from './pages/Social'
 import RatingScreen from './pages/RatingScreen'
 import AlbumDetail from './pages/AlbumDetail'
 import ArtistPage from './pages/ArtistPage'
@@ -21,6 +22,7 @@ function ProtectedRoutes() {
         <Route path="/library" element={<Library />} />
         <Route path="/ratings" element={<Ratings />} />
         <Route path="/stats" element={<Stats />} />
+        <Route path="/social" element={<Social />} />
         <Route path="/album/:id" element={<AlbumDetail />} />
         <Route path="/artist/:name" element={<ArtistPage />} />
       </Routes>

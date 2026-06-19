@@ -565,3 +565,19 @@ export async function updateUser(userId: number, data: { name?: string; avatarUr
   const u = await res.json()
   return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined }
 }
+
+export interface FeedItem {
+  friend: { id: number; name: string; avatar_url?: string }
+  album_id: number
+  album_name: string
+  artist: string
+  album_art_url?: string
+  score: number
+  date_rated?: string
+}
+
+export async function fetchFeed(userId: number): Promise<FeedItem[]> {
+  const res = await fetch(`${BASE}/social/feed?user_id=${userId}`)
+  if (!res.ok) throw new Error('Failed to fetch feed')
+  return res.json()
+}

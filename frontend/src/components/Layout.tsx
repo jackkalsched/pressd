@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useGoogleLogin } from '@react-oauth/google'
-import { Library, BarChart2, List, Music, Mail, X, Loader2, MessageCircle, Pencil } from 'lucide-react'
+import { Library, BarChart2, List, Music, Mail, X, Loader2, MessageCircle, Pencil, Users } from 'lucide-react'
 import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
 import { fetchFriends, sendInvite, updateUser, signInWithGoogle } from '../api'
@@ -40,6 +40,7 @@ const nav = [
   { to: '/library', label: 'Library', icon: Library },
   { to: '/ratings', label: 'Ratings', icon: List },
   { to: '/stats', label: 'Stats', icon: BarChart2 },
+  { to: '/social', label: 'Social', icon: Users },
 ]
 
 function InviteModal({ onClose }: { onClose: () => void }) {
