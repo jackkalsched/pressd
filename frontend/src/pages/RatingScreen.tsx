@@ -125,22 +125,20 @@ export default function RatingScreen() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!album) return
-      const wasEditing = album.status === 'rated'
       const sorted = [...album.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
       await batchRateSongs(sorted.map((song, i) => ({ id: song.id, score: scores[i] ?? null })))
       const parsedExtra = extraArtists.split(',').map(s => s.trim()).filter(Boolean)
       await updateAlbum(album.id, {
         ...(isEP ? {} : { theme, replay_value: replayValue, production, distinctness }),
-        status: wasEditing ? 'rated' : 'listening',
+        status: album.status === 'rated' ? 'rated' : 'listening',
         extra_artists: parsedExtra.length ? JSON.stringify(parsedExtra) : null,
       })
-      return wasEditing
     },
-    onSuccess: async (wasEditing) => {
+    onSuccess: async () => {
       setSaveError(null)
       queryClient.invalidateQueries({ queryKey: ['albums'] })
       queryClient.invalidateQueries({ queryKey: ['album', Number(id)] })
-      navigate(wasEditing ? `/album/${id}` : '/library')
+      navigate('/library')
     },
     onError: (err: unknown) => {
       setSaveError(err instanceof Error ? err.message : 'Failed to save — please try again')
