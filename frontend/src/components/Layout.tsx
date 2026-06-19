@@ -272,7 +272,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
 
         <form onSubmit={handleSave} className="flex flex-col gap-3">
           <div>
-            <label className="text-xs text-[#888] mb-1 block">Display name</label>
+            <label className="text-xs text-[#888] mb-1 block">Username</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
