@@ -363,10 +363,25 @@ export default function RatingScreen() {
       {/* Sticky score card */}
       <aside className="w-64 shrink-0 sticky top-0 h-screen border-l border-[#e2e2e2] p-6 flex flex-col bg-white">
         <p className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-5">Live Score</p>
-        <div className="text-5xl font-bold text-[#2d6a4f] mb-1 tabular-nums">
-          {previewScore !== null ? previewScore.toFixed(2) : '—'}
-        </div>
-        <p className="text-[#aaa] text-xs mb-6">Final score</p>
+        {isSubmitting ? (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-2">
+              <Loader2 size={18} className="animate-spin text-[#2d6a4f]" />
+              <span className="text-[#2d6a4f] text-sm font-semibold">Recalibrating…</span>
+            </div>
+            <div className="h-1.5 bg-[#e8e8e8] rounded-full overflow-hidden">
+              <div className="h-full bg-[#2d6a4f] rounded-full animate-pulse w-3/4" />
+            </div>
+            <p className="text-[#aaa] text-[10px] mt-2">Updating all album scores</p>
+          </div>
+        ) : (
+          <>
+            <div className="text-5xl font-bold text-[#2d6a4f] mb-1 tabular-nums">
+              {previewScore !== null ? previewScore.toFixed(2) : '—'}
+            </div>
+            <p className="text-[#aaa] text-xs mb-6">Final score</p>
+          </>
+        )}
 
         <div className="flex flex-col gap-3">
           {(isEP
