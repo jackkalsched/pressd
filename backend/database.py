@@ -8,17 +8,23 @@ load_dotenv()
 
 
 def _build_engine():
-    pg_host = os.getenv("PG_HOST")
-    if not pg_host:
-        raise RuntimeError("PG_HOST is not set — set Supabase credentials in .env")
-    url = URL.create(
-        "postgresql",
-        username=os.getenv("PG_USER", "postgres"),
-        password=os.getenv("PG_PASSWORD"),
-        host=pg_host,
-        port=int(os.getenv("PG_PORT", "5432")),
-        database=os.getenv("PG_DB", "postgres"),
-    )
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        # Render / production: single connection string
+        url = database_url
+    else:
+        # Local dev: individual PG_* vars from .env
+        pg_host = os.getenv("PG_HOST")
+        if not pg_host:
+            raise RuntimeError("Set DATABASE_URL or PG_HOST in .env")
+        url = URL.create(
+            "postgresql",
+            username=os.getenv("PG_USER", "postgres"),
+            password=os.getenv("PG_PASSWORD"),
+            host=pg_host,
+            port=int(os.getenv("PG_PORT", "5432")),
+            database=os.getenv("PG_DB", "postgres"),
+        )
     return create_engine(url, pool_size=5, max_overflow=10, pool_pre_ping=True, echo=False)
 
 
