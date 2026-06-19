@@ -157,12 +157,46 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+function resizeImageToBase64(file: File, size = 200): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = size
+      canvas.height = size
+      const ctx = canvas.getContext('2d')!
+      const min = Math.min(img.width, img.height)
+      const sx = (img.width - min) / 2
+      const sy = (img.height - min) / 2
+      ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size)
+      URL.revokeObjectURL(url)
+      resolve(canvas.toDataURL('image/jpeg', 0.85))
+    }
+    img.onerror = reject
+    img.src = url
+  })
+}
+
 function ProfileModal({ onClose }: { onClose: () => void }) {
   const { activeUser, setActiveUser } = useUser()
   const [name, setName] = useState(activeUser.name)
   const [avatarUrl, setAvatarUrl] = useState(activeUser.avatarUrl ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) { setError('Please choose an image file'); return }
+    try {
+      const base64 = await resizeImageToBase64(file)
+      setAvatarUrl(base64)
+      setError(null)
+    } catch {
+      setError('Failed to process image')
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -171,7 +205,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
     try {
       const updated = await updateUser(activeUser.id, {
         name: name.trim() !== activeUser.name ? name.trim() : undefined,
-        avatarUrl: avatarUrl.trim() !== (activeUser.avatarUrl ?? '') ? avatarUrl.trim() : undefined,
+        avatarUrl: avatarUrl !== (activeUser.avatarUrl ?? '') ? avatarUrl : undefined,
       })
       setActiveUser(updated)
       onClose()
@@ -193,8 +227,13 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
           <button onClick={onClose} className="text-[#aaa] hover:text-[#555] transition-colors"><X size={18} /></button>
         </div>
 
-        <div className="flex justify-center mb-5">
-          <Avatar user={preview} size={72} />
+        {/* Avatar preview + upload button */}
+        <div className="flex flex-col items-center gap-2 mb-5">
+          <Avatar user={preview} size={80} />
+          <label className="cursor-pointer text-xs font-medium text-[#2d6a4f] hover:text-[#245c43] transition-colors">
+            Upload photo
+            <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
+          </label>
         </div>
 
         <form onSubmit={handleSave} className="flex flex-col gap-3">
@@ -205,17 +244,6 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setName(e.target.value)}
               className="w-full bg-[#f5f5f5] border border-[#e2e2e2] text-[#111] text-sm px-4 py-2.5 rounded-lg focus:outline-none focus:border-[#2d6a4f] transition-colors"
             />
-          </div>
-          <div>
-            <label className="text-xs text-[#888] mb-1 block">Photo URL</label>
-            <input
-              type="url"
-              placeholder="https://..."
-              value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              className="w-full bg-[#f5f5f5] border border-[#e2e2e2] text-[#111] text-sm px-4 py-2.5 rounded-lg focus:outline-none focus:border-[#2d6a4f] transition-colors placeholder:text-[#bbb]"
-            />
-            <p className="text-[11px] text-[#bbb] mt-1">Paste any image URL — profile photo, etc.</p>
           </div>
           {error && <p className="text-[#c0392b] text-xs">{error}</p>}
           <button
