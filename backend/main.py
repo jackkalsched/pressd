@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,7 +9,11 @@ app = FastAPI(title="Press'd API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://pressd-eta.vercel.app",
+        os.getenv("APP_URL", ""),
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
