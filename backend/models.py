@@ -65,6 +65,9 @@ class Album(SQLModel, table=True):
     predicted_score: Optional[float] = None
     predicted_song_mean: Optional[float] = None
 
+    recommended_by: Optional[int] = Field(default=None, foreign_key="pressuser.id")
+    recommended_by_name: Optional[str] = None
+
     date_added: Optional[date] = Field(default_factory=date.today)
     date_rated: Optional[date] = None
 

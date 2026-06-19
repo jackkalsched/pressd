@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from datetime import date
 
 from ..database import get_session
-from ..models import Album, Song, SongAudioFeatures
+from ..models import Album, Song, SongAudioFeatures, PressUser
 from ..scoring import compute_a_score, recompute_all_scores, BANG_THRESHOLD, SKIP_THRESHOLD
 
 router = APIRouter(prefix="/albums", tags=["albums"])
@@ -444,6 +444,54 @@ def album_report(album_id: int, session: Session = Depends(get_session)):
         "artist_stats_after": _compute_stats(_artist_song_scores(), _artist_ext_avg()),
         "artist_stats_before": _compute_stats(_artist_song_scores(exclude_id=album_id), _artist_ext_avg(exclude_id=album_id)),
     }
+
+
+@router.post("/{album_id}/recommend")
+def recommend_album(album_id: int, data: dict, session: Session = Depends(get_session)):
+    source = session.get(Album, album_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Album not found")
+    friend_id = data.get("friend_id")
+    recommender_id = data.get("recommender_id")
+    recommender = session.get(PressUser, recommender_id)
+    if not recommender:
+        raise HTTPException(status_code=404, detail="Recommender not found")
+
+    existing = session.exec(
+        select(Album).where(
+            Album.user_id == friend_id,
+            Album.album_name == source.album_name,
+            Album.artist == source.artist,
+        )
+    ).first()
+
+    if existing:
+        existing.recommended_by = recommender_id
+        existing.recommended_by_name = recommender.name
+        session.add(existing)
+        session.commit()
+        return {"ok": True, "already_existed": True}
+
+    new_album = Album(
+        album_name=source.album_name,
+        artist=source.artist,
+        year=source.year,
+        genre=source.genre,
+        sub_genre1=source.sub_genre1,
+        sub_genre2=source.sub_genre2,
+        sub_genre3=source.sub_genre3,
+        album_art_url=source.album_art_url,
+        spotify_id=source.spotify_id,
+        total_tracks=source.total_tracks,
+        extra_artists=source.extra_artists,
+        status="to_listen",
+        user_id=friend_id,
+        recommended_by=recommender_id,
+        recommended_by_name=recommender.name,
+    )
+    session.add(new_album)
+    session.commit()
+    return {"ok": True, "already_existed": False}
 
 
 @router.delete("/{album_id}")

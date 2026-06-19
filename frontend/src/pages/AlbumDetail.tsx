@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2, Pencil, Trash2, MessageCircle } from 'lucide-react'
+import { ArrowLeft, Loader2, Pencil, Trash2, MessageCircle, Star } from 'lucide-react'
 import { fetchAlbum, deleteAlbum, fetchFriendRatings } from '../api'
 import { useUser } from '../context/UserContext'
 import { BANG_THRESHOLD, SKIP_THRESHOLD, songScoreColor } from '../types'
+import RecommendModal from '../components/RecommendModal'
 
 function shareRatingViaIMessage(albumName: string, artist: string, score: number | null, viewingName?: string) {
   const who = viewingName ? `${viewingName} rated` : 'I rated'
@@ -39,6 +41,7 @@ export default function AlbumDetail() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { isViewingFriend, viewingUser, activeUser } = useUser()
+  const [showRecommend, setShowRecommend] = useState(false)
 
   const { data: album, isLoading, error } = useQuery({
     queryKey: ['album', Number(id)],
@@ -89,6 +92,14 @@ export default function AlbumDetail() {
               className="flex items-center gap-1.5 text-sm font-medium bg-[#f5f5f5] border border-[#e2e2e2] hover:bg-[#ececec] text-[#555] px-3 py-1.5 rounded-lg transition-colors"
             >
               <MessageCircle size={13} /> Share
+            </button>
+          )}
+          {album.status === 'rated' && !isViewingFriend && (
+            <button
+              onClick={() => setShowRecommend(true)}
+              className="flex items-center gap-1.5 text-sm font-medium bg-[#fff7ed] border border-[#fed7aa] hover:bg-[#ffedd5] text-[#f97316] px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Star size={13} fill="#f97316" /> Recommend
             </button>
           )}
           {!isViewingFriend && (
@@ -305,6 +316,10 @@ export default function AlbumDetail() {
             })}
           </div>
         </div>
+      )}
+
+      {showRecommend && album && (
+        <RecommendModal album={album} onClose={() => setShowRecommend(false)} />
       )}
     </div>
   )

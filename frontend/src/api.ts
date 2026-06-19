@@ -50,6 +50,8 @@ function transformAlbum(a: Record<string, unknown>): Album {
     predictedTheme: a.predicted_theme as number | null ?? null,
     predictedThemeReasoning: a.predicted_theme_reasoning as string | null ?? null,
     predictedScore: a.predicted_score as number | null ?? null,
+    recommendedBy: a.recommended_by as number | null ?? null,
+    recommendedByName: a.recommended_by_name as string | null ?? null,
     songs,
   }
 }
@@ -569,6 +571,20 @@ export async function updateUser(userId: number, data: { name?: string; avatarUr
   }
   const u = await res.json()
   return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined }
+}
+
+export async function recommendAlbum(albumId: number, friendId: number, recommenderId: number): Promise<{ alreadyExisted: boolean }> {
+  const res = await fetch(`${BASE}/albums/${albumId}/recommend`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ friend_id: friendId, recommender_id: recommenderId }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? 'Failed to recommend album')
+  }
+  const data = await res.json()
+  return { alreadyExisted: data.already_existed }
 }
 
 export interface FeedItem {

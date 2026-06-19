@@ -41,6 +41,8 @@ export interface Album {
   predictedTheme: number | null
   predictedThemeReasoning: string | null
   predictedScore: number | null
+  recommendedBy: number | null
+  recommendedByName: string | null
 }
 
 export interface ArtistStats {
