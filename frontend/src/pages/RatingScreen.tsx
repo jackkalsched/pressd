@@ -293,14 +293,15 @@ export default function RatingScreen() {
             <div className="grid grid-cols-2 gap-3 mb-4">
               {(
                 [
-                  { label: 'Theme', value: theme, set: setTheme },
-                  { label: 'Replay Value', value: replayValue, set: setReplayValue },
-                  { label: 'Production', value: production, set: setProduction },
-                  { label: 'Distinctness', value: distinctness, set: setDistinctness },
-                ] as const
-              ).map(({ label, value, set }) => (
+                  { label: 'Theme / Cohesion', desc: 'How strong, cohesive, and unique the album\'s central idea or narrative is.', value: theme, set: setTheme },
+                  { label: 'Replay Value', desc: 'How replayable the album is.', value: replayValue, set: setReplayValue },
+                  { label: 'Production', desc: 'Sound quality, mixing, mastering, sonic palette.', value: production, set: setProduction },
+                  { label: 'Distinctness', desc: 'How original, unique song-to-song, and genre-bending the album is.', value: distinctness, set: setDistinctness },
+                ] as { label: string; desc: string; value: number | null; set: (v: number | null) => void }[]
+              ).map(({ label, desc, value, set }) => (
                 <div key={label} className="bg-[#f5f5f5] rounded-xl p-4 border border-[#e2e2e2]">
-                  <p className="text-[#777] text-xs mb-2">{label}</p>
+                  <p className="text-[#555] text-xs font-medium mb-0.5">{label}</p>
+                  <p className="text-[#aaa] text-[10px] leading-snug mb-2">{desc}</p>
                   <ScoreInput value={value} disabled={!songsComplete} onChange={set} />
                 </div>
               ))}
@@ -388,10 +389,10 @@ export default function RatingScreen() {
             ? [{ label: 'Avg Song Score', value: avgSong, weight: '×1.00' }]
             : [
                 { label: 'Avg Song Score', value: avgSong,     weight: '×1.00' },
-                { label: 'Theme',          value: theme,        weight: 'z ×0.25' },
-                { label: 'Replay Value',   value: replayValue,  weight: 'z ×0.15' },
-                { label: 'Production',     value: production,   weight: 'z ×0.15' },
-                { label: 'Distinctness',   value: distinctness, weight: 'z ×0.05' },
+                { label: 'Theme / Cohesion', value: theme,        weight: 'z ×0.25' },
+                { label: 'Replay Value',    value: replayValue,  weight: 'z ×0.15' },
+                { label: 'Production',      value: production,   weight: 'z ×0.15' },
+                { label: 'Distinctness',    value: distinctness, weight: 'z ×0.05' },
               ]
           ).map(({ label, value, weight }) => (
             <div key={label} className="flex items-center justify-between">

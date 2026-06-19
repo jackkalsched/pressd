@@ -176,7 +176,7 @@ export default function AlbumDetail() {
       {/* Factor breakdown — omitted for EPs (≤6 tracks) */}
       {album.songs.length > 6 && <div className="grid grid-cols-4 gap-3 mb-8">
         {[
-          { label: 'Theme', value: album.theme },
+          { label: 'Theme / Cohesion', value: album.theme },
           { label: 'Replay Value', value: album.replayValue },
           { label: 'Production', value: album.production },
           { label: 'Distinctness', value: album.distinctness },

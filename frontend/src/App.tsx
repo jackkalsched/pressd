@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { GoogleOAuthProvider } from '@react-oauth/google'
 import { UserProvider, useUser } from './context/UserContext'
 import Layout from './components/Layout'
 import Library from './pages/Library'
@@ -29,6 +30,7 @@ function ProtectedRoutes() {
 
 export default function App() {
   return (
+    <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''}>
     <UserProvider>
       <BrowserRouter>
         <Routes>
@@ -39,5 +41,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </UserProvider>
+    </GoogleOAuthProvider>
   )
 }
