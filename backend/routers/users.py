@@ -163,3 +163,16 @@ def list_friends(user_id: int, session: Session = Depends(get_session)):
     ]
     friends = [session.get(PressUser, fid) for fid in friend_ids]
     return [{"id": u.id, "name": u.name, "avatar_url": u.avatar_url} for u in friends if u]
+
+
+@router.delete("/{user_id}/friends/{friend_id}")
+def remove_friend(user_id: int, friend_id: int, session: Session = Depends(get_session)):
+    a, b = min(user_id, friend_id), max(user_id, friend_id)
+    friendship = session.exec(
+        select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)
+    ).first()
+    if not friendship:
+        raise HTTPException(status_code=404, detail="Friendship not found")
+    session.delete(friendship)
+    session.commit()
+    return {"ok": True}

@@ -552,6 +552,11 @@ export async function fetchFriends(userId: number): Promise<UserInfo[]> {
   }))
 }
 
+export async function removeFriend(userId: number, friendId: number): Promise<void> {
+  const res = await fetch(`${BASE}/users/${userId}/friends/${friendId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to remove friend')
+}
+
 export async function updateUser(userId: number, data: { name?: string; avatarUrl?: string }): Promise<UserInfo> {
   const res = await fetch(`${BASE}/users/${userId}`, {
     method: 'PATCH',

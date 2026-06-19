@@ -5,7 +5,7 @@ import { useGoogleLogin } from '@react-oauth/google'
 import { Library, BarChart2, List, Music, Mail, X, Loader2, MessageCircle, Pencil, Users } from 'lucide-react'
 import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
-import { fetchFriends, sendInvite, updateUser, signInWithGoogle } from '../api'
+import { fetchFriends, sendInvite, updateUser, signInWithGoogle, removeFriend } from '../api'
 import type { UserInfo } from '../api'
 
 function avatarColor(name: string): string {
@@ -374,19 +374,33 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           ) : (
             <div className="flex flex-col gap-0.5">
               {friends.map((f) => (
-                <button
-                  key={f.id}
-                  onClick={() => viewFriend(f.id, f.name, f.avatarUrl)}
-                  className={clsx(
-                    'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full text-left',
-                    viewingUser?.id === f.id
-                      ? 'bg-[#2d6a4f]/10 text-[#2d6a4f]'
-                      : 'text-[#777] hover:text-[#111] hover:bg-[#f0f0f0]',
-                  )}
-                >
-                  <Avatar user={f} size={18} />
-                  {f.name}
-                </button>
+                <div key={f.id} className="group relative flex items-center">
+                  <button
+                    onClick={() => viewFriend(f.id, f.name, f.avatarUrl)}
+                    className={clsx(
+                      'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors flex-1 text-left min-w-0',
+                      viewingUser?.id === f.id
+                        ? 'bg-[#2d6a4f]/10 text-[#2d6a4f]'
+                        : 'text-[#777] hover:text-[#111] hover:bg-[#f0f0f0]',
+                    )}
+                  >
+                    <Avatar user={f} size={18} />
+                    <span className="truncate">{f.name}</span>
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Remove ${f.name} as a friend?`)) return
+                      await removeFriend(activeUser!.id, f.id)
+                      if (viewingUser?.id === f.id) returnToSelf()
+                      queryClient.invalidateQueries({ queryKey: ['friends'] })
+                      queryClient.invalidateQueries({ queryKey: ['feed'] })
+                    }}
+                    className="absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-[#bbb] hover:text-[#c0392b] hover:bg-[#fdf0ee]"
+                    title={`Remove ${f.name}`}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               ))}
             </div>
           )}
