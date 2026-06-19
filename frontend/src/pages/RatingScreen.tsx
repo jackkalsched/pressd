@@ -75,6 +75,8 @@ export default function RatingScreen() {
   const [distinctness, setDistinctness] = useState<number | null>(null)
   const [extraArtists, setExtraArtists] = useState('')
   const [reportData, setReportData] = useState<AlbumReportData | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   if (album && !initialized) {
     const sorted = [...album.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
@@ -87,6 +89,7 @@ export default function RatingScreen() {
     setInitialized(true)
   }
 
+  // Capture at render time so mutations close over the correct value
   const isEditing = album?.status === 'rated'
   const isEP = (album?.songs.length ?? 0) <= 6
 
@@ -103,35 +106,44 @@ export default function RatingScreen() {
       })
     },
     onSuccess: async () => {
-      await queryClient.refetchQueries({ queryKey: ['album', Number(id)] })
+      setSubmitError(null)
       queryClient.invalidateQueries({ queryKey: ['albums'] })
       queryClient.invalidateQueries({ queryKey: ['stats'] })
+      queryClient.invalidateQueries({ queryKey: ['album', Number(id)] })
       try {
         const report = await fetchAlbumReport(Number(id))
         setReportData(report)
       } catch {
-        // If report fails, just navigate normally
-        navigate(isEditing ? `/album/${id}` : '/library')
+        navigate(`/album/${id}`)
       }
+    },
+    onError: (err: unknown) => {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to save rating — please try again')
     },
   })
 
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!album) return
+      const wasEditing = album.status === 'rated'
       const sorted = [...album.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
       await batchRateSongs(sorted.map((song, i) => ({ id: song.id, score: scores[i] ?? null })))
       const parsedExtra = extraArtists.split(',').map(s => s.trim()).filter(Boolean)
       await updateAlbum(album.id, {
         ...(isEP ? {} : { theme, replay_value: replayValue, production, distinctness }),
-        status: isEditing ? 'rated' : 'listening',
+        status: wasEditing ? 'rated' : 'listening',
         extra_artists: parsedExtra.length ? JSON.stringify(parsedExtra) : null,
       })
+      return wasEditing
     },
-    onSuccess: async () => {
-      await queryClient.refetchQueries({ queryKey: ['album', Number(id)] })
+    onSuccess: async (wasEditing) => {
+      setSaveError(null)
       queryClient.invalidateQueries({ queryKey: ['albums'] })
-      navigate(isEditing ? `/album/${id}` : '/library')
+      queryClient.invalidateQueries({ queryKey: ['album', Number(id)] })
+      navigate(wasEditing ? `/album/${id}` : '/library')
+    },
+    onError: (err: unknown) => {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save — please try again')
     },
   })
 
@@ -154,6 +166,7 @@ export default function RatingScreen() {
 
   const sortedSongs = [...album.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
   const ratedCount = scores.filter((s) => s !== null).length
+  const doneCount = scores.filter((s, i) => s !== null || skipped.has(i)).length
   const avgSong = ratedCount > 0
     ? scores.filter((s): s is number => s !== null).reduce((a, s) => a + s, 0) / ratedCount
     : null
@@ -171,7 +184,8 @@ export default function RatingScreen() {
         )
     : null
 
-  const isSaving = submitMutation.isPending || saveMutation.isPending
+  const isSubmitting = submitMutation.isPending
+  const isSavingDraft = saveMutation.isPending
 
   return (
     <div className="flex min-h-screen bg-white">
@@ -185,11 +199,12 @@ export default function RatingScreen() {
             <ArrowLeft size={15} /> Back
           </button>
           <button
-            onClick={() => saveMutation.mutate()}
-            disabled={isSaving}
+            onClick={() => { setSaveError(null); saveMutation.mutate() }}
+            disabled={isSavingDraft || isSubmitting}
             className="flex items-center gap-1.5 text-xs text-[#777] hover:text-[#111] px-3 py-1.5 bg-[#f5f5f5] border border-[#e2e2e2] rounded-lg transition-colors disabled:opacity-40"
           >
-            <Save size={13} /> Save & Exit
+            {isSavingDraft ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+            {isSavingDraft ? 'Saving…' : 'Save & Exit'}
           </button>
         </div>
 
@@ -320,18 +335,30 @@ export default function RatingScreen() {
         )}
 
         {/* Submit */}
+        {saveError && (
+          <p className="text-[#c0392b] text-xs text-center mb-2">{saveError}</p>
+        )}
+        {submitError && (
+          <p className="text-[#c0392b] text-xs text-center mb-2">{submitError}</p>
+        )}
         <button
-          disabled={!canSubmit || isSaving}
-          onClick={() => submitMutation.mutate()}
+          disabled={!canSubmit || isSubmitting || isSavingDraft}
+          onClick={() => { setSubmitError(null); submitMutation.mutate() }}
           className={clsx(
             'w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors',
-            canSubmit && !isSaving
+            canSubmit && !isSubmitting && !isSavingDraft
               ? 'bg-[#2d6a4f] hover:bg-[#245c43] text-white'
               : 'bg-[#f5f5f5] text-[#bbb] cursor-not-allowed border border-[#e2e2e2]',
           )}
         >
-          {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
-          {isSaving ? 'Saving…' : canSubmit ? (isEditing ? 'Update Rating' : 'Submit Rating') : `${ratedCount} / ${sortedSongs.length} songs rated`}
+          {isSubmitting ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+          {isSubmitting
+            ? 'Saving…'
+            : canSubmit
+              ? (isEditing ? 'Update Rating' : 'Submit Rating')
+              : !songsComplete
+                ? `${doneCount} / ${sortedSongs.length} tracks done`
+                : 'Fill in external factors'}
         </button>
       </div>
 
