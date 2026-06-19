@@ -100,26 +100,33 @@ def accept_invite(token: str, data: dict, session: Session = Depends(get_session
     if invite.accepted_at is not None:
         raise HTTPException(status_code=410, detail="Invite already used")
 
-    name = (data.get("name") or "").strip()
-    if not name:
-        raise HTTPException(status_code=400, detail="name is required")
-    if session.exec(select(PressUser).where(PressUser.name == name)).first():
-        raise HTTPException(status_code=409, detail="Name already taken")
+    user_id = data.get("user_id")
+    if user_id:
+        # Google-auth flow: user already exists
+        user = session.get(PressUser, int(user_id))
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+    else:
+        # Legacy name-based flow (kept for backwards compat)
+        name = (data.get("name") or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="name or user_id is required")
+        if session.exec(select(PressUser).where(PressUser.name == name)).first():
+            raise HTTPException(status_code=409, detail="Name already taken")
+        user = PressUser(name=name)
+        session.add(user)
+        session.flush()
 
-    new_user = PressUser(name=name)
-    session.add(new_user)
-    session.flush()
-
-    # Auto-friend the inviter
-    a, b = min(invite.invited_by, new_user.id), max(invite.invited_by, new_user.id)
-    friendship = Friendship(user_id_a=a, user_id_b=b)
-    session.add(friendship)
+    # Skip if already friends
+    a, b = min(invite.invited_by, user.id), max(invite.invited_by, user.id)
+    if not session.exec(select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)).first():
+        session.add(Friendship(user_id_a=a, user_id_b=b))
 
     invite.accepted_at = datetime.utcnow()
     session.add(invite)
     session.commit()
-    session.refresh(new_user)
-    return {"id": new_user.id, "name": new_user.name}
+    session.refresh(user)
+    return {"id": user.id, "name": user.name, "avatar_url": user.avatar_url}
 
 
 @router.patch("/{user_id}")

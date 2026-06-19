@@ -530,11 +530,11 @@ export async function fetchInvite(token: string): Promise<{ inviter_name: string
   return res.json()
 }
 
-export async function acceptInvite(token: string, name: string): Promise<UserInfo> {
+export async function acceptInvite(token: string, name?: string, userId?: number): Promise<UserInfo> {
   const res = await fetch(`${BASE}/users/invite/${token}/accept`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(userId !== undefined ? { user_id: userId } : { name }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
