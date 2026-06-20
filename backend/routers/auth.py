@@ -9,32 +9,30 @@ from ..models import PressUser
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
+GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
 
-def _verify_google_token(id_token: str) -> dict:
-    client_id = os.getenv("GOOGLE_CLIENT_ID")
-    if not client_id:
-        raise HTTPException(status_code=500, detail="GOOGLE_CLIENT_ID not configured on server")
-    resp = httpx.get(GOOGLE_TOKENINFO_URL, params={"id_token": id_token}, timeout=10)
+def _get_google_userinfo(access_token: str) -> dict:
+    resp = httpx.get(
+        GOOGLE_USERINFO_URL,
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=10,
+    )
     if resp.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid Google token")
-    payload = resp.json()
-    if payload.get("aud") != client_id:
-        raise HTTPException(status_code=401, detail="Token was not issued for this app")
-    return payload
+        raise HTTPException(status_code=401, detail="Invalid Google access token")
+    return resp.json()
 
 
 @router.post("/google")
 def sign_in_with_google(data: dict, session: Session = Depends(get_session)):
-    id_token: str = data.get("id_token", "")
+    access_token: str = data.get("access_token", "")
     link_user_id: int | None = data.get("link_user_id")
 
-    if not id_token:
-        raise HTTPException(status_code=400, detail="id_token required")
+    if not access_token:
+        raise HTTPException(status_code=400, detail="access_token required")
 
     try:
-        payload = _verify_google_token(id_token)
+        payload = _get_google_userinfo(access_token)
     except HTTPException:
         raise
     except Exception as e:
