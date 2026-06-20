@@ -160,12 +160,12 @@ def predict_album(album_id: int):
 def _run(album_id: int):
     with engine.connect() as con:
         row = con.execute(
-            text("SELECT artist, album_name, year, genre FROM album WHERE id = :id"),
+            text("SELECT artist, album_name, year, genre, user_id FROM album WHERE id = :id"),
             {"id": album_id},
         ).fetchone()
         if not row:
             return
-        artist, album_name, year, genre = row
+        artist, album_name, year, genre, user_id = row
         print(f"[predict_single] Starting predictions for {artist} – {album_name} (id={album_id})")
 
         # ── 1. Audio features + song score prediction (run first so song mean is available) ──
@@ -220,7 +220,7 @@ def _run(album_id: int):
 
                 score, reasoning = predict_theme(corpus, example_dicts, corpora_map)
                 if score is not None:
-                    _theme_mu, _theme_sd = _factor_stats(con, "theme")
+                    _theme_mu, _theme_sd = _factor_stats(con, "theme", user_id)
                     norm_score = _normalize_single(score, [score], _theme_mu, _theme_sd)
                     con.execute(
                         text("UPDATE album SET predicted_theme = :theme, predicted_theme_reasoning = :reasoning WHERE id = :id"),
@@ -322,18 +322,20 @@ def _run(album_id: int):
             ).fetchone()
             if pred and all(v is not None for v in pred):
                 pred_theme, pred_replay, pred_dist = pred
-                theme_mu, theme_sd   = _factor_stats(con, "theme")
-                replay_mu, replay_sd = _factor_stats(con, "replay_value")
-                dist_mu, dist_sd     = _factor_stats(con, "distinctness")
+                theme_mu, theme_sd   = _factor_stats(con, "theme", user_id)
+                replay_mu, replay_sd = _factor_stats(con, "replay_value", user_id)
+                dist_mu, dist_sd     = _factor_stats(con, "distinctness", user_id)
 
-                # Use song model prediction if available, otherwise fall back to global mean
+                # Use song model prediction if available, otherwise fall back to user's own mean
                 if predicted_song_mean is not None:
                     song_component = predicted_song_mean
                 else:
                     song_component = con.execute(
-                        text("SELECT AVG(s.score) FROM song s JOIN album a ON a.id=s.album_id WHERE a.status='rated' AND s.score IS NOT NULL")
+                        text("SELECT AVG(s.score) FROM song s JOIN album a ON a.id=s.album_id"
+                             " WHERE a.status='rated' AND a.user_id = :uid AND s.score IS NOT NULL"),
+                        {"uid": user_id},
                     ).fetchone()[0] or 7.21
-                    print(f"[predict_single] falling back to global_song_mean={round(song_component, 3)}")
+                    print(f"[predict_single] falling back to user song_mean={round(song_component, 3)}")
 
                 z_theme  = (pred_theme  - theme_mu)  / theme_sd
                 z_replay = (pred_replay - replay_mu) / replay_sd
@@ -359,72 +361,87 @@ def recompute_all_predictions():
 
 
 def _recompute_unrated(con):
-    theme_mu, theme_sd   = _factor_stats(con, "theme")
-    replay_mu, replay_sd = _factor_stats(con, "replay_value")
-    dist_mu, dist_sd     = _factor_stats(con, "distinctness")
-    global_song_mean = con.execute(
+    # Get all distinct users who have unrated albums with predictions
+    user_ids = [r[0] for r in con.execute(
         text(
-            "SELECT AVG(s.score) FROM song s JOIN album a ON a.id=s.album_id"
-            " WHERE a.status='rated' AND s.score IS NOT NULL"
-        )
-    ).fetchone()[0] or 7.21
-
-    unrated = con.execute(
-        text(
-            "SELECT id, artist, genre, predicted_theme, predicted_distinctness, predicted_song_mean FROM album"
+            "SELECT DISTINCT user_id FROM album"
             " WHERE status='to_listen' AND predicted_theme IS NOT NULL AND predicted_distinctness IS NOT NULL"
         )
-    ).fetchall()
+    ).fetchall()]
 
-    for album_id, artist, genre, pred_theme, pred_dist, stored_song_mean in unrated:
-        row = con.execute(
-            text("SELECT AVG(replay_value) FROM album WHERE status='rated' AND replay_value IS NOT NULL AND artist = :artist"),
-            {"artist": artist},
-        ).fetchone()
-        pred_replay = row[0] if row and row[0] else None
+    for user_id in user_ids:
+        theme_mu, theme_sd   = _factor_stats(con, "theme", user_id)
+        replay_mu, replay_sd = _factor_stats(con, "replay_value", user_id)
+        dist_mu, dist_sd     = _factor_stats(con, "distinctness", user_id)
+        user_song_mean = con.execute(
+            text(
+                "SELECT AVG(s.score) FROM song s JOIN album a ON a.id=s.album_id"
+                " WHERE a.status='rated' AND a.user_id = :uid AND s.score IS NOT NULL"
+            ),
+            {"uid": user_id},
+        ).fetchone()[0] or 7.21
 
-        if pred_replay is None:
+        unrated = con.execute(
+            text(
+                "SELECT id, artist, genre, predicted_theme, predicted_distinctness, predicted_song_mean FROM album"
+                " WHERE status='to_listen' AND user_id = :uid"
+                " AND predicted_theme IS NOT NULL AND predicted_distinctness IS NOT NULL"
+            ),
+            {"uid": user_id},
+        ).fetchall()
+
+        for album_id, artist, genre, pred_theme, pred_dist, stored_song_mean in unrated:
             row = con.execute(
-                text("SELECT AVG(replay_value) FROM album WHERE status='rated' AND replay_value IS NOT NULL AND genre = :genre"),
-                {"genre": genre},
+                text("SELECT AVG(replay_value) FROM album WHERE status='rated' AND user_id = :uid AND replay_value IS NOT NULL AND artist = :artist"),
+                {"uid": user_id, "artist": artist},
             ).fetchone()
             pred_replay = row[0] if row and row[0] else None
 
-        if pred_replay is None:
-            pred_replay = con.execute(
-                text("SELECT AVG(replay_value) FROM album WHERE status='rated' AND replay_value IS NOT NULL")
-            ).fetchone()[0]
+            if pred_replay is None:
+                row = con.execute(
+                    text("SELECT AVG(replay_value) FROM album WHERE status='rated' AND user_id = :uid AND replay_value IS NOT NULL AND genre = :genre"),
+                    {"uid": user_id, "genre": genre},
+                ).fetchone()
+                pred_replay = row[0] if row and row[0] else None
 
-        if pred_replay is None:
-            continue
+            if pred_replay is None:
+                pred_replay = con.execute(
+                    text("SELECT AVG(replay_value) FROM album WHERE status='rated' AND user_id = :uid AND replay_value IS NOT NULL"),
+                    {"uid": user_id},
+                ).fetchone()[0]
 
-        pred_replay = round(max(1.0, min(10.0, pred_replay)), 1)
+            if pred_replay is None:
+                continue
 
-        song_component = stored_song_mean if stored_song_mean is not None else global_song_mean
-        if stored_song_mean is None:
-            print(f"[recompute] album {album_id}: no ML song mean, using global_song_mean={round(global_song_mean, 3)}")
+            pred_replay = round(max(1.0, min(10.0, pred_replay)), 1)
 
-        z_theme  = (pred_theme  - theme_mu)  / theme_sd
-        z_replay = (pred_replay - replay_mu) / replay_sd
-        z_dist   = (pred_dist   - dist_mu)   / dist_sd
-        pred_score = round(1.0 * song_component + 0.25 * z_theme + 0.15 * z_replay + 0.05 * z_dist, 2)
+            song_component = stored_song_mean if stored_song_mean is not None else user_song_mean
+            if stored_song_mean is None:
+                print(f"[recompute] album {album_id}: no ML song mean, using user_song_mean={round(user_song_mean, 3)}")
 
-        con.execute(
-            text("UPDATE album SET predicted_replay = :replay, predicted_score = :score WHERE id = :id"),
-            {"replay": pred_replay, "score": pred_score, "id": album_id},
-        )
+            z_theme  = (pred_theme  - theme_mu)  / theme_sd
+            z_replay = (pred_replay - replay_mu) / replay_sd
+            z_dist   = (pred_dist   - dist_mu)   / dist_sd
+            pred_score = round(1.0 * song_component + 0.25 * z_theme + 0.15 * z_replay + 0.05 * z_dist, 2)
+
+            con.execute(
+                text("UPDATE album SET predicted_replay = :replay, predicted_score = :score WHERE id = :id"),
+                {"replay": pred_replay, "score": pred_score, "id": album_id},
+            )
 
     con.commit()
     print(f"[recompute_all_predictions] updated {len(unrated)} unrated albums")
 
 
-def _factor_stats(con, field: str) -> tuple[float, float]:
+def _factor_stats(con, field: str, user_id: int | None = None) -> tuple[float, float]:
+    uid_filter = "AND user_id = :uid" if user_id is not None else ""
+    params = {"uid": user_id} if user_id is not None else {}
     row = con.execute(text(f"""
         SELECT AVG({field}),
-               AVG(({field}-(SELECT AVG({field}) FROM album WHERE {field} IS NOT NULL))*
-                   ({field}-(SELECT AVG({field}) FROM album WHERE {field} IS NOT NULL)))
-        FROM album WHERE status='rated' AND {field} IS NOT NULL
-    """)).fetchone()
+               AVG(({field}-(SELECT AVG({field}) FROM album WHERE {field} IS NOT NULL {uid_filter}))*
+                   ({field}-(SELECT AVG({field}) FROM album WHERE {field} IS NOT NULL {uid_filter})))
+        FROM album WHERE status='rated' AND {field} IS NOT NULL {uid_filter}
+    """), params).fetchone()
     mu = row[0] or 5.0
     sd = math.sqrt(row[1]) if row[1] else 1.0
     return mu, sd
