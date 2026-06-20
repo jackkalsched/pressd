@@ -44,6 +44,139 @@ function genreColor(genre: string | null | undefined): string {
   return GENRE_COLORS[genre] ?? '#bbb'
 }
 
+type SortKey = 'song_score' | 'external' | 'w_song_plus' | 'consistency_plus' | 'bang_pct' | 'skip_pct'
+
+interface RankingRow {
+  artist: string
+  songs: number
+  songScore: number | null
+  external: number | null
+  wSongPlus: number | null
+  consistencyPlus: number | null
+  bangPct: number | null
+  skipPct: number | null
+}
+
+function ArtistRankingsTable({
+  scatter,
+  artistStats,
+  QUALIFIED,
+  navigate,
+}: {
+  scatter: ReturnType<typeof import('../api').fetchScatterData> extends Promise<infer T> ? T : never
+  artistStats: Awaited<ReturnType<typeof import('../api').fetchArtistStats>>
+  QUALIFIED: number
+  navigate: (path: string) => void
+}) {
+  const [sortKey, setSortKey] = useState<SortKey>('song_score')
+
+  const rows = useMemo<RankingRow[]>(() => {
+    const artistMap = new Map(artistStats.map(a => [a.artist, a]))
+    const qualified = scatter.points.filter(p => p.song_count >= QUALIFIED)
+    return qualified.map(p => {
+      const a = artistMap.get(p.artist)
+      return {
+        artist: p.artist,
+        songs: p.song_count,
+        songScore: p.avg_song_score,
+        external: p.avg_external ?? null,
+        wSongPlus: p.w_song_plus ?? null,
+        consistencyPlus: p.consistency_plus ?? null,
+        bangPct: a ? a.bangPct : null,
+        skipPct: a ? a.skipPct : null,
+      }
+    })
+  }, [scatter, artistStats, QUALIFIED])
+
+  const sorted = useMemo(() => {
+    const get = (r: RankingRow): number => {
+      if (sortKey === 'song_score') return r.songScore ?? -Infinity
+      if (sortKey === 'external') return r.external ?? -Infinity
+      if (sortKey === 'w_song_plus') return r.wSongPlus ?? -Infinity
+      if (sortKey === 'consistency_plus') return r.consistencyPlus ?? -Infinity
+      if (sortKey === 'bang_pct') return r.bangPct ?? -Infinity
+      if (sortKey === 'skip_pct') return -(r.skipPct ?? Infinity)
+      return 0
+    }
+    return [...rows].sort((a, b) => get(b) - get(a))
+  }, [rows, sortKey])
+
+  if (sorted.length === 0) return null
+
+  const cols: { key: SortKey; label: string; fmt: (r: RankingRow) => string }[] = [
+    { key: 'song_score',      label: 'Song Score',    fmt: r => r.songScore?.toFixed(2) ?? '—' },
+    { key: 'external',        label: 'External',      fmt: r => r.external?.toFixed(2) ?? '—' },
+    { key: 'w_song_plus',     label: 'wSong+',        fmt: r => r.wSongPlus?.toFixed(1) ?? '—' },
+    { key: 'consistency_plus',label: 'Consist+',      fmt: r => r.consistencyPlus?.toFixed(1) ?? '—' },
+    { key: 'bang_pct',        label: 'Bang%',         fmt: r => r.bangPct != null ? `${Math.round(r.bangPct * 100)}%` : '—' },
+    { key: 'skip_pct',        label: 'Skip%',         fmt: r => r.skipPct != null ? `${Math.round(r.skipPct * 100)}%` : '—' },
+  ]
+
+  return (
+    <div className="mt-8">
+      <h2 className="text-sm font-semibold text-[#777] mb-4">
+        Artist Rankings <span className="text-[#bbb] font-normal">(≥{QUALIFIED} songs)</span>
+      </h2>
+      <div className="border border-[#e2e2e2] rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b border-[#e2e2e2] bg-[#fafafa]">
+                <th className="text-left text-[#aaa] text-xs font-semibold px-4 py-3 w-10">Rk.</th>
+                <th className="text-left text-[#aaa] text-xs font-semibold px-4 py-3">Artist</th>
+                <th className="text-right text-[#aaa] text-xs font-semibold px-4 py-3 w-14">Songs</th>
+                {cols.map(c => (
+                  <th
+                    key={c.key}
+                    onClick={() => setSortKey(c.key)}
+                    className={`text-right text-xs font-semibold px-4 py-3 w-24 cursor-pointer select-none transition-colors ${
+                      sortKey === c.key
+                        ? 'text-[#111] bg-[#f0f0f0]'
+                        : 'text-[#aaa] hover:text-[#555]'
+                    }`}
+                  >
+                    {c.label}
+                    {sortKey === c.key && <span className="ml-1 text-[#2d6a4f]">↓</span>}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((row, i) => (
+                <tr
+                  key={row.artist}
+                  className="border-b border-[#f0f0f0] last:border-0 hover:bg-[#fafafa] transition-colors"
+                >
+                  <td className="text-[#ccc] text-xs tabular-nums px-4 py-2.5">{i + 1}</td>
+                  <td className="px-4 py-2.5">
+                    <button
+                      onClick={() => navigate(`/artist/${encodeURIComponent(row.artist)}`)}
+                      className="text-[#111] font-medium hover:text-[#2d6a4f] transition-colors text-left"
+                    >
+                      {row.artist}
+                    </button>
+                  </td>
+                  <td className="text-right text-[#aaa] tabular-nums px-4 py-2.5 text-xs">{row.songs}</td>
+                  {cols.map(c => (
+                    <td
+                      key={c.key}
+                      className={`text-right tabular-nums px-4 py-2.5 text-xs font-semibold ${
+                        sortKey === c.key ? 'bg-[#f8f8f8] text-[#2d6a4f]' : 'text-[#333]'
+                      }`}
+                    >
+                      {c.fmt(row)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Stats() {
   const navigate = useNavigate()
   const { viewingUser, isViewingFriend } = useUser()
@@ -97,47 +230,6 @@ export default function Stats() {
 
   const QUALIFIED = 15
 
-  const topSongScore = useMemo(() =>
-    [...(scatter?.points ?? [])]
-      .filter(p => p.song_count >= QUALIFIED)
-      .sort((a, b) => b.avg_song_score - a.avg_song_score)
-      .slice(0, 100),
-  [scatter])
-
-  const topExternal = useMemo(() =>
-    [...(scatter?.points ?? [])]
-      .filter(p => p.song_count >= QUALIFIED && p.avg_external !== null)
-      .sort((a, b) => (b.avg_external ?? 0) - (a.avg_external ?? 0))
-      .slice(0, 100),
-  [scatter])
-
-  const topBang = useMemo(() =>
-    [...artistStats]
-      .filter(a => a.count >= QUALIFIED)
-      .sort((a, b) => b.bangPct - a.bangPct)
-      .slice(0, 100),
-  [artistStats])
-
-  const topSkip = useMemo(() =>
-    [...artistStats]
-      .filter(a => a.count >= QUALIFIED)
-      .sort((a, b) => a.skipPct - b.skipPct)
-      .slice(0, 100),
-  [artistStats])
-
-  const topWSongPlus = useMemo(() =>
-    [...(scatter?.points ?? [])]
-      .filter(p => p.song_count >= QUALIFIED && p.w_song_plus !== null)
-      .sort((a, b) => (b.w_song_plus ?? 0) - (a.w_song_plus ?? 0))
-      .slice(0, 100),
-  [scatter])
-
-  const topConsistency = useMemo(() =>
-    [...(scatter?.points ?? [])]
-      .filter(p => p.song_count >= QUALIFIED && p.consistency_plus !== null)
-      .sort((a, b) => (b.consistency_plus ?? 0) - (a.consistency_plus ?? 0))
-      .slice(0, 100),
-  [scatter])
 
   if (loadingSummary) {
     return (
@@ -422,40 +514,13 @@ export default function Stats() {
         )}
       </div>
       {/* Artist Rankings */}
-      {topSongScore.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-sm font-semibold text-[#777] mb-4">Artist Rankings <span className="text-[#bbb] font-normal">(≥{QUALIFIED} songs)</span></h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {[
-              { title: 'Song Score', rows: topSongScore.map(p => ({ artist: p.artist, value: p.avg_song_score.toFixed(2) })) },
-              { title: 'External', rows: topExternal.map(p => ({ artist: p.artist, value: (p.avg_external ?? 0).toFixed(2) })) },
-              { title: 'wSong+', rows: topWSongPlus.map(p => ({ artist: p.artist, value: (p.w_song_plus ?? 0).toFixed(1) })) },
-              { title: 'Consistency+', rows: topConsistency.map(p => ({ artist: p.artist, value: (p.consistency_plus ?? 0).toFixed(1) })) },
-              { title: 'Bang%', rows: topBang.map(a => ({ artist: a.artist, value: `${Math.round(a.bangPct * 100)}%` })) },
-              { title: 'Fewest Skips', rows: topSkip.map(a => ({ artist: a.artist, value: `${Math.round(a.skipPct * 100)}%` })) },
-            ].map(({ title, rows }) => (
-              <div key={title} className="bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl overflow-hidden flex flex-col">
-                <div className="px-4 py-3 border-b border-[#e8e8e8] shrink-0">
-                  <p className="text-xs font-semibold text-[#777] uppercase tracking-widest">{title}</p>
-                </div>
-                <div className="overflow-y-auto max-h-64 divide-y divide-[#efefef]">
-                  {rows.map((row, i) => (
-                    <div key={row.artist} className="flex items-center gap-3 px-4 py-2.5">
-                      <span className="text-[#ccc] text-xs tabular-nums w-4 shrink-0">{i + 1}</span>
-                      <button
-                        onClick={() => navigate(`/artist/${encodeURIComponent(row.artist)}`)}
-                        className="flex-1 text-xs text-left text-[#333] hover:text-[#2d6a4f] truncate transition-colors font-medium"
-                      >
-                        {row.artist}
-                      </button>
-                      <span className="text-xs tabular-nums text-[#2d6a4f] font-semibold shrink-0">{row.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {scatter && (
+        <ArtistRankingsTable
+          scatter={scatter}
+          artistStats={artistStats}
+          QUALIFIED={QUALIFIED}
+          navigate={navigate}
+        />
       )}
     </div>
   )
