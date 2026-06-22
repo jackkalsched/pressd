@@ -41,7 +41,12 @@ def main():
             log(f"  ERROR: {e}")
         log(f"  done ({i}/{total})")
 
-    log("Bulk predictions complete.")
+    log("Bulk predictions complete. Running theme normalization pass…")
+    from theme_predictor.predict_single import normalize_predicted_themes, recompute_all_predictions
+    normalize_predicted_themes()
+    log("Theme normalization done. Recomputing final scores…")
+    recompute_all_predictions()
+    log("All done.")
 
 
 if __name__ == "__main__":

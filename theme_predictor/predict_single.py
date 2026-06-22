@@ -220,8 +220,7 @@ def _run(album_id: int):
 
                 score, reasoning = predict_theme(corpus, example_dicts, corpora_map)
                 if score is not None:
-                    _theme_mu, _theme_sd = _factor_stats(con, "theme", user_id)
-                    norm_score = _normalize_single(score, [score], _theme_mu, _theme_sd)
+                    norm_score = round(max(1.0, min(10.0, float(score))))
                     con.execute(
                         text("UPDATE album SET predicted_theme = :theme, predicted_theme_reasoning = :reasoning WHERE id = :id"),
                         {"theme": norm_score, "reasoning": reasoning, "id": album_id},
@@ -350,7 +349,45 @@ def _run(album_id: int):
         except Exception as e:
             print(f"[predict_single] score failed: {e}")
 
+        # Re-normalize all predicted themes now that there's a new data point
+        try:
+            normalize_predicted_themes()
+        except Exception as e:
+            print(f"[predict_single] theme normalization failed: {e}")
+
         print(f"[predict_single] Done: {artist} – {album_name}")
+
+
+def normalize_predicted_themes():
+    """Remap all predicted_theme values so their distribution matches the user's actual
+    theme rating distribution. Prevents LLM scores from being systematically biased."""
+    with engine.connect() as con:
+        user_ids = [r[0] for r in con.execute(
+            text("SELECT DISTINCT user_id FROM album WHERE status='to_listen' AND predicted_theme IS NOT NULL")
+        ).fetchall()]
+        for user_id in user_ids:
+            target_mu, target_sd = _factor_stats(con, "theme", user_id)
+            rows = con.execute(
+                text("SELECT id, predicted_theme FROM album WHERE user_id=:uid AND status='to_listen' AND predicted_theme IS NOT NULL"),
+                {"uid": user_id},
+            ).fetchall()
+            if not rows:
+                continue
+            raw_scores = [r[1] for r in rows]
+            mu = sum(raw_scores) / len(raw_scores)
+            sd = math.sqrt(sum((x - mu) ** 2 for x in raw_scores) / len(raw_scores)) or 1.0
+            updated = 0
+            for album_id, raw in rows:
+                z = (raw - mu) / sd
+                norm = round(max(1.0, min(10.0, z * target_sd + target_mu)))
+                con.execute(
+                    text("UPDATE album SET predicted_theme = :t WHERE id = :id"),
+                    {"t": norm, "id": album_id},
+                )
+                updated += 1
+            con.commit()
+            print(f"[normalize_themes] user {user_id}: normalized {updated} albums "
+                  f"(raw mu={round(mu,2)}, sd={round(sd,2)}) → target mu={round(target_mu,2)}, sd={round(target_sd,2)}")
 
 
 def recompute_all_predictions():
