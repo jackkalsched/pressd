@@ -47,6 +47,35 @@ def list_users(session: Session = Depends(get_session)):
     return session.exec(select(PressUser)).all()
 
 
+@router.get("/search")
+def search_users(q: str = Query(""), exclude_user_id: int = Query(0), session: Session = Depends(get_session)):
+    if not q.strip():
+        return []
+    pattern = f"%{q.strip()}%"
+    users = session.exec(
+        select(PressUser).where(
+            PressUser.name.ilike(pattern),
+            PressUser.id != exclude_user_id,
+        ).limit(20)
+    ).all()
+
+    # Get existing friend IDs for the requester
+    friendships = session.exec(
+        select(Friendship).where(
+            (Friendship.user_id_a == exclude_user_id) | (Friendship.user_id_b == exclude_user_id)
+        )
+    ).all()
+    friend_ids = {
+        f.user_id_b if f.user_id_a == exclude_user_id else f.user_id_a
+        for f in friendships
+    }
+
+    return [
+        {"id": u.id, "name": u.name, "avatar_url": u.avatar_url, "already_friends": u.id in friend_ids}
+        for u in users
+    ]
+
+
 @router.post("/")
 def create_user(data: dict, session: Session = Depends(get_session)):
     name = (data.get("name") or "").strip()
@@ -183,6 +212,22 @@ def list_friends(user_id: int, session: Session = Depends(get_session)):
     ]
     friends = [session.get(PressUser, fid) for fid in friend_ids]
     return [{"id": u.id, "name": u.name, "avatar_url": u.avatar_url} for u in friends if u]
+
+
+@router.post("/{user_id}/friends")
+def add_friend(user_id: int, data: dict, session: Session = Depends(get_session)):
+    friend_id = data.get("friend_id")
+    if not friend_id or friend_id == user_id:
+        raise HTTPException(status_code=400, detail="Invalid friend_id")
+    for uid in [user_id, friend_id]:
+        if not session.get(PressUser, uid):
+            raise HTTPException(status_code=404, detail="User not found")
+    a, b = min(user_id, friend_id), max(user_id, friend_id)
+    if session.exec(select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)).first():
+        return {"ok": True, "already_friends": True}
+    session.add(Friendship(user_id_a=a, user_id_b=b))
+    session.commit()
+    return {"ok": True, "already_friends": False}
 
 
 @router.delete("/{user_id}/friends/{friend_id}")

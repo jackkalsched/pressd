@@ -1,8 +1,9 @@
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { Loader2, Music } from 'lucide-react'
-import { fetchFeed } from '../api'
-import type { FeedItem } from '../api'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Loader2, Music, Search, UserPlus, Check } from 'lucide-react'
+import { fetchFeed, searchUsers, addFriend } from '../api'
+import type { FeedItem, UserSearchResult } from '../api'
 import { useUser } from '../context/UserContext'
 
 function timeAgo(dateStr?: string): string {
@@ -104,6 +105,86 @@ function FeedCard({ item }: { item: FeedItem }) {
   )
 }
 
+function FindPeople() {
+  const { activeUser } = useUser()
+  const queryClient = useQueryClient()
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<UserSearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [added, setAdded] = useState<Set<number>>(new Set())
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (debounce.current) clearTimeout(debounce.current)
+    if (!query.trim()) { setResults([]); return }
+    debounce.current = setTimeout(async () => {
+      setSearching(true)
+      const res = await searchUsers(query, activeUser!.id)
+      setResults(res)
+      setSearching(false)
+    }, 300)
+    return () => { if (debounce.current) clearTimeout(debounce.current) }
+  }, [query, activeUser])
+
+  async function handleAdd(user: UserSearchResult) {
+    await addFriend(activeUser!.id, user.id)
+    setAdded(prev => new Set(prev).add(user.id))
+    queryClient.invalidateQueries({ queryKey: ['friends'] })
+    queryClient.invalidateQueries({ queryKey: ['feed'] })
+  }
+
+  return (
+    <div className="mb-8">
+      <h2 className="text-sm font-semibold text-[#777] mb-3">Find People</h2>
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#bbb] pointer-events-none" />
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Search by username…"
+          className="w-full pl-8 pr-4 py-2.5 bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl text-sm text-[#111] placeholder:text-[#bbb] focus:outline-none focus:border-[#2d6a4f] transition-colors"
+        />
+        {searching && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#bbb] animate-spin" />}
+      </div>
+
+      {results.length > 0 && (
+        <div className="mt-2 border border-[#e2e2e2] rounded-xl overflow-hidden divide-y divide-[#f0f0f0]">
+          {results.map(u => {
+            const isFriend = u.already_friends || added.has(u.id)
+            return (
+              <div key={u.id} className="flex items-center gap-3 px-4 py-3 bg-white">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                  style={{ background: '#2d6a4f' }}
+                >
+                  {u.name[0].toUpperCase()}
+                </div>
+                <span className="flex-1 text-sm font-medium text-[#111]">{u.name}</span>
+                {isFriend ? (
+                  <span className="flex items-center gap-1 text-xs text-[#2d6a4f] font-medium">
+                    <Check size={13} /> Friends
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => handleAdd(u)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#2d6a4f] hover:bg-[#245c43] px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <UserPlus size={12} /> Add
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {query.trim() && !searching && results.length === 0 && (
+        <p className="text-xs text-[#bbb] mt-3 px-1">No users found.</p>
+      )}
+    </div>
+  )
+}
+
 export default function Social() {
   const { activeUser } = useUser()
 
@@ -117,6 +198,7 @@ export default function Social() {
   return (
     <div className="p-4 md:p-8 max-w-2xl">
       <h1 className="text-xl font-semibold text-[#111] mb-6">Friends' Activity</h1>
+      <FindPeople />
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-[#aaa]">

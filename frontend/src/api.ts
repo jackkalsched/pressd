@@ -513,6 +513,29 @@ export async function fetchUsers(): Promise<UserInfo[]> {
   return res.json()
 }
 
+export interface UserSearchResult {
+  id: number
+  name: string
+  avatar_url?: string
+  already_friends: boolean
+}
+
+export async function searchUsers(q: string, excludeUserId: number): Promise<UserSearchResult[]> {
+  const res = await fetch(`${BASE}/users/search?q=${encodeURIComponent(q)}&exclude_user_id=${excludeUserId}`)
+  if (!res.ok) return []
+  return res.json()
+}
+
+export async function addFriend(userId: number, friendId: number): Promise<{ ok: boolean; already_friends: boolean }> {
+  const res = await fetch(`${BASE}/users/${userId}/friends`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ friend_id: friendId }),
+  })
+  if (!res.ok) throw new Error('Failed to add friend')
+  return res.json()
+}
+
 export async function getInviteLink(userId: number): Promise<{ link: string; inviter_name: string }> {
   const res = await fetch(`${BASE}/users/${userId}/invite-link`)
   if (!res.ok) throw new Error('Failed to get invite link')
