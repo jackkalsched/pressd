@@ -11,6 +11,7 @@ Usage:
 """
 
 import json
+import pickle
 import sys
 import pathlib
 import warnings
@@ -91,11 +92,80 @@ def load_data(con) -> pd.DataFrame:
     return pd.DataFrame(result.fetchall(), columns=_FEATURE_COLS)
 
 
-def predict_for_album(con, album_id: int) -> float | None:
-    """Train LightGBM on all rated songs with audio features, predict for album_id's songs.
-    Returns mean predicted song score, or None if audio features are unavailable."""
+_MODEL_PATH = pathlib.Path(__file__).parent / "song_score_model.pkl"
+_META_PATH  = pathlib.Path(__file__).parent / "song_score_model_meta.json"
+
+
+def _load_cached_model(n_songs: int):
+    """Return cached pipeline if it was trained on exactly n_songs, else None."""
+    try:
+        if not _MODEL_PATH.exists() or not _META_PATH.exists():
+            return None
+        with open(_META_PATH) as f:
+            meta = json.load(f)
+        if meta.get("n_songs") != n_songs:
+            return None
+        with open(_MODEL_PATH, "rb") as f:
+            pipe = pickle.load(f)
+        print(f"[song_score_model] loaded cached model ({n_songs} training songs)")
+        return pipe
+    except Exception as e:
+        print(f"[song_score_model] cache load failed: {e}")
+        return None
+
+
+def _save_model(pipe, n_songs: int, model_name: str):
+    try:
+        with open(_MODEL_PATH, "wb") as f:
+            pickle.dump(pipe, f)
+        with open(_META_PATH, "w") as f:
+            json.dump({"n_songs": n_songs, "model": model_name}, f)
+        print(f"[song_score_model] saved model → {_MODEL_PATH.name}  ({n_songs} songs, {model_name})")
+    except Exception as e:
+        print(f"[song_score_model] save failed: {e}")
+
+
+def train_model(con):
+    """Train on all rated songs with audio features, save .pkl, return pipeline."""
     df_raw = load_data(con)
-    if len(df_raw) < 20:
+    n = len(df_raw)
+    if n < 20:
+        print(f"[song_score_model] only {n} training songs — need ≥20")
+        return None, n
+
+    df = expand_mfcc(df_raw)
+    df = build_features(df)
+    df.dropna(subset=["bpm", "loudness_db", "danceability"], inplace=True)
+    if len(df) < 20:
+        return None, n
+
+    feat_cols = NUMERIC_FEATURES + CATEGORICAL_FEATURES
+    models = get_models()
+    pipe = None
+    chosen = None
+    for model_name in ("LightGBM", "XGBoost", "RandomForest"):
+        if model_name not in models:
+            continue
+        try:
+            p = models[model_name]
+            p.fit(df[feat_cols], df["score"])
+            pipe = p
+            chosen = model_name
+            print(f"[song_score_model] trained {model_name} on {len(df)} songs")
+            break
+        except Exception as e:
+            print(f"[song_score_model] {model_name} failed ({e}), trying next")
+
+    if pipe:
+        _save_model(pipe, n, chosen)
+    return pipe, n
+
+
+def predict_for_album(con, album_id: int) -> float | None:
+    """Load or train model, predict song scores for album_id. Returns mean predicted score."""
+    df_raw = load_data(con)
+    n = len(df_raw)
+    if n < 20:
         return None
 
     result = con.execute(_ALBUM_SQL, {"album_id": album_id})
@@ -103,36 +173,19 @@ def predict_for_album(con, album_id: int) -> float | None:
     if not rows:
         return None
     df_pred_raw = pd.DataFrame(rows, columns=_PREDICT_COLS)
+    df_pred = build_features(expand_mfcc(df_pred_raw))
 
-    df_train = expand_mfcc(df_raw)
-    df_train = build_features(df_train)
-    df_train.dropna(subset=["bpm", "loudness_db", "danceability"], inplace=True)
-    if len(df_train) < 20:
-        return None
-
-    df_pred = expand_mfcc(df_pred_raw)
-    df_pred = build_features(df_pred)
-
-    feat_cols = NUMERIC_FEATURES + CATEGORICAL_FEATURES
-    models = get_models()
-    pipe = None
-    for model_name in ("LightGBM", "XGBoost", "RandomForest"):
-        if model_name not in models:
-            continue
-        try:
-            pipe = models[model_name]
-            pipe.fit(df_train[feat_cols], df_train["score"])
-            print(f"[song_score_model] using {model_name}")
-            break
-        except Exception as e:
-            print(f"[song_score_model] {model_name} failed ({e}), trying next")
-            pipe = None
+    # Use cached model if training data unchanged, otherwise retrain
+    pipe = _load_cached_model(n)
+    if pipe is None:
+        pipe, _ = train_model(con)
     if pipe is None:
         return None
 
+    feat_cols = NUMERIC_FEATURES + CATEGORICAL_FEATURES
     preds = pipe.predict(df_pred[feat_cols])
     avg = float(np.mean(preds))
-    print(f"[song_score_model] album {album_id}: {len(preds)} songs predicted, avg={round(avg, 3)}")
+    print(f"[song_score_model] album {album_id}: {len(preds)} songs → avg={round(avg, 3)}")
     return avg
 
 
