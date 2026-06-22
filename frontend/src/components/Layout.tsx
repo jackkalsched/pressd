@@ -5,7 +5,7 @@ import { useGoogleLogin } from '@react-oauth/google'
 import { Library, BarChart2, List, Music, Mail, X, Loader2, MessageCircle, Pencil, Users } from 'lucide-react'
 import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
-import { fetchFriends, sendInvite, updateUser, signInWithGoogle, removeFriend } from '../api'
+import { fetchFriends, getInviteLink, updateUser, signInWithGoogle, removeFriend } from '../api'
 import type { UserInfo } from '../api'
 
 function avatarColor(name: string): string {
@@ -45,115 +45,80 @@ const nav = [
 
 function InviteModal({ onClose }: { onClose: () => void }) {
   const { activeUser } = useUser()
-  const [email, setEmail] = useState('')
-  const [loadingEmail, setLoadingEmail] = useState(false)
-  const [loadingIMessage, setLoadingIMessage] = useState(false)
-  const [result, setResult] = useState<{ link: string; viaEmail: boolean } | null>(null)
+  const [link, setLink] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleIMessage() {
-    setLoadingIMessage(true)
-    setError(null)
+  async function loadLink() {
+    if (link) return
+    setLoading(true)
     try {
-      const res = await sendInvite(activeUser!.id)
-      setResult({ link: res.link, viaEmail: false })
-      const msg = `Join me on Press'd, a music rating app! Create your account here: ${res.link}`
-      window.location.href = `sms:?body=${encodeURIComponent(msg)}`
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate invite')
+      const res = await getInviteLink(activeUser!.id)
+      setLink(res.link)
+    } catch {
+      setError('Failed to generate invite link')
     } finally {
-      setLoadingIMessage(false)
+      setLoading(false)
     }
   }
 
-  async function handleEmail(e: React.FormEvent) {
-    e.preventDefault()
-    if (!email.trim()) return
-    setLoadingEmail(true)
-    setError(null)
-    try {
-      const res = await sendInvite(activeUser!.id, email.trim())
-      setResult({ link: res.link, viaEmail: true })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send invite')
-    } finally {
-      setLoadingEmail(false)
-    }
+  // Load link on mount
+  useState(() => { loadLink() })
+
+  function handleCopy() {
+    if (!link) return
+    navigator.clipboard.writeText(link)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  function handleiMessage() {
+    if (!link) return
+    const msg = `Join me on Press'd, a music rating app! Sign up here: ${link}`
+    window.location.href = `sms:?body=${encodeURIComponent(msg)}`
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white border border-[#e2e2e2] rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl">
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-4">
           <h2 className="text-[#111] font-semibold">Invite Someone</h2>
           <button onClick={onClose} className="text-[#aaa] hover:text-[#555] transition-colors">
             <X size={18} />
           </button>
         </div>
 
-        {result ? (
+        <p className="text-sm text-[#777] mb-4">
+          Share your invite link — anyone who signs up becomes your friend.
+        </p>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-6 text-[#aaa] gap-2">
+            <Loader2 size={14} className="animate-spin" /> Generating…
+          </div>
+        ) : error ? (
+          <p className="text-[#c0392b] text-xs">{error}</p>
+        ) : link ? (
           <div className="flex flex-col gap-3">
-            <p className="text-sm text-[#444]">
-              {result.viaEmail ? "Invite sent! Share this link as a backup:" : "Invite link created — opening iMessage…"}
-            </p>
-            <div className="bg-[#f5f5f5] rounded-lg px-3 py-2 text-xs text-[#555] break-all font-mono">
-              {result.link}
+            <div className="bg-[#f5f5f5] rounded-lg px-3 py-2 text-xs text-[#555] break-all font-mono border border-[#e2e2e2]">
+              {link}
             </div>
             <button
-              onClick={() => navigator.clipboard.writeText(result.link)}
-              className="w-full py-2 rounded-xl text-sm font-semibold bg-[#2d6a4f] hover:bg-[#245c43] text-white transition-colors"
+              onClick={handleCopy}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#2d6a4f] hover:bg-[#245c43] text-white transition-colors"
             >
-              Copy Link
+              {copied ? '✓ Copied!' : 'Copy Link'}
             </button>
-            {!result.viaEmail && (
-              <button
-                onClick={() => {
-                  const msg = `Join me on Press'd, a music rating app! Create your account here: ${result.link}`
-                  window.location.href = `sms:?body=${encodeURIComponent(msg)}`
-                }}
-                className="w-full py-2 rounded-xl text-sm font-semibold bg-[#f5f5f5] border border-[#e2e2e2] hover:bg-[#ececec] text-[#333] transition-colors flex items-center justify-center gap-2"
-              >
-                <MessageCircle size={14} /> Open iMessage again
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
             <button
-              onClick={handleIMessage}
-              disabled={loadingIMessage}
-              className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#2d6a4f] hover:bg-[#245c43] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              onClick={handleiMessage}
+              className="w-full py-2 rounded-xl text-sm font-medium bg-[#f5f5f5] border border-[#e2e2e2] hover:bg-[#ececec] text-[#333] transition-colors flex items-center justify-center gap-2"
             >
-              {loadingIMessage ? <><Loader2 size={14} className="animate-spin" /> Generating…</> : <><MessageCircle size={14} /> Share via iMessage</>}
+              <MessageCircle size={14} /> Share via iMessage
             </button>
-
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-[#e2e2e2]" />
-              <span className="text-[11px] text-[#bbb]">or send by email</span>
-              <div className="flex-1 h-px bg-[#e2e2e2]" />
-            </div>
-
-            <form onSubmit={handleEmail} className="flex flex-col gap-2">
-              <input
-                type="email"
-                placeholder="Their email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="bg-[#f5f5f5] border border-[#e2e2e2] text-[#111] text-sm px-4 py-2.5 rounded-lg focus:outline-none focus:border-[#2d6a4f] transition-colors placeholder:text-[#bbb]"
-              />
-              <button
-                type="submit"
-                disabled={loadingEmail || !email.trim()}
-                className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#f5f5f5] border border-[#e2e2e2] hover:bg-[#ececec] text-[#333] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {loadingEmail ? <><Loader2 size={14} className="animate-spin" /> Sending…</> : 'Send Email Invite'}
-              </button>
-            </form>
-
-            {error && <p className="text-[#c0392b] text-xs">{error}</p>}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   )
@@ -332,7 +297,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-white">
-      <aside className="w-56 shrink-0 border-r border-[#e2e2e2] flex flex-col py-6 px-4 sticky top-0 h-screen bg-white overflow-y-auto">
+      {/* Sidebar — desktop only */}
+      <aside className="hidden md:flex w-56 shrink-0 border-r border-[#e2e2e2] flex-col py-6 px-4 sticky top-0 h-screen bg-white overflow-y-auto">
         <div className="flex items-center gap-2 mb-8 px-2">
           <Music size={20} className="text-[#2d6a4f]" />
           <span className="text-[#111] font-semibold tracking-wide text-lg">Press'd</span>
@@ -434,11 +400,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">
+      {/* Main content */}
+      <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
         {isViewingFriend && (
-          <div className="bg-[#2d6a4f]/8 border-b border-[#2d6a4f]/20 px-6 py-2 flex items-center gap-3">
+          <div className="bg-[#2d6a4f]/8 border-b border-[#2d6a4f]/20 px-4 py-2 flex items-center gap-3">
             <span className="text-xs text-[#2d6a4f] font-medium">
-              Viewing {viewingUser?.name}'s data (read-only)
+              Viewing {viewingUser?.name}'s data
             </span>
             <button onClick={returnToSelf} className="text-xs text-[#aaa] hover:text-[#555] transition-colors ml-auto">
               ← Back to your data
@@ -447,6 +414,34 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         )}
         {children}
       </main>
+
+      {/* Bottom tab bar — mobile only */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-[#e2e2e2] flex items-stretch z-40"
+           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        {nav.map(({ to, label, icon: Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              clsx(
+                'flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors',
+                isActive ? 'text-[#2d6a4f]' : 'text-[#aaa]',
+              )
+            }
+          >
+            <Icon size={20} />
+            {label}
+          </NavLink>
+        ))}
+        {/* Profile button */}
+        <button
+          onClick={() => setShowProfile(true)}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium text-[#aaa] transition-colors"
+        >
+          <Avatar user={activeUser} size={22} />
+          <span>Profile</span>
+        </button>
+      </nav>
 
       {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}

@@ -51,7 +51,7 @@ export default function Ratings() {
   )
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-[#111]">Record Ratings</h1>
         <span className="text-[#aaa] text-sm">{sorted.length} albums</span>

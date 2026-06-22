@@ -188,7 +188,7 @@ export default function RatingScreen() {
   return (
     <div className="flex min-h-screen bg-white">
       {/* Main content */}
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-4 md:p-8">
         <div className="flex items-center justify-between mb-6">
           <button
             onClick={() => navigate(-1)}

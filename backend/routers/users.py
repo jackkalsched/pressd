@@ -62,8 +62,26 @@ def create_user(data: dict, session: Session = Depends(get_session)):
     return user
 
 
+@router.get("/{user_id}/invite-link")
+def get_invite_link(user_id: int, session: Session = Depends(get_session)):
+    """Return (or create) a permanent, reusable invite link for this user."""
+    inviter = session.get(PressUser, user_id)
+    if not inviter:
+        raise HTTPException(status_code=404, detail="User not found")
+    invite = session.exec(
+        select(Invite).where(Invite.invited_by == user_id, Invite.permanent == True)
+    ).first()
+    if not invite:
+        invite = Invite(invited_by=user_id, token=str(uuid.uuid4()), permanent=True)
+        session.add(invite)
+        session.commit()
+        session.refresh(invite)
+    return {"link": f"{APP_URL}/join?token={invite.token}", "inviter_name": inviter.name}
+
+
 @router.post("/invite")
 def send_invite(data: dict, session: Session = Depends(get_session)):
+    """Legacy one-time invite (email flow). Kept for backwards compat."""
     from_user_id: int = data.get("from_user_id", 1)
     email: str = (data.get("email") or "").strip()
 
@@ -86,7 +104,7 @@ def get_invite(token: str, session: Session = Depends(get_session)):
     invite = session.exec(select(Invite).where(Invite.token == token)).first()
     if not invite:
         raise HTTPException(status_code=404, detail="Invite not found")
-    if invite.accepted_at is not None:
+    if not invite.permanent and invite.accepted_at is not None:
         raise HTTPException(status_code=410, detail="Invite already used")
     inviter = session.get(PressUser, invite.invited_by)
     return {"inviter_name": inviter.name if inviter else "Someone", "email": invite.email}
@@ -97,17 +115,15 @@ def accept_invite(token: str, data: dict, session: Session = Depends(get_session
     invite = session.exec(select(Invite).where(Invite.token == token)).first()
     if not invite:
         raise HTTPException(status_code=404, detail="Invite not found")
-    if invite.accepted_at is not None:
+    if not invite.permanent and invite.accepted_at is not None:
         raise HTTPException(status_code=410, detail="Invite already used")
 
     user_id = data.get("user_id")
     if user_id:
-        # Google-auth flow: user already exists
         user = session.get(PressUser, int(user_id))
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
     else:
-        # Legacy name-based flow (kept for backwards compat)
         name = (data.get("name") or "").strip()
         if not name:
             raise HTTPException(status_code=400, detail="name or user_id is required")
@@ -117,13 +133,17 @@ def accept_invite(token: str, data: dict, session: Session = Depends(get_session
         session.add(user)
         session.flush()
 
-    # Skip if already friends
-    a, b = min(invite.invited_by, user.id), max(invite.invited_by, user.id)
-    if not session.exec(select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)).first():
-        session.add(Friendship(user_id_a=a, user_id_b=b))
+    # Don't add self as friend
+    if user.id != invite.invited_by:
+        a, b = min(invite.invited_by, user.id), max(invite.invited_by, user.id)
+        if not session.exec(select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)).first():
+            session.add(Friendship(user_id_a=a, user_id_b=b))
 
-    invite.accepted_at = datetime.utcnow()
-    session.add(invite)
+    # Only mark used for one-time invites
+    if not invite.permanent:
+        invite.accepted_at = datetime.utcnow()
+        session.add(invite)
+
     session.commit()
     session.refresh(user)
     return {"id": user.id, "name": user.name, "avatar_url": user.avatar_url}

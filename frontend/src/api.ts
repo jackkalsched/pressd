@@ -513,13 +513,9 @@ export async function fetchUsers(): Promise<UserInfo[]> {
   return res.json()
 }
 
-export async function sendInvite(fromUserId: number, email?: string): Promise<{ ok: boolean; link: string }> {
-  const res = await fetch(`${BASE}/users/invite`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: email ?? '', from_user_id: fromUserId }),
-  })
-  if (!res.ok) throw new Error('Failed to send invite')
+export async function getInviteLink(userId: number): Promise<{ link: string; inviter_name: string }> {
+  const res = await fetch(`${BASE}/users/${userId}/invite-link`)
+  if (!res.ok) throw new Error('Failed to get invite link')
   return res.json()
 }
 

@@ -266,7 +266,7 @@ export default function Stats() {
     : scatter?.mean_external ?? null
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <h1 className="text-2xl font-semibold text-[#111] mb-8">
         {isViewingFriend ? `${viewingUser.name}'s Stats` : 'Stats'}
       </h1>

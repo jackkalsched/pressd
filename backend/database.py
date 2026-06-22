@@ -63,6 +63,8 @@ def init_db():
             "ALTER TABLE album ADD COLUMN predicted_score REAL",
             "ALTER TABLE album ADD COLUMN sub_genre3 VARCHAR",
             "ALTER TABLE album ADD COLUMN user_id INTEGER",
+            "ALTER TABLE invite ADD COLUMN permanent BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE invite ALTER COLUMN email SET DEFAULT ''",
         ]:
             try:
                 conn.execute(text(stmt))

@@ -115,7 +115,7 @@ export default function Social() {
   })
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="p-4 md:p-8 max-w-2xl">
       <h1 className="text-xl font-semibold text-[#111] mb-6">Friends' Activity</h1>
 
       {isLoading ? (

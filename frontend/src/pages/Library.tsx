@@ -192,7 +192,7 @@ export default function Library() {
     : filteredAlbums
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       {showModal && <AddAlbumModal onClose={() => setShowModal(false)} userId={activeUser.id} />}
 
       <div className="flex items-center justify-between mb-6">

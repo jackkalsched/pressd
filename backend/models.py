@@ -16,10 +16,11 @@ class PressUser(SQLModel, table=True):
 class Invite(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     invited_by: int = Field(foreign_key="pressuser.id", index=True)
-    email: str
+    email: str = Field(default="")
     token: str = Field(unique=True, index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     accepted_at: Optional[datetime] = None
+    permanent: bool = Field(default=False)
 
 
 class Friendship(SQLModel, table=True):
