@@ -76,11 +76,13 @@ def _search_spotify(q: str) -> list:
         data = _get(
             "https://api.spotify.com/v1/search",
             headers=headers,
-            params={"q": q, "type": "album", "limit": 5},
+            params={"q": f'album:"{q}"', "type": "album", "limit": 10},
         )
+        q_norm = q.strip().lower()
         album_ids = [
             a["id"] for a in data.get("albums", {}).get("items", [])
             if a.get("album_type") != "single"
+            and a.get("name", "").strip().lower() == q_norm
         ]
 
     results = []
