@@ -78,13 +78,19 @@ def _search_spotify(q: str) -> list:
             headers=headers,
             params={"q": q, "type": "album", "limit": 5},
         )
-        album_ids = [a["id"] for a in data.get("albums", {}).get("items", [])]
+        album_ids = [
+            a["id"] for a in data.get("albums", {}).get("items", [])
+            if a.get("album_type") != "single"
+        ]
 
     results = []
     for aid in album_ids:
         try:
             album = _get(f"https://api.spotify.com/v1/albums/{aid}", headers=headers)
         except HTTPException:
+            continue
+
+        if album.get("album_type") == "single":
             continue
 
         release_date = album.get("release_date", "")
