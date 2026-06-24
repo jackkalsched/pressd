@@ -11,10 +11,17 @@ import AlbumDetail from './pages/AlbumDetail'
 import ArtistPage from './pages/ArtistPage'
 import Join from './pages/Join'
 import Login from './pages/Login'
+import LandingPage from './pages/LandingPage'
+
+function PublicHome() {
+  const { activeUser } = useUser()
+  if (activeUser) return <Navigate to="/library" replace />
+  return <LandingPage />
+}
 
 function ProtectedRoutes() {
   const { activeUser } = useUser()
-  if (!activeUser) return <Navigate to="/login" replace />
+  if (!activeUser) return <Navigate to="/" replace />
   return (
     <Layout>
       <Routes>
@@ -36,6 +43,7 @@ export default function App() {
     <UserProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/" element={<PublicHome />} />
           <Route path="/rate/:id" element={<RatingScreen />} />
           <Route path="/join" element={<Join />} />
           <Route path="/login" element={<Login />} />
