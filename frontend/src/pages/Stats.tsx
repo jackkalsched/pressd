@@ -117,6 +117,15 @@ function ArtistRankingsTable({
     return m
   }, [rowsPrev, sortKey])
 
+  // Artists with activity in the last 7 days (more songs now than 7 days ago, or brand new)
+  const recentlyActive = useMemo<Set<string>>(() => {
+    const prevSongs = new Map(rowsPrev.map(r => [r.artist, r.songs]))
+    return new Set(rows.filter(r => {
+      const prev = prevSongs.get(r.artist)
+      return prev === undefined || r.songs > prev
+    }).map(r => r.artist))
+  }, [rows, rowsPrev])
+
   if (sorted.length === 0) return null
 
   const cols: { key: SortKey; label: string; fmt: (r: RankingRow) => string }[] = [
@@ -168,6 +177,7 @@ function ArtistRankingsTable({
                       <span>{i + 1}</span>
                       {(() => {
                         const prev = prevRankMap.get(row.artist)
+                        if (!recentlyActive.has(row.artist)) return null
                         if (prev === undefined) return <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-1 py-0.5 rounded">NEW</span>
                         const delta = prev - (i + 1)
                         if (delta > 0) return <span className="text-[10px] font-bold text-[#2d6a4f]">+{delta}</span>
