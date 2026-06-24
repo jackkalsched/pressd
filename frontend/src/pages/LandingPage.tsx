@@ -521,8 +521,6 @@ export default function LandingPage() {
       <div className="landing">
         {/* ── Nav ── */}
         <nav className="landing-nav">
-          <NavSearch />
-
           <div className="nav-links">
             <Link to="/library" className="nav-link">Library</Link>
             <Link to="/ratings" className="nav-link">Ratings</Link>
