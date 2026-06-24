@@ -60,46 +60,62 @@ interface RankingRow {
 function ArtistRankingsTable({
   scatter,
   artistStats,
+  scatterPrev,
+  artistStatsPrev,
   QUALIFIED,
   navigate,
 }: {
   scatter: ReturnType<typeof import('../api').fetchScatterData> extends Promise<infer T> ? T : never
   artistStats: Awaited<ReturnType<typeof import('../api').fetchArtistStats>>
+  scatterPrev?: ReturnType<typeof import('../api').fetchScatterData> extends Promise<infer T> ? T : never
+  artistStatsPrev?: Awaited<ReturnType<typeof import('../api').fetchArtistStats>>
   QUALIFIED: number
   navigate: (path: string) => void
 }) {
   const [sortKey, setSortKey] = useState<SortKey>('song_score')
 
-  const rows = useMemo<RankingRow[]>(() => {
-    const artistMap = new Map(artistStats.map(a => [a.artist, a]))
-    const qualified = scatter.points.filter(p => p.song_count >= QUALIFIED)
-    return qualified.map(p => {
-      const a = artistMap.get(p.artist)
-      return {
-        artist: p.artist,
-        songs: p.song_count,
-        songScore: p.avg_song_score,
-        external: p.avg_external ?? null,
-        wSongPlus: p.w_song_plus ?? null,
-        consistencyPlus: p.consistency_plus ?? null,
-        bangPct: a ? a.bangPct : null,
-        skipPct: a ? a.skipPct : null,
-      }
-    })
-  }, [scatter, artistStats, QUALIFIED])
+  const buildRows = (sc: typeof scatter, stats: typeof artistStats): RankingRow[] => {
+    const artistMap = new Map(stats.map(a => [a.artist, a]))
+    return sc.points
+      .filter(p => p.song_count >= QUALIFIED)
+      .map(p => {
+        const a = artistMap.get(p.artist)
+        return {
+          artist: p.artist,
+          songs: p.song_count,
+          songScore: p.avg_song_score,
+          external: p.avg_external ?? null,
+          wSongPlus: p.w_song_plus ?? null,
+          consistencyPlus: p.consistency_plus ?? null,
+          bangPct: a ? a.bangPct : null,
+          skipPct: a ? a.skipPct : null,
+        }
+      })
+  }
+
+  const rows = useMemo<RankingRow[]>(() => buildRows(scatter, artistStats), [scatter, artistStats, QUALIFIED])
+  const rowsPrev = useMemo<RankingRow[]>(() => scatterPrev && artistStatsPrev ? buildRows(scatterPrev, artistStatsPrev) : [], [scatterPrev, artistStatsPrev, QUALIFIED])
+
+  const getSortVal = (r: RankingRow, key: SortKey): number => {
+    if (key === 'song_score') return r.songScore ?? -Infinity
+    if (key === 'external') return r.external ?? -Infinity
+    if (key === 'w_song_plus') return r.wSongPlus ?? -Infinity
+    if (key === 'consistency_plus') return r.consistencyPlus ?? -Infinity
+    if (key === 'bang_pct') return r.bangPct ?? -Infinity
+    if (key === 'skip_pct') return -(r.skipPct ?? Infinity)
+    return 0
+  }
 
   const sorted = useMemo(() => {
-    const get = (r: RankingRow): number => {
-      if (sortKey === 'song_score') return r.songScore ?? -Infinity
-      if (sortKey === 'external') return r.external ?? -Infinity
-      if (sortKey === 'w_song_plus') return r.wSongPlus ?? -Infinity
-      if (sortKey === 'consistency_plus') return r.consistencyPlus ?? -Infinity
-      if (sortKey === 'bang_pct') return r.bangPct ?? -Infinity
-      if (sortKey === 'skip_pct') return -(r.skipPct ?? Infinity)
-      return 0
-    }
-    return [...rows].sort((a, b) => get(b) - get(a))
+    return [...rows].sort((a, b) => getSortVal(b, sortKey) - getSortVal(a, sortKey))
   }, [rows, sortKey])
+
+  const prevRankMap = useMemo<Map<string, number>>(() => {
+    const m = new Map<string, number>()
+    const sortedPrev = [...rowsPrev].sort((a, b) => getSortVal(b, sortKey) - getSortVal(a, sortKey))
+    sortedPrev.forEach((r, i) => m.set(r.artist, i + 1))
+    return m
+  }, [rowsPrev, sortKey])
 
   if (sorted.length === 0) return null
 
@@ -147,7 +163,19 @@ function ArtistRankingsTable({
                   key={row.artist}
                   className="border-b border-[#f0f0f0] last:border-0 hover:bg-[#fafafa] transition-colors"
                 >
-                  <td className="text-[#ccc] text-xs tabular-nums px-4 py-2.5">{i + 1}</td>
+                  <td className="text-[#ccc] text-xs tabular-nums px-4 py-2.5">
+                    <div className="flex items-center gap-1.5">
+                      <span>{i + 1}</span>
+                      {(() => {
+                        const prev = prevRankMap.get(row.artist)
+                        if (prev === undefined) return <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-1 py-0.5 rounded">NEW</span>
+                        const delta = prev - (i + 1)
+                        if (delta > 0) return <span className="text-[10px] font-bold text-[#2d6a4f]">+{delta}</span>
+                        if (delta < 0) return <span className="text-[10px] font-bold text-red-400">{delta}</span>
+                        return null
+                      })()}
+                    </div>
+                  </td>
                   <td className="px-4 py-2.5">
                     <button
                       onClick={() => navigate(`/artist/${encodeURIComponent(row.artist)}`)}
@@ -209,6 +237,24 @@ export default function Stats() {
     queryKey: ['stats', 'artists', userId],
     queryFn: () => fetchArtistStats(userId),
     staleTime: 5 * 60 * 1000,
+  })
+
+  const sevenDaysAgo = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 7)
+    return d.toISOString().slice(0, 10)
+  }, [])
+
+  const { data: scatterPrev } = useQuery({
+    queryKey: ['stats', 'scatter', userId, sevenDaysAgo],
+    queryFn: () => fetchScatterData(userId, sevenDaysAgo),
+    staleTime: 60 * 60 * 1000,
+  })
+
+  const { data: artistStatsPrev = [] } = useQuery({
+    queryKey: ['stats', 'artists', userId, sevenDaysAgo],
+    queryFn: () => fetchArtistStats(userId, sevenDaysAgo),
+    staleTime: 60 * 60 * 1000,
   })
 
   const kdeData = useMemo(() => {
@@ -518,6 +564,8 @@ export default function Stats() {
         <ArtistRankingsTable
           scatter={scatter}
           artistStats={artistStats}
+          scatterPrev={scatterPrev}
+          artistStatsPrev={artistStatsPrev}
           QUALIFIED={QUALIFIED}
           navigate={navigate}
         />

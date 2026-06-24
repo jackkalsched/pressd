@@ -337,8 +337,10 @@ export async function fetchSummary(userId = 1): Promise<Summary> {
   return res.json()
 }
 
-export async function fetchArtistStats(userId = 1): Promise<ArtistStats[]> {
-  const res = await fetch(`${BASE}/stats/artists?user_id=${userId}`)
+export async function fetchArtistStats(userId = 1, beforeDate?: string): Promise<ArtistStats[]> {
+  const params = new URLSearchParams({ user_id: String(userId) })
+  if (beforeDate) params.set('before_date', beforeDate)
+  const res = await fetch(`${BASE}/stats/artists?${params}`)
   const data = await res.json() as Record<string, unknown>[]
   return data.map((d) => ({
     artist: d.artist as string,
@@ -443,8 +445,10 @@ export interface ScatterData {
   mean_external: number | null
 }
 
-export async function fetchScatterData(userId = 1): Promise<ScatterData> {
-  const res = await fetch(`${BASE}/stats/scatter?user_id=${userId}`)
+export async function fetchScatterData(userId = 1, beforeDate?: string): Promise<ScatterData> {
+  const params = new URLSearchParams({ user_id: String(userId) })
+  if (beforeDate) params.set('before_date', beforeDate)
+  const res = await fetch(`${BASE}/stats/scatter?${params}`)
   return res.json()
 }
 

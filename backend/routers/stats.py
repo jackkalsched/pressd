@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select, func
 from sqlalchemy.orm import selectinload
 from collections import defaultdict
+from datetime import date, timedelta
+from typing import Optional
 import statistics
 
 from ..database import get_session
@@ -52,13 +54,16 @@ def summary(user_id: int = Query(1), session: Session = Depends(get_session)):
 
 
 @router.get("/artists")
-def artist_stats(user_id: int = Query(1), session: Session = Depends(get_session)):
-    songs = session.exec(
+def artist_stats(user_id: int = Query(1), before_date: Optional[date] = None, session: Session = Depends(get_session)):
+    q = (
         select(Song)
         .join(Album, Song.album_id == Album.id)
         .where(Album.user_id == user_id)
         .where(Song.score.is_not(None))
-    ).all()
+    )
+    if before_date:
+        q = q.where(Album.date_rated <= before_date)
+    songs = session.exec(q).all()
 
     by_artist: dict[str, list[float]] = defaultdict(list)
     for s in songs:
@@ -140,14 +145,21 @@ def year_by_year(user_id: int = Query(1), session: Session = Depends(get_session
 
 
 @router.get("/scatter")
-def scatter_data(user_id: int = Query(1), session: Session = Depends(get_session)):
+def scatter_data(user_id: int = Query(1), before_date: Optional[date] = None, session: Session = Depends(get_session)):
     def album_ext(a: Album):
         if any(v is None for v in [a.theme, a.replay_value, a.production, a.distinctness]):
             return None
         return (0.25 * a.theme + 0.15 * a.replay_value + 0.15 * a.production + 0.05 * a.distinctness) / 0.60
 
-    all_albums = session.exec(select(Album).where(Album.user_id == user_id)).all()
-    rated_albums = [a for a in all_albums if a.status == "rated"]
+    all_albums_q = select(Album).where(Album.user_id == user_id)
+    all_albums = session.exec(all_albums_q).all()
+
+    if before_date:
+        rated_albums = [a for a in all_albums if a.status == "rated" and a.date_rated and a.date_rated <= before_date]
+        eligible_ids = {a.id for a in rated_albums}
+    else:
+        rated_albums = [a for a in all_albums if a.status == "rated"]
+        eligible_ids = {a.id for a in all_albums}
 
     user_album_ids = [a.id for a in all_albums]
 
@@ -163,12 +175,15 @@ def scatter_data(user_id: int = Query(1), session: Session = Depends(get_session
     ).all()
     _album_scores: dict[int, list[float]] = defaultdict(list)
     for _aid, _sc in _scored_rows:
-        _album_scores[_aid].append(_sc)
+        if _aid in eligible_ids:
+            _album_scores[_aid].append(_sc)
 
     by_artist: dict[str, dict] = {}
-    for a in all_albums:
-        if a.status != "rated" and _song_counts.get(a.id, 0) > 6:
-            continue  # skip non-rated full albums
+    for a in (rated_albums if before_date else all_albums):
+        if not before_date and a.status != "rated" and _song_counts.get(a.id, 0) > 6:
+            continue
+        if before_date and a.id not in eligible_ids:
+            continue
         art = a.artist
         if art not in by_artist:
             by_artist[art] = {"songs": [], "ext_vals": [], "genres": []}
