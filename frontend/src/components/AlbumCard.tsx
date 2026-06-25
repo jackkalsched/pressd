@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Play, ChevronRight, Star } from 'lucide-react'
+import { Play, ChevronRight, Star, Trash2 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Album } from '../types'
 import RecommendModal from './RecommendModal'
+import { deleteAlbum } from '../api'
 
 interface Props {
   album: Album
@@ -11,7 +13,16 @@ interface Props {
 
 export default function AlbumCard({ album, showActions = true }: Props) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [showRecommend, setShowRecommend] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  async function handleDiscard(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!confirmDelete) { setConfirmDelete(true); return }
+    await deleteAlbum(album.id)
+    queryClient.invalidateQueries({ queryKey: ['albums'] })
+  }
 
   return (
     <>
@@ -39,12 +50,12 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           )}
 
           {album.score !== null && (
-            <div className="absolute top-2 right-2 bg-white/85 backdrop-blur-sm text-[#2d6a4f] text-sm font-semibold px-2 py-0.5 rounded-md border border-[#e2e2e2]">
+            <div className="absolute top-2 right-2 bg-white/70 backdrop-blur-md text-[#2d6a4f] text-sm font-semibold px-2 py-0.5 rounded-md border border-white/40 shadow-sm">
               {album.score.toFixed(2)}
             </div>
           )}
           {album.score === null && album.predictedScore !== null && (
-            <div className="absolute top-2 right-2 bg-white/85 backdrop-blur-sm text-[#888] text-sm font-semibold px-2 py-0.5 rounded-md border border-[#e2e2e2]" title="Predicted score">
+            <div className="absolute top-2 right-2 bg-white/70 backdrop-blur-md text-[#888] text-sm font-semibold px-2 py-0.5 rounded-md border border-white/40 shadow-sm" title="Predicted score">
               ~{album.predictedScore.toFixed(2)}
             </div>
           )}
@@ -93,6 +104,20 @@ export default function AlbumCard({ album, showActions = true }: Props) {
                   className="flex-1 flex items-center justify-center gap-1.5 bg-[#2d6a4f]/10 hover:bg-[#2d6a4f]/20 text-[#2d6a4f] text-xs font-medium py-1.5 rounded-lg transition-colors"
                 >
                   <ChevronRight size={12} /> Continue
+                </button>
+              )}
+              {album.status === 'listening' && (
+                <button
+                  onClick={handleDiscard}
+                  onMouseLeave={() => setConfirmDelete(false)}
+                  className={`flex items-center justify-center gap-1 text-xs font-medium py-1.5 px-2.5 rounded-lg transition-colors border ${
+                    confirmDelete
+                      ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200'
+                      : 'bg-[#f5f5f5] hover:bg-[#ebebeb] text-[#999] border-[#e2e2e2]'
+                  }`}
+                  title={confirmDelete ? 'Click to confirm delete' : 'Discard album'}
+                >
+                  <Trash2 size={12} />
                 </button>
               )}
               {album.status === 'rated' && (
