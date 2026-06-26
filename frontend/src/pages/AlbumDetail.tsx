@@ -43,6 +43,41 @@ export default function AlbumDetail() {
   const { isViewingFriend, viewingUser, activeUser } = useUser()
   const [showRecommend, setShowRecommend] = useState(false)
   const [ratingItYourself, setRatingItYourself] = useState(false)
+  const [addingToLibrary, setAddingToLibrary] = useState(false)
+  const [addedToLibrary, setAddedToLibrary] = useState(false)
+
+  async function handleAddToLibrary() {
+    if (!album) return
+    setAddingToLibrary(true)
+    try {
+      await importAlbum(
+        {
+          spotify_id: album.spotifyId ?? null,
+          album_name: album.albumName,
+          artist: album.artist,
+          year: album.year ?? null,
+          cover_url: album.albumArtUrl ?? null,
+          total_tracks: album.totalTracks ?? album.songs.length,
+          tracks: album.songs.map(s => ({
+            title: s.title,
+            track_number: s.trackNumber ?? null,
+            duration_ms: null,
+            explicit: false,
+            spotify_id: s.spotifyId ?? null,
+            artist: album.artist,
+          })),
+          genre: album.genre ?? null,
+        },
+        'to_listen',
+        activeUser.id,
+      )
+      setAddedToLibrary(true)
+    } catch {
+      /* silently fail */
+    } finally {
+      setAddingToLibrary(false)
+    }
+  }
 
   async function handleRateItYourself() {
     if (!album) return
@@ -118,6 +153,16 @@ export default function AlbumDetail() {
           <ArrowLeft size={15} /> Back
         </button>
         <div className="flex items-center gap-2">
+          {isViewingFriend && (
+            <button
+              onClick={handleAddToLibrary}
+              disabled={addingToLibrary || addedToLibrary}
+              className="flex items-center gap-1.5 text-sm font-medium bg-[#f5f5f5] border border-[#e2e2e2] hover:bg-[#ececec] text-[#555] px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+            >
+              {addingToLibrary ? <Loader2 size={13} className="animate-spin" /> : null}
+              {addedToLibrary ? '✓ Added' : 'Add to Library'}
+            </button>
+          )}
           {isViewingFriend && (
             <button
               onClick={handleRateItYourself}
