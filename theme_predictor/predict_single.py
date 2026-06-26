@@ -321,9 +321,6 @@ def _run(album_id: int):
             ).fetchone()
             if pred and all(v is not None for v in pred):
                 pred_theme, pred_replay, pred_dist = pred
-                theme_mu, theme_sd   = _factor_stats(con, "theme", user_id)
-                replay_mu, replay_sd = _factor_stats(con, "replay_value", user_id)
-                dist_mu, dist_sd     = _factor_stats(con, "distinctness", user_id)
 
                 # Use song model prediction if available, otherwise fall back to user's own mean
                 if predicted_song_mean is not None:
@@ -336,9 +333,9 @@ def _run(album_id: int):
                     ).fetchone()[0] or 7.21
                     print(f"[predict_single] falling back to user song_mean={round(song_component, 3)}")
 
-                z_theme  = (pred_theme  - theme_mu)  / theme_sd
-                z_replay = (pred_replay - replay_mu) / replay_sd
-                z_dist   = (pred_dist   - dist_mu)   / dist_sd
+                z_theme  = _blended_z(con, pred_theme,  "theme",        user_id, genre)
+                z_replay = _blended_z(con, pred_replay, "replay_value", user_id, genre)
+                z_dist   = _blended_z(con, pred_dist,   "distinctness", user_id, genre)
                 pred_score = round(1.0 * song_component + 0.25 * z_theme + 0.15 * z_replay + 0.05 * z_dist, 2)
                 con.execute(
                     text("UPDATE album SET predicted_score = :score WHERE id = :id"),
@@ -482,6 +479,39 @@ def _factor_stats(con, field: str, user_id: int | None = None) -> tuple[float, f
     mu = row[0] or 5.0
     sd = math.sqrt(row[1]) if row[1] else 1.0
     return mu, sd
+
+
+_GENRE_K = 10  # albums needed for 50% genre weight
+
+
+def _genre_factor_stats(con, field: str, user_id: int, genre: str) -> tuple[float, float, int] | None:
+    """Return (mu, sd, n) for a given genre and field, or None if <2 albums."""
+    row = con.execute(text(f"""
+        SELECT AVG({field}),
+               AVG(({field}-(SELECT AVG({field}) FROM album WHERE status='rated' AND {field} IS NOT NULL AND user_id=:uid AND genre=:g))*
+                   ({field}-(SELECT AVG({field}) FROM album WHERE status='rated' AND {field} IS NOT NULL AND user_id=:uid AND genre=:g))),
+               COUNT(*)
+        FROM album WHERE status='rated' AND {field} IS NOT NULL AND user_id=:uid AND genre=:g
+    """), {"uid": user_id, "g": genre}).fetchone()
+    if not row or not row[0] or row[2] < 2:
+        return None
+    return row[0], math.sqrt(row[1]) if row[1] else 1.0, int(row[2])
+
+
+def _blended_z(con, val: float, field: str, user_id: int, genre: str | None) -> float:
+    """Credibility-weighted blend of genre and global z-scores."""
+    g_mu, g_sd = _factor_stats(con, field, user_id)
+    z_global = (val - g_mu) / g_sd
+
+    if genre:
+        gs = _genre_factor_stats(con, field, user_id, genre)
+        if gs:
+            gn_mu, gn_sd, n = gs
+            z_genre = (val - gn_mu) / gn_sd
+            alpha = n / (n + _GENRE_K)
+            return alpha * z_genre + (1 - alpha) * z_global
+
+    return z_global
 
 
 def _normalize_single(raw: float, all_raw: list[float], target_mu: float, target_sd: float) -> float:
