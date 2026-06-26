@@ -94,18 +94,24 @@ def create_user(data: dict, session: Session = Depends(get_session)):
 @router.get("/{user_id}/invite-link")
 def get_invite_link(user_id: int, session: Session = Depends(get_session)):
     """Return (or create) a permanent, reusable invite link for this user."""
-    inviter = session.get(PressUser, user_id)
-    if not inviter:
-        raise HTTPException(status_code=404, detail="User not found")
-    invite = session.exec(
-        select(Invite).where(Invite.invited_by == user_id, Invite.permanent == True)
-    ).first()
-    if not invite:
-        invite = Invite(invited_by=user_id, token=str(uuid.uuid4()), permanent=True)
-        session.add(invite)
-        session.commit()
-        session.refresh(invite)
-    return {"link": f"{APP_URL}/join?token={invite.token}", "inviter_name": inviter.name}
+    try:
+        inviter = session.get(PressUser, user_id)
+        if not inviter:
+            raise HTTPException(status_code=404, detail="User not found")
+        invite = session.exec(
+            select(Invite).where(Invite.invited_by == user_id, Invite.permanent == True)
+        ).first()
+        if not invite:
+            invite = Invite(invited_by=user_id, token=str(uuid.uuid4()), permanent=True)
+            session.add(invite)
+            session.commit()
+            session.refresh(invite)
+        return {"link": f"{APP_URL}/join?token={invite.token}", "inviter_name": inviter.name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[invite-link] ERROR for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate invite link: {e}")
 
 
 @router.post("/invite")
