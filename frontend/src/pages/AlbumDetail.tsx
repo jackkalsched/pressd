@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Loader2, Pencil, Trash2, MessageCircle, Star } from 'lucide-react'
-import { fetchAlbum, deleteAlbum, fetchFriendRatings } from '../api'
+import { fetchAlbum, deleteAlbum, fetchFriendRatings, importAlbum } from '../api'
 import { useUser } from '../context/UserContext'
 import { BANG_THRESHOLD, SKIP_THRESHOLD, songScoreColor } from '../types'
 import RecommendModal from '../components/RecommendModal'
@@ -42,6 +42,38 @@ export default function AlbumDetail() {
   const queryClient = useQueryClient()
   const { isViewingFriend, viewingUser, activeUser } = useUser()
   const [showRecommend, setShowRecommend] = useState(false)
+  const [ratingItYourself, setRatingItYourself] = useState(false)
+
+  async function handleRateItYourself() {
+    if (!album) return
+    setRatingItYourself(true)
+    try {
+      const result = await importAlbum(
+        {
+          spotify_id: album.spotifyId ?? null,
+          album_name: album.albumName,
+          artist: album.artist,
+          year: album.year ?? null,
+          cover_url: album.albumArtUrl ?? null,
+          total_tracks: album.totalTracks ?? album.songs.length,
+          tracks: album.songs.map(s => ({
+            title: s.title,
+            track_number: s.trackNumber ?? null,
+            duration_ms: null,
+            explicit: false,
+            spotify_id: s.spotifyId ?? null,
+            artist: album.artist,
+          })),
+          genre: album.genre ?? null,
+        },
+        'listening',
+        activeUser.id,
+      )
+      navigate(`/rate/${result.id}`)
+    } catch {
+      setRatingItYourself(false)
+    }
+  }
 
   const { data: album, isLoading, error } = useQuery({
     queryKey: ['album', Number(id)],
@@ -86,6 +118,16 @@ export default function AlbumDetail() {
           <ArrowLeft size={15} /> Back
         </button>
         <div className="flex items-center gap-2">
+          {isViewingFriend && (
+            <button
+              onClick={handleRateItYourself}
+              disabled={ratingItYourself}
+              className="flex items-center gap-1.5 text-sm font-medium bg-[#2d6a4f] hover:bg-[#245c43] text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+            >
+              {ratingItYourself ? <Loader2 size={13} className="animate-spin" /> : <Pencil size={13} />}
+              Rate it Yourself
+            </button>
+          )}
           {album.status === 'rated' && (
             <button
               onClick={() => shareRatingViaIMessage(album.albumName, album.artist, album.score, isViewingFriend ? viewingUser.name : undefined)}
