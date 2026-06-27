@@ -25,15 +25,19 @@ def log(msg: str):
 def main():
     from theme_predictor.predict_single import _run
 
+    start_from = int(sys.argv[1]) if len(sys.argv) > 1 else 1
+
     with engine.connect() as con:
         rows = con.execute(
             text("SELECT id, artist, album_name FROM album WHERE user_id=1 AND status='to_listen' ORDER BY id")
         ).fetchall()
 
     total = len(rows)
-    log(f"Starting bulk predictions for {total} to_listen albums")
+    log(f"Starting bulk predictions for {total} to_listen albums (from #{start_from})")
 
     for i, (album_id, artist, album_name) in enumerate(rows, 1):
+        if i < start_from:
+            continue
         log(f"[{i}/{total}] {artist} – {album_name} (id={album_id})")
         try:
             _run(album_id)
