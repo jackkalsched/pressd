@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { fetchSummary, fetchGenreStats, fetchScatterData, fetchGenreScores, fetchArtistStats } from '../api'
+import { fetchSummary, fetchGenreStats, fetchScatterData, fetchGenreScores } from '../api'
 import { useUser } from '../context/UserContext'
 import { Loader2 } from 'lucide-react'
 import {
@@ -44,175 +44,6 @@ function genreColor(genre: string | null | undefined): string {
   return GENRE_COLORS[genre] ?? '#bbb'
 }
 
-type SortKey = 'song_score' | 'external' | 'w_song_plus' | 'consistency_plus' | 'bang_pct' | 'skip_pct'
-
-interface RankingRow {
-  artist: string
-  songs: number
-  songScore: number | null
-  external: number | null
-  wSongPlus: number | null
-  consistencyPlus: number | null
-  bangPct: number | null
-  skipPct: number | null
-}
-
-function ArtistRankingsTable({
-  scatter,
-  artistStats,
-  scatterPrev,
-  artistStatsPrev,
-  QUALIFIED,
-  navigate,
-}: {
-  scatter: ReturnType<typeof import('../api').fetchScatterData> extends Promise<infer T> ? T : never
-  artistStats: Awaited<ReturnType<typeof import('../api').fetchArtistStats>>
-  scatterPrev?: ReturnType<typeof import('../api').fetchScatterData> extends Promise<infer T> ? T : never
-  artistStatsPrev?: Awaited<ReturnType<typeof import('../api').fetchArtistStats>>
-  QUALIFIED: number
-  navigate: (path: string) => void
-}) {
-  const [sortKey, setSortKey] = useState<SortKey>('song_score')
-
-  const buildRows = (sc: typeof scatter, stats: typeof artistStats): RankingRow[] => {
-    const artistMap = new Map(stats.map(a => [a.artist, a]))
-    return sc.points
-      .filter(p => p.song_count >= QUALIFIED)
-      .map(p => {
-        const a = artistMap.get(p.artist)
-        return {
-          artist: p.artist,
-          songs: p.song_count,
-          songScore: p.avg_song_score,
-          external: p.avg_external ?? null,
-          wSongPlus: p.w_song_plus ?? null,
-          consistencyPlus: p.consistency_plus ?? null,
-          bangPct: a ? a.bangPct : null,
-          skipPct: a ? a.skipPct : null,
-        }
-      })
-  }
-
-  const rows = useMemo<RankingRow[]>(() => buildRows(scatter, artistStats), [scatter, artistStats, QUALIFIED])
-  const rowsPrev = useMemo<RankingRow[]>(() => scatterPrev && artistStatsPrev ? buildRows(scatterPrev, artistStatsPrev) : [], [scatterPrev, artistStatsPrev, QUALIFIED])
-
-  const getSortVal = (r: RankingRow, key: SortKey): number => {
-    if (key === 'song_score') return r.songScore ?? -Infinity
-    if (key === 'external') return r.external ?? -Infinity
-    if (key === 'w_song_plus') return r.wSongPlus ?? -Infinity
-    if (key === 'consistency_plus') return r.consistencyPlus ?? -Infinity
-    if (key === 'bang_pct') return r.bangPct ?? -Infinity
-    if (key === 'skip_pct') return -(r.skipPct ?? Infinity)
-    return 0
-  }
-
-  const sorted = useMemo(() => {
-    return [...rows].sort((a, b) => getSortVal(b, sortKey) - getSortVal(a, sortKey))
-  }, [rows, sortKey])
-
-  const prevRankMap = useMemo<Map<string, number>>(() => {
-    const m = new Map<string, number>()
-    const sortedPrev = [...rowsPrev].sort((a, b) => getSortVal(b, sortKey) - getSortVal(a, sortKey))
-    sortedPrev.forEach((r, i) => m.set(r.artist, i + 1))
-    return m
-  }, [rowsPrev, sortKey])
-
-  // Artists with activity in the last 7 days (more songs now than 7 days ago, or brand new)
-  const recentlyActive = useMemo<Set<string>>(() => {
-    const prevSongs = new Map(rowsPrev.map(r => [r.artist, r.songs]))
-    return new Set(rows.filter(r => {
-      const prev = prevSongs.get(r.artist)
-      return prev === undefined || r.songs > prev
-    }).map(r => r.artist))
-  }, [rows, rowsPrev])
-
-  if (sorted.length === 0) return null
-
-  const cols: { key: SortKey; label: string; fmt: (r: RankingRow) => string }[] = [
-    { key: 'song_score',      label: 'Song Score',    fmt: r => r.songScore?.toFixed(2) ?? '—' },
-    { key: 'external',        label: 'External',      fmt: r => r.external?.toFixed(2) ?? '—' },
-    { key: 'w_song_plus',     label: 'wSong+',        fmt: r => r.wSongPlus?.toFixed(1) ?? '—' },
-    { key: 'consistency_plus',label: 'Consist+',      fmt: r => r.consistencyPlus?.toFixed(1) ?? '—' },
-    { key: 'bang_pct',        label: 'Bang%',         fmt: r => r.bangPct != null ? `${Math.round(r.bangPct * 100)}%` : '—' },
-    { key: 'skip_pct',        label: 'Skip%',         fmt: r => r.skipPct != null ? `${Math.round(r.skipPct * 100)}%` : '—' },
-  ]
-
-  return (
-    <div className="mt-6">
-      <h2 className="text-sm font-semibold text-[#78716c] mb-4">
-        Artist Rankings <span className="text-[#c2b8ad] font-normal">(≥{QUALIFIED} songs)</span>
-      </h2>
-      <div className="border border-[#e8e2d9] rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="border-b border-[#e8e2d9]">
-                <th className="text-left text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] px-4 py-3 w-10">Rk.</th>
-                <th className="text-left text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] px-4 py-3">Artist</th>
-                <th className="text-right text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] px-4 py-3 w-14">Songs</th>
-                {cols.map(c => (
-                  <th
-                    key={c.key}
-                    onClick={() => setSortKey(c.key)}
-                    className={`text-right text-[10px] font-semibold uppercase tracking-[0.1em] px-4 py-3 w-24 cursor-pointer select-none transition-colors ${
-                      sortKey === c.key ? 'text-[#1c1917]' : 'text-[#a8998a] hover:text-[#78716c]'
-                    }`}
-                  >
-                    {c.label}
-                    {sortKey === c.key && <span className="ml-1 text-[#2d6a4f]">↓</span>}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((row, i) => (
-                <tr
-                  key={row.artist}
-                  className="border-b border-[#f0ebe3] last:border-0 hover:bg-[#f7f3ee] transition-colors"
-                >
-                  <td className="text-[#c2b8ad] text-xs tabular-nums px-4 py-2.5">
-                    <div className="flex items-center gap-1.5">
-                      <span>{i + 1}</span>
-                      {(() => {
-                        const prev = prevRankMap.get(row.artist)
-                        if (!recentlyActive.has(row.artist)) return null
-                        if (prev === undefined) return <span className="text-[10px] font-bold text-[#3b82f6] bg-blue-50 px-1 py-0.5 rounded">NEW</span>
-                        const delta = prev - (i + 1)
-                        if (delta > 0) return <span className="text-[10px] font-bold text-[#2d6a4f]">+{delta}</span>
-                        if (delta < 0) return <span className="text-[10px] font-bold text-red-400">{delta}</span>
-                        return null
-                      })()}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <button
-                      onClick={() => navigate(`/artist/${encodeURIComponent(row.artist)}`)}
-                      className="text-[#1c1917] font-medium hover:text-[#2d6a4f] transition-colors text-left"
-                    >
-                      {row.artist}
-                    </button>
-                  </td>
-                  <td className="text-right text-[#a8998a] tabular-nums px-4 py-2.5 text-xs">{row.songs}</td>
-                  {cols.map(c => (
-                    <td
-                      key={c.key}
-                      className={`text-right tabular-nums px-4 py-2.5 text-xs font-semibold ${
-                        sortKey === c.key ? 'text-[#2d6a4f]' : 'text-[#57534e]'
-                      }`}
-                    >
-                      {c.fmt(row)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function Stats() {
   const navigate = useNavigate()
   const { viewingUser, isViewingFriend } = useUser()
@@ -241,30 +72,6 @@ export default function Stats() {
     staleTime: 5 * 60 * 1000,
   })
 
-  const { data: artistStats = [] } = useQuery({
-    queryKey: ['stats', 'artists', userId],
-    queryFn: () => fetchArtistStats(userId),
-    staleTime: 5 * 60 * 1000,
-  })
-
-  const sevenDaysAgo = useMemo(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - 7)
-    return d.toISOString().slice(0, 10)
-  }, [])
-
-  const { data: scatterPrev } = useQuery({
-    queryKey: ['stats', 'scatter', userId, sevenDaysAgo],
-    queryFn: () => fetchScatterData(userId, sevenDaysAgo),
-    staleTime: 60 * 60 * 1000,
-  })
-
-  const { data: artistStatsPrev = [] } = useQuery({
-    queryKey: ['stats', 'artists', userId, sevenDaysAgo],
-    queryFn: () => fetchArtistStats(userId, sevenDaysAgo),
-    staleTime: 60 * 60 * 1000,
-  })
-
   const kdeData = useMemo(() => {
     const xs = Array.from({ length: 80 }, (_, i) => parseFloat((1 + i * (9 / 79)).toFixed(2)))
     const curves = genreScores
@@ -281,9 +88,6 @@ export default function Stats() {
       return pt
     })
   }, [genreScores])
-
-  const QUALIFIED = 15
-
 
   if (loadingSummary) {
     return (
@@ -567,17 +371,6 @@ export default function Stats() {
           )}
         </div>
 
-        {/* Artist Rankings */}
-        {scatter && (
-          <ArtistRankingsTable
-            scatter={scatter}
-            artistStats={artistStats}
-            scatterPrev={scatterPrev}
-            artistStatsPrev={artistStatsPrev}
-            QUALIFIED={QUALIFIED}
-            navigate={navigate}
-          />
-        )}
       </div>
     </div>
   )
