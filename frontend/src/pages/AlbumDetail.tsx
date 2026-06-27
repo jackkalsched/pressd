@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2, Pencil, Trash2, MessageCircle, Star } from 'lucide-react'
+import { ArrowLeft, Loader2, Pencil, Trash2, MessageCircle, Star, Music } from 'lucide-react'
 import { fetchAlbum, deleteAlbum, fetchFriendRatings, importAlbum } from '../api'
 import { useUser } from '../context/UserContext'
 import { BANG_THRESHOLD, SKIP_THRESHOLD, songScoreColor } from '../types'
@@ -72,9 +72,7 @@ export default function AlbumDetail() {
         activeUser.id,
       )
       setAddedToLibrary(true)
-    } catch {
-      /* silently fail */
-    } finally {
+    } catch { /* silently fail */ } finally {
       setAddingToLibrary(false)
     }
   }
@@ -105,9 +103,7 @@ export default function AlbumDetail() {
         activeUser.id,
       )
       navigate(`/rate/${result.id}`)
-    } catch {
-      setRatingItYourself(false)
-    }
+    } catch { setRatingItYourself(false) }
   }
 
   const { data: album, isLoading, error } = useQuery({
@@ -126,13 +122,22 @@ export default function AlbumDetail() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64 text-[#aaa] gap-2">
-        <Loader2 size={16} className="animate-spin" /> Loading…
+      <div className="min-h-screen bg-[#faf8f5] flex items-center justify-center">
+        <div className="flex items-center gap-2 text-[#a8998a]">
+          <Loader2 size={16} className="animate-spin" />
+          <span className="text-sm">Loading…</span>
+        </div>
       </div>
     )
   }
 
-  if (error || !album) return <div className="p-8 text-[#aaa]">Album not found.</div>
+  if (error || !album) {
+    return (
+      <div className="min-h-screen bg-[#faf8f5] flex items-center justify-center">
+        <p className="text-[#a8998a] text-sm">Album not found.</p>
+      </div>
+    )
+  }
 
   const ratedSongs = album.songs.filter((s) => s.score !== null)
   const bangs = ratedSongs.filter((s) => s.score! >= BANG_THRESHOLD)
@@ -140,270 +145,350 @@ export default function AlbumDetail() {
   const avgScore = ratedSongs.length > 0
     ? ratedSongs.reduce((s, song) => s + song.score!, 0) / ratedSongs.length
     : null
-
   const sortedSongs = [...album.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
+  const artists = [album.artist, ...album.extraArtists]
+  const isLP = album.songs.length > 6
+
+  // Warm neutral button class shared across the nav
+  const btnBase = 'flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50'
+  const btnNeutral = `${btnBase} bg-[#f0ebe3] border border-[#e8e2d9] hover:bg-[#e8e0d4] text-[#57534e]`
+  const btnGreen = `${btnBase} bg-[#2d6a4f] hover:bg-[#245c43] text-white border border-transparent`
+  const btnOrange = `${btnBase} bg-[#fff7ed] border border-[#fcd9a8] hover:bg-[#ffedd5] text-[#ea7a2a]`
+  const btnDanger = `${btnBase} bg-[#f0ebe3] border border-[#e8e2d9] hover:border-red-300 hover:text-red-500 text-[#57534e]`
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl">
-      <div className="flex items-center justify-between mb-6">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-[#777] hover:text-[#111] text-sm transition-colors"
-        >
-          <ArrowLeft size={15} /> Back
-        </button>
-        <div className="flex items-center gap-2">
-          {isViewingFriend && (
-            <button
-              onClick={handleAddToLibrary}
-              disabled={addingToLibrary || addedToLibrary}
-              className="flex items-center gap-1.5 text-sm font-medium bg-[#f5f5f5] border border-[#e2e2e2] hover:bg-[#ececec] text-[#555] px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
-            >
-              {addingToLibrary ? <Loader2 size={13} className="animate-spin" /> : null}
-              {addedToLibrary ? '✓ Added' : 'Add to Library'}
-            </button>
-          )}
-          {isViewingFriend && (
-            <button
-              onClick={handleRateItYourself}
-              disabled={ratingItYourself}
-              className="flex items-center gap-1.5 text-sm font-medium bg-[#2d6a4f] hover:bg-[#245c43] text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
-            >
-              {ratingItYourself ? <Loader2 size={13} className="animate-spin" /> : <Pencil size={13} />}
-              Rate it Yourself
-            </button>
-          )}
-          {album.status === 'rated' && (
-            <button
-              onClick={() => shareRatingViaIMessage(album.albumName, album.artist, album.score, isViewingFriend ? viewingUser.name : undefined)}
-              className="flex items-center gap-1.5 text-sm font-medium bg-[#f5f5f5] border border-[#e2e2e2] hover:bg-[#ececec] text-[#555] px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <MessageCircle size={13} /> Share
-            </button>
-          )}
-          {album.status === 'rated' && !isViewingFriend && (
-            <button
-              onClick={() => setShowRecommend(true)}
-              className="flex items-center gap-1.5 text-sm font-medium bg-[#fff7ed] border border-[#fed7aa] hover:bg-[#ffedd5] text-[#f97316] px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <Star size={13} fill="#f97316" /> Recommend
-            </button>
-          )}
-          {!isViewingFriend && (
-            <>
-              <button
-                onClick={() => navigate(`/rate/${album.id}`)}
-                className="flex items-center gap-1.5 text-sm font-medium bg-[#f5f5f5] border border-[#e2e2e2] hover:border-[#c8c8c8] text-[#555] px-3 py-1.5 rounded-lg transition-colors"
-              >
-                <Pencil size={13} /> Edit Rating
-              </button>
-              <button
-                onClick={async () => {
-                  if (!confirm(`Delete "${album.albumName}" by ${album.artist}? This cannot be undone.`)) return
-                  try {
-                    await deleteAlbum(album.id)
-                    await queryClient.invalidateQueries({ queryKey: ['albums'] })
-                    queryClient.removeQueries({ queryKey: ['album', album.id] })
-                    navigate('/library')
-                  } catch (e) {
-                    alert('Failed to delete album. Please try again.')
-                  }
-                }}
-                className="flex items-center gap-1.5 text-sm font-medium bg-[#f5f5f5] border border-[#e2e2e2] hover:border-red-300 hover:text-red-500 text-[#555] px-3 py-1.5 rounded-lg transition-colors"
-              >
-                <Trash2 size={13} /> Delete
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+    <div className="min-h-screen bg-[#faf8f5]">
+      <div className="p-4 md:p-8 max-w-5xl mx-auto">
 
-      {/* Header */}
-      <div className="flex items-start gap-6 mb-8">
-        <div className="w-28 h-28 shrink-0 bg-[#e8e8e8] rounded-xl flex items-center justify-center text-[#aaa] text-5xl font-bold overflow-hidden">
-          {album.albumArtUrl
-            ? <img src={album.albumArtUrl} alt={album.albumName} className="w-full h-full object-cover" />
-            : album.albumName[0]}
-        </div>
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold" style={{ color: accentColor ?? '#111' }}>{album.albumName}</h1>
-          <p className="text-[#777] mt-1">
-            {[album.artist, ...album.extraArtists].map((name, i, arr) => (
-              <span key={name}>
-                <Link
-                  to={`/artist/${encodeURIComponent(name)}`}
-                  className="transition-colors"
-                  style={{ color: 'inherit' }}
-                  onMouseEnter={e => { if (color2) (e.currentTarget as HTMLElement).style.color = color2 }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'inherit' }}
+        {/* ── Nav ──────────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between mb-8">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-1.5 text-[#78716c] hover:text-[#1c1917] text-sm transition-colors"
+          >
+            <ArrowLeft size={15} /> Back
+          </button>
+
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {isViewingFriend && (
+              <button onClick={handleAddToLibrary} disabled={addingToLibrary || addedToLibrary} className={btnNeutral}>
+                {addingToLibrary && <Loader2 size={12} className="animate-spin" />}
+                {addedToLibrary ? '✓ Added' : 'Add to Library'}
+              </button>
+            )}
+            {isViewingFriend && (
+              <button onClick={handleRateItYourself} disabled={ratingItYourself} className={btnGreen}>
+                {ratingItYourself ? <Loader2 size={12} className="animate-spin" /> : <Pencil size={12} />}
+                Rate it Yourself
+              </button>
+            )}
+            {album.status === 'rated' && (
+              <button
+                onClick={() => shareRatingViaIMessage(album.albumName, album.artist, album.score, isViewingFriend ? viewingUser.name : undefined)}
+                className={btnNeutral}
+              >
+                <MessageCircle size={12} /> Share
+              </button>
+            )}
+            {album.status === 'rated' && !isViewingFriend && (
+              <button onClick={() => setShowRecommend(true)} className={btnOrange}>
+                <Star size={12} fill="#ea7a2a" strokeWidth={0} /> Recommend
+              </button>
+            )}
+            {!isViewingFriend && (
+              <>
+                <button onClick={() => navigate(`/rate/${album.id}`)} className={btnNeutral}>
+                  <Pencil size={12} /> Edit Rating
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Delete "${album.albumName}" by ${album.artist}? This cannot be undone.`)) return
+                    try {
+                      await deleteAlbum(album.id)
+                      await queryClient.invalidateQueries({ queryKey: ['albums'] })
+                      queryClient.removeQueries({ queryKey: ['album', album.id] })
+                      navigate('/library')
+                    } catch {
+                      alert('Failed to delete album. Please try again.')
+                    }
+                  }}
+                  className={btnDanger}
                 >
-                  {name}
-                </Link>
-                {i < arr.length - 1 ? ', ' : ''}
-              </span>
-            ))}
-            {' '}· {album.year}
-          </p>
-          {album.genre && (
-            <p className="text-[#aaa] text-sm mt-1">
-              {album.genre}{album.subGenre1 ? ` · ${album.subGenre1}` : ''}
+                  <Trash2 size={12} /> Delete
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ── Hero ─────────────────────────────────────────────────── */}
+        <div className="flex gap-7 md:gap-10 mb-10 items-start">
+
+          {/* Cover */}
+          <div className="w-36 h-36 md:w-44 md:h-44 shrink-0 rounded-2xl overflow-hidden shadow-[0_10px_30px_rgba(50,30,10,0.15)] bg-[#ece6dc]">
+            {album.albumArtUrl ? (
+              <img src={album.albumArtUrl} alt={album.albumName} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-[#e8dfd2] to-[#cfc3b0]">
+                <Music size={32} className="text-[#b0a090]" strokeWidth={1.25} />
+                <span className="text-[#b0a090] text-[10px] font-semibold tracking-[0.2em] uppercase select-none">
+                  {album.albumName.slice(0, 3)}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Meta + score */}
+          <div className="flex-1 min-w-0 flex flex-col justify-start pt-1">
+            <h1
+              className="text-2xl md:text-3xl font-bold leading-tight"
+              style={{ color: accentColor ?? '#1c1917' }}
+            >
+              {album.albumName}
+            </h1>
+
+            <p className="text-[#78716c] text-sm mt-1.5">
+              {artists.map((name, i, arr) => (
+                <span key={name}>
+                  <Link
+                    to={`/artist/${encodeURIComponent(name)}`}
+                    className="hover:underline underline-offset-2 transition-colors"
+                    style={{ color: 'inherit' }}
+                    onMouseEnter={e => { if (color2) (e.currentTarget as HTMLElement).style.color = color2 }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'inherit' }}
+                  >
+                    {name}
+                  </Link>
+                  {i < arr.length - 1 ? ', ' : ''}
+                </span>
+              ))}
+              {' · '}{album.year}
             </p>
-          )}
-          {album.score !== null && (
-            <div className="mt-3 inline-flex items-baseline gap-2">
-              <span className="text-4xl font-bold tabular-nums" style={{ color: accentColor ?? '#2d6a4f' }}>{album.score?.toFixed(2)}</span>
-              <span className="text-[#aaa] text-sm">/ 10</span>
-            </div>
-          )}
-          {album.score === null && album.predictedScore !== null && (
-            <div className="mt-3 inline-flex items-baseline gap-2">
-              <span className="text-3xl font-bold tabular-nums text-[#aaa]">~{album.predictedScore.toFixed(2)}</span>
-              <span className="text-[#bbb] text-xs">predicted</span>
+
+            {album.genre && (
+              <p className="text-[#a8a29e] text-[11px] mt-0.5 uppercase tracking-[0.08em]">
+                {album.genre}{album.subGenre1 ? ` · ${album.subGenre1}` : ''}
+              </p>
+            )}
+
+            {/* Score stamp */}
+            {album.score !== null && (
+              <div className="mt-4 flex items-baseline gap-1.5">
+                <span
+                  className="text-5xl md:text-6xl font-bold tabular-nums leading-none"
+                  style={{ color: accentColor ?? '#2d6a4f' }}
+                >
+                  {album.score.toFixed(2)}
+                </span>
+                <span className="text-[#a8a29e] text-base self-end mb-1">/10</span>
+              </div>
+            )}
+            {album.score === null && album.predictedScore !== null && (
+              <div className="mt-4 flex items-baseline gap-1.5">
+                <span className="text-4xl font-bold tabular-nums leading-none text-[#a8998a]">
+                  ~{album.predictedScore.toFixed(2)}
+                </span>
+                <span className="text-[#c2b8ad] text-sm self-end mb-0.5">predicted</span>
+              </div>
+            )}
+          </div>
+
+          {/* Sidebar stats */}
+          {avgScore !== null && ratedSongs.length > 0 && (
+            <div className="hidden md:flex flex-col items-end gap-2 text-sm shrink-0 pt-1">
+              <div className="text-right">
+                <span className="text-[#a8a29e] text-[11px] uppercase tracking-[0.08em] block mb-0.5">Avg</span>
+                <span className="font-bold text-[#1c1917] tabular-nums">{avgScore.toFixed(2)}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[#a8a29e] text-[11px] uppercase tracking-[0.08em] block mb-0.5">Bang%</span>
+                <span className="font-bold tabular-nums" style={{ color: accentColor ?? '#2d6a4f' }}>
+                  {Math.round(bangs.length / ratedSongs.length * 100)}%
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-[#a8a29e] text-[11px] uppercase tracking-[0.08em] block mb-0.5">Skip%</span>
+                <span className="font-bold text-[#c0392b] tabular-nums">
+                  {Math.round(skips.length / ratedSongs.length * 100)}%
+                </span>
+              </div>
             </div>
           )}
         </div>
-        {avgScore !== null && ratedSongs.length > 0 && (
-          <div className="flex flex-col items-end justify-start gap-1 text-sm shrink-0">
-            <span className="text-[#777]">Avg <span className="font-semibold text-[#111]">{avgScore.toFixed(2)}</span></span>
-            <span className="text-[#777]">Bang% <span className="font-semibold" style={{ color: accentColor ?? '#1a7a3c' }}>{Math.round(bangs.length / ratedSongs.length * 100)}%</span></span>
-            <span className="text-[#777]">Skip% <span className="font-semibold text-[#c0392b]">{Math.round(skips.length / ratedSongs.length * 100)}%</span></span>
+
+        {/* ── Factor tiles (LP only) ───────────────────────────────── */}
+        {isLP && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-10">
+            {[
+              { label: 'Theme / Cohesion', value: album.theme },
+              { label: 'Replay Value',      value: album.replayValue },
+              { label: 'Production',        value: album.production },
+              { label: 'Distinctness',      value: album.distinctness },
+            ].map(({ label, value }) => (
+              <div
+                key={label}
+                className="bg-[#f0ebe3] border border-[#e8e2d9] rounded-2xl px-5 py-5 text-center"
+              >
+                <p
+                  className="text-[10px] uppercase tracking-[0.13em] mb-3 font-medium"
+                  style={{ color: color2 ? lightenHsl(color2, 50) : '#a8998a' }}
+                >
+                  {label}
+                </p>
+                <p
+                  className="text-5xl font-bold tabular-nums leading-none"
+                  style={{ color: accentColor ?? '#1c1917' }}
+                >
+                  {value ?? '—'}
+                </p>
+              </div>
+            ))}
           </div>
         )}
-      </div>
 
-      {/* Factor breakdown — omitted for EPs (≤6 tracks) */}
-      {album.songs.length > 6 && <div className="grid grid-cols-4 gap-3 mb-8">
-        {[
-          { label: 'Theme / Cohesion', value: album.theme },
-          { label: 'Replay Value', value: album.replayValue },
-          { label: 'Production', value: album.production },
-          { label: 'Distinctness', value: album.distinctness },
-        ].map(({ label, value }) => (
-          <div
-            key={label}
-            className="p-5 text-center"
-          >
-            <p
-              className="text-sm font-medium mb-1"
-              style={{ color: color2 ? lightenHsl(color2, 48) : '#999' }}
+        {/* ── Track list ───────────────────────────────────────────── */}
+        <div className="flex flex-col mb-10">
+          {sortedSongs.map((song, idx) => (
+            <div
+              key={song.id}
+              className={`flex items-center gap-3 py-3 ${idx < sortedSongs.length - 1 ? 'border-b border-[#f0ebe3]' : ''}`}
             >
-              {label}
+              {/* Score-mapped left bar */}
+              <div
+                className="w-[3px] h-5 rounded-full shrink-0"
+                style={{ backgroundColor: song.score !== null ? songScoreColor(song.score) : '#e8e2d9' }}
+              />
+
+              <span className="text-[#c2b8ad] text-xs w-4 text-right shrink-0 tabular-nums select-none">
+                {song.trackNumber}
+              </span>
+
+              <span className="flex-1 text-[#1c1917] text-sm truncate">
+                {song.title}
+              </span>
+
+              {song.score !== null && song.score >= BANG_THRESHOLD && (
+                <span
+                  className="text-[9px] font-bold uppercase tracking-[0.12em] shrink-0"
+                  style={{ color: songScoreColor(song.score) }}
+                >
+                  bang
+                </span>
+              )}
+              {song.score !== null && song.score < SKIP_THRESHOLD && (
+                <span
+                  className="text-[9px] font-bold uppercase tracking-[0.12em] shrink-0"
+                  style={{ color: songScoreColor(song.score) }}
+                >
+                  skip
+                </span>
+              )}
+
+              <span
+                className="text-base font-semibold tabular-nums w-10 text-right shrink-0"
+                style={{ color: song.score !== null ? songScoreColor(song.score) : '#d4ccc4' }}
+              >
+                {song.score ?? '—'}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Friends' ratings ─────────────────────────────────────── */}
+        {!isViewingFriend && friendRatings.length > 0 && (
+          <div className="mt-2">
+            <p className="text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.14em] mb-5">
+              Friends' Ratings
             </p>
-            <p
-              className="font-bold text-4xl tabular-nums"
-              style={{ color: accentColor ?? '#111' }}
-            >
-              {value ?? '—'}
-            </p>
-          </div>
-        ))}
-      </div>}
+            <div className="flex flex-col gap-4">
+              {friendRatings.map(({ friend, album: fa }) => {
+                const friendSorted = [...fa.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
+                const friendRated = fa.songs.filter(s => s.score !== null)
+                const friendAvg = friendRated.length > 0
+                  ? friendRated.reduce((s, s2) => s + s2.score!, 0) / friendRated.length
+                  : null
+                const friendBangs = friendRated.filter(s => s.score! >= BANG_THRESHOLD)
+                const friendSkips = friendRated.filter(s => s.score! < SKIP_THRESHOLD)
 
-      {/* Track list */}
-      <div className="flex flex-col gap-1">
-        {sortedSongs.map((song) => (
-          <div
-            key={song.id}
-            className="flex items-center gap-4 px-1 py-2"
-          >
-            <span className="text-[#aaa] text-xs w-5 text-right shrink-0">{song.trackNumber}</span>
-            <span className="flex-1 text-base text-[#111] truncate">{song.title}</span>
-            {song.score !== null && song.score >= BANG_THRESHOLD && (
-              <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: songScoreColor(song.score) }}>bang</span>
-            )}
-            {song.score !== null && song.score < SKIP_THRESHOLD && (
-              <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: songScoreColor(song.score) }}>skip</span>
-            )}
-            <span
-              className="text-lg font-semibold tabular-nums w-12 text-right"
-              style={{ color: song.score !== null ? songScoreColor(song.score) : '#ccc' }}
-            >
-              {song.score ?? '—'}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* Friends' ratings */}
-      {!isViewingFriend && friendRatings.length > 0 && (
-        <div className="mt-10">
-          <h2 className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-4">Friends' Ratings</h2>
-          <div className="flex flex-col gap-6">
-            {friendRatings.map(({ friend, album: fa }) => {
-              const friendSorted = [...fa.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
-              const friendRated = fa.songs.filter(s => s.score !== null)
-              const friendAvg = friendRated.length > 0
-                ? friendRated.reduce((s, s2) => s + s2.score!, 0) / friendRated.length
-                : null
-              const friendBangs = friendRated.filter(s => s.score! >= BANG_THRESHOLD)
-              const friendSkips = friendRated.filter(s => s.score! < SKIP_THRESHOLD)
-              return (
-                <div key={friend.id} className="border border-[#e8e8e8] rounded-xl p-5">
-                  {/* Friend header */}
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
-                        style={{ backgroundColor: '#2d6a4f' }}
-                      >
-                        {friend.name[0].toUpperCase()}
+                return (
+                  <div key={friend.id} className="bg-[#f7f3ee] border border-[#e8e2d9] rounded-2xl p-5">
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                          style={{ backgroundColor: '#2d6a4f' }}
+                        >
+                          {friend.name[0].toUpperCase()}
+                        </div>
+                        <span className="text-sm font-semibold text-[#1c1917]">{friend.name}</span>
                       </div>
-                      <span className="text-sm font-semibold text-[#111]">{friend.name}</span>
+                      <div className="flex items-center gap-4 text-sm">
+                        {friendAvg !== null && (
+                          <span className="text-[#78716c]">Avg <span className="font-semibold text-[#1c1917] tabular-nums">{friendAvg.toFixed(2)}</span></span>
+                        )}
+                        {friendRated.length > 0 && (
+                          <span className="text-[#78716c]">Bang% <span className="font-semibold text-[#2d6a4f] tabular-nums">{Math.round(friendBangs.length / friendRated.length * 100)}%</span></span>
+                        )}
+                        {friendRated.length > 0 && (
+                          <span className="text-[#78716c]">Skip% <span className="font-semibold text-[#c0392b] tabular-nums">{Math.round(friendSkips.length / friendRated.length * 100)}%</span></span>
+                        )}
+                        {fa.score !== null && (
+                          <span className="text-2xl font-bold tabular-nums text-[#2d6a4f]">{fa.score.toFixed(2)}</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-[#777]">
-                      {friendAvg !== null && <span>Avg <span className="font-semibold text-[#111]">{friendAvg.toFixed(2)}</span></span>}
-                      {friendRated.length > 0 && <span>Bang% <span className="font-semibold text-[#2d6a4f]">{Math.round(friendBangs.length / friendRated.length * 100)}%</span></span>}
-                      {friendRated.length > 0 && <span>Skip% <span className="font-semibold text-[#c0392b]">{Math.round(friendSkips.length / friendRated.length * 100)}%</span></span>}
-                      {fa.score !== null && (
-                        <span className="text-2xl font-bold tabular-nums text-[#2d6a4f]">{fa.score.toFixed(2)}</span>
-                      )}
-                    </div>
-                  </div>
 
-                  {/* Friend's factor ratings (LP only) */}
-                  {fa.songs.length > 6 && (fa.theme ?? fa.replayValue ?? fa.production ?? fa.distinctness) && (
-                    <div className="grid grid-cols-4 gap-2 mb-4">
-                      {[
-                        { label: 'Theme', value: fa.theme },
-                        { label: 'Replay', value: fa.replayValue },
-                        { label: 'Production', value: fa.production },
-                        { label: 'Distinct', value: fa.distinctness },
-                      ].map(({ label, value }) => (
-                        <div key={label} className="bg-[#f8f8f8] rounded-lg p-3 text-center">
-                          <p className="text-[10px] text-[#aaa] uppercase tracking-wide mb-1">{label}</p>
-                          <p className="text-lg font-bold text-[#111] tabular-nums">{value ?? '—'}</p>
+                    {fa.songs.length > 6 && (fa.theme ?? fa.replayValue ?? fa.production ?? fa.distinctness) && (
+                      <div className="grid grid-cols-4 gap-2 mb-4">
+                        {[
+                          { label: 'Theme',   value: fa.theme },
+                          { label: 'Replay',  value: fa.replayValue },
+                          { label: 'Prod.',   value: fa.production },
+                          { label: 'Distinct',value: fa.distinctness },
+                        ].map(({ label, value }) => (
+                          <div key={label} className="bg-[#f0ebe3] border border-[#e8e2d9] rounded-xl p-3 text-center">
+                            <p className="text-[9px] text-[#a8998a] uppercase tracking-[0.1em] mb-1.5">{label}</p>
+                            <p className="text-xl font-bold text-[#1c1917] tabular-nums">{value ?? '—'}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex flex-col">
+                      {friendSorted.map((song, idx) => (
+                        <div
+                          key={song.id}
+                          className={`flex items-center gap-3 py-2.5 ${idx < friendSorted.length - 1 ? 'border-b border-[#ece5da]' : ''}`}
+                        >
+                          <div
+                            className="w-[3px] h-4 rounded-full shrink-0"
+                            style={{ backgroundColor: song.score !== null ? songScoreColor(song.score) : '#e8e2d9' }}
+                          />
+                          <span className="text-[#c2b8ad] text-xs w-4 text-right shrink-0 tabular-nums">{song.trackNumber}</span>
+                          <span className="flex-1 text-[#57534e] text-sm truncate">{song.title}</span>
+                          {song.score !== null && song.score >= BANG_THRESHOLD && (
+                            <span className="text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: songScoreColor(song.score) }}>bang</span>
+                          )}
+                          {song.score !== null && song.score < SKIP_THRESHOLD && (
+                            <span className="text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: songScoreColor(song.score) }}>skip</span>
+                          )}
+                          <span
+                            className="text-sm font-semibold tabular-nums w-10 text-right shrink-0"
+                            style={{ color: song.score !== null ? songScoreColor(song.score) : '#d4ccc4' }}
+                          >
+                            {song.score ?? '—'}
+                          </span>
                         </div>
                       ))}
                     </div>
-                  )}
-
-                  {/* Friend's song scores */}
-                  <div className="flex flex-col gap-0.5">
-                    {friendSorted.map((song) => (
-                      <div key={song.id} className="flex items-center gap-3 px-1 py-1.5">
-                        <span className="text-[#bbb] text-xs w-5 text-right shrink-0">{song.trackNumber}</span>
-                        <span className="flex-1 text-sm text-[#555] truncate">{song.title}</span>
-                        {song.score !== null && song.score >= BANG_THRESHOLD && (
-                          <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: songScoreColor(song.score) }}>bang</span>
-                        )}
-                        {song.score !== null && song.score < SKIP_THRESHOLD && (
-                          <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: songScoreColor(song.score) }}>skip</span>
-                        )}
-                        <span
-                          className="text-sm font-semibold tabular-nums w-10 text-right"
-                          style={{ color: song.score !== null ? songScoreColor(song.score) : '#ddd' }}
-                        >
-                          {song.score ?? '—'}
-                        </span>
-                      </div>
-                    ))}
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+      </div>
 
       {showRecommend && album && (
         <RecommendModal album={album} onClose={() => setShowRecommend(false)} />

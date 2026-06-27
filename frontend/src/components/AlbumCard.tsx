@@ -129,7 +129,7 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           {/* Predicted score badge */}
           {album.score === null && album.predictedScore !== null && (
             <div
-              className="absolute top-2.5 right-2.5 bg-black/45 backdrop-blur-md text-white/75 text-[11px] font-semibold px-2 py-0.5 rounded-full shadow-sm tracking-tight select-none"
+              className="absolute top-2.5 right-2.5 bg-black/50 backdrop-blur-md text-white/80 text-[13px] font-bold px-3 py-1 rounded-full shadow-lg tracking-tight select-none"
               title="Predicted score"
             >
               ~{album.predictedScore.toFixed(2)}
