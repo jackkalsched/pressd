@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Play, ChevronRight, Star, Trash2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -16,6 +16,19 @@ export default function AlbumCard({ album, showActions = true }: Props) {
   const queryClient = useQueryClient()
   const [showRecommend, setShowRecommend] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [visible, setVisible] = useState(false)
+  const cardRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = cardRef.current
+    if (!el) return
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect() } },
+      { threshold: 0.1 },
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [])
 
   async function handleDiscard(e: React.MouseEvent) {
     e.stopPropagation()
@@ -27,7 +40,8 @@ export default function AlbumCard({ album, showActions = true }: Props) {
   return (
     <>
       <div
-        className="bg-[#f5f5f5] rounded-xl overflow-hidden border border-[#e2e2e2] hover:border-[#c8c8c8] transition-colors cursor-pointer group"
+        ref={cardRef}
+        className={`bg-[#f5f5f5] rounded-xl overflow-hidden border border-[#e2e2e2] hover:border-[#c8c8c8] hover:-translate-y-1.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)] transition-all duration-200 ease-out cursor-pointer group${visible ? ' card-pop' : ' opacity-0'}`}
         onClick={() => (album.status === 'rated' || album.status === 'to_listen') && navigate(`/album/${album.id}`)}
       >
         <div className="aspect-square bg-[#e8e8e8] relative">
