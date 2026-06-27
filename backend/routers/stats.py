@@ -19,6 +19,23 @@ def factor_stats(session: Session = Depends(get_session)):
     return {k: list(v) for k, v in stats.items()}
 
 
+@router.get("/score-range")
+def score_range(user_id: int = Query(1), session: Session = Depends(get_session)):
+    scores = [
+        a.score for a in session.exec(
+            select(Album).where(Album.user_id == user_id, Album.status == "rated", Album.score.is_not(None))
+        ).all()
+    ]
+    if len(scores) < 2:
+        return {"mu": 7.0, "sd": 1.0, "min": 1.0, "max": 10.0}
+    return {
+        "mu": statistics.mean(scores),
+        "sd": statistics.stdev(scores),
+        "min": min(scores),
+        "max": max(scores),
+    }
+
+
 @router.get("/summary")
 def summary(user_id: int = Query(1), session: Session = Depends(get_session)):
     rated = session.exec(

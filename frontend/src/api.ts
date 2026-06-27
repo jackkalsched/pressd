@@ -445,6 +445,11 @@ export interface ScatterData {
   mean_external: number | null
 }
 
+export async function fetchScoreRange(userId = 1): Promise<{ mu: number; sd: number; min: number; max: number }> {
+  const res = await fetch(`${BASE}/stats/score-range?user_id=${userId}`)
+  return res.json()
+}
+
 export async function fetchScatterData(userId = 1, beforeDate?: string): Promise<ScatterData> {
   const params = new URLSearchParams({ user_id: String(userId) })
   if (beforeDate) params.set('before_date', beforeDate)

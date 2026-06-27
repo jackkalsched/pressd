@@ -1,26 +1,38 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Play, ChevronRight, Star, Trash2, Music } from 'lucide-react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Album } from '../types'
 import RecommendModal from './RecommendModal'
-import { deleteAlbum } from '../api'
+import { deleteAlbum, fetchScoreRange } from '../api'
 
 interface Props {
   album: Album
   showActions?: boolean
 }
 
-function scoreBadgeBg(score: number): string {
-  // Continuous hue: 0° (dark red) at score=1 → 138° (dark green) at score=10
-  const t = Math.max(0, Math.min(1, (score - 1) / 9))
-  const hue = Math.round(t * 138)
-  return `hsl(${hue}, 70%, 24%)`
+function scoreBadgeBg(score: number, mu: number, sd: number): string {
+  // Above average → amber (30°) to dark green (138°)
+  // Below average → amber (30°) to dark red (0°)
+  // Saturates at ±2.5 SD from mean
+  const SD_RANGE = 2.5
+  if (score >= mu) {
+    const t = Math.min(1, (score - mu) / (SD_RANGE * sd))
+    return `hsl(${Math.round(30 + t * 108)}, 70%, 24%)`
+  } else {
+    const t = Math.min(1, (mu - score) / (SD_RANGE * sd))
+    return `hsl(${Math.round(30 - t * 30)}, 72%, 24%)`
+  }
 }
 
 export default function AlbumCard({ album, showActions = true }: Props) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { data: scoreRange } = useQuery({
+    queryKey: ['score-range', 1],
+    queryFn: () => fetchScoreRange(1),
+    staleTime: 5 * 60 * 1000,
+  })
   const [showRecommend, setShowRecommend] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [visible, setVisible] = useState(false)
@@ -104,7 +116,11 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           {album.score !== null && (
             <div
               className="absolute top-2.5 right-2.5 text-[13px] font-bold px-3 py-1 rounded-full shadow-lg tracking-tight select-none text-white"
-              style={{ backgroundColor: scoreBadgeBg(album.score) }}
+              style={{
+                backgroundColor: scoreRange
+                  ? scoreBadgeBg(album.score, scoreRange.mu, scoreRange.sd)
+                  : scoreBadgeBg(album.score, 7.0, 1.0),
+              }}
             >
               {album.score.toFixed(2)}
             </div>
@@ -163,6 +179,7 @@ export default function AlbumCard({ album, showActions = true }: Props) {
         {showActions && (
           <div
             className="
+              card-action-row
               px-3 pb-3 pt-1 flex gap-1.5 mt-auto
               opacity-0 translate-y-1
               group-hover:opacity-100 group-hover:translate-y-0
@@ -189,7 +206,7 @@ export default function AlbumCard({ album, showActions = true }: Props) {
                 </button>
                 <button
                   onClick={handleDiscard}
-                  onMouseLeave={() => setConfirmDelete(false)}
+                  onBlur={() => setConfirmDelete(false)}
                   className={`flex items-center justify-center px-3 text-[11px] font-medium rounded-lg transition-colors border min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
                     confirmDelete
                       ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200 focus-visible:outline-red-400'
