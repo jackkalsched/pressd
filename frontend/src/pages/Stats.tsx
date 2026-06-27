@@ -138,26 +138,24 @@ function ArtistRankingsTable({
   ]
 
   return (
-    <div className="mt-8">
-      <h2 className="text-sm font-semibold text-[#777] mb-4">
-        Artist Rankings <span className="text-[#bbb] font-normal">(≥{QUALIFIED} songs)</span>
+    <div className="mt-6">
+      <h2 className="text-sm font-semibold text-[#78716c] mb-4">
+        Artist Rankings <span className="text-[#c2b8ad] font-normal">(≥{QUALIFIED} songs)</span>
       </h2>
-      <div className="border border-[#e2e2e2] rounded-xl overflow-hidden">
+      <div className="border border-[#e8e2d9] rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="border-b border-[#e2e2e2] bg-[#fafafa]">
-                <th className="text-left text-[#aaa] text-xs font-semibold px-4 py-3 w-10">Rk.</th>
-                <th className="text-left text-[#aaa] text-xs font-semibold px-4 py-3">Artist</th>
-                <th className="text-right text-[#aaa] text-xs font-semibold px-4 py-3 w-14">Songs</th>
+              <tr className="border-b border-[#e8e2d9] bg-[#f7f3ee]">
+                <th className="text-left text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] px-4 py-3 w-10">Rk.</th>
+                <th className="text-left text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] px-4 py-3">Artist</th>
+                <th className="text-right text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] px-4 py-3 w-14">Songs</th>
                 {cols.map(c => (
                   <th
                     key={c.key}
                     onClick={() => setSortKey(c.key)}
-                    className={`text-right text-xs font-semibold px-4 py-3 w-24 cursor-pointer select-none transition-colors ${
-                      sortKey === c.key
-                        ? 'text-[#111] bg-[#f0f0f0]'
-                        : 'text-[#aaa] hover:text-[#555]'
+                    className={`text-right text-[10px] font-semibold uppercase tracking-[0.1em] px-4 py-3 w-24 cursor-pointer select-none transition-colors ${
+                      sortKey === c.key ? 'text-[#1c1917] bg-[#f0ebe3]' : 'text-[#a8998a] hover:text-[#78716c]'
                     }`}
                   >
                     {c.label}
@@ -170,15 +168,15 @@ function ArtistRankingsTable({
               {sorted.map((row, i) => (
                 <tr
                   key={row.artist}
-                  className="border-b border-[#f0f0f0] last:border-0 hover:bg-[#fafafa] transition-colors"
+                  className="border-b border-[#f0ebe3] last:border-0 hover:bg-[#f7f3ee] transition-colors"
                 >
-                  <td className="text-[#ccc] text-xs tabular-nums px-4 py-2.5">
+                  <td className="text-[#c2b8ad] text-xs tabular-nums px-4 py-2.5">
                     <div className="flex items-center gap-1.5">
                       <span>{i + 1}</span>
                       {(() => {
                         const prev = prevRankMap.get(row.artist)
                         if (!recentlyActive.has(row.artist)) return null
-                        if (prev === undefined) return <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-1 py-0.5 rounded">NEW</span>
+                        if (prev === undefined) return <span className="text-[10px] font-bold text-[#3b82f6] bg-blue-50 px-1 py-0.5 rounded">NEW</span>
                         const delta = prev - (i + 1)
                         if (delta > 0) return <span className="text-[10px] font-bold text-[#2d6a4f]">+{delta}</span>
                         if (delta < 0) return <span className="text-[10px] font-bold text-red-400">{delta}</span>
@@ -189,17 +187,17 @@ function ArtistRankingsTable({
                   <td className="px-4 py-2.5">
                     <button
                       onClick={() => navigate(`/artist/${encodeURIComponent(row.artist)}`)}
-                      className="text-[#111] font-medium hover:text-[#2d6a4f] transition-colors text-left"
+                      className="text-[#1c1917] font-medium hover:text-[#2d6a4f] transition-colors text-left"
                     >
                       {row.artist}
                     </button>
                   </td>
-                  <td className="text-right text-[#aaa] tabular-nums px-4 py-2.5 text-xs">{row.songs}</td>
+                  <td className="text-right text-[#a8998a] tabular-nums px-4 py-2.5 text-xs">{row.songs}</td>
                   {cols.map(c => (
                     <td
                       key={c.key}
                       className={`text-right tabular-nums px-4 py-2.5 text-xs font-semibold ${
-                        sortKey === c.key ? 'bg-[#f8f8f8] text-[#2d6a4f]' : 'text-[#333]'
+                        sortKey === c.key ? 'bg-[#f0ebe3] text-[#2d6a4f]' : 'text-[#57534e]'
                       }`}
                     >
                       {c.fmt(row)}
@@ -218,7 +216,7 @@ function ArtistRankingsTable({
 export default function Stats() {
   const navigate = useNavigate()
   const { viewingUser, isViewingFriend } = useUser()
-  const userId = viewingUser.id
+  const userId = viewingUser?.id ?? 1
   const [genreFilter, setGenreFilter] = useState<string>('all')
 
   const { data: summary, isLoading: loadingSummary } = useQuery({
@@ -289,16 +287,19 @@ export default function Stats() {
 
   if (loadingSummary) {
     return (
-      <div className="flex items-center justify-center h-64 text-[#aaa] gap-2">
-        <Loader2 size={16} className="animate-spin" /> Loading…
+      <div className="min-h-screen bg-[#faf8f5] flex items-center justify-center">
+        <div className="flex items-center gap-2 text-[#a8998a]">
+          <Loader2 size={16} className="animate-spin" />
+          <span className="text-sm">Loading…</span>
+        </div>
       </div>
     )
   }
 
   if (!summary) {
     return (
-      <div className="flex items-center justify-center h-64 text-[#aaa] text-sm">
-        Failed to load stats — check that the backend is running.
+      <div className="min-h-screen bg-[#faf8f5] flex items-center justify-center">
+        <p className="text-[#a8998a] text-sm">Failed to load stats — check that the backend is running.</p>
       </div>
     )
   }
@@ -321,265 +322,263 @@ export default function Stats() {
     ? scatterPoints.reduce((s, p) => s + (p.avg_external ?? 0), 0) / scatterPoints.length
     : scatter?.mean_external ?? null
 
+  const panelCls = 'bg-[#f0ebe3] border border-[#e8e2d9] rounded-2xl p-6'
+  const cardCls = 'bg-[#f0ebe3] border border-[#e8e2d9] rounded-2xl p-5'
+  const labelCls = 'text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.12em] mb-2'
+  const tooltipStyle = { background: '#faf8f5', border: '1px solid #e8e2d9', borderRadius: 12, color: '#1c1917', fontSize: 12 }
+
   return (
-    <div className="p-4 md:p-8">
-      <h1 className="text-2xl font-semibold text-[#111] mb-8">
-        {isViewingFriend ? `${viewingUser.name}'s Stats` : 'Stats'}
-      </h1>
+    <div className="min-h-screen bg-[#faf8f5]">
+      <div className="p-4 md:p-8">
+        <h1 className="text-2xl font-bold text-[#1c1917] mb-8">
+          {isViewingFriend ? `${viewingUser?.name}'s Stats` : 'Stats'}
+        </h1>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
-        {[
-          { label: 'Albums Rated', value: summary?.total_albums_rated ?? '—' },
-          { label: 'Songs Rated', value: summary?.total_songs_rated ?? '—' },
-          { label: 'Avg Album Score', value: summary?.avg_album_score?.toFixed(2) ?? '—' },
-          { label: 'Avg Song Score', value: summary?.avg_song_score?.toFixed(2) ?? '—' },
-          { label: 'Top Album', value: summary?.top_album?.name ?? '—', small: true },
-        ].map(({ label, value, small }) => (
-          <div key={label} className="bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl p-5">
-            <p className="text-[#999] text-xs uppercase tracking-widest mb-2">{label}</p>
-            <p className={`text-[#111] font-semibold ${small ? 'text-base truncate' : 'text-3xl tabular-nums'}`}>{value}</p>
+        {/* Summary strip */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-10">
+          {[
+            { label: 'Albums Rated',   value: summary?.total_albums_rated ?? '—' },
+            { label: 'Songs Rated',    value: summary?.total_songs_rated ?? '—' },
+            { label: 'Avg Album',      value: summary?.avg_album_score?.toFixed(2) ?? '—' },
+            { label: 'Avg Song',       value: summary?.avg_song_score?.toFixed(2) ?? '—' },
+            { label: 'Top Album',      value: summary?.top_album?.name ?? '—', small: true },
+          ].map(({ label, value, small }) => (
+            <div key={label} className={cardCls}>
+              <p className={labelCls}>{label}</p>
+              <p className={`text-[#1c1917] font-bold ${small ? 'text-base truncate' : 'text-3xl tabular-nums'}`}>{value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Genre bar chart */}
+          <div className={panelCls}>
+            <h2 className="text-sm font-semibold text-[#78716c] mb-5">Albums by Genre</h2>
+            {loadingGenres ? (
+              <div className="flex items-center justify-center h-48 text-[#a8998a]">
+                <Loader2 size={14} className="animate-spin" />
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={Math.max(200, genres.length * 28)}>
+                <BarChart data={genres} layout="vertical" barSize={14}>
+                  <XAxis type="number" tick={{ fill: '#c2b8ad', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    type="category"
+                    dataKey="genre"
+                    tick={{ fill: '#78716c', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={100}
+                  />
+                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#00000006' }} />
+                  <Bar dataKey="count" fill="#2d6a4f" radius={[0, 4, 4, 0]} opacity={0.8} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
-        ))}
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Genre breakdown */}
-        <div className="bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-[#777] mb-5">Albums by Genre</h2>
-          {loadingGenres ? (
-            <div className="flex items-center justify-center h-48 text-[#aaa] gap-2">
+          {/* Top album / top song highlights */}
+          <div className="flex flex-col gap-3">
+            {summary?.top_album && (
+              <div className={cardCls}>
+                <p className={labelCls}>Top Album</p>
+                <p className="text-[#1c1917] font-semibold text-sm">{summary.top_album.name}</p>
+                <p className="text-[#78716c] text-xs mt-0.5">
+                  {summary.top_album.artist} · <span className="text-[#2d6a4f] font-semibold">{summary.top_album.score?.toFixed(2)}</span>
+                </p>
+              </div>
+            )}
+            {summary?.top_song && (
+              <div className={cardCls}>
+                <p className={labelCls}>Top Song</p>
+                <p className="text-[#1c1917] font-semibold text-sm">{summary.top_song.title}</p>
+                <p className="text-[#78716c] text-xs mt-0.5">
+                  {summary.top_song.artist} · <span className="text-[#2d6a4f] font-semibold">{summary.top_song.score}</span>
+                </p>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div className={cardCls}>
+                <p className={labelCls}>Albums</p>
+                <p className="text-[#1c1917] font-bold text-3xl tabular-nums">{summary?.total_albums_rated}</p>
+              </div>
+              <div className={cardCls}>
+                <p className={labelCls}>Songs</p>
+                <p className="text-[#1c1917] font-bold text-3xl tabular-nums">{summary?.total_songs_rated}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Genre KDE */}
+        {kdeData.length > 0 && (
+          <div className={`mt-6 ${panelCls}`}>
+            <h2 className="text-sm font-semibold text-[#78716c] mb-1">Score Distribution by Genre</h2>
+            <p className="text-[#c2b8ad] text-xs mb-5">Kernel density estimate of average song scores per album</p>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={kdeData} margin={{ left: -20, right: 16, top: 8, bottom: 8 }}>
+                <XAxis
+                  dataKey="x"
+                  type="number"
+                  domain={[1, 10]}
+                  tickCount={10}
+                  tick={{ fill: '#c2b8ad', fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  label={{ value: 'Avg Song Score', fill: '#c2b8ad', fontSize: 10, position: 'insideBottom', offset: -4 }}
+                />
+                <YAxis hide />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(val, name) => [typeof val === 'number' ? val.toFixed(4) : val, name as string]}
+                  labelFormatter={(x) => `Score: ${Number(x).toFixed(2)}`}
+                />
+                <Legend iconType="plainline" iconSize={16} wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
+                {genreScores.filter(g => g.scores.length >= 3).map(g => (
+                  <Line
+                    key={g.genre}
+                    type="monotone"
+                    dataKey={g.genre}
+                    stroke={genreColor(g.genre)}
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 3 }}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Scatter */}
+        <div className={`mt-6 ${panelCls}`}>
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-sm font-semibold text-[#78716c]">Song Score vs External Factors — All Artists</h2>
+              <p className="text-[#c2b8ad] text-xs mt-0.5">Click an artist to view their page</p>
+            </div>
+            <select
+              value={genreFilter}
+              onChange={(e) => setGenreFilter(e.target.value)}
+              className="text-xs border border-[#e8e2d9] rounded-xl px-2.5 py-1.5 bg-[#faf8f5] text-[#78716c] focus:outline-none focus:border-[#2d6a4f] transition-colors"
+            >
+              <option value="all">All Genres</option>
+              {allGenres.map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </div>
+
+          {!scatter ? (
+            <div className="flex items-center justify-center h-64 text-[#a8998a]">
               <Loader2 size={14} className="animate-spin" />
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={Math.max(200, genres.length * 28)}>
-              <BarChart data={genres} layout="vertical" barSize={16}>
-                <XAxis type="number" tick={{ fill: '#aaa', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis
-                  type="category"
-                  dataKey="genre"
-                  tick={{ fill: '#777', fontSize: 11 }}
+            <ResponsiveContainer width="100%" height={480}>
+              <ScatterChart margin={{ left: -10, right: 20, top: 10, bottom: 20 }}>
+                <XAxis
+                  type="number"
+                  dataKey="avg_song_score"
+                  name="Avg Song Score"
+                  domain={[1, 10]}
+                  tick={{ fill: '#c2b8ad', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
-                  width={100}
+                  label={{ value: 'Avg Song Score', fill: '#c2b8ad', fontSize: 10, position: 'insideBottom', offset: -12 }}
                 />
+                <YAxis
+                  type="number"
+                  dataKey="avg_external"
+                  name="Avg External"
+                  domain={[1, 10]}
+                  tick={{ fill: '#c2b8ad', fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  label={{ value: 'Avg External', fill: '#c2b8ad', fontSize: 10, angle: -90, position: 'insideLeft', offset: 14 }}
+                />
+                <ZAxis range={[28, 28]} />
+                {meanSong !== null && (
+                  <ReferenceLine
+                    x={meanSong}
+                    stroke="#e8e2d9"
+                    strokeDasharray="4 3"
+                    label={{ value: `avg ${meanSong.toFixed(2)}`, fill: '#c2b8ad', fontSize: 9, position: 'top' }}
+                  />
+                )}
+                {meanExt !== null && (
+                  <ReferenceLine
+                    y={meanExt}
+                    stroke="#e8e2d9"
+                    strokeDasharray="4 3"
+                    label={{ value: `avg ${meanExt.toFixed(2)}`, fill: '#c2b8ad', fontSize: 9, position: 'right' }}
+                  />
+                )}
                 <Tooltip
-                  contentStyle={{ background: '#fff', border: '1px solid #e2e2e2', borderRadius: 8, color: '#111' }}
-                  cursor={{ fill: '#00000008' }}
+                  contentStyle={tooltipStyle}
+                  cursor={{ strokeDasharray: '3 3', stroke: '#e8e2d9' }}
+                  content={({ payload }) => {
+                    if (!payload?.length) return null
+                    const d = payload[0].payload as { artist: string; avg_song_score: number; avg_external: number; genre: string | null }
+                    return (
+                      <div className="text-xs p-3 space-y-0.5 bg-[#faf8f5] border border-[#e8e2d9] rounded-xl shadow-sm">
+                        <p className="font-semibold text-[#1c1917]">{d.artist}</p>
+                        {d.genre && <p className="text-[#a8998a]">{d.genre}</p>}
+                        <p className="text-[#78716c]">Song: {d.avg_song_score?.toFixed(2)}</p>
+                        <p className="text-[#78716c]">Ext: {d.avg_external?.toFixed(2)}</p>
+                      </div>
+                    )
+                  }}
                 />
-                <Bar dataKey="count" fill="#2d6a4f" radius={[0, 4, 4, 0]} opacity={0.85} />
-              </BarChart>
+                {Object.entries(
+                  scatterPoints.reduce((acc, p) => {
+                    const key = p.genre ?? 'Other'
+                    if (!acc[key]) acc[key] = []
+                    acc[key].push(p)
+                    return acc
+                  }, {} as Record<string, typeof scatterPoints>)
+                ).map(([genre, points]) => (
+                  <Scatter
+                    key={genre}
+                    name={genre}
+                    data={points}
+                    fill={genreColor(genre === 'Other' ? null : genre)}
+                    opacity={0.75}
+                    onClick={(d) => navigate(`/artist/${encodeURIComponent((d as unknown as { artist: string }).artist)}`)}
+                    style={{ cursor: 'pointer' }}
+                  />
+                ))}
+              </ScatterChart>
             </ResponsiveContainer>
           )}
-        </div>
 
-        {/* Top song + top album */}
-        <div className="flex flex-col gap-4">
-          {summary?.top_album && (
-            <div className="bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl p-5">
-              <p className="text-[#999] text-xs uppercase tracking-widest mb-1">Top Album</p>
-              <p className="text-[#111] font-semibold">{summary.top_album.name}</p>
-              <p className="text-[#777] text-sm mt-0.5">
-                {summary.top_album.artist} ·{' '}
-                <span className="text-[#2d6a4f] font-medium">{summary.top_album.score?.toFixed(2)}</span>
-              </p>
+          {scatter && genreFilter === 'all' && allGenres.length > 0 && (
+            <div className="flex flex-wrap gap-x-4 gap-y-2 mt-4 pt-4 border-t border-[#e8e2d9]">
+              {allGenres.map((g) => (
+                <button
+                  key={g}
+                  onClick={() => setGenreFilter(g)}
+                  className="flex items-center gap-1.5 text-xs text-[#78716c] hover:text-[#1c1917] transition-colors"
+                >
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: genreColor(g) }} />
+                  {g}
+                </button>
+              ))}
             </div>
           )}
-          {summary?.top_song && (
-            <div className="bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl p-5">
-              <p className="text-[#999] text-xs uppercase tracking-widest mb-1">Top Song</p>
-              <p className="text-[#111] font-semibold">{summary.top_song.title}</p>
-              <p className="text-[#777] text-sm mt-0.5">
-                {summary.top_song.artist} ·{' '}
-                <span className="text-[#2d6a4f] font-medium">{summary.top_song.score}</span>
-              </p>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl p-5">
-              <p className="text-[#999] text-xs uppercase tracking-widest mb-2">Albums Rated</p>
-              <p className="text-[#111] font-semibold text-3xl tabular-nums">{summary?.total_albums_rated}</p>
-            </div>
-            <div className="bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl p-5">
-              <p className="text-[#999] text-xs uppercase tracking-widest mb-2">Songs Rated</p>
-              <p className="text-[#111] font-semibold text-3xl tabular-nums">{summary?.total_songs_rated}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Genre KDE */}
-      {kdeData.length > 0 && (
-        <div className="mt-8 bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-[#777] mb-1">Score Distribution by Genre</h2>
-          <p className="text-[#bbb] text-xs mb-5">Kernel density estimate of average song scores per album</p>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={kdeData} margin={{ left: -20, right: 16, top: 8, bottom: 8 }}>
-              <XAxis
-                dataKey="x"
-                type="number"
-                domain={[1, 10]}
-                tickCount={10}
-                tick={{ fill: '#aaa', fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                label={{ value: 'Avg Song Score', fill: '#bbb', fontSize: 10, position: 'insideBottom', offset: -4 }}
-              />
-              <YAxis hide />
-              <Tooltip
-                contentStyle={{ background: '#fff', border: '1px solid #e2e2e2', borderRadius: 8, fontSize: 11 }}
-                formatter={(val: number, name: string) => [val.toFixed(4), name]}
-                labelFormatter={(x: number) => `Score: ${Number(x).toFixed(2)}`}
-              />
-              <Legend
-                iconType="plainline"
-                iconSize={16}
-                wrapperStyle={{ fontSize: 11, paddingTop: 12 }}
-              />
-              {genreScores.filter(g => g.scores.length >= 3).map(g => (
-                <Line
-                  key={g.genre}
-                  type="monotone"
-                  dataKey={g.genre}
-                  stroke={genreColor(g.genre)}
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 3 }}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* Artist scatterplot */}
-      <div className="mt-8 bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl p-6">
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h2 className="text-sm font-semibold text-[#777]">Song Score vs External Factors — All Artists</h2>
-            <p className="text-[#bbb] text-xs mt-0.5">Click an artist to view their page</p>
-          </div>
-          <select
-            value={genreFilter}
-            onChange={(e) => setGenreFilter(e.target.value)}
-            className="text-xs border border-[#e2e2e2] rounded-lg px-2.5 py-1.5 bg-white text-[#555] focus:outline-none focus:border-[#2d6a4f]"
-          >
-            <option value="all">All Genres</option>
-            {allGenres.map((g) => (
-              <option key={g} value={g}>{g}</option>
-            ))}
-          </select>
         </div>
 
-        {!scatter ? (
-          <div className="flex items-center justify-center h-64 text-[#aaa] gap-2">
-            <Loader2 size={14} className="animate-spin" />
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={480}>
-            <ScatterChart margin={{ left: -10, right: 20, top: 10, bottom: 20 }}>
-              <XAxis
-                type="number"
-                dataKey="avg_song_score"
-                name="Avg Song Score"
-                domain={[1, 10]}
-                tick={{ fill: '#aaa', fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                label={{ value: 'Avg Song Score', fill: '#bbb', fontSize: 10, position: 'insideBottom', offset: -12 }}
-              />
-              <YAxis
-                type="number"
-                dataKey="avg_external"
-                name="Avg External"
-                domain={[1, 10]}
-                tick={{ fill: '#aaa', fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                label={{ value: 'Avg External', fill: '#bbb', fontSize: 10, angle: -90, position: 'insideLeft', offset: 14 }}
-              />
-              <ZAxis range={[28, 28]} />
-              {meanSong !== null && (
-                <ReferenceLine
-                  x={meanSong}
-                  stroke="#d0d0d0"
-                  strokeDasharray="4 3"
-                  label={{ value: `avg ${meanSong.toFixed(2)}`, fill: '#bbb', fontSize: 9, position: 'top' }}
-                />
-              )}
-              {meanExt !== null && (
-                <ReferenceLine
-                  y={meanExt}
-                  stroke="#d0d0d0"
-                  strokeDasharray="4 3"
-                  label={{ value: `avg ${meanExt.toFixed(2)}`, fill: '#bbb', fontSize: 9, position: 'right' }}
-                />
-              )}
-              <Tooltip
-                contentStyle={{ background: '#fff', border: '1px solid #e2e2e2', borderRadius: 8, color: '#111', fontSize: 12 }}
-                cursor={{ strokeDasharray: '3 3', stroke: '#e2e2e2' }}
-                content={({ payload }) => {
-                  if (!payload?.length) return null
-                  const d = payload[0].payload as { artist: string; avg_song_score: number; avg_external: number; genre: string | null }
-                  return (
-                    <div className="text-xs p-2 space-y-0.5">
-                      <p className="font-medium text-[#111]">{d.artist}</p>
-                      {d.genre && <p className="text-[#aaa]">{d.genre}</p>}
-                      <p className="text-[#777]">Song: {d.avg_song_score?.toFixed(2)}</p>
-                      <p className="text-[#777]">Ext: {d.avg_external?.toFixed(2)}</p>
-                    </div>
-                  )
-                }}
-              />
-              {Object.entries(
-                scatterPoints.reduce((acc, p) => {
-                  const key = p.genre ?? 'Other'
-                  if (!acc[key]) acc[key] = []
-                  acc[key].push(p)
-                  return acc
-                }, {} as Record<string, typeof scatterPoints>)
-              ).map(([genre, points]) => (
-                <Scatter
-                  key={genre}
-                  name={genre}
-                  data={points}
-                  fill={genreColor(genre === 'Other' ? null : genre)}
-                  opacity={0.75}
-                  onClick={(d) => navigate(`/artist/${encodeURIComponent((d as unknown as { artist: string }).artist)}`)}
-                  style={{ cursor: 'pointer' }}
-                />
-              ))}
-            </ScatterChart>
-          </ResponsiveContainer>
-        )}
-
-        {/* Genre color legend */}
-        {scatter && genreFilter === 'all' && allGenres.length > 0 && (
-          <div className="flex flex-wrap gap-x-4 gap-y-2 mt-4 pt-4 border-t border-[#e8e8e8]">
-            {allGenres.map((g) => (
-              <button
-                key={g}
-                onClick={() => setGenreFilter(g)}
-                className="flex items-center gap-1.5 text-xs text-[#777] hover:text-[#111] transition-colors"
-              >
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: genreColor(g) }} />
-                {g}
-              </button>
-            ))}
-          </div>
+        {/* Artist Rankings */}
+        {scatter && (
+          <ArtistRankingsTable
+            scatter={scatter}
+            artistStats={artistStats}
+            scatterPrev={scatterPrev}
+            artistStatsPrev={artistStatsPrev}
+            QUALIFIED={QUALIFIED}
+            navigate={navigate}
+          />
         )}
       </div>
-      {/* Artist Rankings */}
-      {scatter && (
-        <ArtistRankingsTable
-          scatter={scatter}
-          artistStats={artistStats}
-          scatterPrev={scatterPrev}
-          artistStatsPrev={artistStatsPrev}
-          QUALIFIED={QUALIFIED}
-          navigate={navigate}
-        />
-      )}
     </div>
   )
 }
