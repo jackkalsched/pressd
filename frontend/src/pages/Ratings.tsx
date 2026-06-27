@@ -5,7 +5,7 @@ import { fetchAlbums } from '../api'
 import { useUser } from '../context/UserContext'
 import { Loader2, Music } from 'lucide-react'
 
-type SortKey = 'score' | 'year' | 'artist' | 'albumName'
+type SortKey = 'score' | 'year' | 'artist' | 'albumName' | 'theme' | 'replayValue' | 'production' | 'distinctness'
 
 export default function Ratings() {
   const navigate = useNavigate()
@@ -89,10 +89,21 @@ export default function Ratings() {
                   >
                     Score {sortKey === 'score' && <span className="text-[#2d6a4f]">{sortDir === 'desc' ? '↓' : '↑'}</span>}
                   </th>
-                  <th className="text-right text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] py-3 px-4 w-20">Theme</th>
-                  <th className="text-right text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] py-3 px-4 w-20">Replay</th>
-                  <th className="text-right text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] py-3 px-4 w-20">Prod.</th>
-                  <th className="text-right text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] py-3 px-4 w-20">Dist.</th>
+                  {(['theme', 'replayValue', 'production', 'distinctness'] as SortKey[]).map((key, i) => {
+                    const label = ['Theme', 'Replay', 'Prod.', 'Dist.'][i]
+                    return (
+                      <th
+                        key={key}
+                        onClick={() => toggleSort(key)}
+                        className={`text-right text-[10px] font-semibold uppercase tracking-[0.1em] py-3 px-4 w-20 cursor-pointer select-none transition-colors ${
+                          sortKey === key ? 'text-[#1c1917]' : 'text-[#a8998a] hover:text-[#78716c]'
+                        }`}
+                      >
+                        {label}
+                        {sortKey === key && <span className="ml-1 text-[#2d6a4f]">{sortDir === 'desc' ? '↓' : '↑'}</span>}
+                      </th>
+                    )
+                  })}
                   <th className="text-left text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] py-3 px-4">Genre</th>
                 </tr>
               </thead>

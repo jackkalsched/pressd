@@ -146,7 +146,7 @@ function ArtistRankingsTable({
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="border-b border-[#e8e2d9] bg-[#f7f3ee]">
+              <tr className="border-b border-[#e8e2d9]">
                 <th className="text-left text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] px-4 py-3 w-10">Rk.</th>
                 <th className="text-left text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] px-4 py-3">Artist</th>
                 <th className="text-right text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] px-4 py-3 w-14">Songs</th>
@@ -155,7 +155,7 @@ function ArtistRankingsTable({
                     key={c.key}
                     onClick={() => setSortKey(c.key)}
                     className={`text-right text-[10px] font-semibold uppercase tracking-[0.1em] px-4 py-3 w-24 cursor-pointer select-none transition-colors ${
-                      sortKey === c.key ? 'text-[#1c1917] bg-[#f0ebe3]' : 'text-[#a8998a] hover:text-[#78716c]'
+                      sortKey === c.key ? 'text-[#1c1917]' : 'text-[#a8998a] hover:text-[#78716c]'
                     }`}
                   >
                     {c.label}
@@ -197,7 +197,7 @@ function ArtistRankingsTable({
                     <td
                       key={c.key}
                       className={`text-right tabular-nums px-4 py-2.5 text-xs font-semibold ${
-                        sortKey === c.key ? 'bg-[#f0ebe3] text-[#2d6a4f]' : 'text-[#57534e]'
+                        sortKey === c.key ? 'text-[#2d6a4f]' : 'text-[#57534e]'
                       }`}
                     >
                       {c.fmt(row)}
@@ -322,8 +322,8 @@ export default function Stats() {
     ? scatterPoints.reduce((s, p) => s + (p.avg_external ?? 0), 0) / scatterPoints.length
     : scatter?.mean_external ?? null
 
-  const panelCls = 'bg-[#f0ebe3] border border-[#e8e2d9] rounded-2xl p-6'
-  const cardCls = 'bg-[#f0ebe3] border border-[#e8e2d9] rounded-2xl p-5'
+  const panelCls = 'border border-[#e8e2d9] rounded-2xl p-6'
+  const cardCls = 'border border-[#e8e2d9] rounded-2xl p-5'
   const labelCls = 'text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.12em] mb-2'
   const tooltipStyle = { background: '#faf8f5', border: '1px solid #e8e2d9', borderRadius: 12, color: '#1c1917', fontSize: 12 }
 
