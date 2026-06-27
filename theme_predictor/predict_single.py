@@ -3,6 +3,7 @@ Predict theme, replay, distinctness, and album score for a single album.
 Called as a background task when a new to_listen album is added.
 """
 
+import json
 import math
 import sys
 import pathlib
@@ -115,39 +116,6 @@ def _analyze_and_store_songs(con, album_id: int, artist: str, album_name: str) -
     return success > 0
 
 
-def _ensure_ollama() -> bool:
-    """Start Ollama if it isn't responding. Returns True when ready."""
-    import subprocess, time, urllib.request, urllib.error
-    def _ping():
-        try:
-            urllib.request.urlopen("http://localhost:11434/", timeout=3)
-            return True
-        except Exception:
-            return False
-
-    if _ping():
-        return True
-
-    print("[predict_single] Ollama not running — starting it...")
-    try:
-        subprocess.Popen(
-            ["ollama", "serve"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except FileNotFoundError:
-        print("[predict_single] ollama not found in PATH — skipping LLM steps")
-        return False
-
-    for _ in range(30):
-        time.sleep(2)
-        if _ping():
-            print("[predict_single] Ollama ready")
-            return True
-
-    print("[predict_single] Ollama did not start in time — skipping LLM steps")
-    return False
-
 
 def predict_album(album_id: int):
     """Full prediction pipeline for one album. Safe to call from a background thread."""
@@ -184,94 +152,91 @@ def _run(album_id: int):
         except Exception as e:
             print(f"[predict_single] song model failed: {e}")
 
-        # ── Ensure Ollama is running before LLM steps ────────────────────────────
-        ollama_ready = _ensure_ollama()
+        # ── 3. Theme (Claude + user ratings as RAG) ──────────────────────────────
+        try:
+            from .corpus import load_or_build_corpus, CACHE_DIR, _safe_filename
+            from .predictor import predict_theme
 
-        # ── 3. Theme (requires Ollama) ────────────────────────────────────────────
-        if not ollama_ready:
-            print("[predict_single] skipping theme (Ollama unavailable)")
-        else:
-            try:
-                from .corpus import load_or_build_corpus, build_document
-                from .embedder import get_collection, upsert_corpus, top_similar_albums
-                from .predictor import predict_theme
+            corpus = load_or_build_corpus(album_id, artist, album_name, year, None)
+            corpus["genre"] = genre
 
-                corpus = load_or_build_corpus(album_id, artist, album_name, year, None)
-                corpus["genre"] = genre
+            # Pull genre-matched rated albums as RAG examples (DB query, no embeddings needed)
+            theme_rows = con.execute(text("""
+                SELECT id, artist, album_name, genre, theme FROM album
+                WHERE status='rated' AND theme IS NOT NULL
+                ORDER BY CASE WHEN genre = :g THEN 0 ELSE 1 END, theme DESC
+                LIMIT 5
+            """), {"g": genre or ""}).fetchall()
 
-                rated = con.execute(
-                    text("SELECT id, artist, album_name, year, genre, theme FROM album WHERE status='rated' AND theme IS NOT NULL")
-                ).fetchall()
-                corpora_map: dict[int, dict] = {}
-                for aid, a_artist, a_album, a_year, a_genre, a_theme in rated:
-                    c = load_or_build_corpus(aid, a_artist, a_album, a_year, a_theme)
-                    c["genre"] = a_genre
-                    corpora_map[aid] = c
+            example_dicts = [
+                {"album_id": r[0], "artist": r[1], "album_name": r[2], "theme_score": r[4]}
+                for r in theme_rows
+            ]
+            # Use cached corpus files where available; otherwise provide a genre stub
+            corpora_map: dict[int, dict] = {}
+            for r in theme_rows:
+                path = CACHE_DIR / f"{_safe_filename(r[1], r[2])}.json"
+                if path.exists():
+                    try:
+                        corpora_map[r[0]] = json.loads(path.read_text())
+                    except Exception:
+                        corpora_map[r[0]] = {"llm_analysis": "", "genre": r[3]}
+                else:
+                    corpora_map[r[0]] = {"llm_analysis": "", "genre": r[3]}
 
-                collection = get_collection()
-                upsert_corpus(collection, corpus, build_document(corpus))
+            score, reasoning = predict_theme(corpus, example_dicts, corpora_map)
+            if score is not None:
+                norm_score = round(max(1.0, min(10.0, float(score))))
+                con.execute(
+                    text("UPDATE album SET predicted_theme = :theme, predicted_theme_reasoning = :reasoning WHERE id = :id"),
+                    {"theme": norm_score, "reasoning": reasoning, "id": album_id},
+                )
+                con.commit()
+                print(f"[predict_single] theme={norm_score}")
+        except Exception as e:
+            print(f"[predict_single] theme failed: {e}")
 
-                examples = top_similar_albums(collection, build_document(corpus), n_albums=3)
-                example_dicts = [
-                    {"album_id": ex["album_id"], "artist": ex["artist"],
-                     "album_name": ex["album_name"], "theme_score": ex["theme_score"]}
-                    for ex in examples if ex["album_id"] in corpora_map
-                ]
+        # ── 4. Distinctness (Claude + user ratings as RAG) ────────────────────────
+        try:
+            from .corpus import load_or_build_corpus, CACHE_DIR, _safe_filename
+            from .distinctness_predictor import predict_distinctness
 
-                score, reasoning = predict_theme(corpus, example_dicts, corpora_map)
-                if score is not None:
-                    norm_score = round(max(1.0, min(10.0, float(score))))
-                    con.execute(
-                        text("UPDATE album SET predicted_theme = :theme, predicted_theme_reasoning = :reasoning WHERE id = :id"),
-                        {"theme": norm_score, "reasoning": reasoning, "id": album_id},
-                    )
-                    con.commit()
-                    print(f"[predict_single] theme={norm_score}")
-            except Exception as e:
-                print(f"[predict_single] theme failed: {e}")
+            corpus = load_or_build_corpus(album_id, artist, album_name, year, None)
+            corpus["genre"] = genre
 
-        # ── 4. Distinctness (requires Ollama) ─────────────────────────────────────
-        if not ollama_ready:
-            print("[predict_single] skipping distinctness (Ollama unavailable)")
-        else:
-            try:
-                from .corpus import load_or_build_corpus, build_document
-                from .embedder import get_collection, top_similar_albums
-                from .distinctness_predictor import predict_distinctness
+            dist_rows = con.execute(text("""
+                SELECT id, artist, album_name, genre, distinctness FROM album
+                WHERE status='rated' AND distinctness IS NOT NULL
+                ORDER BY CASE WHEN genre = :g THEN 0 ELSE 1 END, distinctness DESC
+                LIMIT 5
+            """), {"g": genre or ""}).fetchall()
 
-                corpus = load_or_build_corpus(album_id, artist, album_name, year, None)
-                corpus["genre"] = genre
-                collection = get_collection()
-                doc = build_document(corpus)
-                examples = top_similar_albums(collection, doc, n_albums=3)
+            d_examples = [
+                {"album_id": r[0], "artist": r[1], "album_name": r[2], "theme_score": r[4]}
+                for r in dist_rows
+            ]
+            d_corpora: dict[int, dict] = {}
+            for r in dist_rows:
+                path = CACHE_DIR / f"{_safe_filename(r[1], r[2])}.json"
+                if path.exists():
+                    try:
+                        d_corpora[r[0]] = json.loads(path.read_text())
+                    except Exception:
+                        d_corpora[r[0]] = {"llm_analysis": "", "genre": r[3]}
+                else:
+                    d_corpora[r[0]] = {"llm_analysis": "", "genre": r[3]}
 
-                d_corpora: dict[int, dict] = {}
-                d_rated = con.execute(
-                    text("SELECT id, artist, album_name, year, genre, distinctness FROM album WHERE status='rated' AND distinctness IS NOT NULL")
-                ).fetchall()
-                for aid, a_artist, a_album, a_year, a_genre, a_dist in d_rated:
-                    c = load_or_build_corpus(aid, a_artist, a_album, a_year, None)
-                    c["genre"] = a_genre
-                    c["theme_score"] = a_dist
-                    d_corpora[aid] = c
-
-                d_examples = [
-                    {"album_id": ex["album_id"], "artist": ex["artist"],
-                     "album_name": ex["album_name"], "theme_score": d_corpora[ex["album_id"]]["theme_score"]}
-                    for ex in examples if ex["album_id"] in d_corpora
-                ]
-
-                d_score, _ = predict_distinctness(corpus, d_examples, d_corpora)
-                if d_score is not None:
-                    norm = round(max(1.0, min(10.0, d_score)), 0)
-                    con.execute(
-                        text("UPDATE album SET predicted_distinctness = :dist WHERE id = :id"),
-                        {"dist": norm, "id": album_id},
-                    )
-                    con.commit()
-                    print(f"[predict_single] distinctness={norm}")
-            except Exception as e:
-                print(f"[predict_single] distinctness failed: {e}")
+            d_score, _ = predict_distinctness(corpus, d_examples, d_corpora)
+            if d_score is not None:
+                norm = round(max(1.0, min(10.0, d_score)), 0)
+                con.execute(
+                    text("UPDATE album SET predicted_distinctness = :dist WHERE id = :id"),
+                    {"dist": norm, "id": album_id},
+                )
+                con.commit()
+                print(f"[predict_single] distinctness={norm}")
+        except Exception as e:
+            print(f"[predict_single] distinctness failed: {e}")
 
         # ── 5. Replay ─────────────────────────────────────────────────────────────
         try:
@@ -321,6 +286,9 @@ def _run(album_id: int):
             ).fetchone()
             if pred and all(v is not None for v in pred):
                 pred_theme, pred_replay, pred_dist = pred
+                theme_mu, theme_sd   = _factor_stats(con, "theme", user_id)
+                replay_mu, replay_sd = _factor_stats(con, "replay_value", user_id)
+                dist_mu, dist_sd     = _factor_stats(con, "distinctness", user_id)
 
                 # Use song model prediction if available, otherwise fall back to user's own mean
                 if predicted_song_mean is not None:
@@ -333,9 +301,9 @@ def _run(album_id: int):
                     ).fetchone()[0] or 7.21
                     print(f"[predict_single] falling back to user song_mean={round(song_component, 3)}")
 
-                z_theme  = _blended_z(con, pred_theme,  "theme",        user_id, genre)
-                z_replay = _blended_z(con, pred_replay, "replay_value", user_id, genre)
-                z_dist   = _blended_z(con, pred_dist,   "distinctness", user_id, genre)
+                z_theme  = (pred_theme  - theme_mu)  / theme_sd
+                z_replay = (pred_replay - replay_mu) / replay_sd
+                z_dist   = (pred_dist   - dist_mu)   / dist_sd
                 pred_score = round(1.0 * song_component + 0.25 * z_theme + 0.15 * z_replay + 0.05 * z_dist, 2)
                 con.execute(
                     text("UPDATE album SET predicted_score = :score WHERE id = :id"),
@@ -481,37 +449,6 @@ def _factor_stats(con, field: str, user_id: int | None = None) -> tuple[float, f
     return mu, sd
 
 
-_GENRE_K = 10  # albums needed for 50% genre weight
-
-
-def _genre_factor_stats(con, field: str, user_id: int, genre: str) -> tuple[float, float, int] | None:
-    """Return (mu, sd, n) for a given genre and field, or None if <2 albums."""
-    row = con.execute(text(f"""
-        SELECT AVG({field}),
-               AVG(({field}-(SELECT AVG({field}) FROM album WHERE status='rated' AND {field} IS NOT NULL AND user_id=:uid AND genre=:g))*
-                   ({field}-(SELECT AVG({field}) FROM album WHERE status='rated' AND {field} IS NOT NULL AND user_id=:uid AND genre=:g))),
-               COUNT(*)
-        FROM album WHERE status='rated' AND {field} IS NOT NULL AND user_id=:uid AND genre=:g
-    """), {"uid": user_id, "g": genre}).fetchone()
-    if not row or not row[0] or row[2] < 2:
-        return None
-    return row[0], math.sqrt(row[1]) if row[1] else 1.0, int(row[2])
-
-
-def _blended_z(con, val: float, field: str, user_id: int, genre: str | None) -> float:
-    """Credibility-weighted blend of genre and global z-scores."""
-    g_mu, g_sd = _factor_stats(con, field, user_id)
-    z_global = (val - g_mu) / g_sd
-
-    if genre:
-        gs = _genre_factor_stats(con, field, user_id, genre)
-        if gs:
-            gn_mu, gn_sd, n = gs
-            z_genre = (val - gn_mu) / gn_sd
-            alpha = n / (n + _GENRE_K)
-            return alpha * z_genre + (1 - alpha) * z_global
-
-    return z_global
 
 
 def _normalize_single(raw: float, all_raw: list[float], target_mu: float, target_sd: float) -> float:
