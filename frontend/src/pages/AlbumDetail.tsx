@@ -327,7 +327,7 @@ export default function AlbumDetail() {
             ].map(({ label, value }) => (
               <div
                 key={label}
-                className="bg-[#f0ebe3] border border-[#e8e2d9] rounded-2xl px-5 py-5 text-center"
+                className="px-5 py-5 text-center"
               >
                 <p
                   className="text-[10px] uppercase tracking-[0.13em] mb-3 font-medium"
