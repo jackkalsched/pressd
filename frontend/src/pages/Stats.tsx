@@ -72,7 +72,7 @@ export default function Stats() {
     staleTime: 5 * 60 * 1000,
   })
 
-  const { data: analysisData, isLoading: loadingAnalysis, isError: analysisError, refetch: refetchAnalysis } = useQuery({
+  const { data: analysisData, isFetching: fetchingAnalysis, isError: analysisError, refetch: refetchAnalysis } = useQuery({
     queryKey: ['stats', 'analysis', userId],
     queryFn: () => fetchAnalysis(userId),
     staleTime: 30 * 60 * 1000,
@@ -385,7 +385,7 @@ export default function Stats() {
               <h2 className="text-sm font-semibold text-[#78716c]">Analysis</h2>
               <p className="text-[#c2b8ad] text-xs mt-0.5">3 patterns found in your listening data</p>
             </div>
-            {!loadingAnalysis && (
+            {!fetchingAnalysis && (
               <button
                 onClick={() => refetchAnalysis()}
                 className="text-xs text-[#a8998a] hover:text-[#78716c] transition-colors px-3 py-1.5 rounded-lg border border-[#e8e2d9] hover:border-[#c2b8ad]"
@@ -395,7 +395,7 @@ export default function Stats() {
             )}
           </div>
 
-          {loadingAnalysis && (
+          {fetchingAnalysis && (
             <div className="flex items-center gap-2 text-[#a8998a] py-6">
               <Loader2 size={14} className="animate-spin" />
               <span className="text-sm">Analyzing your library…</span>
