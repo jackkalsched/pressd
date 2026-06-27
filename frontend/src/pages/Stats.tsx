@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { fetchSummary, fetchGenreStats, fetchScatterData, fetchGenreScores } from '../api'
+import { fetchSummary, fetchGenreStats, fetchScatterData, fetchGenreScores, fetchAnalysis } from '../api'
 import { useUser } from '../context/UserContext'
 import { Loader2 } from 'lucide-react'
 import {
@@ -70,6 +70,13 @@ export default function Stats() {
     queryKey: ['stats', 'genre-scores', userId],
     queryFn: () => fetchGenreScores(userId),
     staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: analysisData, isLoading: loadingAnalysis, isError: analysisError, refetch: refetchAnalysis } = useQuery({
+    queryKey: ['stats', 'analysis', userId],
+    queryFn: () => fetchAnalysis(userId),
+    staleTime: 30 * 60 * 1000,
+    retry: false,
   })
 
   const kdeData = useMemo(() => {
@@ -368,6 +375,50 @@ export default function Stats() {
                 </button>
               ))}
             </div>
+          )}
+        </div>
+
+        {/* Analysis */}
+        <div className={`mt-6 ${panelCls}`}>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-[#78716c]">Analysis</h2>
+              <p className="text-[#c2b8ad] text-xs mt-0.5">3 patterns found in your listening data</p>
+            </div>
+            {!loadingAnalysis && (
+              <button
+                onClick={() => refetchAnalysis()}
+                className="text-xs text-[#a8998a] hover:text-[#78716c] transition-colors px-3 py-1.5 rounded-lg border border-[#e8e2d9] hover:border-[#c2b8ad]"
+              >
+                Refresh
+              </button>
+            )}
+          </div>
+
+          {loadingAnalysis && (
+            <div className="flex items-center gap-2 text-[#a8998a] py-6">
+              <Loader2 size={14} className="animate-spin" />
+              <span className="text-sm">Analyzing your library…</span>
+            </div>
+          )}
+
+          {analysisError && (
+            <p className="text-sm text-[#a8998a] py-4">
+              Could not load analysis — make sure <code className="text-xs bg-[#f0ebe3] px-1 py-0.5 rounded">ANTHROPIC_API_KEY</code> is set on the server.
+            </p>
+          )}
+
+          {analysisData && (
+            <ul className="space-y-3">
+              {analysisData.insights.map((insight, i) => (
+                <li key={i} className="flex gap-3 text-sm text-[#1c1917] leading-snug">
+                  <span className="mt-0.5 shrink-0 w-5 h-5 rounded-full bg-[#f0ebe3] flex items-center justify-center text-[10px] font-bold text-[#78716c]">
+                    {i + 1}
+                  </span>
+                  {insight}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 

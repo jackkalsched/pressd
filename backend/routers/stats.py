@@ -5,6 +5,8 @@ from collections import defaultdict
 from datetime import date, timedelta
 from typing import Optional
 import statistics
+import json
+import os
 
 from ..database import get_session
 from ..models import Album, Song
@@ -513,3 +515,109 @@ def genre_breakdown(user_id: int = Query(1), session: Session = Depends(get_sess
         }
         for genre, scores in sorted(by_genre.items(), key=lambda x: len(x[1]), reverse=True)
     ]
+
+
+@router.get("/analysis")
+def analysis(user_id: int = Query(1), session: Session = Depends(get_session)):
+    import anthropic
+
+    rated_albums = session.exec(
+        select(Album)
+        .where(Album.status == "rated", Album.user_id == user_id, Album.score.is_not(None))
+        .options(selectinload(Album.songs))
+    ).all()
+
+    to_listen = session.exec(
+        select(Album).where(Album.status == "to_listen", Album.user_id == user_id)
+    ).all()
+
+    seven_days_ago = date.today() - timedelta(days=7)
+    recent = [a for a in rated_albums if a.date_rated and a.date_rated >= seven_days_ago]
+
+    # Per-genre averages
+    by_genre: dict[str, list[float]] = defaultdict(list)
+    for a in rated_albums:
+        if a.genre and a.score is not None:
+            by_genre[a.genre].append(a.score)
+
+    # Per-artist song averages
+    artist_songs: dict[str, list[float]] = defaultdict(list)
+    all_songs_flat = []
+    for a in rated_albums:
+        for s in a.songs:
+            if s.score is not None:
+                artist_songs[a.artist].append(s.score)
+                all_songs_flat.append({
+                    "title": s.title,
+                    "album": a.album_name,
+                    "artist": a.artist,
+                    "score": s.score,
+                    "date_rated": str(a.date_rated),
+                })
+
+    lines: list[str] = []
+    lines.append(f"Total rated albums: {len(rated_albums)}, To-listen queue: {len(to_listen)}")
+
+    lines.append("\n=== RATED ALBUMS (score | name | artist | genre | year | date rated) ===")
+    for a in sorted(rated_albums, key=lambda x: x.score or 0, reverse=True):
+        lines.append(f"{a.score:.2f} | {a.album_name} | {a.artist} | {a.genre or 'Unknown'} | {a.year or '?'} | {a.date_rated}")
+
+    lines.append("\n=== GENRE AVERAGES ===")
+    for g, scores in sorted(by_genre.items(), key=lambda x: sum(x[1])/len(x[1]), reverse=True):
+        lines.append(f"{g}: {sum(scores)/len(scores):.2f} avg over {len(scores)} albums")
+
+    lines.append("\n=== ARTIST SONG AVERAGES (≥5 songs) ===")
+    for artist, scores in sorted(artist_songs.items(), key=lambda x: sum(x[1])/len(x[1]), reverse=True):
+        if len(scores) >= 5:
+            lines.append(f"{artist}: {sum(scores)/len(scores):.2f} avg over {len(scores)} songs")
+
+    lines.append(f"\n=== RECENTLY RATED (last 7 days, {len(recent)} albums) ===")
+    for a in recent:
+        lines.append(f"{a.album_name} by {a.artist} — score: {a.score:.2f}")
+
+    lines.append("\n=== TO-LISTEN QUEUE (first 20) ===")
+    for a in to_listen[:20]:
+        lines.append(f"{a.album_name} by {a.artist} | {a.genre or 'Unknown'}")
+
+    lines.append("\n=== TOP 10 SONGS ===")
+    for s in sorted(all_songs_flat, key=lambda x: x["score"], reverse=True)[:10]:
+        lines.append(f"{s['score']:.1f} | {s['title']} | {s['artist']}")
+
+    context = "\n".join(lines)
+
+    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=500,
+        messages=[{
+            "role": "user",
+            "content": (
+                "You are analyzing a music fan's listening data from the Press'd app "
+                "(a personal music rating tracker where 1–10 scores are given to songs and albums).\n\n"
+                f"Here is their data:\n\n{context}\n\n"
+                "Find exactly 3 interesting, specific, and surprising patterns or facts. "
+                "Each should be concrete — mention real names and numbers. "
+                "Make them feel like genuine discoveries, not generic observations. "
+                "Keep each to 1–2 punchy sentences. "
+                "Return ONLY a valid JSON array of 3 strings, no explanation:\n"
+                '["insight one.", "insight two.", "insight three."]'
+            ),
+        }],
+    )
+
+    text = response.content[0].text.strip()
+    # Strip markdown code fences if the model wraps in ```json
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+
+    try:
+        insights = json.loads(text)
+        if not isinstance(insights, list):
+            insights = [str(insights)]
+    except Exception:
+        insights = [line.strip().strip('"').strip("'").rstrip(",") for line in text.splitlines() if line.strip()][:3]
+
+    return {"insights": insights}

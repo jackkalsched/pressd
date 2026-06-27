@@ -630,3 +630,9 @@ export async function fetchFeed(userId: number): Promise<FeedItem[]> {
   if (!res.ok) throw new Error('Failed to fetch feed')
   return res.json()
 }
+
+export async function fetchAnalysis(userId: number): Promise<{ insights: string[] }> {
+  const res = await fetch(`${BASE}/stats/analysis?user_id=${userId}`)
+  if (!res.ok) throw new Error('Failed to fetch analysis')
+  return res.json()
+}
