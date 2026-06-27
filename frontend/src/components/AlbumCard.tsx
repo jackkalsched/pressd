@@ -11,11 +11,11 @@ interface Props {
   showActions?: boolean
 }
 
-function scoreBadgeStyle(score: number): { bg: string; text: string } {
-  if (score >= 9.0) return { bg: '#1e5c3e', text: '#d1fae5' }
-  if (score >= 8.0) return { bg: '#92400e', text: '#fef3c7' }
-  if (score >= 7.0) return { bg: '#44403c', text: '#e7e5e4' }
-  return { bg: '#881337', text: '#ffe4e6' }
+function scoreBadgeBg(score: number): string {
+  // Continuous hue: 0° (dark red) at score=1 → 138° (dark green) at score=10
+  const t = Math.max(0, Math.min(1, (score - 1) / 9))
+  const hue = Math.round(t * 138)
+  return `hsl(${hue}, 70%, 24%)`
 }
 
 export default function AlbumCard({ album, showActions = true }: Props) {
@@ -101,17 +101,14 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           )}
 
           {/* Score badge */}
-          {album.score !== null && (() => {
-            const { bg, text } = scoreBadgeStyle(album.score)
-            return (
-              <div
-                className="absolute top-2.5 right-2.5 text-[11px] font-bold px-2 py-0.5 rounded-full shadow-md tracking-tight select-none"
-                style={{ backgroundColor: bg, color: text }}
-              >
-                {album.score.toFixed(2)}
-              </div>
-            )
-          })()}
+          {album.score !== null && (
+            <div
+              className="absolute top-2.5 right-2.5 text-[13px] font-bold px-3 py-1 rounded-full shadow-lg tracking-tight select-none text-white"
+              style={{ backgroundColor: scoreBadgeBg(album.score) }}
+            >
+              {album.score.toFixed(2)}
+            </div>
+          )}
 
           {/* Predicted score badge */}
           {album.score === null && album.predictedScore !== null && (
