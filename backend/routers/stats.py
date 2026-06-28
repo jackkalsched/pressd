@@ -58,6 +58,43 @@ def summary(user_id: int = Query(1), session: Session = Depends(get_session)):
         v = [x for x in vals if x is not None]
         return round(sum(v) / len(v), 2) if v else None
 
+    # Most loyal artist (most rated albums)
+    artist_counts: dict[str, int] = defaultdict(int)
+    for a in rated:
+        artist_counts[a.artist] += 1
+    most_loyal = max(artist_counts.items(), key=lambda x: x[1], default=None)
+
+    # Best genre (highest avg score, min 3 albums)
+    genre_scores_map: dict[str, list[float]] = defaultdict(list)
+    for a in rated:
+        if a.genre and a.score is not None:
+            genre_scores_map[a.genre].append(a.score)
+    qualified = {g: s for g, s in genre_scores_map.items() if len(s) >= 3}
+    best_genre_entry = max(qualified.items(), key=lambda x: sum(x[1]) / len(x[1]), default=None)
+
+    # Avg release year
+    years = [a.year for a in rated if a.year]
+    avg_year = round(sum(years) / len(years)) if years else None
+
+    # Longest consecutive-day rating streak
+    rated_dates = sorted({a.date_rated for a in rated if a.date_rated})
+    longest_streak = 1
+    if len(rated_dates) > 1:
+        cur = 1
+        for i in range(1, len(rated_dates)):
+            if (rated_dates[i] - rated_dates[i - 1]).days == 1:
+                cur += 1
+                longest_streak = max(longest_streak, cur)
+            else:
+                cur = 1
+
+    # Albums rated this calendar year
+    this_year = date.today().year
+    albums_this_year = sum(1 for a in rated if a.date_rated and a.date_rated.year == this_year)
+
+    # Perfect 10 songs
+    total_10s = sum(1 for s in all_songs if s.score == 10.0)
+
     return {
         "total_albums_rated": len(rated),
         "total_songs_rated": len(all_songs),
@@ -69,6 +106,16 @@ def summary(user_id: int = Query(1), session: Session = Depends(get_session)):
         "avg_replay": _avg([a.replay_value for a in rated]),
         "avg_production": _avg([a.production for a in rated]),
         "avg_distinctness": _avg([a.distinctness for a in rated]),
+        "most_rated_artist": {"name": most_loyal[0], "count": most_loyal[1]} if most_loyal else None,
+        "best_genre": {
+            "genre": best_genre_entry[0],
+            "avg_score": round(sum(best_genre_entry[1]) / len(best_genre_entry[1]), 2),
+            "count": len(best_genre_entry[1]),
+        } if best_genre_entry else None,
+        "avg_release_year": avg_year,
+        "longest_streak": longest_streak if rated_dates else 0,
+        "albums_this_year": albums_this_year,
+        "total_10s": total_10s,
     }
 
 

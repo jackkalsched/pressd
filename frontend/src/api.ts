@@ -325,6 +325,12 @@ export interface Summary {
   avg_replay: number | null
   avg_production: number | null
   avg_distinctness: number | null
+  most_rated_artist: { name: string; count: number } | null
+  best_genre: { genre: string; avg_score: number; count: number } | null
+  avg_release_year: number | null
+  longest_streak: number
+  albums_this_year: number
+  total_10s: number
 }
 
 export async function fetchFactorStats(): Promise<FactorStats> {
