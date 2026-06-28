@@ -226,6 +226,41 @@ def get_tags_for_album(album_id: int, artist: str, album_name: str) -> list[str]
         return []
 
 
+GENRE_LIST = [
+    "Hip-Hop", "R&B", "Pop", "Rock", "Electronic", "Folk",
+    "Singer-Songwriter", "Country", "Jazz", "Latin", "Afrobeats",
+    "Classical", "Funk", "Disco", "Blues", "Gospel",
+]
+
+
+def classify_genre_claude(artist: str, album_name: str, year: int | None) -> tuple[str | None, list[str]]:
+    """Use Claude Haiku to classify main genre + up to 3 subgenres."""
+    import anthropic
+    client = anthropic.Anthropic()
+    year_str = f" ({year})" if year else ""
+    prompt = (
+        f'Album: "{album_name}" by {artist}{year_str}\n\n'
+        f'Classify this album. Respond with JSON only, no explanation:\n'
+        f'{{"genre": "<one of: {", ".join(GENRE_LIST)}>", '
+        f'"subgenres": ["<specific subgenre 1>", "<specific subgenre 2>", "<specific subgenre 3>"]}}'
+    )
+    resp = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=120,
+        temperature=0,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    text = resp.content[0].text.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    data = json.loads(text.strip())
+    genre = data.get("genre") if data.get("genre") in GENRE_LIST else None
+    subgenres = [s for s in data.get("subgenres", []) if isinstance(s, str) and s.strip()][:3]
+    return genre, subgenres
+
+
 def run(dry_run: bool = False, album_id: int | None = None, overwrite: bool = False):
     from dotenv import load_dotenv
     load_dotenv(Path(__file__).parent / ".env")
@@ -235,7 +270,7 @@ def run(dry_run: bool = False, album_id: int | None = None, overwrite: bool = Fa
     from sqlmodel import Session, select
 
     engine = _build_engine()
-    updated = no_tags = 0
+    updated = failed = 0
 
     with Session(engine) as session:
         q = select(Album)
@@ -244,14 +279,21 @@ def run(dry_run: bool = False, album_id: int | None = None, overwrite: bool = Fa
         albums = session.exec(q).all()
 
         for alb in albums:
-            tags = get_tags_for_album(alb.id, alb.artist, alb.album_name)
-            if not tags:
-                no_tags += 1
-                continue
+            try:
+                genre, subgenres = classify_genre_claude(alb.artist, alb.album_name, alb.year)
+            except Exception as e:
+                print(f"  Claude failed for {alb.artist} – {alb.album_name}: {e}")
+                # fallback to Last.fm for genre only
+                try:
+                    tags = get_tags_for_album(alb.id, alb.artist, alb.album_name)
+                    genre, _ = infer_genres(tags)
+                    subgenres = []
+                except Exception:
+                    failed += 1
+                    continue
 
-            genre, subgenres = infer_genres(tags)
             if not genre and not subgenres:
-                no_tags += 1
+                failed += 1
                 continue
 
             sub1 = subgenres[0] if len(subgenres) > 0 else None
@@ -260,7 +302,6 @@ def run(dry_run: bool = False, album_id: int | None = None, overwrite: bool = Fa
 
             print(f"{alb.artist} – {alb.album_name}")
             print(f"  genre={genre}  sub1={sub1}  sub2={sub2}  sub3={sub3}")
-            print(f"  tags: {tags[:6]}")
 
             if not dry_run:
                 if overwrite or not alb.genre:
@@ -277,7 +318,7 @@ def run(dry_run: bool = False, album_id: int | None = None, overwrite: bool = Fa
         if not dry_run:
             session.commit()
 
-    print(f"\nDone — updated: {updated}, no tags found: {no_tags}")
+    print(f"\nDone — updated: {updated}, failed/no result: {failed}")
 
 
 if __name__ == "__main__":

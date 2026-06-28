@@ -121,21 +121,64 @@ def _queue_predictions(album_id: int):
     threading.Thread(target=_run, daemon=True).start()
 
 
-def _queue_genre_tagging(album_id: int, artist: str, album_name: str):
-    """Spawn a background thread to fetch Last.fm tags and set genre/subgenres."""
+_GENRE_LIST = [
+    "Hip-Hop", "R&B", "Pop", "Rock", "Electronic", "Folk",
+    "Singer-Songwriter", "Country", "Jazz", "Latin", "Afrobeats",
+    "Classical", "Funk", "Disco", "Blues", "Gospel",
+]
+
+def _classify_genre_claude(artist: str, album_name: str, year: int | None) -> tuple[str | None, list[str]]:
+    """Call Claude Haiku to classify main genre + up to 3 subgenres."""
+    import json as _json, os as _os
+    import anthropic as _anthropic
+    client = _anthropic.Anthropic(api_key=_os.environ.get("ANTHROPIC_API_KEY"))
+    year_str = f" ({year})" if year else ""
+    prompt = (
+        f'Album: "{album_name}" by {artist}{year_str}\n\n'
+        f'Classify this album. Respond with JSON only, no explanation:\n'
+        f'{{"genre": "<one of: {", ".join(_GENRE_LIST)}>", '
+        f'"subgenres": ["<specific subgenre 1>", "<specific subgenre 2>", "<specific subgenre 3>"]}}'
+    )
+    resp = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=120,
+        temperature=0,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    text = resp.content[0].text.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    data = _json.loads(text.strip())
+    genre = data.get("genre") if data.get("genre") in _GENRE_LIST else None
+    subgenres = [s for s in data.get("subgenres", []) if isinstance(s, str) and s.strip()][:3]
+    return genre, subgenres
+
+
+def _queue_genre_tagging(album_id: int, artist: str, album_name: str, year: int | None = None):
+    """Spawn a background thread to classify genre/subgenres via Claude (Last.fm fallback for genre)."""
     import threading, sys, pathlib
     sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent))
     def _run():
         try:
-            from generate_genres_lastfm import get_tags_for_album, infer_genres
             from ..database import engine
             from sqlmodel import Session
-            tags = get_tags_for_album(album_id, artist, album_name)
-            if not tags:
-                return
-            genre, subgenres = infer_genres(tags)
+
+            genre, subgenres = _classify_genre_claude(artist, album_name, year)
+
+            # fallback: if Claude didn't return a valid genre, try Last.fm
+            if not genre:
+                try:
+                    from generate_genres_lastfm import get_tags_for_album, infer_genres
+                    tags = get_tags_for_album(album_id, artist, album_name)
+                    genre, _ = infer_genres(tags)
+                except Exception:
+                    pass
+
             if not genre and not subgenres:
                 return
+
             with Session(engine) as s:
                 alb = s.get(Album, album_id)
                 if alb:
@@ -232,7 +275,7 @@ def import_album(data: dict, user_id: int = Query(1), session: Session = Depends
         _queue_predictions(album.id)
 
     if not album.genre:
-        _queue_genre_tagging(album.id, album.artist, album.album_name)
+        _queue_genre_tagging(album.id, album.artist, album.album_name, album.year)
 
     return {
         **album.model_dump(),
