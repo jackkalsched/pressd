@@ -24,7 +24,7 @@ function accentToPageGradient(hsl: string | null): string {
   if (!hsl) return '#faf8f5'
   const h = hsl.match(/hsl\((\d+)/)?.[1]
   if (!h) return '#faf8f5'
-  return `linear-gradient(to bottom, hsl(${h}, 38%, 95%) 0%, #faf8f5 38%)`
+  return `linear-gradient(to bottom, hsl(${h}, 60%, 88%) 0%, #faf8f5 55%)`
 }
 }
 
