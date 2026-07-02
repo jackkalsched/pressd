@@ -11,17 +11,17 @@ interface Props {
   showActions?: boolean
 }
 
-function scoreBadgeBg(score: number, mu: number, sd: number): string {
+function scoreBadgeColor(score: number, mu: number, sd: number): string {
   // Above average → amber (30°) to dark green (138°)
   // Below average → amber (30°) to dark red (0°)
   // Saturates at ±2.5 SD from mean
   const SD_RANGE = 2.5
   if (score >= mu) {
     const t = Math.min(1, (score - mu) / (SD_RANGE * sd))
-    return `hsl(${Math.round(30 + t * 108)}, 70%, 24%)`
+    return `hsl(${Math.round(30 + t * 108)}, 70%, 30%)`
   } else {
     const t = Math.min(1, (mu - score) / (SD_RANGE * sd))
-    return `hsl(${Math.round(30 - t * 30)}, 72%, 24%)`
+    return `hsl(${Math.round(30 - t * 30)}, 72%, 30%)`
   }
 }
 
@@ -115,11 +115,14 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           {/* Score badge */}
           {album.score !== null && (
             <div
-              className="absolute top-2.5 right-2.5 text-[13px] font-bold px-3 py-1 rounded-full shadow-lg tracking-tight select-none text-white"
+              className="absolute top-2.5 right-2.5 text-[13px] font-bold px-3 py-1 rounded-full shadow-md tracking-tight select-none bg-white"
               style={{
-                backgroundColor: scoreRange
-                  ? scoreBadgeBg(album.score, scoreRange.mu, scoreRange.sd)
-                  : scoreBadgeBg(album.score, 7.0, 1.0),
+                color: scoreRange
+                  ? scoreBadgeColor(album.score, scoreRange.mu, scoreRange.sd)
+                  : scoreBadgeColor(album.score, 7.0, 1.0),
+                border: `1.5px solid ${scoreRange
+                  ? scoreBadgeColor(album.score, scoreRange.mu, scoreRange.sd)
+                  : scoreBadgeColor(album.score, 7.0, 1.0)}`,
               }}
             >
               {album.score.toFixed(2)}

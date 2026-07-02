@@ -152,8 +152,8 @@ export async function fetchSongs(params?: {
   return ((await res.json()) as Record<string, unknown>[]).map(transformSong)
 }
 
-export async function batchRateSongs(items: { id: number; score: number | null }[]): Promise<void> {
-  const res = await fetch(`${BASE}/songs/batch-rate`, {
+export async function batchRateSongs(items: { id: number; score: number | null }[], userId = 1): Promise<void> {
+  const res = await fetch(`${BASE}/songs/batch-rate?user_id=${userId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(items),

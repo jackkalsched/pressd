@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Check, Loader2, Save, SkipForward } from 'lucide-react'
@@ -8,6 +8,7 @@ import { computeAlbumScore, BANG_THRESHOLD, SKIP_THRESHOLD, songScoreColor } fro
 import type { Song } from '../types'
 import clsx from 'clsx'
 import RatingReport from '../components/RatingReport'
+import { useUser } from '../context/UserContext'
 
 function ScoreInput({
   value,
@@ -54,6 +55,12 @@ export default function RatingScreen() {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { isViewingFriend, activeUser } = useUser()
+  const userId = activeUser?.id ?? 1
+
+  useEffect(() => {
+    if (isViewingFriend) navigate(-1)
+  }, [isViewingFriend, navigate])
 
   const { data: album, isLoading } = useQuery({
     queryKey: ['album', Number(id)],
@@ -97,7 +104,7 @@ export default function RatingScreen() {
     mutationFn: async () => {
       if (!album) return
       const sorted = [...album.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
-      await batchRateSongs(sorted.map((song, i) => ({ id: song.id, score: scores[i] ?? null })))
+      await batchRateSongs(sorted.map((song, i) => ({ id: song.id, score: scores[i] ?? null })), userId)
       const parsedExtra = extraArtists.split(',').map(s => s.trim()).filter(Boolean)
       await updateAlbum(album.id, {
         ...(isEP ? {} : { theme, replay_value: replayValue, production, distinctness }),
@@ -126,7 +133,7 @@ export default function RatingScreen() {
     mutationFn: async () => {
       if (!album) return
       const sorted = [...album.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
-      await batchRateSongs(sorted.map((song, i) => ({ id: song.id, score: scores[i] ?? null })))
+      await batchRateSongs(sorted.map((song, i) => ({ id: song.id, score: scores[i] ?? null })), userId)
       const parsedExtra = extraArtists.split(',').map(s => s.trim()).filter(Boolean)
       await updateAlbum(album.id, {
         ...(isEP ? {} : { theme, replay_value: replayValue, production, distinctness }),
