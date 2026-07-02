@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Album } from '../types'
 import RecommendModal from './RecommendModal'
 import { deleteAlbum, fetchScoreRange } from '../api'
+import { useUser } from '../context/UserContext'
 
 interface Props {
   album: Album
@@ -28,6 +29,7 @@ function scoreBadgeColor(score: number, mu: number, sd: number): string {
 export default function AlbumCard({ album, showActions = true }: Props) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { isViewingFriend } = useUser()
   const { data: scoreRange } = useQuery({
     queryKey: ['score-range', 1],
     queryFn: () => fetchScoreRange(1),
@@ -190,7 +192,7 @@ export default function AlbumCard({ album, showActions = true }: Props) {
               motion-reduce:opacity-100 motion-reduce:translate-y-0
             "
           >
-            {album.status === 'to_listen' && (
+            {album.status === 'to_listen' && !isViewingFriend && (
               <button
                 onClick={(e) => { e.stopPropagation(); navigate(`/rate/${album.id}`) }}
                 className="flex-1 flex items-center justify-center gap-1.5 bg-[#2d6a4f] hover:bg-[#245c43] active:bg-[#1e5238] text-white text-[11px] font-semibold py-2 rounded-lg transition-colors min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2d6a4f]"
@@ -201,24 +203,28 @@ export default function AlbumCard({ album, showActions = true }: Props) {
 
             {album.status === 'listening' && (
               <>
-                <button
-                  onClick={(e) => { e.stopPropagation(); navigate(`/rate/${album.id}`) }}
-                  className="flex-1 flex items-center justify-center gap-1.5 bg-[#2d6a4f] hover:bg-[#245c43] active:bg-[#1e5238] text-white text-[11px] font-semibold py-2 rounded-lg transition-colors min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2d6a4f]"
-                >
-                  <ChevronRight size={12} /> Continue
-                </button>
-                <button
-                  onClick={handleDiscard}
-                  onBlur={() => setConfirmDelete(false)}
-                  className={`flex items-center justify-center px-3 text-[11px] font-medium rounded-lg transition-colors border min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
-                    confirmDelete
-                      ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200 focus-visible:outline-red-400'
-                      : 'bg-[#f0ebe3] hover:bg-[#e5ddd2] text-[#a8998a] border-[#ddd5c8] focus-visible:outline-[#a8998a]'
-                  }`}
-                  title={confirmDelete ? 'Click to confirm' : 'Discard'}
-                >
-                  <Trash2 size={12} />
-                </button>
+                {!isViewingFriend && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigate(`/rate/${album.id}`) }}
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-[#2d6a4f] hover:bg-[#245c43] active:bg-[#1e5238] text-white text-[11px] font-semibold py-2 rounded-lg transition-colors min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2d6a4f]"
+                  >
+                    <ChevronRight size={12} /> Continue
+                  </button>
+                )}
+                {!isViewingFriend && (
+                  <button
+                    onClick={handleDiscard}
+                    onBlur={() => setConfirmDelete(false)}
+                    className={`flex items-center justify-center px-3 text-[11px] font-medium rounded-lg transition-colors border min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                      confirmDelete
+                        ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200 focus-visible:outline-red-400'
+                        : 'bg-[#f0ebe3] hover:bg-[#e5ddd2] text-[#a8998a] border-[#ddd5c8] focus-visible:outline-[#a8998a]'
+                    }`}
+                    title={confirmDelete ? 'Click to confirm' : 'Discard'}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
               </>
             )}
 
