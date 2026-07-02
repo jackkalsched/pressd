@@ -189,7 +189,6 @@ export default function AlbumCard({ album, showActions = true }: Props) {
               opacity-0 translate-y-1
               group-hover:opacity-100 group-hover:translate-y-0
               transition-[opacity,transform] duration-[150ms] ease-out
-              motion-reduce:opacity-100 motion-reduce:translate-y-0
             "
           >
             {album.status === 'to_listen' && !isViewingFriend && (
