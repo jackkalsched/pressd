@@ -14,7 +14,7 @@ function shareRatingViaIMessage(albumName: string, artist: string, score: number
   window.location.href = `sms:?body=${encodeURIComponent(msg)}`
 }
 
-const BASE = 'http://localhost:8000'
+const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 function lightenHsl(hsl: string, l: number): string {
   return hsl.replace(/,\s*\d+%\)$/, `, ${l}%)`)
