@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, X, Loader2, Search } from 'lucide-react'
@@ -153,34 +153,9 @@ function AddAlbumModal({ onClose, userId }: { onClose: () => void; userId: numbe
   )
 }
 
-function useNumColumns() {
-  const [cols, setCols] = useState(() => {
-    const w = window.innerWidth
-    if (w >= 1280) return 6
-    if (w >= 1024) return 5
-    if (w >= 768)  return 4
-    if (w >= 640)  return 3
-    return 2
-  })
-  useEffect(() => {
-    function update() {
-      const w = window.innerWidth
-      if (w >= 1280)      setCols(6)
-      else if (w >= 1024) setCols(5)
-      else if (w >= 768)  setCols(4)
-      else if (w >= 640)  setCols(3)
-      else                setCols(2)
-    }
-    window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
-  }, [])
-  return cols
-}
-
 export default function Library() {
   const { activeUser, viewingUser, isViewingFriend } = useUser()
   const userId = viewingUser.id
-  const numCols = useNumColumns()
   const [activeTab, setActiveTab] = useState<AlbumStatus>('rated')
   const [showModal, setShowModal] = useState(false)
   const [toListenSearch, setToListenSearch] = useState('')
@@ -297,15 +272,9 @@ export default function Library() {
           {!q && activeTab === 'rated' && <p className="text-sm mt-2">Finish rating an album to see it here.</p>}
         </div>
       ) : (
-        <div className="flex gap-4">
-          {Array.from({ length: numCols }, (_, col) =>
-            visibleAlbums.filter((_, i) => i % numCols === col)
-          ).map((colAlbums, col) => (
-            <div key={col} className="flex-1 flex flex-col gap-4">
-              {colAlbums.map((album) => (
-                <AlbumCard key={album.id} album={album} />
-              ))}
-            </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 items-start">
+          {visibleAlbums.map((album) => (
+            <AlbumCard key={album.id} album={album} />
           ))}
         </div>
       )}
