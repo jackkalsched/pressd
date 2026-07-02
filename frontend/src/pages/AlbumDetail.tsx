@@ -20,6 +20,14 @@ function lightenHsl(hsl: string, l: number): string {
   return hsl.replace(/,\s*\d+%\)$/, `, ${l}%)`)
 }
 
+function accentToPageGradient(hsl: string | null): string {
+  if (!hsl) return '#faf8f5'
+  const h = hsl.match(/hsl\((\d+)/)?.[1]
+  if (!h) return '#faf8f5'
+  return `linear-gradient(to bottom, hsl(${h}, 38%, 95%) 0%, #faf8f5 38%)`
+}
+}
+
 function useAlbumColors(album: string | null, artist: string | null): { color: string | null; color2: string | null } {
   const { data } = useQuery({
     queryKey: ['album-color', album, artist],
@@ -157,7 +165,7 @@ export default function AlbumDetail() {
   const btnDanger = `${btnBase} bg-[#f0ebe3] border border-[#e8e2d9] hover:border-red-300 hover:text-red-500 text-[#57534e]`
 
   return (
-    <div className="min-h-screen bg-[#faf8f5]">
+    <div className="min-h-screen" style={{ background: accentToPageGradient(accentColor) }}>
       <div className="p-4 md:p-8 max-w-5xl mx-auto">
 
         {/* ── Nav ──────────────────────────────────────────────────── */}
