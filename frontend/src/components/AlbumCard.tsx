@@ -161,7 +161,7 @@ export default function AlbumCard({ album, showActions = true }: Props) {
         </div>
 
         {/* ── Metadata ──────────────────────────────────────────────── */}
-        <div className={`px-3 pt-2.5 ${showActions ? 'pb-1.5' : 'pb-3'}`}>
+        <div className="px-3 pt-2.5 pb-3">
           <p className="text-[#1c1917] text-[13px] font-semibold leading-snug line-clamp-2">
             {album.albumName}
           </p>
@@ -180,70 +180,62 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           )}
         </div>
 
-        {/* ── Action row — hidden at rest, slides in on hover ───────── */}
+        {/* ── Action row — collapses to 0 height, expands on hover ────── */}
         {showActions && !(isViewingFriend && (album.status === 'to_listen' || album.status === 'listening')) && (
-          <div
-            className="
-              card-action-row
-              overflow-hidden max-h-0
-              group-hover:max-h-[52px]
-              transition-[max-height] duration-150 ease-out
-              px-3 pb-3 pt-1 flex gap-1.5
-            "
-          >
-            {album.status === 'to_listen' && !isViewingFriend && (
-              <button
-                onClick={(e) => { e.stopPropagation(); navigate(`/rate/${album.id}`) }}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-[#2d6a4f] hover:bg-[#245c43] active:bg-[#1e5238] text-white text-[11px] font-semibold py-2 rounded-lg transition-colors min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2d6a4f]"
-              >
-                <Play size={10} fill="currentColor" strokeWidth={0} /> Start Rating
-              </button>
-            )}
-
-            {album.status === 'listening' && (
-              <>
-                {!isViewingFriend && (
+          <div className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] transition-[grid-template-rows] duration-150 ease-out">
+            <div className="overflow-hidden min-h-0">
+              <div className="px-3 pb-3 pt-1 flex gap-1.5">
+                {album.status === 'to_listen' && !isViewingFriend && (
                   <button
                     onClick={(e) => { e.stopPropagation(); navigate(`/rate/${album.id}`) }}
                     className="flex-1 flex items-center justify-center gap-1.5 bg-[#2d6a4f] hover:bg-[#245c43] active:bg-[#1e5238] text-white text-[11px] font-semibold py-2 rounded-lg transition-colors min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2d6a4f]"
                   >
-                    <ChevronRight size={12} /> Continue
+                    <Play size={10} fill="currentColor" strokeWidth={0} /> Start Rating
                   </button>
                 )}
-                {!isViewingFriend && (
-                  <button
-                    onClick={handleDiscard}
-                    onBlur={() => setConfirmDelete(false)}
-                    className={`flex items-center justify-center px-3 text-[11px] font-medium rounded-lg transition-colors border min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
-                      confirmDelete
-                        ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200 focus-visible:outline-red-400'
-                        : 'bg-[#f0ebe3] hover:bg-[#e5ddd2] text-[#a8998a] border-[#ddd5c8] focus-visible:outline-[#a8998a]'
-                    }`}
-                    title={confirmDelete ? 'Click to confirm' : 'Discard'}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                )}
-              </>
-            )}
 
-            {album.status === 'rated' && (
-              <>
-                <button
-                  onClick={(e) => { e.stopPropagation(); navigate(`/album/${album.id}`) }}
-                  className="flex-1 flex items-center justify-center bg-[#f0ebe3] hover:bg-[#e5ddd2] active:bg-[#d9d0c4] text-[#57534e] text-[11px] font-semibold py-2 rounded-lg transition-colors min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#78716c]"
-                >
-                  View
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowRecommend(true) }}
-                  className="w-9 flex items-center justify-center bg-[#fff7ed] hover:bg-[#ffedd5] active:bg-[#fed7aa] text-[#f97316] rounded-lg transition-colors border border-[#fcd9a8] min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f97316]"
-                  title="Recommend to a friend"
-                >
-                  <Star size={13} fill="#f97316" strokeWidth={0} />
-                </button>
-              </>
-            )}
+                {album.status === 'listening' && !isViewingFriend && (
+                  <>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate(`/rate/${album.id}`) }}
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-[#2d6a4f] hover:bg-[#245c43] active:bg-[#1e5238] text-white text-[11px] font-semibold py-2 rounded-lg transition-colors min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2d6a4f]"
+                    >
+                      <ChevronRight size={12} /> Continue
+                    </button>
+                    <button
+                      onClick={handleDiscard}
+                      onBlur={() => setConfirmDelete(false)}
+                      className={`flex items-center justify-center px-3 text-[11px] font-medium rounded-lg transition-colors border min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                        confirmDelete
+                          ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200 focus-visible:outline-red-400'
+                          : 'bg-[#f0ebe3] hover:bg-[#e5ddd2] text-[#a8998a] border-[#ddd5c8] focus-visible:outline-[#a8998a]'
+                      }`}
+                      title={confirmDelete ? 'Click to confirm' : 'Discard'}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </>
+                )}
+
+                {album.status === 'rated' && (
+                  <>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate(`/album/${album.id}`) }}
+                      className="flex-1 flex items-center justify-center bg-[#f0ebe3] hover:bg-[#e5ddd2] active:bg-[#d9d0c4] text-[#57534e] text-[11px] font-semibold py-2 rounded-lg transition-colors min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#78716c]"
+                    >
+                      View
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowRecommend(true) }}
+                      className="w-9 flex items-center justify-center bg-[#fff7ed] hover:bg-[#ffedd5] active:bg-[#fed7aa] text-[#f97316] rounded-lg transition-colors border border-[#fcd9a8] min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f97316]"
+                      title="Recommend to a friend"
+                    >
+                      <Star size={13} fill="#f97316" strokeWidth={0} />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
