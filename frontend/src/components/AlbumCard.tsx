@@ -185,10 +185,10 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           <div
             className="
               card-action-row
-              px-3 pb-3 pt-1 flex gap-1.5 mt-auto
-              opacity-0 translate-y-1
-              group-hover:opacity-100 group-hover:translate-y-0
-              transition-[opacity,transform] duration-[150ms] ease-out
+              overflow-hidden max-h-0
+              group-hover:max-h-[52px]
+              transition-[max-height] duration-150 ease-out
+              px-3 pb-3 pt-1 flex gap-1.5
             "
           >
             {album.status === 'to_listen' && !isViewingFriend && (
