@@ -181,7 +181,7 @@ export default function AlbumCard({ album, showActions = true }: Props) {
         </div>
 
         {/* ── Action row — hidden at rest, slides in on hover ───────── */}
-        {showActions && (
+        {showActions && !(isViewingFriend && (album.status === 'to_listen' || album.status === 'listening')) && (
           <div
             className="
               card-action-row
