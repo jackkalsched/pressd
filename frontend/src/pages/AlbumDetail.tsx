@@ -248,10 +248,7 @@ export default function AlbumDetail() {
 
           {/* Meta + score */}
           <div className="flex-1 min-w-0 flex flex-col justify-start pt-1">
-            <h1
-              className="text-2xl md:text-3xl font-bold leading-tight"
-              style={{ color: accentColor ?? '#1c1917' }}
-            >
+            <h1 className="text-2xl md:text-3xl font-bold leading-tight text-[#1c1917]">
               {album.albumName}
             </h1>
 
@@ -282,10 +279,7 @@ export default function AlbumDetail() {
             {/* Score stamp */}
             {album.score !== null && (
               <div className="mt-4 flex items-baseline gap-1.5">
-                <span
-                  className="text-5xl md:text-6xl font-bold tabular-nums leading-none"
-                  style={{ color: accentColor ?? '#2d6a4f' }}
-                >
+                <span className="text-5xl md:text-6xl font-bold tabular-nums leading-none text-[#1c1917]">
                   {album.score.toFixed(2)}
                 </span>
                 <span className="text-[#a8a29e] text-base self-end mb-1">/10</span>
@@ -310,7 +304,7 @@ export default function AlbumDetail() {
               </div>
               <div className="text-right">
                 <span className="text-[#a8a29e] text-[11px] uppercase tracking-[0.08em] block mb-0.5">Bang%</span>
-                <span className="font-bold tabular-nums" style={{ color: accentColor ?? '#2d6a4f' }}>
+                <span className="font-bold tabular-nums text-[#2d6a4f]">
                   {Math.round(bangs.length / ratedSongs.length * 100)}%
                 </span>
               </div>
@@ -337,16 +331,10 @@ export default function AlbumDetail() {
                 key={label}
                 className="px-5 py-5 text-center"
               >
-                <p
-                  className="text-[10px] uppercase tracking-[0.13em] mb-3 font-medium"
-                  style={{ color: color2 ? lightenHsl(color2, 50) : '#a8998a' }}
-                >
+                <p className="text-[10px] uppercase tracking-[0.13em] mb-3 font-medium text-[#a8998a]">
                   {label}
                 </p>
-                <p
-                  className="text-5xl font-bold tabular-nums leading-none"
-                  style={{ color: accentColor ?? '#1c1917' }}
-                >
+                <p className="text-5xl font-bold tabular-nums leading-none text-[#1c1917]">
                   {value ?? '—'}
                 </p>
               </div>
