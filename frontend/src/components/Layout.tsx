@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useGoogleLogin } from '@react-oauth/google'
-import { Library, BarChart2, List, Music, Mail, X, Loader2, MessageCircle, Pencil, Users } from 'lucide-react'
+import { Library, BarChart2, List, Mail, X, Loader2, MessageCircle, Pencil, Users } from 'lucide-react'
 import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
 import { fetchFriends, getInviteLink, updateUser, signInWithGoogle, removeFriend } from '../api'
@@ -300,8 +300,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Sidebar — desktop only */}
       <aside className="hidden md:flex w-56 shrink-0 border-r border-[#e2e2e2] flex-col py-6 px-4 sticky top-0 h-screen bg-white overflow-y-auto">
         <div className="flex items-center gap-2 mb-8 px-2">
-          <Music size={20} className="text-[#2d6a4f]" />
-          <span className="text-[#111] font-semibold tracking-wide text-lg">Press'd</span>
+          <svg viewBox="0 0 50 44" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-7 h-auto shrink-0">
+            <circle cx="20" cy="22" r="18" fill="#1a1a1a"/>
+            <circle cx="20" cy="22" r="15.5" stroke="#2c2c2c" strokeWidth="1" fill="none"/>
+            <circle cx="20" cy="22" r="13" stroke="#2c2c2c" strokeWidth="1" fill="none"/>
+            <circle cx="20" cy="22" r="10.5" stroke="#2c2c2c" strokeWidth="1" fill="none"/>
+            <circle cx="20" cy="22" r="8" stroke="#2c2c2c" strokeWidth="1" fill="none"/>
+            <circle cx="20" cy="22" r="5.5" fill="#f0ece4"/>
+            <circle cx="20" cy="22" r="1.3" fill="#1a1a1a"/>
+            <circle cx="6" cy="5" r="2.5" fill="#2d6a4f"/>
+            <line x1="6" y1="7.5" x2="18" y2="20" stroke="#2d6a4f" strokeWidth="2.2" strokeLinecap="round"/>
+            <line x1="18" y1="20" x2="19.5" y2="24.5" stroke="#2d6a4f" strokeWidth="1.8" strokeLinecap="round"/>
+            <rect x="37" y="3" width="11" height="28" rx="5.5" fill="#2d6a4f"/>
+          </svg>
+          <span className="font-display text-[#111] font-bold tracking-wide text-xl">Press'd</span>
         </div>
 
         <nav className="flex flex-col gap-1">

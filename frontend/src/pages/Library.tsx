@@ -196,7 +196,7 @@ export default function Library() {
       {showModal && <AddAlbumModal onClose={() => setShowModal(false)} userId={activeUser.id} />}
 
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-[#111]">
+        <h1 className="font-display text-3xl font-bold text-[#111]">
           {isViewingFriend ? `${viewingUser.name}'s Library` : 'Library'}
         </h1>
         {!isViewingFriend && (
@@ -272,7 +272,7 @@ export default function Library() {
           {!q && activeTab === 'rated' && <p className="text-sm mt-2">Finish rating an album to see it here.</p>}
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 items-start">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 items-start">
           {visibleAlbums.map((album) => (
             <AlbumCard key={album.id} album={album} />
           ))}

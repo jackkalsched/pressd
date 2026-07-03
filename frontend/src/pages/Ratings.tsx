@@ -274,7 +274,7 @@ export default function Ratings() {
 
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
-          <h1 className="text-2xl font-bold text-[#1c1917]">Ratings</h1>
+          <h1 className="font-display text-3xl font-bold text-[#1c1917]">Ratings</h1>
           {tab === 'albums' && (
             <span className="text-[#a8998a] text-sm">{sorted.length} albums</span>
           )}

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchSummary, fetchGenreStats, fetchScatterData, fetchGenreScores, fetchAnalysis } from '../api'
 import { useUser } from '../context/UserContext'
-import { Loader2, Disc3, ListMusic, Star, Trophy, Heart, Layers, CalendarDays, Flame, Music } from 'lucide-react'
+import { Loader2, Disc3, ListMusic, Star, Trophy, Heart, CalendarDays, Flame, Music } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   ScatterChart, Scatter, ZAxis, ReferenceLine,
@@ -141,21 +141,24 @@ export default function Stats() {
   return (
     <div className="min-h-screen bg-[#faf8f5]">
       <div className="p-4 md:p-8">
-        <h1 className="text-2xl font-bold text-[#1c1917] mb-8">
+        <h1 className="font-display text-4xl font-bold text-[#1c1917] mb-8 tracking-tight">
           {isViewingFriend ? `${viewingUser?.name}'s Stats` : 'Stats'}
         </h1>
 
-        {/* ── Primary stats ── */}
+        {/* ── Row 1: Primary metrics ── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
 
-          <div className={cardCls}>
+          {/* Albums Rated — dark green hero card */}
+          <div className="rounded-2xl p-5 bg-[#2d6a4f]">
             <div className="flex items-start justify-between mb-3">
-              <p className={labelCls}>Albums Rated</p>
-              <Disc3 size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
+              <p className="text-[10px] font-semibold text-white/60 uppercase tracking-[0.12em]">Albums Rated</p>
+              <Disc3 size={15} className="text-white/30 shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="text-[#1c1917] font-bold text-4xl tabular-nums leading-none">{summary?.total_albums_rated ?? '—'}</p>
+            <p className="font-display text-white font-bold text-5xl tabular-nums leading-none">
+              {summary?.total_albums_rated ?? '—'}
+            </p>
             {summary?.albums_this_year != null && (
-              <p className="text-[#a8998a] text-xs mt-2">{summary.albums_this_year} this year</p>
+              <p className="text-white/55 text-xs mt-2">{summary.albums_this_year} this year</p>
             )}
           </div>
 
@@ -164,7 +167,9 @@ export default function Stats() {
               <p className={labelCls}>Songs Rated</p>
               <ListMusic size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="text-[#1c1917] font-bold text-4xl tabular-nums leading-none">{summary?.total_songs_rated ?? '—'}</p>
+            <p className="font-display text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
+              {summary?.total_songs_rated != null ? summary.total_songs_rated.toLocaleString() : '—'}
+            </p>
             {summary?.total_10s != null && (
               <p className="text-[#a8998a] text-xs mt-2">{summary.total_10s} perfect 10s</p>
             )}
@@ -172,16 +177,31 @@ export default function Stats() {
 
           <div className={cardCls}>
             <div className="flex items-start justify-between mb-3">
-              <p className={labelCls}>Avg Score</p>
+              <p className={labelCls}>Avg Album Score</p>
               <Star size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="text-[#1c1917] font-bold text-4xl tabular-nums leading-none">
+            <p className="font-display text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
               {summary?.avg_album_score?.toFixed(2) ?? '—'}
             </p>
             {summary?.avg_song_score != null && (
               <p className="text-[#a8998a] text-xs mt-2">{summary.avg_song_score.toFixed(2)} avg song</p>
             )}
           </div>
+
+          <div className={cardCls}>
+            <div className="flex items-start justify-between mb-3">
+              <p className={labelCls}>Rating Streak</p>
+              <Flame size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
+            </div>
+            <p className="font-display text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
+              {summary?.longest_streak ?? '—'}
+            </p>
+            <p className="text-[#a8998a] text-xs mt-2">consecutive days</p>
+          </div>
+        </div>
+
+        {/* ── Row 2: Character stats ── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
 
           <div className={cardCls}>
             <div className="flex items-start justify-between mb-3">
@@ -196,49 +216,6 @@ export default function Stats() {
                 {summary.top_album.artist} · <span className="text-[#2d6a4f] font-semibold">{summary.top_album.score?.toFixed(2)}</span>
               </p>
             )}
-          </div>
-        </div>
-
-        {/* ── Character stats ── */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-10">
-
-          <div className={cardCls}>
-            <div className="flex items-start justify-between mb-3">
-              <p className={labelCls}>Most Loyal Artist</p>
-              <Heart size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
-            </div>
-            <p className="text-[#1c1917] font-semibold text-sm leading-snug line-clamp-2">
-              {summary?.most_rated_artist?.name ?? '—'}
-            </p>
-            {summary?.most_rated_artist && (
-              <p className="text-[#a8998a] text-xs mt-2">{summary.most_rated_artist.count} albums rated</p>
-            )}
-          </div>
-
-          <div className={cardCls}>
-            <div className="flex items-start justify-between mb-3">
-              <p className={labelCls}>Best Genre</p>
-              <Layers size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
-            </div>
-            <p className="text-[#1c1917] font-semibold text-sm leading-snug">
-              {summary?.best_genre?.genre ?? '—'}
-            </p>
-            {summary?.best_genre && (
-              <p className="text-[#a8998a] text-xs mt-2">
-                {summary.best_genre.avg_score.toFixed(2)} avg · {summary.best_genre.count} albums
-              </p>
-            )}
-          </div>
-
-          <div className={cardCls}>
-            <div className="flex items-start justify-between mb-3">
-              <p className={labelCls}>Avg Release Year</p>
-              <CalendarDays size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
-            </div>
-            <p className="text-[#1c1917] font-bold text-4xl tabular-nums leading-none">
-              {summary?.avg_release_year ?? '—'}
-            </p>
-            <p className="text-[#a8998a] text-xs mt-2">center of your taste</p>
           </div>
 
           <div className={cardCls}>
@@ -255,12 +232,37 @@ export default function Stats() {
               </p>
             )}
           </div>
+
+          <div className={cardCls}>
+            <div className="flex items-start justify-between mb-3">
+              <p className={labelCls}>Most Loyal Artist</p>
+              <Heart size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
+            </div>
+            <p className="text-[#1c1917] font-semibold text-sm leading-snug line-clamp-2">
+              {summary?.most_rated_artist?.name ?? '—'}
+            </p>
+            {summary?.most_rated_artist && (
+              <p className="text-[#a8998a] text-xs mt-2">{summary.most_rated_artist.count} albums rated</p>
+            )}
+          </div>
+
+          <div className={cardCls}>
+            <div className="flex items-start justify-between mb-3">
+              <p className={labelCls}>Center of Your Taste</p>
+              <CalendarDays size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
+            </div>
+            <p className="font-display text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
+              {summary?.avg_release_year ?? '—'}
+            </p>
+            <p className="text-[#a8998a] text-xs mt-2">avg release year</p>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Genre bar chart */}
+        {/* ── Row 3: Genre chart + Factor averages ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          {/* Albums by genre */}
           <div className={panelCls}>
-            <h2 className="text-sm font-semibold text-[#78716c] mb-5">Albums by Genre</h2>
+            <h2 className="text-sm font-semibold text-[#78716c] mb-5">Albums by genre</h2>
             {loadingGenres ? (
               <div className="flex items-center justify-center h-48 text-[#a8998a]">
                 <Loader2 size={14} className="animate-spin" />
@@ -284,31 +286,48 @@ export default function Stats() {
             )}
           </div>
 
-          {/* Streak + external factor avgs */}
-          <div className="flex flex-col gap-3">
-            <div className={cardCls}>
-              <div className="flex items-start justify-between mb-3">
-                <p className={labelCls}>Longest Rating Streak</p>
-                <Flame size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
-              </div>
-              <p className="text-[#1c1917] font-bold text-4xl tabular-nums leading-none">
-                {summary?.longest_streak ?? '—'}
-              </p>
-              <p className="text-[#a8998a] text-xs mt-2">consecutive days rated</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+          {/* Factor averages with progress bars */}
+          <div className={panelCls}>
+            <h2 className="text-sm font-semibold text-[#78716c] mb-5">Factor averages</h2>
+            <div className="flex flex-col gap-5">
               {[
-                { label: 'Avg Theme',       value: summary?.avg_theme },
-                { label: 'Avg Replay',      value: summary?.avg_replay },
-                { label: 'Avg Production',  value: summary?.avg_production },
-                { label: 'Avg Distinctness',value: summary?.avg_distinctness },
+                { label: 'Theme',        value: summary?.avg_theme },
+                { label: 'Replay',       value: summary?.avg_replay },
+                { label: 'Production',   value: summary?.avg_production },
+                { label: 'Distinctness', value: summary?.avg_distinctness },
               ].map(({ label, value }) => (
-                <div key={label} className={cardCls}>
-                  <p className={labelCls}>{label}</p>
-                  <p className="text-[#1c1917] font-bold text-2xl tabular-nums">{value?.toFixed(1) ?? '—'}</p>
+                <div key={label}>
+                  <div className="flex justify-between items-baseline mb-1.5">
+                    <span className="text-xs font-medium text-[#78716c]">{label}</span>
+                    <span className="font-display text-[#1c1917] font-semibold text-xl tabular-nums leading-none">
+                      {value?.toFixed(1) ?? '—'}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-[#e8e2d9] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#2d6a4f] rounded-full transition-all duration-700"
+                      style={{ width: value != null ? `${(value / 10) * 100}%` : '0%' }}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
+            {(() => {
+              const factors = [
+                { label: 'Theme', value: summary?.avg_theme },
+                { label: 'Replay', value: summary?.avg_replay },
+                { label: 'Production', value: summary?.avg_production },
+                { label: 'Distinctness', value: summary?.avg_distinctness },
+              ].filter((f): f is { label: string; value: number } => f.value != null)
+              if (factors.length < 2) return null
+              const best = factors.reduce((a, b) => a.value > b.value ? a : b)
+              const worst = factors.reduce((a, b) => a.value < b.value ? a : b)
+              return (
+                <p className="text-[#a8998a] text-xs mt-5 leading-relaxed border-t border-[#e8e2d9] pt-4">
+                  {best.label} is your strongest factor at {best.value.toFixed(1)}. {worst.label} has the most room to grow at {worst.value.toFixed(1)}.
+                </p>
+              )
+            })()}
           </div>
         </div>
 

@@ -41,3 +41,7 @@ body {
   font-family: 'DM Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+.font-display {
+  font-family: 'Playfair Display', Georgia, serif;
+}
