@@ -189,6 +189,9 @@ export default function Ratings() {
   const [sortKey, setSortKey] = useState<AlbumSortKey>('score')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [search, setSearch] = useState('')
+  const [filterYear, setFilterYear] = useState('')
+  const [filterGenre, setFilterGenre] = useState('')
+  const [filterArtist, setFilterArtist] = useState('')
 
   const sevenDaysAgo = useMemo(() => {
     const d = new Date()
@@ -228,20 +231,34 @@ export default function Ratings() {
     enabled: tab === 'artists',
   })
 
+  // Derived filter options
+  const yearOptions = useMemo(() =>
+    [...new Set(albums.map(a => a.year).filter(Boolean))].sort((a, b) => b! - a!).map(String),
+    [albums])
+  const genreOptions = useMemo(() =>
+    [...new Set(albums.map(a => a.genre).filter(Boolean))].sort() as string[],
+    [albums])
+  const artistOptions = useMemo(() =>
+    [...new Set(albums.flatMap(a => [a.artist, ...a.extraArtists]))].sort(),
+    [albums])
+
+  const hasFilters = search || filterYear || filterGenre || filterArtist
+
   // Album sorting/filtering
-  const filtered = albums.filter(
-    (a) =>
-      a.theme !== null && a.replayValue !== null && a.production !== null && a.distinctness !== null &&
-      (a.albumName.toLowerCase().includes(search.toLowerCase()) ||
-       a.artist.toLowerCase().includes(search.toLowerCase())),
-  )
-  const sorted = [...filtered].sort((a, b) => {
+  const filtered = useMemo(() => albums.filter(a =>
+    a.theme !== null && a.replayValue !== null && a.production !== null && a.distinctness !== null &&
+    (!search || a.albumName.toLowerCase().includes(search.toLowerCase()) || a.artist.toLowerCase().includes(search.toLowerCase())) &&
+    (!filterYear || String(a.year) === filterYear) &&
+    (!filterGenre || a.genre === filterGenre) &&
+    (!filterArtist || a.artist === filterArtist || a.extraArtists.includes(filterArtist)),
+  ), [albums, search, filterYear, filterGenre, filterArtist])
+  const sorted = useMemo(() => [...filtered].sort((a, b) => {
     const av = a[sortKey] ?? ''
     const bv = b[sortKey] ?? ''
     if (av < bv) return sortDir === 'asc' ? -1 : 1
     if (av > bv) return sortDir === 'asc' ? 1 : -1
     return 0
-  })
+  }), [filtered, sortKey, sortDir])
   function toggleSort(key: AlbumSortKey) {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     else { setSortKey(key); setSortDir('desc') }
@@ -286,13 +303,47 @@ export default function Ratings() {
         {/* Albums tab */}
         {tab === 'albums' && (
           <>
-            <input
-              type="text"
-              placeholder="Search albums or artists…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full max-w-sm bg-[#f0ebe3] border border-[#e8e2d9] text-[#1c1917] text-sm px-4 py-2 rounded-xl focus:outline-none focus:border-[#2d6a4f] transition-colors placeholder:text-[#c2b8ad] mb-6"
-            />
+            <div className="flex flex-wrap gap-2 mb-6 items-center">
+              <input
+                type="text"
+                placeholder="Search albums or artists…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="bg-[#f0ebe3] border border-[#e8e2d9] text-[#1c1917] text-sm px-4 py-2 rounded-xl focus:outline-none focus:border-[#2d6a4f] transition-colors placeholder:text-[#c2b8ad] w-56"
+              />
+              <select
+                value={filterArtist}
+                onChange={e => setFilterArtist(e.target.value)}
+                className="bg-[#f0ebe3] border border-[#e8e2d9] text-sm px-3 py-2 rounded-xl focus:outline-none focus:border-[#2d6a4f] transition-colors cursor-pointer text-[#1c1917]"
+              >
+                <option value="">All Artists</option>
+                {artistOptions.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+              <select
+                value={filterGenre}
+                onChange={e => setFilterGenre(e.target.value)}
+                className="bg-[#f0ebe3] border border-[#e8e2d9] text-sm px-3 py-2 rounded-xl focus:outline-none focus:border-[#2d6a4f] transition-colors cursor-pointer text-[#1c1917]"
+              >
+                <option value="">All Genres</option>
+                {genreOptions.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+              <select
+                value={filterYear}
+                onChange={e => setFilterYear(e.target.value)}
+                className="bg-[#f0ebe3] border border-[#e8e2d9] text-sm px-3 py-2 rounded-xl focus:outline-none focus:border-[#2d6a4f] transition-colors cursor-pointer text-[#1c1917]"
+              >
+                <option value="">All Years</option>
+                {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              {hasFilters && (
+                <button
+                  onClick={() => { setSearch(''); setFilterArtist(''); setFilterGenre(''); setFilterYear('') }}
+                  className="text-xs text-[#a8998a] hover:text-[#1c1917] transition-colors px-2 py-2"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
             {loadingAlbums ? (
               <div className="flex items-center justify-center py-24 text-[#a8998a] gap-2">
                 <Loader2 size={16} className="animate-spin" /> Loading…
