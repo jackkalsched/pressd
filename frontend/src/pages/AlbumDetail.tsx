@@ -26,7 +26,6 @@ function accentToPageGradient(hsl: string | null): string {
   if (!h) return '#faf8f5'
   return `linear-gradient(to bottom, hsl(${h}, 55%, 82%) 0%, hsl(${h}, 35%, 93%) 30%, #faf8f5 60%)`
 }
-}
 
 function useAlbumColors(album: string | null, artist: string | null): { color: string | null; color2: string | null } {
   const { data } = useQuery({
