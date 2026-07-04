@@ -1,11 +1,9 @@
 """
-Artist discography discovery via MusicBrainz.
+Artist discography discovery via Spotify.
 Surfaces releases not yet in the local library on artist pages.
-Rate limit: 1 req/sec per MusicBrainz guidelines.
 """
 import json
 import re
-import time
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,22 +11,12 @@ from sqlmodel import Session, select
 
 from ..database import get_session
 from ..models import Album, ArtistMeta
+from .search import _get_token, _get as _spotify_get
 
 router = APIRouter(prefix="/aoty", tags=["discover"])
 
 CACHE_TTL = timedelta(days=3)
-MB_BASE = "https://musicbrainz.org/ws/2"
-MB_HEADERS = {"User-Agent": "Pressd/1.0 (personal-music-rating-app)"}
-
-# Primary types to include; Singles are excluded (too noisy)
-INCLUDE_PRIMARY = {"Album", "EP"}
-# Secondary types that upgrade an Album to a more specific label
-SECONDARY_LABEL = {
-    "Mixtape/Street": "Mixtape",
-    "Compilation":    "Compilation",
-    "Live":           "Live",
-    "Remix":          "Remix",
-}
+SPOTIFY_BASE = "https://api.spotify.com/v1"
 
 
 def _normalize(s: str) -> str:
@@ -44,17 +32,14 @@ def _already_in_db(title: str, db_names: list[str]) -> bool:
     return False
 
 
-def _mb_get(path: str, params: dict | None = None) -> dict:
-    import httpx
-    url = f"{MB_BASE}/{path}"
-    r = httpx.get(url, headers=MB_HEADERS, params=params, timeout=10.0)
-    r.raise_for_status()
-    return r.json()
-
-
-def _find_artist_id(artist_name: str) -> str | None:
-    data = _mb_get("artist/", {"query": artist_name, "fmt": "json", "limit": 5})
-    artists = data.get("artists", [])
+def _find_spotify_artist_id(artist_name: str, token: str) -> str | None:
+    headers = {"Authorization": f"Bearer {token}"}
+    data = _spotify_get(
+        f"{SPOTIFY_BASE}/search",
+        headers=headers,
+        params={"q": artist_name, "type": "artist", "limit": 5},
+    )
+    artists = data.get("artists", {}).get("items", [])
     if not artists:
         return None
     norm = _normalize(artist_name)
@@ -64,65 +49,53 @@ def _find_artist_id(artist_name: str) -> str | None:
     return artists[0]["id"]
 
 
-def _fetch_releases(mb_artist_id: str) -> list[dict]:
+def _fetch_releases(spotify_artist_id: str, token: str) -> list[dict]:
+    headers = {"Authorization": f"Bearer {token}"}
+    url: str | None = f"{SPOTIFY_BASE}/artists/{spotify_artist_id}/albums"
+    params: dict | None = {"include_groups": "album", "limit": 50, "market": "US"}
     releases: list[dict] = []
-    offset = 0
-    limit = 100
 
-    while True:
-        time.sleep(1)  # MusicBrainz rate limit: 1 req/sec
-        data = _mb_get(
-            "release-group",
-            {"artist": mb_artist_id, "fmt": "json", "limit": limit, "offset": offset},
-        )
-        groups = data.get("release-groups", [])
-        total = data.get("release-group-count", 0)
-
-        for g in groups:
-            primary = g.get("primary-type", "")
-            if primary not in INCLUDE_PRIMARY:
-                continue
-
-            secondary = g.get("secondary-types", [])
-            # Determine display type
-            release_type = primary
-            for sec in secondary:
-                if sec in SECONDARY_LABEL:
-                    release_type = SECONDARY_LABEL[sec]
-                    break
-
-            if release_type in {"Live", "Compilation"}:
-                continue
-
-            mb_id = g["id"]
-            date = g.get("first-release-date", "")
-            year = int(date[:4]) if date and len(date) >= 4 else None
-
+    while url:
+        data = _spotify_get(url, headers=headers, params=params)
+        params = None  # subsequent pages use the full next URL
+        for item in data.get("items", []):
+            release_date = item.get("release_date", "")
+            year = int(release_date[:4]) if release_date and len(release_date) >= 4 else None
+            images = item.get("images", [])
+            cover_url = images[0]["url"] if images else None
             releases.append({
-                "title": g["title"],
+                "title": item["name"],
                 "year": year,
-                "type": release_type,
-                "mb_id": mb_id,
-                # Cover Art Archive — browser loads this lazily, no extra backend request
-                "cover_url": f"https://coverartarchive.org/release-group/{mb_id}/front-250",
+                "type": "Album",
+                "mb_id": item["id"],  # Spotify album ID used as unique key
+                "cover_url": cover_url,
                 "score": None,
             })
+        url = data.get("next")
 
-        offset += len(groups)
-        if offset >= total or not groups:
-            break
+    # Deduplicate by normalized title (Spotify sometimes lists deluxe + standard editions)
+    seen: set[str] = set()
+    deduped: list[dict] = []
+    for r in releases:
+        key = _normalize(r["title"])
+        if key not in seen:
+            seen.add(key)
+            deduped.append(r)
 
-    # Sort by year descending
-    return sorted(releases, key=lambda r: r["year"] or 0, reverse=True)
+    return sorted(deduped, key=lambda r: r["year"] or 0, reverse=True)
 
 
 def _refresh(artist_name: str, session: Session) -> ArtistMeta | None:
-    mb_id = _find_artist_id(artist_name)
-    if not mb_id:
+    try:
+        token = _get_token()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Spotify auth failed: {e}")
+
+    spotify_id = _find_spotify_artist_id(artist_name, token)
+    if not spotify_id:
         return None
 
-    time.sleep(1)
-    releases = _fetch_releases(mb_id)
+    releases = _fetch_releases(spotify_id, token)
 
     meta = session.exec(
         select(ArtistMeta).where(ArtistMeta.artist == artist_name)
@@ -131,7 +104,7 @@ def _refresh(artist_name: str, session: Session) -> ArtistMeta | None:
         meta = ArtistMeta(artist=artist_name)
         session.add(meta)
 
-    meta.mb_artist_id = mb_id
+    meta.mb_artist_id = spotify_id
     meta.albums_json = json.dumps(releases)
     meta.scraped_at = datetime.utcnow()
     session.commit()
@@ -161,7 +134,7 @@ def _get_or_refresh(artist_name: str, session: Session) -> ArtistMeta | None:
 def discover_artist(artist_name: str, session: Session = Depends(get_session)):
     meta = _get_or_refresh(artist_name, session)
     if not meta or not meta.albums_json:
-        raise HTTPException(404, detail="Artist not found on MusicBrainz")
+        raise HTTPException(404, detail="Artist not found on Spotify")
 
     all_releases: list[dict] = json.loads(meta.albums_json)
 
@@ -169,13 +142,11 @@ def discover_artist(artist_name: str, session: Session = Depends(get_session)):
     all_db_albums = session.exec(select(Album)).all()
     db_names = [a.album_name for a in all_db_albums if artist_in_album(a, artist_name)]
 
-    EXCLUDE_TYPES = {"Live", "Compilation"}
-    filtered = [r for r in all_releases if r.get("type") not in EXCLUDE_TYPES]
-    unrated = [r for r in filtered if not _already_in_db(r["title"], db_names)]
+    unrated = [r for r in all_releases if not _already_in_db(r["title"], db_names)]
 
     return {
         "mb_artist_id": meta.mb_artist_id,
-        "total_on_mb": len(filtered),
+        "total_on_mb": len(all_releases),
         "unrated": unrated,
     }
 
@@ -191,5 +162,5 @@ def force_refresh(artist_name: str, session: Session = Depends(get_session)):
 
     meta = _refresh(artist_name, session)
     if not meta:
-        raise HTTPException(404, detail="Artist not found on MusicBrainz")
+        raise HTTPException(404, detail="Artist not found on Spotify")
     return {"ok": True, "releases": len(json.loads(meta.albums_json or "[]"))}
