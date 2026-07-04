@@ -508,7 +508,7 @@ export default function ArtistPage() {
                   key={a.id}
                   to={`/album/${a.id}`}
                   title={a.album_name}
-                  className="w-12 h-12 rounded-lg overflow-hidden border-2 border-[#f9f8f6] hover:scale-110 hover:z-10 transition-transform relative"
+                  className="w-20 h-20 rounded-xl overflow-hidden border-2 border-[#f9f8f6] hover:scale-110 hover:z-10 transition-transform relative"
                   style={{ marginLeft: i === 0 ? 0 : '-10px', zIndex: shown.length - i }}
                 >
                   <img src={a.album_art_url!} alt={a.album_name} className="w-full h-full object-cover" />
