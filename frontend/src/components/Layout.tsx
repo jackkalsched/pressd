@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useGoogleLogin } from '@react-oauth/google'
-import { Library, BarChart2, List, Mail, X, Loader2, MessageCircle, Pencil, Users } from 'lucide-react'
+import { Library, BarChart2, List, Mail, X, Loader2, MessageCircle, Pencil, Users, Plus } from 'lucide-react'
 import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
 import { fetchFriends, getInviteLink, updateUser, signInWithGoogle, removeFriend } from '../api'
 import type { UserInfo } from '../api'
+import AddAlbumModal from './AddAlbumModal'
 
 function avatarColor(name: string): string {
   const colors = ['#2d6a4f', '#1d4ed8', '#7c3aed', '#b45309', '#0f766e', '#be185d', '#c2410c']
@@ -277,6 +278,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient()
   const [showInvite, setShowInvite] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
+  const [showAddAlbum, setShowAddAlbum] = useState(false)
 
   const { data: friends = [] } = useQuery({
     queryKey: ['friends', activeUser?.id],
@@ -322,6 +324,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               {label}
             </NavLink>
           ))}
+          {!isViewingFriend && (
+            <button
+              onClick={() => setShowAddAlbum(true)}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-[#777] hover:text-[#111] hover:bg-[#f0f0f0] w-full text-left mt-1"
+            >
+              <Plus size={16} />
+              Add Album
+            </button>
+          )}
         </nav>
 
         {/* Friends section */}
@@ -443,8 +454,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </button>
       </nav>
 
+      {/* Mobile FAB */}
+      {!isViewingFriend && (
+        <button
+          onClick={() => setShowAddAlbum(true)}
+          className="md:hidden fixed bottom-20 right-4 z-30 w-12 h-12 rounded-full bg-[#2d6a4f] hover:bg-[#245c43] text-white shadow-lg flex items-center justify-center transition-colors"
+          style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+          aria-label="Add Album"
+        >
+          <Plus size={22} />
+        </button>
+      )}
+
       {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+      {showAddAlbum && activeUser && (
+        <AddAlbumModal onClose={() => setShowAddAlbum(false)} userId={activeUser.id} />
+      )}
     </div>
   )
 }
