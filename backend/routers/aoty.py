@@ -21,9 +21,9 @@ router = APIRouter(prefix="/aoty", tags=["discover"])
 CACHE_TTL = timedelta(days=3)
 DISCOGS_BASE = "https://api.discogs.com"
 
-# Format keywords that disqualify a release from being a studio album
+# Format keywords that disqualify a release
 _EXCLUDE_FORMATS = {
-    "single", "ep", "compilation", "live", "interview",
+    "single", "compilation", "live", "interview",
     "soundtrack", "mixtape", "dj mix", "video", "dvd", "vhs", "cassette single",
 }
 
@@ -110,10 +110,12 @@ def _fetch_releases(artist_id: str) -> list[dict]:
                 continue
             year = item.get("year") or None
             cover = _clean_cover(item.get("cover_image")) or _clean_cover(item.get("thumb"))
+            fmt_lower = item.get("format", "").lower()
+            release_type = "EP" if "ep" in {p.strip() for p in fmt_lower.split(",")} else "Album"
             releases.append({
                 "title": item["title"],
                 "year": year,
-                "type": "Album",
+                "type": release_type,
                 "mb_id": str(item.get("id", "")),
                 "cover_url": cover,
                 "score": None,
