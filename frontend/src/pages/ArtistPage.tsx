@@ -481,7 +481,7 @@ export default function ArtistPage() {
   ]
 
   return (
-    <div className="p-4 md:p-8 md:pr-16 max-w-5xl">
+    <div className="p-4 md:p-8 md:pr-8 max-w-6xl">
       <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-2 text-[#777] hover:text-[#111] text-sm mb-6 transition-colors"
