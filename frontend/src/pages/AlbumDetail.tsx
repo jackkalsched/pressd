@@ -24,7 +24,7 @@ function accentToPageGradient(hsl: string | null): string {
   if (!hsl) return '#faf8f5'
   const h = hsl.match(/hsl\((\d+)/)?.[1]
   if (!h) return '#faf8f5'
-  return `linear-gradient(to bottom, hsl(${h}, 55%, 82%) 0%, hsl(${h}, 35%, 93%) 30%, #faf8f5 60%)`
+  return `linear-gradient(to bottom, hsl(${h}, 38%, 88%) 0%, hsl(${h}, 25%, 94%) 30%, #faf8f5 60%)`
 }
 
 function useAlbumColors(album: string | null, artist: string | null): { color: string | null; color2: string | null } {
@@ -171,7 +171,7 @@ export default function AlbumDetail() {
         <div className="flex items-center justify-between mb-8">
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-1.5 text-[#78716c] hover:text-[#1c1917] text-sm transition-colors"
+            className="flex items-center gap-1.5 text-[#44403c] hover:text-[#1c1917] text-sm transition-colors"
           >
             <ArrowLeft size={15} /> Back
           </button>
@@ -251,7 +251,7 @@ export default function AlbumDetail() {
               {album.albumName}
             </h1>
 
-            <p className="text-[#78716c] text-sm mt-1.5">
+            <p className="text-[#44403c] text-sm mt-1.5">
               {artists.map((name, i, arr) => (
                 <span key={name}>
                   <Link
@@ -270,7 +270,7 @@ export default function AlbumDetail() {
             </p>
 
             {album.genre && (
-              <p className="text-[#a8a29e] text-[11px] mt-0.5 uppercase tracking-[0.08em]">
+              <p className="text-[#57534e] text-[11px] mt-0.5 uppercase tracking-[0.08em]">
                 {album.genre}{album.subGenre1 ? ` · ${album.subGenre1}` : ''}
               </p>
             )}
@@ -281,7 +281,7 @@ export default function AlbumDetail() {
                 <span className="text-5xl md:text-6xl font-bold tabular-nums leading-none text-[#1c1917]">
                   {album.score.toFixed(2)}
                 </span>
-                <span className="text-[#a8a29e] text-base self-end mb-1">/10</span>
+                <span className="text-[#57534e] text-base self-end mb-1">/10</span>
               </div>
             )}
             {album.score === null && album.predictedScore !== null && (
@@ -298,17 +298,17 @@ export default function AlbumDetail() {
           {avgScore !== null && ratedSongs.length > 0 && (
             <div className="hidden md:flex flex-col items-end gap-2 text-sm shrink-0 pt-1">
               <div className="text-right">
-                <span className="text-[#a8a29e] text-[11px] uppercase tracking-[0.08em] block mb-0.5">Avg</span>
+                <span className="text-[#57534e] text-[11px] uppercase tracking-[0.08em] block mb-0.5">Avg</span>
                 <span className="font-bold text-[#1c1917] tabular-nums">{avgScore.toFixed(2)}</span>
               </div>
               <div className="text-right">
-                <span className="text-[#a8a29e] text-[11px] uppercase tracking-[0.08em] block mb-0.5">Bang%</span>
+                <span className="text-[#57534e] text-[11px] uppercase tracking-[0.08em] block mb-0.5">Bang%</span>
                 <span className="font-bold tabular-nums text-[#2d6a4f]">
                   {Math.round(bangs.length / ratedSongs.length * 100)}%
                 </span>
               </div>
               <div className="text-right">
-                <span className="text-[#a8a29e] text-[11px] uppercase tracking-[0.08em] block mb-0.5">Skip%</span>
+                <span className="text-[#57534e] text-[11px] uppercase tracking-[0.08em] block mb-0.5">Skip%</span>
                 <span className="font-bold text-[#c0392b] tabular-nums">
                   {Math.round(skips.length / ratedSongs.length * 100)}%
                 </span>
@@ -330,7 +330,7 @@ export default function AlbumDetail() {
                 key={label}
                 className="px-5 py-5 text-center"
               >
-                <p className="text-[10px] uppercase tracking-[0.13em] mb-3 font-medium text-[#a8998a]">
+                <p className="text-[10px] uppercase tracking-[0.13em] mb-3 font-medium text-[#57534e]">
                   {label}
                 </p>
                 <p className="text-5xl font-bold tabular-nums leading-none text-[#1c1917]">
