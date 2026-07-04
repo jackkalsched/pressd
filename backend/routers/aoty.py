@@ -102,8 +102,18 @@ def _find_artist_id(artist_name: str) -> str | None:
     return str(results[0]["id"])
 
 
+def _track_count(resource_url: str) -> int | None:
+    """Fetch the master release and return its track count, or None on failure."""
+    try:
+        data = _get(resource_url)
+        return len(data.get("tracklist", []))
+    except Exception:
+        return None
+
+
 def _fetch_releases(artist_id: str) -> list[dict]:
-    releases: list[dict] = []
+    # Phase 1: collect candidates that pass format filtering
+    candidates: list[dict] = []
     page = 1
 
     while True:
@@ -115,24 +125,34 @@ def _fetch_releases(artist_id: str) -> list[dict]:
         pagination = data.get("pagination", {})
 
         for item in items:
-            if not _is_valid_release(item):
-                continue
-            year = item.get("year") or None
-            cover = _clean_cover(item.get("cover_image")) or _clean_cover(item.get("thumb"))
-            fmt_lower = item.get("format", "").lower()
-            release_type = "EP" if "ep" in {p.strip() for p in fmt_lower.split(",")} else "Album"
-            releases.append({
-                "title": item["title"],
-                "year": year,
-                "type": release_type,
-                "mb_id": str(item.get("id", "")),
-                "cover_url": cover,
-                "score": None,
-            })
+            if _is_valid_release(item):
+                candidates.append(item)
 
         if page >= pagination.get("pages", 1) or not items:
             break
         page += 1
+
+    # Phase 2: verify track count via master endpoint; drop anything ≤ 3 tracks
+    releases: list[dict] = []
+    for item in candidates:
+        resource_url = item.get("resource_url")
+        if resource_url:
+            count = _track_count(resource_url)
+            if count is not None and count <= 3:
+                continue  # single or near-single — skip
+
+        year = item.get("year") or None
+        cover = _clean_cover(item.get("cover_image")) or _clean_cover(item.get("thumb"))
+        fmt_lower = item.get("format", "").lower()
+        release_type = "EP" if "ep" in {p.strip() for p in fmt_lower.split(",")} else "Album"
+        releases.append({
+            "title": item["title"],
+            "year": year,
+            "type": release_type,
+            "mb_id": str(item.get("id", "")),
+            "cover_url": cover,
+            "score": None,
+        })
 
     # Deduplicate by normalized title (keep first / earliest seen, which is most recent year)
     seen: set[str] = set()
