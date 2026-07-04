@@ -118,10 +118,12 @@ def _get_or_refresh(artist_name: str, session: Session) -> ArtistMeta | None:
     ).first()
 
     now = datetime.utcnow()
+    cached_empty = meta is not None and meta.albums_json is not None and json.loads(meta.albums_json) == []
     stale = (
         meta is None
         or meta.albums_json is None
         or meta.scraped_at is None
+        or cached_empty
         or (now - meta.scraped_at) > CACHE_TTL
     )
     if stale:

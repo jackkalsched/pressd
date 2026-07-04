@@ -301,10 +301,10 @@ function DiscoverSection({ artistName }: { artistName: string }) {
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-[#aaa] text-sm py-4">
-          <Loader2 size={14} className="animate-spin" /> Fetching discography from MusicBrainz…
+          <Loader2 size={14} className="animate-spin" /> Fetching discography from Spotify…
         </div>
       ) : error ? (
-        <p className="text-[#bbb] text-sm py-2">Artist not found on MusicBrainz.</p>
+        <p className="text-[#bbb] text-sm py-2">Artist not found on Spotify.</p>
       ) : data?.unrated.length === 0 ? (
         <p className="text-[#bbb] text-sm py-2">All releases are already in your library.</p>
       ) : (
