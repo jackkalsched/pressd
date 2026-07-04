@@ -23,9 +23,14 @@ DISCOGS_BASE = "https://api.discogs.com"
 
 # Format keywords that disqualify a release
 _EXCLUDE_FORMATS = {
-    "single", "compilation", "live", "interview",
-    "soundtrack", "mixtape", "dj mix", "video", "dvd", "vhs", "cassette single",
+    "single", "maxi-single", "compilation", "live", "interview",
+    "soundtrack", "mixtape", "dj mix", "video", "dvd", "vhs",
+    "cassette single", "45 rpm", "flexi-disc",
 }
+
+# At least one of these must be present when a format string exists;
+# bare "12"", "Vinyl", "CD" etc. without an "Album" label are often singles
+_ALBUM_INDICATORS = {"album", "lp", "ep"}
 
 
 def _headers() -> dict:
@@ -57,16 +62,20 @@ def _already_in_db(title: str, db_names: list[str]) -> bool:
     return False
 
 
-def _is_studio_album(release: dict) -> bool:
+def _is_valid_release(release: dict) -> bool:
     if release.get("type") != "master":
         return False
     if release.get("role", "").lower() != "main":
         return False
     fmt = release.get("format", "").lower()
     if not fmt:
-        return True
+        return True  # master with no format data → assume album
     parts = {p.strip() for p in fmt.split(",")}
-    return not (parts & _EXCLUDE_FORMATS)
+    if parts & _EXCLUDE_FORMATS:
+        return False
+    # Require a positive album/LP/EP label — filters out bare "12"", "Vinyl",
+    # "CD" etc. that Discogs uses for singles without explicitly saying so
+    return bool(parts & _ALBUM_INDICATORS)
 
 
 def _clean_cover(url: str | None) -> str | None:
@@ -106,7 +115,7 @@ def _fetch_releases(artist_id: str) -> list[dict]:
         pagination = data.get("pagination", {})
 
         for item in items:
-            if not _is_studio_album(item):
+            if not _is_valid_release(item):
                 continue
             year = item.get("year") or None
             cover = _clean_cover(item.get("cover_image")) or _clean_cover(item.get("thumb"))
