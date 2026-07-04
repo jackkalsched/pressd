@@ -89,10 +89,10 @@ function FeedCard({ item }: { item: FeedItem }) {
   return (
     <div className="bg-white border border-[#e2e2e2] rounded-2xl p-5 flex gap-5 hover:border-[#c8c8c8] transition-colors">
       {/* Album art */}
-      <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-[#e8e8e8] flex items-center justify-center text-[#aaa]">
+      <div className="w-24 h-24 shrink-0 rounded-xl overflow-hidden bg-[#e8e8e8] flex items-center justify-center text-[#aaa]">
         {item.album_art_url
           ? <img src={item.album_art_url} alt={item.album_name} className="w-full h-full object-cover" />
-          : <Music size={28} />}
+          : <Music size={30} />}
       </div>
 
       {/* Content */}
@@ -241,9 +241,11 @@ export default function Social() {
   })
 
   return (
-    <div className="p-4 md:p-8 max-w-2xl">
-      <h1 className="text-xl font-semibold text-[#111] mb-6">Friends' Activity</h1>
-      <FindPeople />
+    <div className="p-4 md:p-8">
+      <h1 className="font-display text-3xl font-bold text-[#111] mb-6">Friends' Activity</h1>
+      <div className="max-w-lg">
+        <FindPeople />
+      </div>
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-[#aaa]">
@@ -255,7 +257,7 @@ export default function Social() {
           <p className="text-[#ccc] text-xs mt-1">Ratings from your friends will show up here.</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {feed.map((item) => (
             <FeedCard key={`${item.friend.id}-${item.album_id}`} item={item} />
           ))}
