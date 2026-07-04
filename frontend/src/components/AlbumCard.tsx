@@ -147,12 +147,12 @@ export default function AlbumCard({ album, showActions = true }: Props) {
               <div className="bg-black/35 backdrop-blur-sm rounded-xl px-2.5 py-2">
                 <div className="flex justify-between items-center mb-1.5">
                   <span className="text-white/65 text-[10px] font-medium tracking-wide uppercase">In progress</span>
-                  <span className="text-white/65 text-[10px] tabular-nums">{ratedSongs}/{album.totalTracks}</span>
+                  <span className="text-white/65 text-[10px] tabular-nums">{ratedSongs}/{album.songs.length}</span>
                 </div>
                 <div className="h-[3px] bg-white/15 rounded-full">
                   <div
                     className="h-[3px] bg-[#6ee7b7] rounded-full transition-all duration-500"
-                    style={{ width: `${(ratedSongs / (album.totalTracks ?? 1)) * 100}%` }}
+                    style={{ width: `${album.songs.length > 0 ? (ratedSongs / album.songs.length) * 100 : 0}%` }}
                   />
                 </div>
               </div>

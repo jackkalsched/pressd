@@ -164,8 +164,25 @@ export default function AlbumDetail() {
   const btnDanger = `${btnBase} bg-[#f0ebe3] border border-[#e8e2d9] hover:border-red-300 hover:text-red-500 text-[#57534e]`
 
   return (
-    <div className="min-h-screen" style={{ background: accentToPageGradient(accentColor) }}>
-      <div className="p-4 md:p-8 max-w-5xl mx-auto">
+    <div className="min-h-screen relative overflow-hidden" style={{ background: accentToPageGradient(accentColor) }}>
+      {/* Faint album art watermark */}
+      {album.albumArtUrl && (
+        <div className="absolute inset-0 pointer-events-none select-none" aria-hidden="true">
+          <img
+            src={album.albumArtUrl}
+            alt=""
+            className="absolute top-0 right-0 w-[55vw] max-w-2xl object-cover rounded-none"
+            style={{
+              opacity: 0.15,
+              filter: 'blur(1px) saturate(1.1)',
+              transform: 'translate(10%, -5%)',
+              maskImage: 'linear-gradient(to bottom left, black 0%, rgba(0,0,0,0.7) 40%, transparent 75%)',
+              WebkitMaskImage: 'linear-gradient(to bottom left, black 0%, rgba(0,0,0,0.7) 40%, transparent 75%)',
+            }}
+          />
+        </div>
+      )}
+      <div className="p-4 md:p-8 max-w-5xl mx-auto relative">
 
         {/* ── Nav ──────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between mb-8">
