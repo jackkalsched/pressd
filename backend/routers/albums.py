@@ -599,25 +599,33 @@ def enrich_covers(
         .where(Album.album_art_url.is_(None))
     ).all()
 
+    def _itunes_search(term: str, norm_name: str) -> str | None:
+        resp = _requests.get(
+            "https://itunes.apple.com/search",
+            params={"term": term, "entity": "album", "limit": 5},
+            timeout=6,
+        )
+        results = resp.json().get("results", [])
+        # Prefer exact title match
+        for r in results:
+            if re.sub(r"[^a-z0-9]", "", r.get("collectionName", "").lower()) == norm_name:
+                raw = r.get("artworkUrl100", "")
+                return raw.replace("100x100bb", "600x600bb") if raw else None
+        # Fall back to first result if available
+        if results:
+            raw = results[0].get("artworkUrl100", "")
+            return raw.replace("100x100bb", "600x600bb") if raw else None
+        return None
+
     updated = 0
     for album in albums:
         try:
-            resp = _requests.get(
-                "https://itunes.apple.com/search",
-                params={"term": f"{album.album_name} {album.artist}", "entity": "album", "limit": 5},
-                timeout=6,
-            )
-            results = resp.json().get("results", [])
-            url = None
             norm_name = re.sub(r"[^a-z0-9]", "", album.album_name.lower())
-            for r in results:
-                if re.sub(r"[^a-z0-9]", "", r.get("collectionName", "").lower()) == norm_name:
-                    raw = r.get("artworkUrl100", "")
-                    url = raw.replace("100x100bb", "600x600bb") if raw else None
-                    break
-            if not url and results:
-                raw = results[0].get("artworkUrl100", "")
-                url = raw.replace("100x100bb", "600x600bb") if raw else None
+            # Pass 1: album + artist (handles most cases)
+            url = _itunes_search(f"{album.album_name} {album.artist}", norm_name)
+            # Pass 2: album name only (handles multi-artist credits like Silk Sonic)
+            if not url:
+                url = _itunes_search(album.album_name, norm_name)
             if url:
                 album.album_art_url = url
                 session.add(album)
