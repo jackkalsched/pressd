@@ -387,14 +387,16 @@ function DiscographyGrid({
     staleTime: 1000 * 60 * 60,
   })
 
-  const rated: GridEntry[] = ratedAlbums.map(a => ({
-    kind: 'rated' as const,
-    id: a.id,
-    name: a.album_name,
-    year: a.year ?? null,
-    art: a.album_art_url ?? null,
-    score: a.score ?? null,
-  }))
+  const rated: GridEntry[] = ratedAlbums
+    .filter(a => a.score !== null)
+    .map(a => ({
+      kind: 'rated' as const,
+      id: a.id,
+      name: a.album_name,
+      year: a.year ?? null,
+      art: a.album_art_url ?? null,
+      score: a.score,
+    }))
 
   const unrated: GridEntry[] = (data?.unrated ?? []).map(a => ({
     kind: 'unrated' as const,
