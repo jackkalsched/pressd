@@ -490,11 +490,33 @@ export default function ArtistPage() {
       </button>
 
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-[#111]">{data.artist}</h1>
-        <p className="text-[#aaa] text-sm mt-1">
-          {data.album_count} rated {data.album_count === 1 ? 'album' : 'albums'}
-        </p>
+      <div className="flex items-start justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-[#111]">{data.artist}</h1>
+          <p className="text-[#aaa] text-sm mt-1">
+            {data.album_count} rated {data.album_count === 1 ? 'album' : 'albums'}
+          </p>
+        </div>
+        {(() => {
+          const ratedAlbums = data.albums.filter(a => a.score !== null && a.album_art_url)
+          if (ratedAlbums.length === 0) return null
+          const shown = ratedAlbums.slice(0, 6)
+          return (
+            <div className="flex shrink-0">
+              {shown.map((a, i) => (
+                <Link
+                  key={a.id}
+                  to={`/album/${a.id}`}
+                  title={a.album_name}
+                  className="w-12 h-12 rounded-lg overflow-hidden border-2 border-[#f9f8f6] hover:scale-110 hover:z-10 transition-transform relative"
+                  style={{ marginLeft: i === 0 ? 0 : '-10px', zIndex: shown.length - i }}
+                >
+                  <img src={a.album_art_url!} alt={a.album_name} className="w-full h-full object-cover" />
+                </Link>
+              ))}
+            </div>
+          )
+        })()}
       </div>
 
       {/* Inline stat row */}
