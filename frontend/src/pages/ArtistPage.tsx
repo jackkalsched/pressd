@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Loader2, RefreshCw, Plus, Check } from 'lucide-react'
 import { fetchArtistDetail, fetchAotyAlbums, refreshAotyArtist, searchSpotify, importAlbum, createAlbum } from '../api'
 import { useUser } from '../context/UserContext'
-import type { AotyAlbum } from '../api'
+import type { AotyAlbum, ArtistDetail } from '../api'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   ScatterChart, Scatter, ZAxis,
@@ -318,6 +318,120 @@ function DiscoverSection({ artistName }: { artistName: string }) {
   )
 }
 
+// ── Discography Grid ─────────────────────────────────────────────────────────
+
+type GridEntry =
+  | { kind: 'rated'; id: number; name: string; year: number | null; art: string | null; score: number | null }
+  | { kind: 'unrated'; mb_id: string; name: string; year: number | null; art: string | null; type: string }
+
+function Tile({ entry }: { entry: GridEntry }) {
+  const [imgError, setImgError] = useState(false)
+  const navigate = useNavigate()
+  const isRated = entry.kind === 'rated'
+
+  const inner = (
+    <div className="relative w-full aspect-square rounded-lg overflow-hidden bg-[#e8e8e8]">
+      {entry.art && !imgError ? (
+        <img
+          src={entry.art}
+          alt={entry.name}
+          className="w-full h-full object-cover"
+          style={isRated ? undefined : { filter: 'grayscale(100%) brightness(0.7)' }}
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-[#bbb] text-xl font-bold select-none">
+          {entry.name[0]}
+        </div>
+      )}
+
+      {isRated && entry.score !== null && (
+        <div className="absolute bottom-1.5 right-1.5 bg-black/60 rounded px-1.5 py-0.5 text-[10px] font-bold text-white tabular-nums leading-none">
+          {entry.score.toFixed(1)}
+        </div>
+      )}
+
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/55 transition-all flex items-end p-1.5 pointer-events-none opacity-0 group-hover:opacity-100">
+        <div>
+          <p className="text-white text-[10px] font-medium leading-tight">{entry.name}</p>
+          {entry.year && <p className="text-white/65 text-[9px] mt-0.5">{entry.year}</p>}
+        </div>
+      </div>
+    </div>
+  )
+
+  if (isRated) {
+    return (
+      <button
+        onClick={() => navigate(`/album/${entry.id}`)}
+        className="group block w-full hover:scale-105 transition-transform duration-150"
+      >
+        {inner}
+      </button>
+    )
+  }
+  return <div className="group w-full">{inner}</div>
+}
+
+function DiscographyGrid({
+  ratedAlbums,
+  artistName,
+}: {
+  ratedAlbums: ArtistDetail['albums']
+  artistName: string
+}) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['aoty', artistName],
+    queryFn: () => fetchAotyAlbums(artistName),
+    retry: false,
+    staleTime: 1000 * 60 * 60,
+  })
+
+  const rated: GridEntry[] = ratedAlbums.map(a => ({
+    kind: 'rated' as const,
+    id: a.id,
+    name: a.album_name,
+    year: a.year ?? null,
+    art: a.album_art_url ?? null,
+    score: a.score ?? null,
+  }))
+
+  const unrated: GridEntry[] = (data?.unrated ?? []).map(a => ({
+    kind: 'unrated' as const,
+    mb_id: a.mb_id,
+    name: a.title,
+    year: a.year ?? null,
+    art: a.cover_url ?? null,
+    type: a.type,
+  }))
+
+  const all = [...rated, ...unrated].sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
+
+  if (rated.length === 0 && !isLoading && unrated.length === 0) return null
+
+  return (
+    <div className="mb-10">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xs font-semibold text-[#999] uppercase tracking-widest">Discography</h2>
+        <div className="flex items-center gap-2">
+          {isLoading && <Loader2 size={11} className="text-[#bbb] animate-spin" />}
+          <span className="text-[#bbb] text-[10px]">
+            {rated.length} rated · {isLoading ? '…' : unrated.length} unrated
+          </span>
+        </div>
+      </div>
+      <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-7 gap-2">
+        {all.map(entry => (
+          <Tile
+            key={entry.kind === 'rated' ? `r-${entry.id}` : `u-${entry.mb_id}`}
+            entry={entry}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ArtistPage() {
@@ -490,6 +604,9 @@ export default function ArtistPage() {
           </ScatterChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Discography Grid */}
+      <DiscographyGrid ratedAlbums={data.albums} artistName={data.artist} />
 
       {/* Album list */}
       {(() => {

@@ -32,9 +32,11 @@ const [toListenSearch, setToListenSearch] = useState('')
   const counts = { rated: rated.length, listening: listening.length, to_listen: toListen.length }
 
   const [toListenSort, setToListenSort] = useState<'predicted' | 'artist' | 'added'>('predicted')
+  const [ratedSearch, setRatedSearch] = useState('')
 
-  const q = toListenSearch.trim().toLowerCase()
-  const filteredAlbums = activeTab === 'to_listen' && q
+  const activeSearch = activeTab === 'to_listen' ? toListenSearch : activeTab === 'rated' ? ratedSearch : ''
+  const q = activeSearch.trim().toLowerCase()
+  const filteredAlbums = q
     ? albums.filter(a =>
         a.albumName.toLowerCase().includes(q) ||
         a.artist.toLowerCase().includes(q)
@@ -77,6 +79,29 @@ const [toListenSearch, setToListenSearch] = useState('')
           </button>
         ))}
       </div>
+
+      {activeTab === 'rated' && (
+        <div className="flex items-center gap-3 mb-6">
+          <div className="relative max-w-sm flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#bbb] pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search by album or artist…"
+              value={ratedSearch}
+              onChange={e => setRatedSearch(e.target.value)}
+              className="w-full pl-8 pr-4 py-2 text-sm bg-[#f5f5f5] border border-[#e2e2e2] rounded-lg text-[#111] placeholder:text-[#bbb] focus:outline-none focus:border-[#2d6a4f] transition-colors"
+            />
+            {ratedSearch && (
+              <button
+                onClick={() => setRatedSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#bbb] hover:text-[#555]"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {activeTab === 'to_listen' && (
         <div className="flex items-center gap-3 mb-6">
