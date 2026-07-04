@@ -1,28 +1,42 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { X, Loader2, Search, Music } from 'lucide-react'
+import { X, Loader2, Search, Music, ArrowLeft } from 'lucide-react'
 import { searchSpotify, searchMusicBrainz, searchItunes, importAlbum, createAlbum } from '../api'
 import type { SpotifyAlbumResult } from '../api'
 
-type SearchSource = 'spotify' | 'itunes' | 'musicbrainz' | 'manual'
+function normalizeKey(name: string, artist: string): string {
+  return `${name}|||${artist}`.toLowerCase().replace(/[^a-z0-9|]/g, '')
+}
 
-const SOURCE_LABELS: Record<SearchSource, string> = {
-  spotify: 'Spotify',
-  itunes: 'iTunes',
-  musicbrainz: 'MusicBrainz',
-  manual: 'Manual',
+function mergeResults(
+  itunes: SpotifyAlbumResult[],
+  spotify: SpotifyAlbumResult[],
+  mb: SpotifyAlbumResult[],
+): SpotifyAlbumResult[] {
+  const seen = new Map<string, SpotifyAlbumResult>()
+  for (const r of [...itunes, ...spotify, ...mb]) {
+    const key = normalizeKey(r.album_name, r.artist)
+    const existing = seen.get(key)
+    if (!existing) {
+      seen.set(key, r)
+    } else if (!existing.cover_url && r.cover_url) {
+      seen.set(key, r)
+    }
+  }
+  return [...seen.values()].slice(0, 12)
 }
 
 export default function AddAlbumModal({ onClose, userId }: { onClose: () => void; userId: number }) {
   const [query, setQuery] = useState('')
+  const [manualMode, setManualMode] = useState(false)
   const [albumName, setAlbumName] = useState('')
   const [artist, setArtist] = useState('')
-  const [source, setSource] = useState<SearchSource>('itunes')
   const [status, setStatus] = useState<'listening' | 'to_listen'>('listening')
   const [results, setResults] = useState<SpotifyAlbumResult[]>([])
   const [selected, setSelected] = useState<SpotifyAlbumResult | null>(null)
   const [searching, setSearching] = useState(false)
+  const [noResults, setNoResults] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -30,32 +44,42 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
   const queryClient = useQueryClient()
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  // Fan out to all 3 APIs simultaneously, merge + dedup
   useEffect(() => {
-    if (source === 'manual' || query.trim().length < 2) {
+    if (query.trim().length < 2) {
       setResults([])
       setShowDropdown(false)
       setSearching(false)
+      setNoResults(false)
       return
     }
     setSearching(true)
+    setNoResults(false)
     const timer = setTimeout(async () => {
       try {
-        const fn = source === 'spotify' ? searchSpotify
-          : source === 'itunes' ? searchItunes
-          : searchMusicBrainz
-        const q = source === 'spotify' ? `album:${query.trim()}` : query.trim()
-        const res = await fn(q)
-        setResults(res.slice(0, 8))
-        setShowDropdown(res.length > 0)
+        const q = query.trim()
+        const [itunesRes, spotifyRes, mbRes] = await Promise.allSettled([
+          searchItunes(q),
+          searchSpotify(`album:${q}`),
+          searchMusicBrainz(q),
+        ])
+        const itunes  = itunesRes.status  === 'fulfilled' ? itunesRes.value  : []
+        const spotify = spotifyRes.status === 'fulfilled' ? spotifyRes.value : []
+        const mb      = mbRes.status      === 'fulfilled' ? mbRes.value      : []
+        const merged = mergeResults(itunes, spotify, mb)
+        setResults(merged)
+        setShowDropdown(merged.length > 0)
+        setNoResults(merged.length === 0)
       } catch {
         setResults([])
         setShowDropdown(false)
+        setNoResults(true)
       } finally {
         setSearching(false)
       }
     }, 380)
     return () => clearTimeout(timer)
-  }, [query, source])
+  }, [query])
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -109,37 +133,24 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white border border-[#e2e2e2] rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl">
+
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-[#111] font-semibold">Add Album</h2>
+          <div className="flex items-center gap-2">
+            {manualMode && (
+              <button onClick={() => setManualMode(false)} className="text-[#aaa] hover:text-[#555] transition-colors -ml-1 p-1">
+                <ArrowLeft size={16} />
+              </button>
+            )}
+            <h2 className="text-[#111] font-semibold">
+              {manualMode ? 'Add Manually' : 'Add Album'}
+            </h2>
+          </div>
           <button onClick={onClose} className="text-[#aaa] hover:text-[#555] transition-colors">
             <X size={18} />
           </button>
         </div>
 
-        <div className="flex gap-1.5 mb-3">
-          {(['itunes', 'spotify', 'musicbrainz', 'manual'] as SearchSource[]).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => {
-                setSource(s)
-                setSelected(null)
-                setResults([])
-                setShowDropdown(false)
-                if (s === 'manual') setStatus('to_listen')
-              }}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                source === s
-                  ? 'bg-[#2d6a4f]/10 border border-[#2d6a4f]/40 text-[#2d6a4f]'
-                  : 'bg-[#f5f5f5] border border-[#e2e2e2] text-[#aaa] hover:text-[#555]'
-              }`}
-            >
-              {SOURCE_LABELS[s]}
-            </button>
-          ))}
-        </div>
-
-        {source === 'manual' ? (
+        {manualMode ? (
           <form onSubmit={handleManualSubmit} className="flex flex-col gap-3">
             <input autoFocus type="text" placeholder="Album name" value={albumName}
               onChange={(e) => setAlbumName(e.target.value)} className={inputCls} />
@@ -154,6 +165,7 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
           </form>
         ) : (
           <div className="flex flex-col gap-3">
+            {/* Unified search input */}
             <div ref={dropdownRef} className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#bbb] pointer-events-none" />
               {searching && (
@@ -169,7 +181,7 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
                 className={`${inputCls} pl-9 pr-8 ${selected ? 'border-[#2d6a4f]' : ''}`}
               />
               {showDropdown && (
-                <div className="absolute z-10 top-full mt-1 left-0 right-0 bg-white border border-[#e2e2e2] rounded-xl shadow-lg overflow-hidden max-h-60 overflow-y-auto">
+                <div className="absolute z-10 top-full mt-1 left-0 right-0 bg-white border border-[#e2e2e2] rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto">
                   {results.map((r, i) => (
                     <button
                       key={i}
@@ -194,6 +206,17 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
               )}
             </div>
 
+            {/* No results nudge */}
+            {noResults && !searching && query.trim().length >= 2 && (
+              <p className="text-[#a8998a] text-xs text-center py-1">
+                No results found.{' '}
+                <button onClick={() => setManualMode(true)} className="text-[#2d6a4f] font-medium hover:underline">
+                  Add manually →
+                </button>
+              </p>
+            )}
+
+            {/* Selected album preview */}
             {selected && (
               <div className="flex items-center gap-3 bg-[#f5f5f5] rounded-xl px-3 py-2.5 border border-[#2d6a4f]/25">
                 {selected.cover_url ? (
@@ -210,6 +233,7 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
               </div>
             )}
 
+            {/* Status */}
             <div className="flex gap-2">
               {(['listening', 'to_listen'] as const).map((s) => (
                 <button key={s} type="button" onClick={() => setStatus(s)}
@@ -229,6 +253,14 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
               className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#2d6a4f] hover:bg-[#245c43] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
               {loading ? <><Loader2 size={14} className="animate-spin" /> Adding…</> : 'Confirm'}
             </button>
+
+            {/* Manual fallback — always available */}
+            {!noResults && (
+              <button onClick={() => setManualMode(true)}
+                className="text-[#a8998a] text-xs text-center hover:text-[#78716c] transition-colors">
+                Can't find it? Add manually →
+              </button>
+            )}
           </div>
         )}
       </div>
