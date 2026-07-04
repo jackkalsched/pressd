@@ -173,11 +173,11 @@ export default function AlbumDetail() {
             alt=""
             className="absolute top-0 right-0 w-[55vw] max-w-2xl object-cover rounded-none"
             style={{
-              opacity: 0.15,
+              opacity: 0.18,
               filter: 'blur(1px) saturate(1.1)',
               transform: 'translate(10%, -5%)',
-              maskImage: 'linear-gradient(to bottom left, black 0%, rgba(0,0,0,0.7) 40%, transparent 75%)',
-              WebkitMaskImage: 'linear-gradient(to bottom left, black 0%, rgba(0,0,0,0.7) 40%, transparent 75%)',
+              maskImage: 'radial-gradient(ellipse 75% 75% at 55% 40%, black 20%, rgba(0,0,0,0.5) 50%, transparent 75%)',
+              WebkitMaskImage: 'radial-gradient(ellipse 75% 75% at 55% 40%, black 20%, rgba(0,0,0,0.5) 50%, transparent 75%)',
             }}
           />
         </div>
