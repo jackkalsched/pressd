@@ -471,6 +471,7 @@ export interface ArtistDetail {
     album_art_url: string | null
     avg_external: number | null
     is_ep: boolean
+    status: string
   }[]
   all_artists: {
     artist: string

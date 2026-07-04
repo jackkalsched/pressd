@@ -388,7 +388,7 @@ function DiscographyGrid({
   })
 
   const rated: GridEntry[] = ratedAlbums
-    .filter(a => a.score !== null)
+    .filter(a => a.status === 'rated')
     .map(a => ({
       kind: 'rated' as const,
       id: a.id,
@@ -498,7 +498,7 @@ export default function ArtistPage() {
           </p>
         </div>
         {(() => {
-          const ratedAlbums = data.albums.filter(a => a.score !== null && a.album_art_url)
+          const ratedAlbums = data.albums.filter(a => a.status === 'rated' && a.album_art_url)
           if (ratedAlbums.length === 0) return null
           const shown = ratedAlbums.slice(0, 6)
           return (

@@ -533,6 +533,7 @@ def artist_detail(artist_name: str, user_id: int = Depends(viewable_user_id), se
                 "album_art_url": a.album_art_url,
                 "avg_external": album_ext(a),
                 "is_ep": _song_counts.get(a.id, 0) <= 6,
+                "status": a.status,
             }
             for a in sorted(
                 [a for a in all_artist_albums if a.status == "rated" or len(_album_scores.get(a.id, [])) <= 6],
