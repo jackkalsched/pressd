@@ -347,7 +347,7 @@ function Tile({ entry }: { entry: GridEntry }) {
 
       {isRated && entry.score !== null && (
         <div className="absolute bottom-1.5 right-1.5 bg-black/60 rounded px-1.5 py-0.5 text-[10px] font-bold text-white tabular-nums leading-none">
-          {entry.score.toFixed(1)}
+          {entry.score.toFixed(2)}
         </div>
       )}
 
