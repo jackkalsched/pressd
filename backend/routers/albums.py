@@ -8,10 +8,19 @@ from sqlalchemy.orm import selectinload
 from datetime import date
 
 from ..database import get_session
+from ..deps import current_user, authorize_view, are_friends
 from ..models import Album, Song, SongAudioFeatures, PressUser
 from ..scoring import compute_a_score, recompute_all_scores, BANG_THRESHOLD, SKIP_THRESHOLD
 
 router = APIRouter(prefix="/albums", tags=["albums"])
+
+# Fields a client may set/change on an album; everything else (score, user_id,
+# predicted_*) is server-controlled and must never come from the request body.
+ALBUM_MUTABLE_FIELDS = {
+    "album_name", "artist", "year", "status", "theme", "replay_value",
+    "production", "distinctness", "genre", "sub_genre1", "sub_genre2",
+    "sub_genre3", "spotify_id", "album_art_url", "total_tracks", "extra_artists",
+}
 
 
 def artist_in_album(album: Album, name: str) -> bool:
@@ -31,16 +40,19 @@ def list_albums(
     artist: Optional[str] = Query(None),
     album_name: Optional[str] = Query(None),
     genre: Optional[str] = Query(None),
-    user_id: int = Query(1),
+    user_id: Optional[int] = Query(None),
+    user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
+    target_id = user_id if user_id is not None else user.id
+    authorize_view(user, target_id, session)
     song_count = (
         select(func.count(Song.id))
         .where(Song.album_id == Album.id)
         .correlate(Album)
         .scalar_subquery()
     )
-    q = select(Album).where(Album.user_id == user_id)
+    q = select(Album).where(Album.user_id == target_id)
     # Only exclude short releases (singles/EPs) for rated albums; unrated albums may have no tracks yet
     if status not in ("to_listen", "listening"):
         q = q.where(song_count > 6)
@@ -57,15 +69,32 @@ def list_albums(
 
 
 @router.get("/{album_id}")
-def get_album(album_id: int, session: Session = Depends(get_session)):
+def get_album(
+    album_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
     album = session.get(Album, album_id)
     if not album:
         raise HTTPException(status_code=404, detail="Album not found")
+    authorize_view(user, album.user_id, session)
     return {**album.model_dump(), "songs": [s.model_dump() for s in album.songs]}
 
 
 @router.post("/")
-def create_album(album: Album, session: Session = Depends(get_session)):
+def create_album(
+    album: Album,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    # Ownership and computed fields are server-controlled — never trust the body.
+    album.user_id = user.id
+    album.score = None
+    album.predicted_score = None
+    album.predicted_theme = None
+    album.predicted_distinctness = None
+    album.predicted_replay = None
+    album.predicted_song_mean = None
     session.add(album)
     session.commit()
     session.refresh(album)
@@ -78,14 +107,17 @@ def create_album(album: Album, session: Session = Depends(get_session)):
 def update_album(
     album_id: int,
     data: dict,
+    user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
     album = session.get(Album, album_id)
     if not album:
         raise HTTPException(status_code=404, detail="Album not found")
+    if album.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not your album")
 
     for key, value in data.items():
-        if hasattr(album, key):
+        if key in ALBUM_MUTABLE_FIELDS:
             setattr(album, key, value)
 
     if data.get("status") == "rated":
@@ -212,7 +244,12 @@ def _queue_recompute_predictions():
 
 
 @router.post("/import")
-def import_album(data: dict, user_id: int = Query(1), session: Session = Depends(get_session)):
+def import_album(
+    data: dict,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    user_id = user.id
     # Return existing album if already imported — check Spotify ID first, then name+artist (scoped per user)
     if data.get("spotify_id"):
         existing = session.exec(
@@ -285,12 +322,17 @@ def import_album(data: dict, user_id: int = Query(1), session: Session = Depends
 
 
 @router.get("/{album_id}/report")
-def album_report(album_id: int, session: Session = Depends(get_session)):
+def album_report(
+    album_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
     album = session.exec(
         select(Album).where(Album.id == album_id).options(selectinload(Album.songs))
     ).first()
     if not album:
         raise HTTPException(status_code=404, detail="Album not found")
+    authorize_view(user, album.user_id, session)
 
     sorted_songs = sorted(album.songs, key=lambda s: s.track_number or 0)
     rated_scores = [s.score for s in sorted_songs if s.score is not None]
@@ -490,15 +532,20 @@ def album_report(album_id: int, session: Session = Depends(get_session)):
 
 
 @router.post("/{album_id}/recommend")
-def recommend_album(album_id: int, data: dict, session: Session = Depends(get_session)):
+def recommend_album(
+    album_id: int,
+    data: dict,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
     source = session.get(Album, album_id)
     if not source:
         raise HTTPException(status_code=404, detail="Album not found")
     friend_id = data.get("friend_id")
-    recommender_id = data.get("recommender_id")
-    recommender = session.get(PressUser, recommender_id)
-    if not recommender:
-        raise HTTPException(status_code=404, detail="Recommender not found")
+    recommender_id = user.id
+    recommender = user
+    if not friend_id or friend_id == user.id or not are_friends(session, user.id, friend_id):
+        raise HTTPException(status_code=403, detail="You can only recommend to friends")
 
     existing = session.exec(
         select(Album).where(
@@ -538,10 +585,16 @@ def recommend_album(album_id: int, data: dict, session: Session = Depends(get_se
 
 
 @router.delete("/{album_id}")
-def delete_album(album_id: int, session: Session = Depends(get_session)):
+def delete_album(
+    album_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
     album = session.get(Album, album_id)
     if not album:
         raise HTTPException(status_code=404, detail="Album not found")
+    if album.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not your album")
     for song in album.songs:
         af = session.exec(select(SongAudioFeatures).where(SongAudioFeatures.song_id == song.id)).first()
         if af:

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from ..database import get_session
+from ..deps import current_user, optional_user, authorize_view, auth_response
 from ..models import PressUser, Invite, Friendship
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -43,12 +44,20 @@ def _send_invite_email(to_email: str, inviter_name: str, token: str):
 
 
 @router.get("/")
-def list_users(session: Session = Depends(get_session)):
+def list_users(
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
     return session.exec(select(PressUser)).all()
 
 
 @router.get("/search")
-def search_users(q: str = Query(""), exclude_user_id: int = Query(0), session: Session = Depends(get_session)):
+def search_users(
+    q: str = Query(""),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    exclude_user_id = user.id
     if not q.strip():
         return []
     pattern = f"%{q.strip()}%"
@@ -92,8 +101,14 @@ def create_user(data: dict, session: Session = Depends(get_session)):
 
 
 @router.get("/{user_id}/invite-link")
-def get_invite_link(user_id: int, session: Session = Depends(get_session)):
+def get_invite_link(
+    user_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
     """Return (or create) a permanent, reusable invite link for this user."""
+    if user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     try:
         inviter = session.get(PressUser, user_id)
         if not inviter:
@@ -115,9 +130,13 @@ def get_invite_link(user_id: int, session: Session = Depends(get_session)):
 
 
 @router.post("/invite")
-def send_invite(data: dict, session: Session = Depends(get_session)):
+def send_invite(
+    data: dict,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
     """Legacy one-time invite (email flow). Kept for backwards compat."""
-    from_user_id: int = data.get("from_user_id", 1)
+    from_user_id: int = user.id
     email: str = (data.get("email") or "").strip()
 
     inviter = session.get(PressUser, from_user_id)
@@ -146,18 +165,22 @@ def get_invite(token: str, session: Session = Depends(get_session)):
 
 
 @router.post("/invite/{token}/accept")
-def accept_invite(token: str, data: dict, session: Session = Depends(get_session)):
+def accept_invite(
+    token: str,
+    data: dict,
+    current: PressUser | None = Depends(optional_user),
+    session: Session = Depends(get_session),
+):
     invite = session.exec(select(Invite).where(Invite.token == token)).first()
     if not invite:
         raise HTTPException(status_code=404, detail="Invite not found")
     if not invite.permanent and invite.accepted_at is not None:
         raise HTTPException(status_code=410, detail="Invite already used")
 
-    user_id = data.get("user_id")
-    if user_id:
-        user = session.get(PressUser, int(user_id))
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+    # An already-signed-in user accepts as themselves — identity comes from their
+    # token, never a client-supplied user_id (which could impersonate anyone).
+    if current is not None:
+        user = current
     else:
         name = (data.get("name") or "").strip()
         if not name:
@@ -181,11 +204,18 @@ def accept_invite(token: str, data: dict, session: Session = Depends(get_session
 
     session.commit()
     session.refresh(user)
-    return {"id": user.id, "name": user.name, "avatar_url": user.avatar_url}
+    return auth_response(user)
 
 
 @router.patch("/{user_id}")
-def update_user(user_id: int, data: dict, session: Session = Depends(get_session)):
+def update_user(
+    user_id: int,
+    data: dict,
+    current: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    if user_id != current.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     user = session.get(PressUser, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -206,7 +236,12 @@ def update_user(user_id: int, data: dict, session: Session = Depends(get_session
 
 
 @router.get("/{user_id}/friends")
-def list_friends(user_id: int, session: Session = Depends(get_session)):
+def list_friends(
+    user_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    authorize_view(user, user_id, session)
     friendships = session.exec(
         select(Friendship).where(
             (Friendship.user_id_a == user_id) | (Friendship.user_id_b == user_id)
@@ -221,7 +256,14 @@ def list_friends(user_id: int, session: Session = Depends(get_session)):
 
 
 @router.post("/{user_id}/friends")
-def add_friend(user_id: int, data: dict, session: Session = Depends(get_session)):
+def add_friend(
+    user_id: int,
+    data: dict,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    if user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     friend_id = data.get("friend_id")
     if not friend_id or friend_id == user_id:
         raise HTTPException(status_code=400, detail="Invalid friend_id")
@@ -237,7 +279,14 @@ def add_friend(user_id: int, data: dict, session: Session = Depends(get_session)
 
 
 @router.delete("/{user_id}/friends/{friend_id}")
-def remove_friend(user_id: int, friend_id: int, session: Session = Depends(get_session)):
+def remove_friend(
+    user_id: int,
+    friend_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    if user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     a, b = min(user_id, friend_id), max(user_id, friend_id)
     friendship = session.exec(
         select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)

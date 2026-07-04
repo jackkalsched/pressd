@@ -2,6 +2,41 @@ import type { Album, Song, ArtistStats, FactorStats } from './types'
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
+// ── Auth token ────────────────────────────────────────────────────────────────
+
+const TOKEN_KEY = 'pressd_token'
+
+export function getToken(): string | null {
+  try { return localStorage.getItem(TOKEN_KEY) } catch { return null }
+}
+
+export function setToken(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token)
+    else localStorage.removeItem(TOKEN_KEY)
+  } catch { /* ignore */ }
+}
+
+/**
+ * fetch wrapper that attaches the bearer token on every call and, on a 401,
+ * clears the stale session and bounces to /login. All API calls go through this.
+ */
+async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const token = getToken()
+  const headers = new Headers(init.headers)
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const res = await fetch(url, { ...init, headers })
+  if (res.status === 401) {
+    setToken(null)
+    try { localStorage.removeItem('pressd_active_user') } catch { /* ignore */ }
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+      window.location.href = '/login'
+    }
+    throw new Error('Session expired')
+  }
+  return res
+}
+
 // ── Transformers (snake_case → camelCase) ─────────────────────────────────────
 
 function transformSong(s: Record<string, unknown>): Song {
@@ -71,7 +106,7 @@ export async function fetchAlbums(params?: {
   if (params?.albumName) qs.set('album_name', params.albumName)
   if (params?.genre) qs.set('genre', params.genre)
   qs.set('user_id', String(params?.userId ?? 1))
-  const res = await fetch(`${BASE}/albums/?${qs}`)
+  const res = await apiFetch(`${BASE}/albums/?${qs}`)
   const data = await res.json()
   return (data as Record<string, unknown>[]).map(transformAlbum)
 }
@@ -95,13 +130,13 @@ export async function fetchFriendRatings(
 }
 
 export async function fetchAlbum(id: number): Promise<Album> {
-  const res = await fetch(`${BASE}/albums/${id}`)
+  const res = await apiFetch(`${BASE}/albums/${id}`)
   if (!res.ok) throw new Error('Album not found')
   return transformAlbum(await res.json())
 }
 
 export async function updateAlbum(id: number, patch: Record<string, unknown>): Promise<Album> {
-  const res = await fetch(`${BASE}/albums/${id}`, {
+  const res = await apiFetch(`${BASE}/albums/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
@@ -111,7 +146,7 @@ export async function updateAlbum(id: number, patch: Record<string, unknown>): P
 }
 
 export async function deleteAlbum(id: number): Promise<void> {
-  const res = await fetch(`${BASE}/albums/${id}`, { method: 'DELETE' })
+  const res = await apiFetch(`${BASE}/albums/${id}`, { method: 'DELETE' })
   if (!res.ok) throw new Error('Failed to delete album')
 }
 
@@ -127,7 +162,7 @@ export async function createAlbum(data: Partial<Album> & { userId?: number }): P
     spotify_id: data.spotifyId,
     user_id: data.userId ?? 1,
   }
-  const res = await fetch(`${BASE}/albums/`, {
+  const res = await apiFetch(`${BASE}/albums/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -148,12 +183,12 @@ export async function fetchSongs(params?: {
   if (params?.albumId) qs.set('album_id', String(params.albumId))
   if (params?.minScore != null) qs.set('min_score', String(params.minScore))
   qs.set('user_id', String(params?.userId ?? 1))
-  const res = await fetch(`${BASE}/songs/?${qs}`)
+  const res = await apiFetch(`${BASE}/songs/?${qs}`)
   return ((await res.json()) as Record<string, unknown>[]).map(transformSong)
 }
 
 export async function batchRateSongs(items: { id: number; score: number | null }[], userId = 1): Promise<void> {
-  const res = await fetch(`${BASE}/songs/batch-rate?user_id=${userId}`, {
+  const res = await apiFetch(`${BASE}/songs/batch-rate?user_id=${userId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(items),
@@ -162,7 +197,7 @@ export async function batchRateSongs(items: { id: number; score: number | null }
 }
 
 export async function rateSong(id: number, score: number | null): Promise<Song> {
-  const res = await fetch(`${BASE}/songs/${id}`, {
+  const res = await apiFetch(`${BASE}/songs/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ score }),
@@ -194,7 +229,7 @@ export interface SpotifyAlbumResult {
 }
 
 export async function searchSpotify(q: string): Promise<SpotifyAlbumResult[]> {
-  const res = await fetch(`${BASE}/search/?q=${encodeURIComponent(q)}`)
+  const res = await apiFetch(`${BASE}/search/?q=${encodeURIComponent(q)}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { detail?: string }).detail ?? 'Search failed')
@@ -203,7 +238,7 @@ export async function searchSpotify(q: string): Promise<SpotifyAlbumResult[]> {
 }
 
 export async function searchMusicBrainz(q: string): Promise<SpotifyAlbumResult[]> {
-  const res = await fetch(`${BASE}/search/mb?q=${encodeURIComponent(q)}`)
+  const res = await apiFetch(`${BASE}/search/mb?q=${encodeURIComponent(q)}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { detail?: string }).detail ?? 'MusicBrainz search failed')
@@ -212,7 +247,7 @@ export async function searchMusicBrainz(q: string): Promise<SpotifyAlbumResult[]
 }
 
 export async function searchItunes(q: string): Promise<SpotifyAlbumResult[]> {
-  const res = await fetch(`${BASE}/search/itunes?q=${encodeURIComponent(q)}`)
+  const res = await apiFetch(`${BASE}/search/itunes?q=${encodeURIComponent(q)}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { detail?: string }).detail ?? 'iTunes search failed')
@@ -221,7 +256,7 @@ export async function searchItunes(q: string): Promise<SpotifyAlbumResult[]> {
 }
 
 export async function searchDeezer(q: string): Promise<SpotifyAlbumResult[]> {
-  const res = await fetch(`${BASE}/search/deezer?q=${encodeURIComponent(q)}`)
+  const res = await apiFetch(`${BASE}/search/deezer?q=${encodeURIComponent(q)}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { detail?: string }).detail ?? 'Deezer search failed')
@@ -234,7 +269,7 @@ export async function importAlbum(
   status: 'to_listen' | 'listening',
   userId = 1,
 ): Promise<Album & { alreadyExisted: boolean }> {
-  const res = await fetch(`${BASE}/albums/import?user_id=${userId}`, {
+  const res = await apiFetch(`${BASE}/albums/import?user_id=${userId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -249,7 +284,7 @@ export async function importAlbum(
 }
 
 export async function backfillCovers(): Promise<{ updated: number; skipped: number; failed: number }> {
-  const res = await fetch(`${BASE}/util/backfill-covers`, { method: 'POST' })
+  const res = await apiFetch(`${BASE}/util/backfill-covers`, { method: 'POST' })
   if (!res.ok) throw new Error('Backfill failed')
   return res.json()
 }
@@ -307,13 +342,13 @@ export interface AlbumReportData {
 }
 
 export async function fetchAlbumReport(albumId: number): Promise<AlbumReportData> {
-  const res = await fetch(`${BASE}/albums/${albumId}/report`)
+  const res = await apiFetch(`${BASE}/albums/${albumId}/report`)
   if (!res.ok) throw new Error('Report fetch failed')
   return res.json()
 }
 
 export async function analyzeAudio(albumId: number): Promise<{ analyzed: number; tracks: { id: number; bpm?: number; musical_key?: string; loudness_db?: number; error?: string }[] }> {
-  const res = await fetch(`${BASE}/albums/${albumId}/analyze-audio`, { method: 'POST' })
+  const res = await apiFetch(`${BASE}/albums/${albumId}/analyze-audio`, { method: 'POST' })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { detail?: string }).detail ?? 'Audio analysis failed')
@@ -343,19 +378,19 @@ export interface Summary {
 }
 
 export async function fetchFactorStats(): Promise<FactorStats> {
-  const res = await fetch(`${BASE}/stats/factor-stats`)
+  const res = await apiFetch(`${BASE}/stats/factor-stats`)
   return res.json()
 }
 
 export async function fetchSummary(userId = 1): Promise<Summary> {
-  const res = await fetch(`${BASE}/stats/summary?user_id=${userId}`)
+  const res = await apiFetch(`${BASE}/stats/summary?user_id=${userId}`)
   return res.json()
 }
 
 export async function fetchArtistStats(userId = 1, beforeDate?: string): Promise<ArtistStats[]> {
   const params = new URLSearchParams({ user_id: String(userId) })
   if (beforeDate) params.set('before_date', beforeDate)
-  const res = await fetch(`${BASE}/stats/artists?${params}`)
+  const res = await apiFetch(`${BASE}/stats/artists?${params}`)
   const data = await res.json() as Record<string, unknown>[]
   return data.map((d) => ({
     artist: d.artist as string,
@@ -379,13 +414,13 @@ export interface GenreStat {
 }
 
 export async function fetchGenreStats(userId = 1): Promise<GenreStat[]> {
-  const res = await fetch(`${BASE}/stats/genres?user_id=${userId}`)
+  const res = await apiFetch(`${BASE}/stats/genres?user_id=${userId}`)
   return res.json()
 }
 
 export interface GenreScores { genre: string; scores: number[] }
 export async function fetchGenreScores(userId = 1): Promise<GenreScores[]> {
-  const res = await fetch(`${BASE}/stats/genre-scores?user_id=${userId}`)
+  const res = await apiFetch(`${BASE}/stats/genre-scores?user_id=${userId}`)
   return res.json()
 }
 
@@ -396,7 +431,7 @@ export interface YearEntry {
 }
 
 export async function fetchYearByYear(userId = 1): Promise<Record<string, YearEntry[]>> {
-  const res = await fetch(`${BASE}/stats/year-by-year?user_id=${userId}`)
+  const res = await apiFetch(`${BASE}/stats/year-by-year?user_id=${userId}`)
   return res.json()
 }
 
@@ -461,19 +496,19 @@ export interface ScatterData {
 }
 
 export async function fetchScoreRange(userId = 1): Promise<{ mu: number; sd: number; min: number; max: number }> {
-  const res = await fetch(`${BASE}/stats/score-range?user_id=${userId}`)
+  const res = await apiFetch(`${BASE}/stats/score-range?user_id=${userId}`)
   return res.json()
 }
 
 export async function fetchScatterData(userId = 1, beforeDate?: string): Promise<ScatterData> {
   const params = new URLSearchParams({ user_id: String(userId) })
   if (beforeDate) params.set('before_date', beforeDate)
-  const res = await fetch(`${BASE}/stats/scatter?${params}`)
+  const res = await apiFetch(`${BASE}/stats/scatter?${params}`)
   return res.json()
 }
 
 export async function fetchArtistDetail(artist: string, userId = 1): Promise<ArtistDetail> {
-  const res = await fetch(`${BASE}/stats/artist/${encodeURIComponent(artist)}?user_id=${userId}`)
+  const res = await apiFetch(`${BASE}/stats/artist/${encodeURIComponent(artist)}?user_id=${userId}`)
   if (!res.ok) throw new Error('Artist not found')
   return res.json()
 }
@@ -496,13 +531,13 @@ export interface AotyData {
 }
 
 export async function fetchAotyAlbums(artist: string): Promise<AotyData> {
-  const res = await fetch(`${BASE}/aoty/artist/${encodeURIComponent(artist)}`)
+  const res = await apiFetch(`${BASE}/aoty/artist/${encodeURIComponent(artist)}`)
   if (!res.ok) throw new Error('Artist not found on AOTY')
   return res.json()
 }
 
 export async function refreshAotyArtist(artist: string): Promise<void> {
-  await fetch(`${BASE}/aoty/artist/${encodeURIComponent(artist)}/refresh`, { method: 'POST' })
+  await apiFetch(`${BASE}/aoty/artist/${encodeURIComponent(artist)}/refresh`, { method: 'POST' })
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -511,7 +546,7 @@ export async function signInWithGoogle(
   accessToken: string,
   linkUserId?: number,
 ): Promise<{ id: number; name: string; avatarUrl?: string }> {
-  const res = await fetch(`${BASE}/auth/google`, {
+  const res = await apiFetch(`${BASE}/auth/google`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ access_token: accessToken, link_user_id: linkUserId }),
@@ -520,7 +555,9 @@ export async function signInWithGoogle(
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { detail?: string }).detail ?? 'Sign in failed')
   }
-  const u = await res.json()
+  const data = await res.json()
+  setToken(data.token)
+  const u = data.user
   return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined }
 }
 
@@ -533,7 +570,7 @@ export interface UserInfo {
 }
 
 export async function fetchUsers(): Promise<UserInfo[]> {
-  const res = await fetch(`${BASE}/users/`)
+  const res = await apiFetch(`${BASE}/users/`)
   return res.json()
 }
 
@@ -545,13 +582,13 @@ export interface UserSearchResult {
 }
 
 export async function searchUsers(q: string, excludeUserId: number): Promise<UserSearchResult[]> {
-  const res = await fetch(`${BASE}/users/search?q=${encodeURIComponent(q)}&exclude_user_id=${excludeUserId}`)
+  const res = await apiFetch(`${BASE}/users/search?q=${encodeURIComponent(q)}&exclude_user_id=${excludeUserId}`)
   if (!res.ok) return []
   return res.json()
 }
 
 export async function addFriend(userId: number, friendId: number): Promise<{ ok: boolean; already_friends: boolean }> {
-  const res = await fetch(`${BASE}/users/${userId}/friends`, {
+  const res = await apiFetch(`${BASE}/users/${userId}/friends`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ friend_id: friendId }),
@@ -561,13 +598,13 @@ export async function addFriend(userId: number, friendId: number): Promise<{ ok:
 }
 
 export async function getInviteLink(userId: number): Promise<{ link: string; inviter_name: string }> {
-  const res = await fetch(`${BASE}/users/${userId}/invite-link`)
+  const res = await apiFetch(`${BASE}/users/${userId}/invite-link`)
   if (!res.ok) throw new Error('Failed to get invite link')
   return res.json()
 }
 
 export async function fetchInvite(token: string): Promise<{ inviter_name: string; email: string }> {
-  const res = await fetch(`${BASE}/users/invite/${token}`)
+  const res = await apiFetch(`${BASE}/users/invite/${token}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { detail?: string }).detail ?? 'Invalid invite')
@@ -576,7 +613,7 @@ export async function fetchInvite(token: string): Promise<{ inviter_name: string
 }
 
 export async function acceptInvite(token: string, name?: string, userId?: number): Promise<UserInfo> {
-  const res = await fetch(`${BASE}/users/invite/${token}/accept`, {
+  const res = await apiFetch(`${BASE}/users/invite/${token}/accept`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(userId !== undefined ? { user_id: userId } : { name }),
@@ -585,12 +622,14 @@ export async function acceptInvite(token: string, name?: string, userId?: number
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { detail?: string }).detail ?? 'Failed to accept invite')
   }
-  const u = await res.json()
+  const data = await res.json()
+  setToken(data.token)
+  const u = data.user
   return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined }
 }
 
 export async function fetchFriends(userId: number): Promise<UserInfo[]> {
-  const res = await fetch(`${BASE}/users/${userId}/friends`)
+  const res = await apiFetch(`${BASE}/users/${userId}/friends`)
   const data = await res.json()
   return data.map((u: { id: number; name: string; avatar_url?: string }) => ({
     id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined,
@@ -598,12 +637,12 @@ export async function fetchFriends(userId: number): Promise<UserInfo[]> {
 }
 
 export async function removeFriend(userId: number, friendId: number): Promise<void> {
-  const res = await fetch(`${BASE}/users/${userId}/friends/${friendId}`, { method: 'DELETE' })
+  const res = await apiFetch(`${BASE}/users/${userId}/friends/${friendId}`, { method: 'DELETE' })
   if (!res.ok) throw new Error('Failed to remove friend')
 }
 
 export async function updateUser(userId: number, data: { name?: string; avatarUrl?: string }): Promise<UserInfo> {
-  const res = await fetch(`${BASE}/users/${userId}`, {
+  const res = await apiFetch(`${BASE}/users/${userId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: data.name, avatar_url: data.avatarUrl }),
@@ -617,7 +656,7 @@ export async function updateUser(userId: number, data: { name?: string; avatarUr
 }
 
 export async function recommendAlbum(albumId: number, friendId: number, recommenderId: number): Promise<{ alreadyExisted: boolean }> {
-  const res = await fetch(`${BASE}/albums/${albumId}/recommend`, {
+  const res = await apiFetch(`${BASE}/albums/${albumId}/recommend`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ friend_id: friendId, recommender_id: recommenderId }),
@@ -643,13 +682,13 @@ export interface FeedItem {
 }
 
 export async function fetchFeed(userId: number): Promise<FeedItem[]> {
-  const res = await fetch(`${BASE}/social/feed?user_id=${userId}`)
+  const res = await apiFetch(`${BASE}/social/feed?user_id=${userId}`)
   if (!res.ok) throw new Error('Failed to fetch feed')
   return res.json()
 }
 
 export async function toggleLike(userId: number, albumId: number): Promise<{ liked: boolean }> {
-  const res = await fetch(`${BASE}/social/like?user_id=${userId}&album_id=${albumId}`, {
+  const res = await apiFetch(`${BASE}/social/like?user_id=${userId}&album_id=${albumId}`, {
     method: 'POST',
   })
   if (!res.ok) throw new Error('Failed to toggle like')
@@ -657,7 +696,7 @@ export async function toggleLike(userId: number, albumId: number): Promise<{ lik
 }
 
 export async function fetchAnalysis(userId: number): Promise<{ insights: string[] }> {
-  const res = await fetch(`${BASE}/stats/analysis?user_id=${userId}`)
+  const res = await apiFetch(`${BASE}/stats/analysis?user_id=${userId}`)
   if (!res.ok) throw new Error('Failed to fetch analysis')
   return res.json()
 }

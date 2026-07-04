@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from ..database import get_session
-from ..models import Song, Album
+from ..deps import current_user, authorize_view
+from ..models import Song, Album, PressUser
 from ..scoring import compute_a_score, compute_album_score, get_factor_stats
 
 router = APIRouter(prefix="/songs", tags=["songs"])
@@ -14,10 +15,13 @@ def list_songs(
     artist: Optional[str] = Query(None),
     album_id: Optional[int] = Query(None),
     min_score: Optional[float] = Query(None),
-    user_id: int = Query(1),
+    user_id: Optional[int] = Query(None),
+    user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
-    q = select(Song).join(Album, Song.album_id == Album.id).where(Album.user_id == user_id)
+    target_id = user_id if user_id is not None else user.id
+    authorize_view(user, target_id, session)
+    q = select(Song).join(Album, Song.album_id == Album.id).where(Album.user_id == target_id)
     if artist:
         q = q.where(Song.artist == artist)
     if album_id:
@@ -30,10 +34,11 @@ def list_songs(
 @router.post("/batch-rate")
 def batch_rate_songs(
     data: list[dict],
-    user_id: int = Query(1),
+    user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
     """Rate multiple songs in a single transaction. Expects [{id, score}, ...]."""
+    user_id = user.id
     for item in data:
         song = session.get(Song, item["id"])
         if not song:
@@ -53,9 +58,10 @@ def batch_rate_songs(
 def rate_song(
     song_id: int,
     data: dict,
-    user_id: int = Query(1),
+    user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
+    user_id = user.id
     song = session.get(Song, song_id)
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")

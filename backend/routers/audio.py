@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from ..database import get_session
-from ..models import Album, SongAudioFeatures
+from ..deps import current_user
+from ..models import Album, SongAudioFeatures, PressUser
 
 router = APIRouter(prefix="/albums", tags=["audio"])
 
@@ -103,10 +104,16 @@ def _analyze_file(path: str) -> dict:
 
 
 @router.post("/{album_id}/analyze-audio")
-def analyze_audio(album_id: int, session: Session = Depends(get_session)):
+def analyze_audio(
+    album_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
     album = session.get(Album, album_id)
     if not album:
         raise HTTPException(status_code=404, detail="Album not found")
+    if album.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not your album")
     with tempfile.TemporaryDirectory() as tmpdir:
         songs = sorted(album.songs, key=lambda s: s.track_number or 0)
 

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from ..database import get_session
+from ..deps import auth_response
 from ..models import PressUser
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -42,13 +43,10 @@ def sign_in_with_google(data: dict, session: Session = Depends(get_session)):
     google_email: str | None = payload.get("email")
     google_name: str | None = payload.get("name")
 
-    def _user_response(u: PressUser) -> dict:
-        return {"id": u.id, "name": u.name, "avatar_url": u.avatar_url}
-
     # 1. Existing account already linked to this Google ID
     user = session.exec(select(PressUser).where(PressUser.google_sub == google_sub)).first()
     if user:
-        return _user_response(user)
+        return auth_response(user)
 
     # 2. Caller wants to link their existing local account
     if link_user_id:
@@ -60,7 +58,7 @@ def sign_in_with_google(data: dict, session: Session = Depends(get_session)):
             session.add(user)
             session.commit()
             session.refresh(user)
-            return _user_response(user)
+            return auth_response(user)
 
     # 3. Match by email Google provided
     if google_email:
@@ -70,7 +68,7 @@ def sign_in_with_google(data: dict, session: Session = Depends(get_session)):
             session.add(user)
             session.commit()
             session.refresh(user)
-            return _user_response(user)
+            return auth_response(user)
 
     # 4. Create new account
     name = google_name or (google_email.split("@")[0] if google_email else "User")
@@ -83,4 +81,4 @@ def sign_in_with_google(data: dict, session: Session = Depends(get_session)):
     session.add(user)
     session.commit()
     session.refresh(user)
-    return _user_response(user)
+    return auth_response(user)
