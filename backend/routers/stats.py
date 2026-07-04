@@ -9,6 +9,7 @@ import json
 import os
 
 from ..database import get_session
+from ..deps import current_user, viewable_user_id
 from ..models import Album, Song
 from ..scoring import BANG_THRESHOLD, SKIP_THRESHOLD, compute_a_score, get_factor_stats
 
@@ -16,13 +17,13 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 
 
 @router.get("/factor-stats")
-def factor_stats(session: Session = Depends(get_session)):
+def factor_stats(_user=Depends(current_user), session: Session = Depends(get_session)):
     stats = get_factor_stats(session)
     return {k: list(v) for k, v in stats.items()}
 
 
 @router.get("/score-range")
-def score_range(user_id: int = Query(1), session: Session = Depends(get_session)):
+def score_range(user_id: int = Depends(viewable_user_id), session: Session = Depends(get_session)):
     scores = [
         a.score for a in session.exec(
             select(Album).where(Album.user_id == user_id, Album.status == "rated", Album.score.is_not(None))
@@ -39,7 +40,7 @@ def score_range(user_id: int = Query(1), session: Session = Depends(get_session)
 
 
 @router.get("/summary")
-def summary(user_id: int = Query(1), session: Session = Depends(get_session)):
+def summary(user_id: int = Depends(viewable_user_id), session: Session = Depends(get_session)):
     rated = session.exec(
         select(Album).where(Album.status == "rated").where(Album.user_id == user_id)
     ).all()
@@ -120,7 +121,7 @@ def summary(user_id: int = Query(1), session: Session = Depends(get_session)):
 
 
 @router.get("/artists")
-def artist_stats(user_id: int = Query(1), before_date: Optional[date] = None, session: Session = Depends(get_session)):
+def artist_stats(user_id: int = Depends(viewable_user_id), before_date: Optional[date] = None, session: Session = Depends(get_session)):
     q = (
         select(Song)
         .join(Album, Song.album_id == Album.id)
@@ -172,7 +173,7 @@ def artist_stats(user_id: int = Query(1), before_date: Optional[date] = None, se
 
 
 @router.get("/genre-scores")
-def genre_scores(user_id: int = Query(1), session: Session = Depends(get_session)):
+def genre_scores(user_id: int = Depends(viewable_user_id), session: Session = Depends(get_session)):
     """Per-album scores grouped by genre, for KDE plots."""
     albums = session.exec(
         select(Album)
@@ -188,7 +189,7 @@ def genre_scores(user_id: int = Query(1), session: Session = Depends(get_session
 
 
 @router.get("/year-by-year")
-def year_by_year(user_id: int = Query(1), session: Session = Depends(get_session)):
+def year_by_year(user_id: int = Depends(viewable_user_id), session: Session = Depends(get_session)):
     albums = session.exec(
         select(Album)
         .where(Album.status == "rated")
@@ -211,7 +212,7 @@ def year_by_year(user_id: int = Query(1), session: Session = Depends(get_session
 
 
 @router.get("/scatter")
-def scatter_data(user_id: int = Query(1), before_date: Optional[date] = None, session: Session = Depends(get_session)):
+def scatter_data(user_id: int = Depends(viewable_user_id), before_date: Optional[date] = None, session: Session = Depends(get_session)):
     def album_ext(a: Album):
         if any(v is None for v in [a.theme, a.replay_value, a.production, a.distinctness]):
             return None
@@ -324,7 +325,7 @@ def scatter_data(user_id: int = Query(1), before_date: Optional[date] = None, se
 
 
 @router.get("/artist/{artist_name}")
-def artist_detail(artist_name: str, user_id: int = Query(1), session: Session = Depends(get_session)):
+def artist_detail(artist_name: str, user_id: int = Depends(viewable_user_id), session: Session = Depends(get_session)):
     def album_ext(a: Album):
         if any(v is None for v in [a.theme, a.replay_value, a.production, a.distinctness]):
             return None
@@ -543,7 +544,7 @@ def artist_detail(artist_name: str, user_id: int = Query(1), session: Session = 
 
 
 @router.get("/genres")
-def genre_breakdown(user_id: int = Query(1), session: Session = Depends(get_session)):
+def genre_breakdown(user_id: int = Depends(viewable_user_id), session: Session = Depends(get_session)):
     albums = session.exec(
         select(Album).where(Album.status == "rated").where(Album.user_id == user_id)
     ).all()
@@ -565,7 +566,7 @@ def genre_breakdown(user_id: int = Query(1), session: Session = Depends(get_sess
 
 
 @router.get("/analysis")
-def analysis(user_id: int = Query(1), session: Session = Depends(get_session)):
+def analysis(user_id: int = Depends(viewable_user_id), session: Session = Depends(get_session)):
     import anthropic
 
     rated_albums = session.exec(

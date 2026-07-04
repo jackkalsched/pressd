@@ -1,13 +1,18 @@
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select, func
 from ..database import get_session
+from ..deps import current_user
 from ..models import Album, Friendship, Like, PressUser
 
 router = APIRouter(prefix="/social", tags=["social"])
 
 
 @router.get("/feed")
-def get_feed(user_id: int = Query(...), session: Session = Depends(get_session)):
+def get_feed(
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    user_id = user.id
     friendships = session.exec(
         select(Friendship).where(
             (Friendship.user_id_a == user_id) | (Friendship.user_id_b == user_id)
@@ -73,10 +78,11 @@ def get_feed(user_id: int = Query(...), session: Session = Depends(get_session))
 
 @router.post("/like")
 def toggle_like(
-    user_id: int = Query(...),
     album_id: int = Query(...),
+    user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
+    user_id = user.id
     existing = session.exec(
         select(Like).where(Like.user_id == user_id, Like.album_id == album_id)
     ).first()

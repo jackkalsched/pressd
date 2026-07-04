@@ -44,6 +44,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }
 
   function signOut() {
+    try { localStorage.removeItem('pressd_token') } catch { /* ignore */ }
     setActiveUserState(null)
     setViewingUser(null)
   }

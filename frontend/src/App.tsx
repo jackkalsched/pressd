@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import { UserProvider, useUser } from './context/UserContext'
@@ -17,6 +18,12 @@ function PublicHome() {
   const { activeUser } = useUser()
   if (activeUser) return <Navigate to="/library" replace />
   return <LandingPage />
+}
+
+function RequireUser({ children }: { children: ReactElement }) {
+  const { activeUser } = useUser()
+  if (!activeUser) return <Navigate to="/" replace />
+  return children
 }
 
 function ProtectedRoutes() {
@@ -44,7 +51,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<PublicHome />} />
-          <Route path="/rate/:id" element={<RatingScreen />} />
+          <Route path="/rate/:id" element={<RequireUser><RatingScreen /></RequireUser>} />
           <Route path="/join" element={<Join />} />
           <Route path="/login" element={<Login />} />
           <Route path="/*" element={<ProtectedRoutes />} />

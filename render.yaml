@@ -10,3 +10,9 @@ services:
         sync: false
       - key: APP_URL
         sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SPOTIFY_CLIENT_ID
+        sync: false
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false

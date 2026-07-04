@@ -56,7 +56,8 @@ export default function RatingScreen() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { isViewingFriend, activeUser } = useUser()
-  const userId = activeUser?.id ?? 1
+  // Route is gated by <RequireUser>, so activeUser is always present here.
+  const userId = activeUser?.id ?? 0
 
   useEffect(() => {
     if (isViewingFriend) navigate(-1)
