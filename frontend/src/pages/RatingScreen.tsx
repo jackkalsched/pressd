@@ -203,14 +203,31 @@ export default function RatingScreen() {
           >
             <ArrowLeft size={15} /> Back
           </button>
-          <button
-            onClick={() => { setSaveError(null); saveMutation.mutate() }}
-            disabled={isSavingDraft || isSubmitting}
-            className="flex items-center gap-1.5 text-xs text-[#777] hover:text-[#111] px-3 py-1.5 bg-[#f5f5f5] border border-[#e2e2e2] rounded-lg transition-colors disabled:opacity-40"
-          >
-            {isSavingDraft ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-            {isSavingDraft ? 'Saving…' : 'Save & Exit'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                if (!confirm('Clear all song scores and factor ratings?')) return
+                setScores(scores.map(() => null))
+                setSkipped(new Set())
+                setTheme(null)
+                setReplayValue(null)
+                setProduction(null)
+                setDistinctness(null)
+              }}
+              disabled={isSubmitting || isSavingDraft}
+              className="text-xs text-[#a8998a] hover:text-[#c0392b] px-3 py-1.5 bg-[#f5f5f5] border border-[#e2e2e2] hover:border-red-200 rounded-lg transition-colors disabled:opacity-40"
+            >
+              Clear All
+            </button>
+            <button
+              onClick={() => { setSaveError(null); saveMutation.mutate() }}
+              disabled={isSavingDraft || isSubmitting}
+              className="flex items-center gap-1.5 text-xs text-[#777] hover:text-[#111] px-3 py-1.5 bg-[#f5f5f5] border border-[#e2e2e2] rounded-lg transition-colors disabled:opacity-40"
+            >
+              {isSavingDraft ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+              {isSavingDraft ? 'Saving…' : 'Save & Exit'}
+            </button>
+          </div>
         </div>
 
         {/* Album header */}
