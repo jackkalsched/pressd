@@ -199,6 +199,65 @@ async def search_itunes(q: str = Query(..., min_length=1)):
         return results
 
 
+@router.get("/deezer")
+async def search_deezer(q: str = Query(..., min_length=1)):
+    async with httpx.AsyncClient(timeout=12) as client:
+        search_resp = await client.get(
+            "https://api.deezer.com/search/album",
+            params={"q": q, "limit": 8},
+        )
+        if not search_resp.is_success:
+            raise HTTPException(status_code=502, detail="Deezer search failed")
+
+        albums = search_resp.json().get("data", [])[:6]
+        if not albums:
+            return []
+
+        results = []
+        for album in albums:
+            album_id = album.get("id")
+            if not album_id:
+                continue
+
+            tracks_resp = await client.get(
+                f"https://api.deezer.com/album/{album_id}/tracks",
+                params={"limit": 100},
+            )
+            tracks = []
+            if tracks_resp.is_success:
+                for i, t in enumerate(tracks_resp.json().get("data", [])):
+                    tracks.append({
+                        "title": t.get("title", ""),
+                        "track_number": t.get("track_position") or i + 1,
+                        "duration_ms": (t.get("duration") or 0) * 1000,
+                        "explicit": t.get("explicit_lyrics", False),
+                        "spotify_id": None,
+                        "artist": t.get("artist", {}).get("name", "")
+                            or album.get("artist", {}).get("name", ""),
+                    })
+
+            release_date = album.get("release_date", "")
+            year = int(release_date[:4]) if release_date and len(release_date) >= 4 else None
+            cover_url = (
+                album.get("cover_xl")
+                or album.get("cover_big")
+                or album.get("cover_medium")
+                or None
+            )
+
+            results.append({
+                "spotify_id": None,
+                "album_name": album.get("title", ""),
+                "artist": album.get("artist", {}).get("name", ""),
+                "year": year,
+                "cover_url": cover_url,
+                "total_tracks": album.get("nb_tracks") or len(tracks),
+                "tracks": tracks,
+            })
+
+        return results
+
+
 MB_HEADERS = {"User-Agent": "Pressd/1.0 (music-rating-app)"}
 
 

@@ -220,6 +220,15 @@ export async function searchItunes(q: string): Promise<SpotifyAlbumResult[]> {
   return res.json()
 }
 
+export async function searchDeezer(q: string): Promise<SpotifyAlbumResult[]> {
+  const res = await fetch(`${BASE}/search/deezer?q=${encodeURIComponent(q)}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? 'Deezer search failed')
+  }
+  return res.json()
+}
+
 export async function importAlbum(
   data: SpotifyAlbumResult,
   status: 'to_listen' | 'listening',

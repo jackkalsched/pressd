@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { X, Loader2, Search, Music, ArrowLeft } from 'lucide-react'
-import { searchSpotify, searchMusicBrainz, searchItunes, importAlbum, createAlbum } from '../api'
+import { searchSpotify, searchMusicBrainz, searchItunes, searchDeezer, importAlbum, createAlbum } from '../api'
 import type { SpotifyAlbumResult } from '../api'
 
 function normalizeKey(name: string, artist: string): string {
@@ -12,10 +12,11 @@ function normalizeKey(name: string, artist: string): string {
 function mergeResults(
   itunes: SpotifyAlbumResult[],
   spotify: SpotifyAlbumResult[],
+  deezer: SpotifyAlbumResult[],
   mb: SpotifyAlbumResult[],
 ): SpotifyAlbumResult[] {
   const seen = new Map<string, SpotifyAlbumResult>()
-  for (const r of [...itunes, ...spotify, ...mb]) {
+  for (const r of [...itunes, ...spotify, ...deezer, ...mb]) {
     const key = normalizeKey(r.album_name, r.artist)
     const existing = seen.get(key)
     if (!existing) {
@@ -58,15 +59,17 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
     const timer = setTimeout(async () => {
       try {
         const q = query.trim()
-        const [itunesRes, spotifyRes, mbRes] = await Promise.allSettled([
+        const [itunesRes, spotifyRes, deezerRes, mbRes] = await Promise.allSettled([
           searchItunes(q),
           searchSpotify(`album:${q}`),
+          searchDeezer(q),
           searchMusicBrainz(q),
         ])
         const itunes  = itunesRes.status  === 'fulfilled' ? itunesRes.value  : []
         const spotify = spotifyRes.status === 'fulfilled' ? spotifyRes.value : []
+        const deezer  = deezerRes.status  === 'fulfilled' ? deezerRes.value  : []
         const mb      = mbRes.status      === 'fulfilled' ? mbRes.value      : []
-        const merged = mergeResults(itunes, spotify, mb)
+        const merged = mergeResults(itunes, spotify, deezer, mb)
         setResults(merged)
         setShowDropdown(merged.length > 0)
         setNoResults(merged.length === 0)
