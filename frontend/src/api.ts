@@ -150,6 +150,12 @@ export async function deleteAlbum(id: number): Promise<void> {
   if (!res.ok) throw new Error('Failed to delete album')
 }
 
+export async function enrichCovers(): Promise<{ updated: number; total_missing: number }> {
+  const res = await apiFetch(`${BASE}/albums/enrich-covers`, { method: 'POST' })
+  if (!res.ok) throw new Error('Cover enrichment failed')
+  return res.json()
+}
+
 export async function createAlbum(data: Partial<Album> & { userId?: number }): Promise<Album> {
   const body = {
     album_name: data.albumName,

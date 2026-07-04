@@ -1,4 +1,5 @@
 import json
+import re
 from collections import defaultdict
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -582,6 +583,51 @@ def recommend_album(
     session.add(new_album)
     session.commit()
     return {"ok": True, "already_existed": False}
+
+
+@router.post("/enrich-covers")
+def enrich_covers(
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Fill in missing album_art_url values by searching iTunes."""
+    import requests as _requests
+
+    albums = session.exec(
+        select(Album)
+        .where(Album.user_id == user.id)
+        .where(Album.album_art_url.is_(None))
+    ).all()
+
+    updated = 0
+    for album in albums:
+        try:
+            resp = _requests.get(
+                "https://itunes.apple.com/search",
+                params={"term": f"{album.album_name} {album.artist}", "entity": "album", "limit": 5},
+                timeout=6,
+            )
+            results = resp.json().get("results", [])
+            url = None
+            norm_name = re.sub(r"[^a-z0-9]", "", album.album_name.lower())
+            for r in results:
+                if re.sub(r"[^a-z0-9]", "", r.get("collectionName", "").lower()) == norm_name:
+                    raw = r.get("artworkUrl100", "")
+                    url = raw.replace("100x100bb", "600x600bb") if raw else None
+                    break
+            if not url and results:
+                raw = results[0].get("artworkUrl100", "")
+                url = raw.replace("100x100bb", "600x600bb") if raw else None
+            if url:
+                album.album_art_url = url
+                session.add(album)
+                updated += 1
+        except Exception:
+            continue
+
+    if updated:
+        session.commit()
+    return {"updated": updated, "total_missing": len(albums)}
 
 
 @router.delete("/{album_id}")
