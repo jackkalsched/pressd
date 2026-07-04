@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select, func
 from ..database import get_session
 from ..deps import current_user
@@ -91,5 +92,9 @@ def toggle_like(
         session.commit()
         return {"liked": False}
     session.add(Like(user_id=user_id, album_id=album_id))
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        # Double-tap / concurrent request already inserted the like
+        session.rollback()
     return {"liked": True}

@@ -1,5 +1,6 @@
 from typing import Optional
 from datetime import date, datetime
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -24,6 +25,10 @@ class Invite(SQLModel, table=True):
 
 
 class Friendship(SQLModel, table=True):
+    # Rows are stored with user_id_a < user_id_b (normalized in app code);
+    # the unique constraint makes duplicate friendships impossible under races.
+    __table_args__ = (UniqueConstraint("user_id_a", "user_id_b", name="uq_friendship_pair"),)
+
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id_a: int = Field(foreign_key="pressuser.id", index=True)
     user_id_b: int = Field(foreign_key="pressuser.id", index=True)
@@ -135,6 +140,8 @@ class SongAudioFeatures(SQLModel, table=True):
 
 
 class Like(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("user_id", "album_id", name="uq_like_user_album"),)
+
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="pressuser.id", index=True)
     album_id: int = Field(foreign_key="album.id", index=True)

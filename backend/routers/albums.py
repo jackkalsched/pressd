@@ -10,7 +10,7 @@ from datetime import date
 
 from ..database import get_session
 from ..deps import current_user, authorize_view, are_friends
-from ..models import Album, Song, SongAudioFeatures, PressUser
+from ..models import Album, Song, SongAudioFeatures, PressUser, Like
 from ..scoring import compute_a_score, recompute_all_scores, BANG_THRESHOLD, SKIP_THRESHOLD
 
 router = APIRouter(prefix="/albums", tags=["albums"])
@@ -649,6 +649,8 @@ def delete_album(
         raise HTTPException(status_code=404, detail="Album not found")
     if album.user_id != user.id:
         raise HTTPException(status_code=403, detail="Not your album")
+    for like in session.exec(select(Like).where(Like.album_id == album_id)).all():
+        session.delete(like)
     for song in album.songs:
         af = session.exec(select(SongAudioFeatures).where(SongAudioFeatures.song_id == song.id)).first()
         if af:

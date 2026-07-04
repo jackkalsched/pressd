@@ -5,6 +5,7 @@ from email.mime.text import MIMEText
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..database import get_session
@@ -189,20 +190,26 @@ def accept_invite(
             raise HTTPException(status_code=409, detail="Name already taken")
         user = PressUser(name=name)
         session.add(user)
-        session.flush()
+        session.commit()
+        session.refresh(user)
 
-    # Don't add self as friend
+    # Don't add self as friend. Committed separately so a duplicate-friendship
+    # race can't roll back the freshly created account.
     if user.id != invite.invited_by:
         a, b = min(invite.invited_by, user.id), max(invite.invited_by, user.id)
         if not session.exec(select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)).first():
             session.add(Friendship(user_id_a=a, user_id_b=b))
+            try:
+                session.commit()
+            except IntegrityError:
+                session.rollback()  # already friends — fine
 
     # Only mark used for one-time invites
     if not invite.permanent:
         invite.accepted_at = datetime.utcnow()
         session.add(invite)
+        session.commit()
 
-    session.commit()
     session.refresh(user)
     return auth_response(user)
 
@@ -274,7 +281,12 @@ def add_friend(
     if session.exec(select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)).first():
         return {"ok": True, "already_friends": True}
     session.add(Friendship(user_id_a=a, user_id_b=b))
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        # Concurrent request won the race — the friendship exists, which is fine
+        session.rollback()
+        return {"ok": True, "already_friends": True}
     return {"ok": True, "already_friends": False}
 
 

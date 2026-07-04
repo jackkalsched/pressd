@@ -31,6 +31,20 @@ def _build_engine():
 engine = _build_engine()
 
 
+def _exec_migration(conn, stmt: str):
+    """Run one idempotent migration statement. Expected idempotency errors
+    (column/index already exists) stay quiet; anything else is logged so
+    schema drift is never silently swallowed."""
+    try:
+        conn.execute(text(stmt))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        msg = str(e).lower()
+        if "already exists" not in msg and "duplicate column" not in msg:
+            print(f"[init_db] migration failed: {stmt[:80]}... -> {e}")
+
+
 def init_db():
     SQLModel.metadata.create_all(engine)
     with engine.connect() as conn:
@@ -38,14 +52,15 @@ def init_db():
         try:
             conn.execute(text("INSERT INTO pressuser (id, name) VALUES (1, 'Jack') ON CONFLICT (id) DO NOTHING"))
             conn.commit()
-        except Exception:
-            pass
+        except Exception as e:
+            conn.rollback()
+            print(f"[init_db] seed user failed: {e}")
 
         # Disable statement timeout for DDL (Supabase pooler sets a short default)
         try:
             conn.execute(text("SET statement_timeout = 0"))
         except Exception:
-            pass
+            conn.rollback()  # not Postgres (e.g. sqlite in tests) — fine
 
         for stmt in [
             "ALTER TABLE pressuser ADD COLUMN avatar_url VARCHAR",
@@ -66,19 +81,18 @@ def init_db():
             "ALTER TABLE invite ADD COLUMN IF NOT EXISTS permanent BOOLEAN DEFAULT FALSE",
             "ALTER TABLE invite ALTER COLUMN email SET DEFAULT ''",
             "UPDATE invite SET permanent = FALSE WHERE permanent IS NULL",
+            "UPDATE album SET user_id = 1 WHERE user_id IS NULL",
+            # ── Data integrity: dedupe legacy rows, then enforce uniqueness ──
+            # (create_all only adds the model constraints on fresh DBs; existing
+            # tables get equivalent unique indexes here)
+            "DELETE FROM friendship WHERE id NOT IN (SELECT MIN(id) FROM friendship GROUP BY user_id_a, user_id_b)",
+            'DELETE FROM "like" WHERE id NOT IN (SELECT MIN(id) FROM "like" GROUP BY user_id, album_id)',
+            # Remove likes orphaned by album deletes that predate cascade cleanup
+            'DELETE FROM "like" WHERE album_id NOT IN (SELECT id FROM album)',
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_friendship_pair ON friendship (user_id_a, user_id_b)",
+            'CREATE UNIQUE INDEX IF NOT EXISTS uq_like_user_album ON "like" (user_id, album_id)',
         ]:
-            try:
-                conn.execute(text(stmt))
-                conn.commit()
-            except Exception:
-                pass  # column already exists
-
-        # Backfill any nulls in a separate transaction (Supabase pooler has statement timeout)
-        try:
-            conn.execute(text("UPDATE album SET user_id = 1 WHERE user_id IS NULL"))
-            conn.commit()
-        except Exception:
-            pass
+            _exec_migration(conn, stmt)
 
 
 def get_session():
