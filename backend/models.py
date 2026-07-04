@@ -134,6 +134,13 @@ class SongAudioFeatures(SQLModel, table=True):
     song: Optional["Song"] = Relationship(back_populates="audio_features")
 
 
+class Like(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="pressuser.id", index=True)
+    album_id: int = Field(foreign_key="album.id", index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class ArtistMeta(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     artist: str = Field(unique=True, index=True)

@@ -638,11 +638,21 @@ export interface FeedItem {
   album_art_url?: string
   score: number
   date_rated?: string
+  like_count: number
+  liked_by_me: boolean
 }
 
 export async function fetchFeed(userId: number): Promise<FeedItem[]> {
   const res = await fetch(`${BASE}/social/feed?user_id=${userId}`)
   if (!res.ok) throw new Error('Failed to fetch feed')
+  return res.json()
+}
+
+export async function toggleLike(userId: number, albumId: number): Promise<{ liked: boolean }> {
+  const res = await fetch(`${BASE}/social/like?user_id=${userId}&album_id=${albumId}`, {
+    method: 'POST',
+  })
+  if (!res.ok) throw new Error('Failed to toggle like')
   return res.json()
 }
 

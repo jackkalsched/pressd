@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Music, Search, UserPlus, Check } from 'lucide-react'
-import { fetchFeed, searchUsers, addFriend } from '../api'
+import { Loader2, Music, Search, UserPlus, Check, Heart } from 'lucide-react'
+import { fetchFeed, searchUsers, addFriend, toggleLike } from '../api'
 import type { FeedItem, UserSearchResult } from '../api'
 import { useUser } from '../context/UserContext'
 
@@ -54,12 +54,36 @@ function scoreColor(score: number): string {
 }
 
 function FeedCard({ item }: { item: FeedItem }) {
-  const { setViewingUser } = useUser()
+  const { activeUser, setViewingUser } = useUser()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const [liked, setLiked] = useState(item.liked_by_me)
+  const [likeCount, setLikeCount] = useState(item.like_count)
+  const [liking, setLiking] = useState(false)
 
   function handleView() {
     setViewingUser({ id: item.friend.id, name: item.friend.name, avatarUrl: item.friend.avatar_url })
     navigate(`/album/${item.album_id}`)
+  }
+
+  async function handleLike() {
+    if (!activeUser || liking) return
+    setLiking(true)
+    // optimistic update
+    const wasLiked = liked
+    setLiked(!wasLiked)
+    setLikeCount(c => wasLiked ? c - 1 : c + 1)
+    try {
+      await toggleLike(activeUser.id, item.album_id)
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
+    } catch {
+      // revert
+      setLiked(wasLiked)
+      setLikeCount(c => wasLiked ? c + 1 : c - 1)
+    } finally {
+      setLiking(false)
+    }
   }
 
   return (
@@ -94,12 +118,33 @@ function FeedCard({ item }: { item: FeedItem }) {
           </span>
         </p>
 
-        <button
-          onClick={handleView}
-          className="text-xs font-medium text-[#2d6a4f] hover:text-[#245c43] transition-colors"
-        >
-          View full rating →
-        </button>
+        <div className="flex items-center justify-between">
+          <button
+            onClick={handleView}
+            className="text-xs font-medium text-[#2d6a4f] hover:text-[#245c43] transition-colors"
+          >
+            View full rating →
+          </button>
+
+          <button
+            onClick={handleLike}
+            disabled={liking}
+            className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
+              liked
+                ? 'text-[#e05555]'
+                : 'text-[#bbb] hover:text-[#e05555]'
+            }`}
+            aria-label={liked ? 'Unlike' : 'Like'}
+          >
+            <Heart
+              size={14}
+              className="transition-transform active:scale-125"
+              fill={liked ? 'currentColor' : 'none'}
+              strokeWidth={liked ? 0 : 1.75}
+            />
+            {likeCount > 0 && <span>{likeCount}</span>}
+          </button>
+        </div>
       </div>
     </div>
   )
