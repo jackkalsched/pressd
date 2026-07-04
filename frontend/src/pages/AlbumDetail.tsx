@@ -158,10 +158,10 @@ export default function AlbumDetail() {
 
   // Warm neutral button class shared across the nav
   const btnBase = 'flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50'
-  const btnNeutral = `${btnBase} bg-[#f0ebe3] border border-[#e8e2d9] hover:bg-[#e8e0d4] text-[#57534e]`
-  const btnGreen = `${btnBase} bg-[#2d6a4f] hover:bg-[#245c43] text-white border border-transparent`
-  const btnOrange = `${btnBase} bg-[#fff7ed] border border-[#fcd9a8] hover:bg-[#ffedd5] text-[#ea7a2a]`
-  const btnDanger = `${btnBase} bg-[#f0ebe3] border border-[#e8e2d9] hover:border-red-300 hover:text-red-500 text-[#57534e]`
+  const btnNeutral = `${btnBase} bg-white border border-[#d0c8be] hover:bg-[#f5f2ee] text-[#3c3530] shadow-sm`
+  const btnGreen = `${btnBase} bg-[#2d6a4f] hover:bg-[#245c43] text-white border border-transparent shadow-sm`
+  const btnOrange = `${btnBase} bg-white border border-[#fcd9a8] hover:bg-[#fff7ed] text-[#ea7a2a] shadow-sm`
+  const btnDanger = `${btnBase} bg-white border border-[#d0c8be] hover:border-red-300 hover:text-red-500 text-[#3c3530] shadow-sm`
 
   return (
     <div className="min-h-screen relative overflow-hidden" style={{ background: accentToPageGradient(accentColor) }}>
@@ -249,7 +249,7 @@ export default function AlbumDetail() {
         <div className="flex gap-7 md:gap-10 mb-10 items-start">
 
           {/* Cover */}
-          <div className="w-36 h-36 md:w-44 md:h-44 shrink-0 rounded-2xl overflow-hidden shadow-[0_10px_30px_rgba(50,30,10,0.15)] bg-[#ece6dc]">
+          <div className="w-36 h-36 md:w-44 md:h-44 shrink-0 rounded-2xl overflow-hidden shadow-[0_16px_48px_rgba(0,0,0,0.32),0_4px_12px_rgba(0,0,0,0.18)] bg-[#ece6dc]">
             {album.albumArtUrl ? (
               <img src={album.albumArtUrl} alt={album.albumName} className="w-full h-full object-cover" />
             ) : (
