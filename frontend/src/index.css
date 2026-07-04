@@ -45,3 +45,7 @@ body {
 .font-display {
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 }
+
+.font-metric {
+  font-family: 'Playfair Display', Georgia, serif;
+}

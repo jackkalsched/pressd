@@ -269,7 +269,7 @@ export default function Ratings() {
     }`
 
   return (
-    <div className="min-h-screen bg-[#faf8f5]">
+    <div className="min-h-screen bg-[#f9f8f6]">
       <div className="p-4 md:p-8">
 
         {/* Header */}

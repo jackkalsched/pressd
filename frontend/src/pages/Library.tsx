@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, X, Loader2, Search } from 'lucide-react'
+import { X, Loader2, Search } from 'lucide-react'
 import { fetchAlbums } from '../api'
 import { useNavigate } from 'react-router-dom'
 import AlbumCard from '../components/AlbumCard'
-import AddAlbumModal from '../components/AddAlbumModal'
 import { useUser } from '../context/UserContext'
 import type { AlbumStatus } from '../types'
 
@@ -19,8 +18,7 @@ export default function Library() {
   const { activeUser, viewingUser, isViewingFriend } = useUser()
   const userId = viewingUser.id
   const [activeTab, setActiveTab] = useState<AlbumStatus>('rated')
-  const [showModal, setShowModal] = useState(false)
-  const [toListenSearch, setToListenSearch] = useState('')
+const [toListenSearch, setToListenSearch] = useState('')
 
   const { data: albums = [], isLoading } = useQuery({
     queryKey: ['albums', activeTab, userId],
@@ -55,20 +53,10 @@ export default function Library() {
 
   return (
     <div className="p-4 md:p-8">
-      {showModal && <AddAlbumModal onClose={() => setShowModal(false)} userId={activeUser.id} />}
-
-      <div className="flex items-center justify-between mb-6">
+<div className="mb-6">
         <h1 className="font-display text-3xl font-bold text-[#111]">
           {isViewingFriend ? `${viewingUser.name}'s Library` : 'Library'}
         </h1>
-        {!isViewingFriend && (
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-1.5 text-sm font-medium bg-[#2d6a4f] hover:bg-[#245c43] text-white px-4 py-2 rounded-lg transition-colors"
-          >
-            <Plus size={15} /> Add Album
-          </button>
-        )}
       </div>
 
       <div className="flex gap-1 mb-8 border-b border-[#e2e2e2]">

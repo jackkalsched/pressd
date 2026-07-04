@@ -92,7 +92,7 @@ export default function Stats() {
 
   if (loadingSummary) {
     return (
-      <div className="min-h-screen bg-[#faf8f5] flex items-center justify-center">
+      <div className="min-h-screen bg-[#f9f8f6] flex items-center justify-center">
         <div className="flex items-center gap-2 text-[#a8998a]">
           <Loader2 size={16} className="animate-spin" />
           <span className="text-sm">Loading…</span>
@@ -103,7 +103,7 @@ export default function Stats() {
 
   if (!summary) {
     return (
-      <div className="min-h-screen bg-[#faf8f5] flex items-center justify-center">
+      <div className="min-h-screen bg-[#f9f8f6] flex items-center justify-center">
         <p className="text-[#a8998a] text-sm">Failed to load stats — check that the backend is running.</p>
       </div>
     )
@@ -133,7 +133,7 @@ export default function Stats() {
   const tooltipStyle = { background: '#faf8f5', border: '1px solid #e8e2d9', borderRadius: 12, color: '#1c1917', fontSize: 12 }
 
   return (
-    <div className="min-h-screen bg-[#faf8f5]">
+    <div className="min-h-screen bg-[#f9f8f6]">
       <div className="p-4 md:p-8">
         <h1 className="font-display text-4xl font-bold text-[#1c1917] mb-8 tracking-tight">
           {isViewingFriend ? `${viewingUser?.name}'s Stats` : 'Stats'}
@@ -148,7 +148,7 @@ export default function Stats() {
               <p className="text-[10px] font-semibold text-white/60 uppercase tracking-[0.12em]">Albums Rated</p>
               <Disc3 size={15} className="text-white/30 shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="font-display text-white font-bold text-5xl tabular-nums leading-none">
+            <p className="font-metric text-white font-bold text-5xl tabular-nums leading-none">
               {summary?.total_albums_rated ?? '—'}
             </p>
             {summary?.albums_this_year != null && (
@@ -161,7 +161,7 @@ export default function Stats() {
               <p className={labelCls}>Songs Rated</p>
               <ListMusic size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="font-display text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
+            <p className="font-metric text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
               {summary?.total_songs_rated != null ? summary.total_songs_rated.toLocaleString() : '—'}
             </p>
             {summary?.total_10s != null && (
@@ -174,7 +174,7 @@ export default function Stats() {
               <p className={labelCls}>Avg Album Score</p>
               <Star size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="font-display text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
+            <p className="font-metric text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
               {summary?.avg_album_score?.toFixed(2) ?? '—'}
             </p>
             {summary?.avg_song_score != null && (
@@ -187,7 +187,7 @@ export default function Stats() {
               <p className={labelCls}>Rating Streak</p>
               <Flame size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="font-display text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
+            <p className="font-metric text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
               {summary?.longest_streak ?? '—'}
             </p>
             <p className="text-[#a8998a] text-xs mt-2">consecutive days</p>
@@ -202,11 +202,11 @@ export default function Stats() {
               <p className={labelCls}>Top Album</p>
               <Trophy size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="text-[#1c1917] font-semibold text-sm leading-snug line-clamp-2">
+            <p className="font-metric text-[#1c1917] font-bold text-xl leading-snug line-clamp-2">
               {summary?.top_album?.name ?? '—'}
             </p>
             {summary?.top_album && (
-              <p className="text-[#a8998a] text-xs mt-2 truncate">
+              <p className="text-[#a8998a] text-sm mt-2 truncate">
                 {summary.top_album.artist} · <span className="text-[#2d6a4f] font-semibold">{summary.top_album.score?.toFixed(2)}</span>
               </p>
             )}
@@ -217,11 +217,11 @@ export default function Stats() {
               <p className={labelCls}>Top Song</p>
               <Music size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="text-[#1c1917] font-semibold text-sm leading-snug line-clamp-2">
+            <p className="font-metric text-[#1c1917] font-bold text-xl leading-snug line-clamp-2">
               {summary?.top_song?.title ?? '—'}
             </p>
             {summary?.top_song && (
-              <p className="text-[#a8998a] text-xs mt-2 truncate">
+              <p className="text-[#a8998a] text-sm mt-2 truncate">
                 {summary.top_song.artist} · <span className="text-[#2d6a4f] font-semibold">{summary.top_song.score}</span>
               </p>
             )}
@@ -232,11 +232,11 @@ export default function Stats() {
               <p className={labelCls}>Most Loyal Artist</p>
               <Heart size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="text-[#1c1917] font-semibold text-sm leading-snug line-clamp-2">
+            <p className="font-metric text-[#1c1917] font-bold text-xl leading-snug line-clamp-2">
               {summary?.most_rated_artist?.name ?? '—'}
             </p>
             {summary?.most_rated_artist && (
-              <p className="text-[#a8998a] text-xs mt-2">{summary.most_rated_artist.count} albums rated</p>
+              <p className="text-[#a8998a] text-sm mt-2">{summary.most_rated_artist.count} albums rated</p>
             )}
           </div>
 
@@ -245,7 +245,7 @@ export default function Stats() {
               <p className={labelCls}>Center of Your Taste</p>
               <CalendarDays size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="font-display text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
+            <p className="font-metric text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
               {summary?.avg_release_year ?? '—'}
             </p>
             <p className="text-[#a8998a] text-xs mt-2">avg release year</p>
@@ -375,7 +375,7 @@ export default function Stats() {
             <select
               value={genreFilter}
               onChange={(e) => setGenreFilter(e.target.value)}
-              className="text-xs border border-[#e8e2d9] rounded-xl px-2.5 py-1.5 bg-[#faf8f5] text-[#78716c] focus:outline-none focus:border-[#2d6a4f] transition-colors"
+              className="text-xs border border-[#e8e2d9] rounded-xl px-2.5 py-1.5 bg-[#f9f8f6] text-[#78716c] focus:outline-none focus:border-[#2d6a4f] transition-colors"
             >
               <option value="all">All Genres</option>
               {allGenres.map((g) => (
@@ -435,7 +435,7 @@ export default function Stats() {
                     if (!payload?.length) return null
                     const d = payload[0].payload as { artist: string; avg_song_score: number; avg_external: number; genre: string | null }
                     return (
-                      <div className="text-xs p-3 space-y-0.5 bg-[#faf8f5] border border-[#e8e2d9] rounded-xl shadow-sm">
+                      <div className="text-xs p-3 space-y-0.5 bg-[#f9f8f6] border border-[#e8e2d9] rounded-xl shadow-sm">
                         <p className="font-semibold text-[#1c1917]">{d.artist}</p>
                         {d.genre && <p className="text-[#a8998a]">{d.genre}</p>}
                         <p className="text-[#78716c]">Song: {d.avg_song_score?.toFixed(2)}</p>
