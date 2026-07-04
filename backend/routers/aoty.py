@@ -1,22 +1,47 @@
 """
-Artist discography discovery via Spotify.
+Artist discography discovery via Discogs.
 Surfaces releases not yet in the local library on artist pages.
+Set DISCOGS_TOKEN env var (personal access token from discogs.com/settings/developers)
+for authenticated requests (60 req/min vs 25 unauthenticated).
 """
 import json
+import os
 import re
 from datetime import datetime, timedelta
 
+import requests
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from ..database import get_session
 from ..models import Album, ArtistMeta
-from .search import _get_token, _get as _spotify_get
 
 router = APIRouter(prefix="/aoty", tags=["discover"])
 
 CACHE_TTL = timedelta(days=3)
-SPOTIFY_BASE = "https://api.spotify.com/v1"
+DISCOGS_BASE = "https://api.discogs.com"
+
+# Format keywords that disqualify a release from being a studio album
+_EXCLUDE_FORMATS = {
+    "single", "ep", "compilation", "live", "interview",
+    "soundtrack", "mixtape", "dj mix", "video", "dvd", "vhs", "cassette single",
+}
+
+
+def _headers() -> dict:
+    token = os.getenv("DISCOGS_TOKEN")
+    ua = "Pressd/1.0 (personal-music-rating-app)"
+    if token:
+        return {"Authorization": f"Discogs token={token}", "User-Agent": ua}
+    return {"User-Agent": ua}
+
+
+def _get(url: str, params: dict | None = None) -> dict:
+    resp = requests.get(url, headers=_headers(), params=params, timeout=12)
+    if resp.status_code == 429:
+        raise HTTPException(429, detail="Discogs rate limit hit — try again shortly.")
+    resp.raise_for_status()
+    return resp.json()
 
 
 def _normalize(s: str) -> str:
@@ -32,48 +57,73 @@ def _already_in_db(title: str, db_names: list[str]) -> bool:
     return False
 
 
-def _find_spotify_artist_id(artist_name: str, token: str) -> str | None:
-    headers = {"Authorization": f"Bearer {token}"}
-    data = _spotify_get(
-        f"{SPOTIFY_BASE}/search",
-        headers=headers,
-        params={"q": artist_name, "type": "artist", "limit": 5},
+def _is_studio_album(release: dict) -> bool:
+    if release.get("type") != "master":
+        return False
+    if release.get("role", "").lower() != "main":
+        return False
+    fmt = release.get("format", "").lower()
+    if not fmt:
+        return True
+    parts = {p.strip() for p in fmt.split(",")}
+    return not (parts & _EXCLUDE_FORMATS)
+
+
+def _clean_cover(url: str | None) -> str | None:
+    if not url:
+        return None
+    # Discard Discogs generic placeholder images
+    if "spacer.gif" in url or "placeholder" in url.lower():
+        return None
+    return url
+
+
+def _find_artist_id(artist_name: str) -> str | None:
+    data = _get(
+        f"{DISCOGS_BASE}/database/search",
+        params={"q": artist_name, "type": "artist", "per_page": 5},
     )
-    artists = data.get("artists", {}).get("items", [])
-    if not artists:
+    results = data.get("results", [])
+    if not results:
         return None
     norm = _normalize(artist_name)
-    for a in artists:
-        if _normalize(a.get("name", "")) == norm:
-            return a["id"]
-    return artists[0]["id"]
+    for r in results:
+        if _normalize(r.get("title", "")) == norm:
+            return str(r["id"])
+    return str(results[0]["id"])
 
 
-def _fetch_releases(spotify_artist_id: str, token: str) -> list[dict]:
-    headers = {"Authorization": f"Bearer {token}"}
-    url: str | None = f"{SPOTIFY_BASE}/artists/{spotify_artist_id}/albums"
-    params: dict | None = {"include_groups": "album", "limit": 50, "market": "US"}
+def _fetch_releases(artist_id: str) -> list[dict]:
     releases: list[dict] = []
+    page = 1
 
-    while url:
-        data = _spotify_get(url, headers=headers, params=params)
-        params = None  # subsequent pages use the full next URL
-        for item in data.get("items", []):
-            release_date = item.get("release_date", "")
-            year = int(release_date[:4]) if release_date and len(release_date) >= 4 else None
-            images = item.get("images", [])
-            cover_url = images[0]["url"] if images else None
+    while True:
+        data = _get(
+            f"{DISCOGS_BASE}/artists/{artist_id}/releases",
+            params={"sort": "year", "sort_order": "desc", "per_page": 100, "page": page},
+        )
+        items = data.get("releases", [])
+        pagination = data.get("pagination", {})
+
+        for item in items:
+            if not _is_studio_album(item):
+                continue
+            year = item.get("year") or None
+            cover = _clean_cover(item.get("cover_image")) or _clean_cover(item.get("thumb"))
             releases.append({
-                "title": item["name"],
+                "title": item["title"],
                 "year": year,
                 "type": "Album",
-                "mb_id": item["id"],  # Spotify album ID used as unique key
-                "cover_url": cover_url,
+                "mb_id": str(item.get("id", "")),
+                "cover_url": cover,
                 "score": None,
             })
-        url = data.get("next")
 
-    # Deduplicate by normalized title (Spotify sometimes lists deluxe + standard editions)
+        if page >= pagination.get("pages", 1) or not items:
+            break
+        page += 1
+
+    # Deduplicate by normalized title (keep first / earliest seen, which is most recent year)
     seen: set[str] = set()
     deduped: list[dict] = []
     for r in releases:
@@ -86,16 +136,11 @@ def _fetch_releases(spotify_artist_id: str, token: str) -> list[dict]:
 
 
 def _refresh(artist_name: str, session: Session) -> ArtistMeta | None:
-    try:
-        token = _get_token()
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Spotify auth failed: {e}")
-
-    spotify_id = _find_spotify_artist_id(artist_name, token)
-    if not spotify_id:
+    artist_id = _find_artist_id(artist_name)
+    if not artist_id:
         return None
 
-    releases = _fetch_releases(spotify_id, token)
+    releases = _fetch_releases(artist_id)
 
     meta = session.exec(
         select(ArtistMeta).where(ArtistMeta.artist == artist_name)
@@ -104,7 +149,7 @@ def _refresh(artist_name: str, session: Session) -> ArtistMeta | None:
         meta = ArtistMeta(artist=artist_name)
         session.add(meta)
 
-    meta.mb_artist_id = spotify_id
+    meta.mb_artist_id = artist_id
     meta.albums_json = json.dumps(releases)
     meta.scraped_at = datetime.utcnow()
     session.commit()
@@ -118,7 +163,11 @@ def _get_or_refresh(artist_name: str, session: Session) -> ArtistMeta | None:
     ).first()
 
     now = datetime.utcnow()
-    cached_empty = meta is not None and meta.albums_json is not None and json.loads(meta.albums_json) == []
+    cached_empty = (
+        meta is not None
+        and meta.albums_json is not None
+        and json.loads(meta.albums_json) == []
+    )
     stale = (
         meta is None
         or meta.albums_json is None
@@ -136,7 +185,7 @@ def _get_or_refresh(artist_name: str, session: Session) -> ArtistMeta | None:
 def discover_artist(artist_name: str, session: Session = Depends(get_session)):
     meta = _get_or_refresh(artist_name, session)
     if not meta or not meta.albums_json:
-        raise HTTPException(404, detail="Artist not found on Spotify")
+        raise HTTPException(404, detail="Artist not found on Discogs")
 
     all_releases: list[dict] = json.loads(meta.albums_json)
 
@@ -164,5 +213,5 @@ def force_refresh(artist_name: str, session: Session = Depends(get_session)):
 
     meta = _refresh(artist_name, session)
     if not meta:
-        raise HTTPException(404, detail="Artist not found on Spotify")
+        raise HTTPException(404, detail="Artist not found on Discogs")
     return {"ok": True, "releases": len(json.loads(meta.albums_json or "[]"))}
