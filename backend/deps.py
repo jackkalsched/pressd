@@ -77,9 +77,12 @@ def are_friends(session: Session, a: int, b: int) -> bool:
     if a == b:
         return True
     lo, hi = min(a, b), max(a, b)
+    # Pending requests grant no access — only accepted friendships count
     return session.exec(
         select(Friendship).where(
-            Friendship.user_id_a == lo, Friendship.user_id_b == hi
+            Friendship.user_id_a == lo,
+            Friendship.user_id_b == hi,
+            Friendship.status == "accepted",
         )
     ).first() is not None
 

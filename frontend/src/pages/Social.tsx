@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Music, Search, UserPlus, Check, Heart } from 'lucide-react'
-import { fetchFeed, searchUsers, addFriend, toggleLike } from '../api'
+import { Loader2, Music, Search, UserPlus, Check, Heart, X, Clock } from 'lucide-react'
+import {
+  fetchFeed, searchUsers, addFriend, toggleLike,
+  fetchFriendRequests, acceptFriendRequest, declineFriendRequest,
+} from '../api'
 import type { FeedItem, UserSearchResult } from '../api'
 import { useUser } from '../context/UserContext'
 
@@ -150,13 +153,95 @@ function FeedCard({ item }: { item: FeedItem }) {
   )
 }
 
+function FriendRequests() {
+  const { activeUser } = useUser()
+  const queryClient = useQueryClient()
+  const [busy, setBusy] = useState<Set<number>>(new Set())
+
+  const { data } = useQuery({
+    queryKey: ['friend-requests', activeUser?.id],
+    queryFn: () => fetchFriendRequests(activeUser!.id),
+    enabled: !!activeUser,
+    staleTime: 30_000,
+  })
+  const incoming = data?.incoming ?? []
+  const outgoing = data?.outgoing ?? []
+  if (incoming.length === 0 && outgoing.length === 0) return null
+
+  function refresh() {
+    queryClient.invalidateQueries({ queryKey: ['friend-requests'] })
+    queryClient.invalidateQueries({ queryKey: ['friends'] })
+    queryClient.invalidateQueries({ queryKey: ['feed'] })
+  }
+
+  async function act(otherId: number, fn: (uid: number, oid: number) => Promise<void>) {
+    if (busy.has(otherId)) return
+    setBusy(prev => new Set(prev).add(otherId))
+    try {
+      await fn(activeUser!.id, otherId)
+      refresh()
+    } finally {
+      setBusy(prev => { const n = new Set(prev); n.delete(otherId); return n })
+    }
+  }
+
+  return (
+    <div className="mb-8">
+      <h2 className="text-sm font-semibold text-[#777] mb-3">Friend Requests</h2>
+      <div className="border border-[#e2e2e2] rounded-xl overflow-hidden divide-y divide-[#f0f0f0]">
+        {incoming.map(u => (
+          <div key={`in-${u.id}`} className="flex items-center gap-3 px-4 py-3 bg-white">
+            <FriendAvatar name={u.name} avatarUrl={u.avatarUrl} size={32} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-[#111] truncate">{u.name}</p>
+              <p className="text-[11px] text-[#aaa]">wants to be friends</p>
+            </div>
+            <button
+              onClick={() => act(u.id, acceptFriendRequest)}
+              disabled={busy.has(u.id)}
+              className="flex items-center gap-1 text-xs font-semibold text-white bg-[#2d6a4f] hover:bg-[#245c43] px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <Check size={12} /> Accept
+            </button>
+            <button
+              onClick={() => act(u.id, declineFriendRequest)}
+              disabled={busy.has(u.id)}
+              className="flex items-center gap-1 text-xs font-medium text-[#999] hover:text-[#c0392b] px-2 py-1.5 transition-colors disabled:opacity-50"
+              aria-label="Decline"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ))}
+        {outgoing.map(u => (
+          <div key={`out-${u.id}`} className="flex items-center gap-3 px-4 py-3 bg-white">
+            <FriendAvatar name={u.name} avatarUrl={u.avatarUrl} size={32} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-[#111] truncate">{u.name}</p>
+              <p className="text-[11px] text-[#aaa] flex items-center gap-1"><Clock size={10} /> request sent</p>
+            </div>
+            <button
+              onClick={() => act(u.id, declineFriendRequest)}
+              disabled={busy.has(u.id)}
+              className="text-xs font-medium text-[#999] hover:text-[#c0392b] px-2 py-1.5 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function FindPeople() {
   const { activeUser } = useUser()
   const queryClient = useQueryClient()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<UserSearchResult[]>([])
   const [searching, setSearching] = useState(false)
-  const [added, setAdded] = useState<Set<number>>(new Set())
+  const [sent, setSent] = useState<Set<number>>(new Set())
+  const [becameFriends, setBecameFriends] = useState<Set<number>>(new Set())
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -172,10 +257,15 @@ function FindPeople() {
   }, [query, activeUser])
 
   async function handleAdd(user: UserSearchResult) {
-    await addFriend(activeUser!.id, user.id)
-    setAdded(prev => new Set(prev).add(user.id))
+    const r = await addFriend(activeUser!.id, user.id)
+    if (r.status === 'accepted') {
+      setBecameFriends(prev => new Set(prev).add(user.id))
+    } else {
+      setSent(prev => new Set(prev).add(user.id))
+    }
     queryClient.invalidateQueries({ queryKey: ['friends'] })
     queryClient.invalidateQueries({ queryKey: ['feed'] })
+    queryClient.invalidateQueries({ queryKey: ['friend-requests'] })
   }
 
   return (
@@ -195,7 +285,9 @@ function FindPeople() {
       {results.length > 0 && (
         <div className="mt-2 border border-[#e2e2e2] rounded-xl overflow-hidden divide-y divide-[#f0f0f0]">
           {results.map(u => {
-            const isFriend = u.already_friends || added.has(u.id)
+            const isFriend = u.already_friends || becameFriends.has(u.id)
+            const requested = !isFriend && (u.request_sent || sent.has(u.id))
+            const theyAsked = !isFriend && !requested && u.request_received
             return (
               <div key={u.id} className="flex items-center gap-3 px-4 py-3 bg-white">
                 <div
@@ -209,12 +301,16 @@ function FindPeople() {
                   <span className="flex items-center gap-1 text-xs text-[#2d6a4f] font-medium">
                     <Check size={13} /> Friends
                   </span>
+                ) : requested ? (
+                  <span className="flex items-center gap-1 text-xs text-[#aaa] font-medium">
+                    <Clock size={12} /> Requested
+                  </span>
                 ) : (
                   <button
                     onClick={() => handleAdd(u)}
                     className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#2d6a4f] hover:bg-[#245c43] px-3 py-1.5 rounded-lg transition-colors"
                   >
-                    <UserPlus size={12} /> Add
+                    {theyAsked ? <><Check size={12} /> Accept</> : <><UserPlus size={12} /> Add</>}
                   </button>
                 )}
               </div>
@@ -244,6 +340,7 @@ export default function Social() {
     <div className="p-4 md:p-8">
       <h1 className="font-display text-3xl font-bold text-[#111] mb-6">Friends' Activity</h1>
       <div className="max-w-lg">
+        <FriendRequests />
         <FindPeople />
       </div>
 

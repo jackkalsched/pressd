@@ -16,7 +16,8 @@ def get_feed(
     user_id = user.id
     friendships = session.exec(
         select(Friendship).where(
-            (Friendship.user_id_a == user_id) | (Friendship.user_id_b == user_id)
+            (Friendship.user_id_a == user_id) | (Friendship.user_id_b == user_id),
+            Friendship.status == "accepted",
         )
     ).all()
     friend_ids = [

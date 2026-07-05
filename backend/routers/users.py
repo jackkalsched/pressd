@@ -69,19 +69,33 @@ def search_users(
         ).limit(20)
     ).all()
 
-    # Get existing friend IDs for the requester
+    # Partition the requester's friendships into accepted vs pending
     friendships = session.exec(
         select(Friendship).where(
             (Friendship.user_id_a == exclude_user_id) | (Friendship.user_id_b == exclude_user_id)
         )
     ).all()
-    friend_ids = {
-        f.user_id_b if f.user_id_a == exclude_user_id else f.user_id_a
-        for f in friendships
-    }
+    friend_ids: set[int] = set()
+    pending_out: set[int] = set()  # I requested them
+    pending_in: set[int] = set()   # they requested me
+    for f in friendships:
+        other = f.user_id_b if f.user_id_a == exclude_user_id else f.user_id_a
+        if f.status == "accepted":
+            friend_ids.add(other)
+        elif f.requested_by == exclude_user_id:
+            pending_out.add(other)
+        else:
+            pending_in.add(other)
 
     return [
-        {"id": u.id, "name": u.name, "avatar_url": u.avatar_url, "already_friends": u.id in friend_ids}
+        {
+            "id": u.id,
+            "name": u.name,
+            "avatar_url": u.avatar_url,
+            "already_friends": u.id in friend_ids,
+            "request_sent": u.id in pending_out,
+            "request_received": u.id in pending_in,
+        }
         for u in users
     ]
 
@@ -197,8 +211,13 @@ def accept_invite(
     # race can't roll back the freshly created account.
     if user.id != invite.invited_by:
         a, b = min(invite.invited_by, user.id), max(invite.invited_by, user.id)
-        if not session.exec(select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)).first():
-            session.add(Friendship(user_id_a=a, user_id_b=b))
+        existing = session.exec(select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)).first()
+        if not existing:
+            # Invite links are mutual consent — accepted immediately
+            session.add(Friendship(user_id_a=a, user_id_b=b, status="accepted", requested_by=invite.invited_by))
+        elif existing.status == "pending":
+            existing.status = "accepted"
+            session.add(existing)
             try:
                 session.commit()
             except IntegrityError:
@@ -251,7 +270,8 @@ def list_friends(
     authorize_view(user, user_id, session)
     friendships = session.exec(
         select(Friendship).where(
-            (Friendship.user_id_a == user_id) | (Friendship.user_id_b == user_id)
+            (Friendship.user_id_a == user_id) | (Friendship.user_id_b == user_id),
+            Friendship.status == "accepted",
         )
     ).all()
     friend_ids = [
@@ -269,6 +289,7 @@ def add_friend(
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
+    """Send a friend request (or accept one, if the other user already asked)."""
     if user_id != user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
     friend_id = data.get("friend_id")
@@ -278,16 +299,103 @@ def add_friend(
         if not session.get(PressUser, uid):
             raise HTTPException(status_code=404, detail="User not found")
     a, b = min(user_id, friend_id), max(user_id, friend_id)
-    if session.exec(select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)).first():
-        return {"ok": True, "already_friends": True}
-    session.add(Friendship(user_id_a=a, user_id_b=b))
+    existing = session.exec(
+        select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)
+    ).first()
+    if existing:
+        if existing.status == "accepted":
+            return {"ok": True, "status": "accepted", "already_friends": True}
+        if existing.requested_by == user.id:
+            return {"ok": True, "status": "pending", "already_friends": False}
+        # They already requested us — requesting back is mutual consent
+        existing.status = "accepted"
+        session.add(existing)
+        session.commit()
+        return {"ok": True, "status": "accepted", "already_friends": True}
+    session.add(Friendship(user_id_a=a, user_id_b=b, status="pending", requested_by=user.id))
     try:
         session.commit()
     except IntegrityError:
-        # Concurrent request won the race — the friendship exists, which is fine
+        # Concurrent request won the race — a row exists, which is fine
         session.rollback()
-        return {"ok": True, "already_friends": True}
-    return {"ok": True, "already_friends": False}
+    return {"ok": True, "status": "pending", "already_friends": False}
+
+
+@router.get("/{user_id}/friend-requests")
+def list_friend_requests(
+    user_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    if user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    pending = session.exec(
+        select(Friendship).where(
+            (Friendship.user_id_a == user_id) | (Friendship.user_id_b == user_id),
+            Friendship.status == "pending",
+        )
+    ).all()
+    incoming, outgoing = [], []
+    for f in pending:
+        other_id = f.user_id_b if f.user_id_a == user_id else f.user_id_a
+        other = session.get(PressUser, other_id)
+        if not other:
+            continue
+        info = {"id": other.id, "name": other.name, "avatar_url": other.avatar_url}
+        (outgoing if f.requested_by == user_id else incoming).append(info)
+    return {"incoming": incoming, "outgoing": outgoing}
+
+
+@router.post("/{user_id}/friend-requests/{other_id}/accept")
+def accept_friend_request(
+    user_id: int,
+    other_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    if user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    a, b = min(user_id, other_id), max(user_id, other_id)
+    f = session.exec(
+        select(Friendship).where(
+            Friendship.user_id_a == a,
+            Friendship.user_id_b == b,
+            Friendship.status == "pending",
+        )
+    ).first()
+    if not f:
+        raise HTTPException(status_code=404, detail="No pending request")
+    if f.requested_by == user.id:
+        raise HTTPException(status_code=400, detail="Can't accept your own request")
+    f.status = "accepted"
+    session.add(f)
+    session.commit()
+    return {"ok": True}
+
+
+@router.delete("/{user_id}/friend-requests/{other_id}")
+def decline_friend_request(
+    user_id: int,
+    other_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Decline an incoming request, or cancel one you sent."""
+    if user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    a, b = min(user_id, other_id), max(user_id, other_id)
+    f = session.exec(
+        select(Friendship).where(
+            Friendship.user_id_a == a,
+            Friendship.user_id_b == b,
+            Friendship.status == "pending",
+        )
+    ).first()
+    if not f:
+        raise HTTPException(status_code=404, detail="No pending request")
+    session.delete(f)
+    session.commit()
+    return {"ok": True}
 
 
 @router.delete("/{user_id}/friends/{friend_id}")
