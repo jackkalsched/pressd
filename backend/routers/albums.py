@@ -133,7 +133,7 @@ def update_album(
         session.refresh(album)
 
     if data.get("status") == "rated":
-        _queue_recompute_predictions()
+        _queue_song_repredictions()
 
     if data.get("status") == "to_listen" and album.predicted_score is None:
         _queue_predictions(album.id)
@@ -231,16 +231,20 @@ def _queue_genre_tagging(album_id: int, artist: str, album_name: str, year: int 
     threading.Thread(target=_run, daemon=True).start()
 
 
-def _queue_recompute_predictions():
-    """Spawn a background thread to refresh predictions for all unrated albums."""
+def _queue_song_repredictions():
+    """Spawn a background thread that retrains the song score model on the
+    newly enlarged library and refreshes predicted_song_mean for every
+    to_listen album (composite scores included). Runs on each new rating."""
     import threading, sys, pathlib
     sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent))
     def _run():
         try:
-            from theme_predictor.predict_single import recompute_all_predictions
-            recompute_all_predictions()
+            from song_score_model import repredict_all_song_means
+            from ..database import engine
+            with engine.connect() as con:
+                repredict_all_song_means(con)
         except Exception as e:
-            print(f"[_queue_recompute_predictions] failed: {e}")
+            print(f"[_queue_song_repredictions] failed: {e}")
     threading.Thread(target=_run, daemon=True).start()
 
 
