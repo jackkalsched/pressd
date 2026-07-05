@@ -27,7 +27,7 @@ It's also social: follow friends, watch what they're rating, like their reviews,
 ### 🎵 Rate albums the right way
 - **Search and add** any album from a catalog of millions — album art, tracklist, and release year fill in automatically.
 - **Listen-through rating.** Songs unlock one at a time in track order, so you rate the way you actually listen — top to bottom, no jumping ahead.
-- **Score every song** from 0–10 (skits and interludes can be skipped).
+- **Score every song** from 0–10.
 - **Album-level factors.** After the songs, rate the album on **Theme**, **Replay Value**, **Production**, and **Distinctness**.
 - **Live score.** A running score card updates with every rating so you can see the album's number take shape in real time. Songs are flagged as **bangs** 🟢 or **skips** 🔴, and a clean album with zero skips earns a **"No skips"** badge.
 - **Shareable rating cards.** Every finished album generates a polished, downloadable report you can share (including straight to iMessage).
@@ -52,17 +52,10 @@ It's also social: follow friends, watch what they're rating, like their reviews,
 
 Works great on mobile and desktop.
 
+Mobile App coming soon! 
 ---
 
-## How the score works
-
-Your album score starts from the **average of your song ratings**, then nudges up or down based on how you scored the album's four external factors (Theme, Replay Value, Production, Distinctness) *relative to your own averages*. In practice that means the songs do most of the talking, while a standout — or forgettable — production, concept, or replay factor can move the needle.
-
-Song scores are also normalized so the very top of your scale maps cleanly to a perfect 10, keeping numbers comparable across every album you've ever rated.
-
----
-
-## For the curious (tech stack)
+## For the curious...
 
 Press'd is a full-stack app:
 
@@ -92,6 +85,6 @@ Copy the relevant environment variables (database URL, Google OAuth client ID, S
 
 <div align="center">
 
-Built by [Jack Kalsched](https://github.com/jackkalsched). 🎶
+Built by [Jack Kalsched](https://github.com/jackkalsched) & Claude. 🎶
 
 </div>
