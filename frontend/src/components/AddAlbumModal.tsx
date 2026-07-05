@@ -37,6 +37,7 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
   const [results, setResults] = useState<SpotifyAlbumResult[]>([])
   const [selected, setSelected] = useState<SpotifyAlbumResult | null>(null)
   const [searching, setSearching] = useState(false)
+  const [mbPending, setMbPending] = useState(false)
   const [noResults, setNoResults] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -45,43 +46,61 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
   const queryClient = useQueryClient()
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Fan out to all 3 APIs simultaneously, merge + dedup
+  // Fan out to all 4 APIs simultaneously. The three fast sources (iTunes,
+  // Spotify, Deezer) populate the dropdown immediately; MusicBrainz — slow
+  // (global ~1 req/s limit) but the only source with announced/unreleased
+  // albums — is merged in when it arrives instead of holding everything up.
   useEffect(() => {
     if (query.trim().length < 2) {
       setResults([])
       setShowDropdown(false)
       setSearching(false)
+      setMbPending(false)
       setNoResults(false)
       return
     }
     setSearching(true)
+    setMbPending(false)
     setNoResults(false)
+    let cancelled = false
     const timer = setTimeout(async () => {
+      const q = query.trim()
+      const mbPromise = searchMusicBrainz(q).catch(() => [] as SpotifyAlbumResult[])
       try {
-        const q = query.trim()
-        const [itunesRes, spotifyRes, deezerRes, mbRes] = await Promise.allSettled([
+        const [itunesRes, spotifyRes, deezerRes] = await Promise.allSettled([
           searchItunes(q),
           searchSpotify(`album:${q}`),
           searchDeezer(q),
-          searchMusicBrainz(q),
         ])
+        if (cancelled) return
         const itunes  = itunesRes.status  === 'fulfilled' ? itunesRes.value  : []
         const spotify = spotifyRes.status === 'fulfilled' ? spotifyRes.value : []
         const deezer  = deezerRes.status  === 'fulfilled' ? deezerRes.value  : []
-        const mb      = mbRes.status      === 'fulfilled' ? mbRes.value      : []
+        const fast = mergeResults(itunes, spotify, deezer, [])
+        setResults(fast)
+        // Keep the dropdown open even with zero fast results — the pending
+        // row tells the user slower sources are still being searched
+        setShowDropdown(true)
+        setMbPending(true)
+
+        const mb = await mbPromise
+        if (cancelled) return
+        setMbPending(false)
         const merged = mergeResults(itunes, spotify, deezer, mb)
         setResults(merged)
         setShowDropdown(merged.length > 0)
         setNoResults(merged.length === 0)
       } catch {
+        if (cancelled) return
         setResults([])
         setShowDropdown(false)
+        setMbPending(false)
         setNoResults(true)
       } finally {
-        setSearching(false)
+        if (!cancelled) setSearching(false)
       }
     }, 380)
-    return () => clearTimeout(timer)
+    return () => { cancelled = true; clearTimeout(timer) }
   }, [query])
 
   useEffect(() => {
@@ -200,11 +219,27 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
                         </div>
                       )}
                       <div className="min-w-0">
-                        <p className="text-[#111] text-sm font-medium truncate leading-snug">{r.album_name}</p>
-                        <p className="text-[#aaa] text-xs truncate">{r.artist}{r.year ? ` · ${r.year}` : ''}</p>
+                        <p className="text-[#111] text-sm font-medium truncate leading-snug">
+                          {r.album_name}
+                          {r.upcoming && (
+                            <span className="ml-1.5 align-middle inline-block px-1.5 py-px rounded-full bg-[#2d6a4f]/10 text-[#2d6a4f] text-[10px] font-semibold">
+                              Upcoming
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[#aaa] text-xs truncate">
+                          {r.artist}
+                          {r.upcoming && r.release_date ? ` · ${r.release_date}` : r.year ? ` · ${r.year}` : ''}
+                        </p>
                       </div>
                     </button>
                   ))}
+                  {mbPending && (
+                    <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-[#a8998a] border-t border-[#f0f0f0] bg-[#fafafa]">
+                      <Loader2 size={11} className="animate-spin shrink-0" />
+                      Checking more sources for new &amp; upcoming releases…
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -231,6 +266,7 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
                   <p className="text-[#111] text-sm font-semibold truncate">{selected.album_name}</p>
                   <p className="text-[#aaa] text-xs truncate">
                     {selected.artist}{selected.year ? ` · ${selected.year}` : ''} · {selected.total_tracks} tracks
+                    {selected.upcoming ? ` · out ${selected.release_date ?? 'soon'}` : ''}
                   </p>
                 </div>
               </div>
