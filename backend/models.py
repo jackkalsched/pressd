@@ -32,6 +32,8 @@ class Friendship(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id_a: int = Field(foreign_key="pressuser.id", index=True)
     user_id_b: int = Field(foreign_key="pressuser.id", index=True)
+    status: str = Field(default="accepted", index=True)  # pending | accepted
+    requested_by: Optional[int] = Field(default=None, foreign_key="pressuser.id")
 
 
 class Album(SQLModel, table=True):

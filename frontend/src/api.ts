@@ -588,6 +588,8 @@ export interface UserSearchResult {
   name: string
   avatar_url?: string
   already_friends: boolean
+  request_sent: boolean      // I already requested them
+  request_received: boolean  // they requested me
 }
 
 export async function searchUsers(q: string, excludeUserId: number): Promise<UserSearchResult[]> {
@@ -596,14 +598,39 @@ export async function searchUsers(q: string, excludeUserId: number): Promise<Use
   return res.json()
 }
 
-export async function addFriend(userId: number, friendId: number): Promise<{ ok: boolean; already_friends: boolean }> {
+export async function addFriend(
+  userId: number,
+  friendId: number,
+): Promise<{ ok: boolean; status: 'pending' | 'accepted'; already_friends: boolean }> {
   const res = await apiFetch(`${BASE}/users/${userId}/friends`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ friend_id: friendId }),
   })
-  if (!res.ok) throw new Error('Failed to add friend')
+  if (!res.ok) throw new Error('Failed to send friend request')
   return res.json()
+}
+
+export async function fetchFriendRequests(
+  userId: number,
+): Promise<{ incoming: UserInfo[]; outgoing: UserInfo[] }> {
+  const res = await apiFetch(`${BASE}/users/${userId}/friend-requests`)
+  if (!res.ok) throw new Error('Failed to fetch friend requests')
+  const data = await res.json()
+  const map = (u: { id: number; name: string; avatar_url?: string }): UserInfo => ({
+    id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined,
+  })
+  return { incoming: (data.incoming ?? []).map(map), outgoing: (data.outgoing ?? []).map(map) }
+}
+
+export async function acceptFriendRequest(userId: number, otherId: number): Promise<void> {
+  const res = await apiFetch(`${BASE}/users/${userId}/friend-requests/${otherId}/accept`, { method: 'POST' })
+  if (!res.ok) throw new Error('Failed to accept request')
+}
+
+export async function declineFriendRequest(userId: number, otherId: number): Promise<void> {
+  const res = await apiFetch(`${BASE}/users/${userId}/friend-requests/${otherId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to decline request')
 }
 
 export async function getInviteLink(userId: number): Promise<{ link: string; inviter_name: string }> {

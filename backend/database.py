@@ -91,6 +91,10 @@ def init_db():
             'DELETE FROM "like" WHERE album_id NOT IN (SELECT id FROM album)',
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_friendship_pair ON friendship (user_id_a, user_id_b)",
             'CREATE UNIQUE INDEX IF NOT EXISTS uq_like_user_album ON "like" (user_id, album_id)',
+            # ── Friend requests: pre-existing friendships stay accepted ──
+            "ALTER TABLE friendship ADD COLUMN status VARCHAR DEFAULT 'accepted'",
+            "ALTER TABLE friendship ADD COLUMN requested_by INTEGER",
+            "UPDATE friendship SET status = 'accepted' WHERE status IS NULL",
         ]:
             _exec_migration(conn, stmt)
 
