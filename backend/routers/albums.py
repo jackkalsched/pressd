@@ -251,6 +251,23 @@ def import_album(
     session: Session = Depends(get_session),
 ):
     user_id = user.id
+
+    def _return_existing(existing: Album) -> dict:
+        # Backfill art the original import didn't have (e.g. first added
+        # manually or before Cover Art Archive had the album) — otherwise the
+        # NULL invites the iTunes enrichment to guess, and a re-import with
+        # the right cover is the best possible source.
+        if not existing.album_art_url and data.get("cover_url"):
+            existing.album_art_url = data["cover_url"]
+            session.add(existing)
+            session.commit()
+            session.refresh(existing)
+        return {
+            **existing.model_dump(),
+            "songs": [s.model_dump() for s in existing.songs],
+            "already_existed": True,
+        }
+
     # Return existing album if already imported — check Spotify ID first, then name+artist (scoped per user)
     if data.get("spotify_id"):
         existing = session.exec(
@@ -259,11 +276,7 @@ def import_album(
             .where(Album.user_id == user_id)
         ).first()
         if existing:
-            return {
-                **existing.model_dump(),
-                "songs": [s.model_dump() for s in existing.songs],
-                "already_existed": True,
-            }
+            return _return_existing(existing)
     else:
         existing = session.exec(
             select(Album)
@@ -272,11 +285,7 @@ def import_album(
             .where(Album.user_id == user_id)
         ).first()
         if existing:
-            return {
-                **existing.model_dump(),
-                "songs": [s.model_dump() for s in existing.songs],
-                "already_existed": True,
-            }
+            return _return_existing(existing)
 
     extra = data.get("extra_artists")
     album = Album(
@@ -599,33 +608,46 @@ def enrich_covers(
         .where(Album.album_art_url.is_(None))
     ).all()
 
-    def _itunes_search(term: str, norm_name: str) -> str | None:
+    def _norm(s: str | None) -> str:
+        return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+    def _itunes_search(term: str, norm_name: str, norm_artists: list[str]) -> str | None:
         resp = _requests.get(
             "https://itunes.apple.com/search",
             params={"term": term, "entity": "album", "limit": 5},
             timeout=6,
         )
         results = resp.json().get("results", [])
-        # Prefer exact title match
+        # Title AND artist must both match — a same-titled album by a different
+        # artist is worse than no art at all. Artist compares as a substring in
+        # either direction so combined credits ("Bruno Mars, Anderson .Paak &
+        # Silk Sonic") still match. No fall-back-to-first-result.
         for r in results:
-            if re.sub(r"[^a-z0-9]", "", r.get("collectionName", "").lower()) == norm_name:
+            if _norm(r.get("collectionName")) != norm_name:
+                continue
+            r_artist = _norm(r.get("artistName"))
+            if any(na and (na in r_artist or r_artist in na) for na in norm_artists):
                 raw = r.get("artworkUrl100", "")
                 return raw.replace("100x100bb", "600x600bb") if raw else None
-        # Fall back to first result if available
-        if results:
-            raw = results[0].get("artworkUrl100", "")
-            return raw.replace("100x100bb", "600x600bb") if raw else None
         return None
 
     updated = 0
     for album in albums:
         try:
-            norm_name = re.sub(r"[^a-z0-9]", "", album.album_name.lower())
+            norm_name = _norm(album.album_name)
+            norm_artists = [_norm(album.artist)]
+            if album.extra_artists:
+                try:
+                    norm_artists += [_norm(a) for a in json.loads(album.extra_artists)]
+                except (json.JSONDecodeError, TypeError):
+                    pass
             # Pass 1: album + artist (handles most cases)
-            url = _itunes_search(f"{album.album_name} {album.artist}", norm_name)
-            # Pass 2: album name only (handles multi-artist credits like Silk Sonic)
+            url = _itunes_search(f"{album.album_name} {album.artist}", norm_name, norm_artists)
+            # Pass 2: album name only (handles multi-artist credits like Silk
+            # Sonic, where the credited artist breaks the search term but the
+            # artist check above still verifies the result)
             if not url:
-                url = _itunes_search(album.album_name, norm_name)
+                url = _itunes_search(album.album_name, norm_name, norm_artists)
             if url:
                 album.album_art_url = url
                 session.add(album)
