@@ -95,6 +95,9 @@ def init_db():
             "ALTER TABLE friendship ADD COLUMN status VARCHAR DEFAULT 'accepted'",
             "ALTER TABLE friendship ADD COLUMN requested_by INTEGER",
             "UPDATE friendship SET status = 'accepted' WHERE status IS NULL",
+            # ── ML worker split: shared global track store ──
+            "ALTER TABLE song ADD COLUMN track_id INTEGER",
+            "CREATE INDEX IF NOT EXISTS ix_song_track_id ON song (track_id)",
         ]:
             _exec_migration(conn, stmt)
 

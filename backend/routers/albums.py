@@ -322,6 +322,8 @@ def import_album(
     session.commit()
     session.refresh(album)
 
+    _link_tracks(session, album.id)
+
     if album.status == "to_listen":
         _queue_predictions(album.id)
 
@@ -333,6 +335,45 @@ def import_album(
         "songs": [s.model_dump() for s in album.songs],
         "already_existed": False,
     }
+
+
+def _link_tracks(session: Session, album_id: int):
+    """Resolve global track ids for an album's songs (shared-audio dedup):
+    if any user already imported + analyzed the same recording, its audio is
+    reused and the nightly ingest never downloads it again. Never fails the
+    import — the worker's sync_tracks() is the backstop."""
+    from sqlalchemy import text as _sql
+    from ..trackkeys import track_key
+    try:
+        rows = session.execute(_sql(
+            "SELECT s.id, COALESCE(NULLIF(s.artist, ''), a.artist), s.title, s.duration_ms"
+            " FROM song s JOIN album a ON a.id = s.album_id"
+            " WHERE s.album_id = :aid AND s.track_id IS NULL"), {"aid": album_id}).fetchall()
+        for song_id, artist, title, dur in rows:
+            key = track_key(artist or "", title or "")
+            hit = session.execute(_sql(
+                "SELECT id, duration_ms FROM track WHERE track_key = :k"),
+                {"k": key}).fetchone()
+            if hit and dur and hit[1] and abs(dur - hit[1]) > 10_000:
+                key = f"{key}||d{dur // 1000}"   # same name, different recording
+                hit = session.execute(_sql(
+                    "SELECT id, duration_ms FROM track WHERE track_key = :k"),
+                    {"k": key}).fetchone()
+            if hit:
+                tid = hit[0]
+            else:
+                a_norm, t_norm = key.split("||")[0], key.split("||")[1]
+                tid = session.execute(_sql(
+                    "INSERT INTO track (track_key, artist_norm, title_norm, duration_ms, created_at)"
+                    " VALUES (:k, :a, :t, :d, NOW()) ON CONFLICT (track_key) DO UPDATE"
+                    " SET track_key = EXCLUDED.track_key RETURNING id"),
+                    {"k": key, "a": a_norm, "t": t_norm, "d": dur}).scalar()
+            session.execute(_sql("UPDATE song SET track_id = :tid WHERE id = :sid"),
+                            {"tid": tid, "sid": song_id})
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"[_link_tracks] album {album_id} failed: {e}")
 
 
 @router.get("/{album_id}/report")

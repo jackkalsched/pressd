@@ -140,6 +140,11 @@ def _run(album_id: int):
         predicted_song_mean = None
         try:
             _analyze_and_store_songs(con, album_id, artist, album_name)
+            # Bridge until worker cutover: link new songs to global tracks and
+            # copy fresh songaudiofeatures rows into trackaudio (the model's
+            # only audio source)
+            from worker.migrate_tracks import sync_tracks
+            sync_tracks(con)
             from song_score_model import predict_for_album
             predicted_song_mean = predict_for_album(con, album_id)
             if predicted_song_mean is not None:
@@ -152,99 +157,16 @@ def _run(album_id: int):
         except Exception as e:
             print(f"[predict_single] song model failed: {e}")
 
-        # ── 3. Theme (Claude + user ratings as RAG) ──────────────────────────────
-        try:
-            from .corpus import load_or_build_corpus, CACHE_DIR, _safe_filename
-            from .predictor import predict_theme
-
-            corpus = load_or_build_corpus(album_id, artist, album_name, year, None)
-            corpus["genre"] = genre
-
-            # Pull genre-matched rated albums as RAG examples (DB query, no embeddings needed)
-            theme_rows = con.execute(text("""
-                SELECT id, artist, album_name, genre, theme FROM album
-                WHERE status='rated' AND theme IS NOT NULL
-                ORDER BY CASE WHEN genre = :g THEN 0 ELSE 1 END, theme DESC
-                LIMIT 5
-            """), {"g": genre or ""}).fetchall()
-
-            example_dicts = [
-                {"album_id": r[0], "artist": r[1], "album_name": r[2], "theme_score": r[4]}
-                for r in theme_rows
-            ]
-            # Use cached corpus files where available; otherwise provide a genre stub
-            corpora_map: dict[int, dict] = {}
-            for r in theme_rows:
-                path = CACHE_DIR / f"{_safe_filename(r[1], r[2])}.json"
-                if path.exists():
-                    try:
-                        corpora_map[r[0]] = json.loads(path.read_text())
-                    except Exception:
-                        corpora_map[r[0]] = {"llm_analysis": "", "genre": r[3]}
-                else:
-                    corpora_map[r[0]] = {"llm_analysis": "", "genre": r[3]}
-
-            score, reasoning = predict_theme(corpus, example_dicts, corpora_map)
-            if score is not None:
-                norm_score = round(max(1.0, min(10.0, float(score))))
-                con.execute(
-                    text("UPDATE album SET predicted_theme = :theme, predicted_theme_reasoning = :reasoning WHERE id = :id"),
-                    {"theme": norm_score, "reasoning": reasoning, "id": album_id},
-                )
-                con.commit()
-                print(f"[predict_single] theme={norm_score}")
-        except Exception as e:
-            print(f"[predict_single] theme failed: {e}")
-
-        # ── 4. Distinctness (Claude + user ratings as RAG) ────────────────────────
-        try:
-            from .corpus import load_or_build_corpus, CACHE_DIR, _safe_filename
-            from .distinctness_predictor import predict_distinctness
-
-            corpus = load_or_build_corpus(album_id, artist, album_name, year, None)
-            corpus["genre"] = genre
-
-            dist_rows = con.execute(text("""
-                SELECT id, artist, album_name, genre, distinctness FROM album
-                WHERE status='rated' AND distinctness IS NOT NULL
-                ORDER BY CASE WHEN genre = :g THEN 0 ELSE 1 END, distinctness DESC
-                LIMIT 5
-            """), {"g": genre or ""}).fetchall()
-
-            d_examples = [
-                {"album_id": r[0], "artist": r[1], "album_name": r[2], "theme_score": r[4]}
-                for r in dist_rows
-            ]
-            d_corpora: dict[int, dict] = {}
-            for r in dist_rows:
-                path = CACHE_DIR / f"{_safe_filename(r[1], r[2])}.json"
-                if path.exists():
-                    try:
-                        d_corpora[r[0]] = json.loads(path.read_text())
-                    except Exception:
-                        d_corpora[r[0]] = {"llm_analysis": "", "genre": r[3]}
-                else:
-                    d_corpora[r[0]] = {"llm_analysis": "", "genre": r[3]}
-
-            d_score, _ = predict_distinctness(corpus, d_examples, d_corpora)
-            if d_score is not None:
-                norm = round(max(1.0, min(10.0, d_score)), 0)
-                con.execute(
-                    text("UPDATE album SET predicted_distinctness = :dist WHERE id = :id"),
-                    {"dist": norm, "id": album_id},
-                )
-                con.commit()
-                print(f"[predict_single] distinctness={norm}")
-        except Exception as e:
-            print(f"[predict_single] distinctness failed: {e}")
+        # ── 3+4. Theme + distinctness (Claude + user's own ratings as RAG) ──────
+        predict_llm_factors(con, album_id, artist, album_name, year, genre, user_id)
 
         # ── 5. Replay ─────────────────────────────────────────────────────────────
         try:
             from generate_genres_lastfm import infer_genres
 
             artist_row = con.execute(
-                text("SELECT AVG(replay_value) FROM album WHERE status='rated' AND replay_value IS NOT NULL AND artist = :artist"),
-                {"artist": artist},
+                text("SELECT AVG(replay_value) FROM album WHERE status='rated' AND replay_value IS NOT NULL AND artist = :artist AND user_id = :uid"),
+                {"artist": artist, "uid": user_id},
             ).fetchone()
             artist_replay = artist_row[0] if artist_row and artist_row[0] else None
 
@@ -256,8 +178,8 @@ def _run(album_id: int):
                     tags = [t.item.name for t in network.get_artist(artist).get_top_tags(limit=10)]
                     inferred_genre, _ = infer_genres(tags)
                     genre_row = con.execute(
-                        text("SELECT AVG(replay_value) FROM album WHERE status='rated' AND replay_value IS NOT NULL AND genre = :genre"),
-                        {"genre": inferred_genre},
+                        text("SELECT AVG(replay_value) FROM album WHERE status='rated' AND replay_value IS NOT NULL AND genre = :genre AND user_id = :uid"),
+                        {"genre": inferred_genre, "uid": user_id},
                     ).fetchone()
                     artist_replay = genre_row[0] if genre_row and genre_row[0] else None
                 except Exception:
@@ -265,7 +187,8 @@ def _run(album_id: int):
 
             if artist_replay is None:
                 artist_replay = con.execute(
-                    text("SELECT AVG(replay_value) FROM album WHERE status='rated' AND replay_value IS NOT NULL")
+                    text("SELECT AVG(replay_value) FROM album WHERE status='rated' AND replay_value IS NOT NULL AND user_id = :uid"),
+                    {"uid": user_id},
                 ).fetchone()[0]
 
             pred_replay = round(max(1.0, min(10.0, artist_replay)), 1)
@@ -304,7 +227,9 @@ def _run(album_id: int):
                 z_theme  = (pred_theme  - theme_mu)  / theme_sd
                 z_replay = (pred_replay - replay_mu) / replay_sd
                 z_dist   = (pred_dist   - dist_mu)   / dist_sd
-                pred_score = round(1.0 * song_component + 0.25 * z_theme + 0.15 * z_replay + 0.05 * z_dist, 2)
+                # Small-sample factor sds can inflate z-terms; no album may
+                # ever show a predicted score above 10/10
+                pred_score = min(round(1.0 * song_component + 0.25 * z_theme + 0.15 * z_replay + 0.05 * z_dist, 2), 10.0)
                 con.execute(
                     text("UPDATE album SET predicted_score = :score WHERE id = :id"),
                     {"score": pred_score, "id": album_id},
@@ -323,17 +248,107 @@ def _run(album_id: int):
         print(f"[predict_single] Done: {artist} – {album_name}")
 
 
-def normalize_predicted_themes():
+def _rag_corpus(artist: str, album_name: str, genre: str | None) -> dict:
+    """Corpus for a RAG example album: shared DB store → local file → stub."""
+    from .corpus import _db_corpus_read, CACHE_DIR, _safe_filename
+    data = _db_corpus_read(artist, album_name)
+    if data is not None:
+        return data
+    path = CACHE_DIR / f"{_safe_filename(artist, album_name)}.json"
+    if path.exists():
+        try:
+            return json.loads(path.read_text())
+        except Exception:
+            pass
+    return {"llm_analysis": "", "genre": genre}
+
+
+def predict_llm_factors(con, album_id: int, artist: str, album_name: str,
+                        year: int | None, genre: str | None, user_id: int):
+    """Predict theme + distinctness for one album via Claude, using the album
+    owner's own rated albums as RAG examples. Writes predicted_theme,
+    predicted_theme_reasoning, predicted_distinctness. Each factor fails
+    independently."""
+    # ── Theme ──
+    try:
+        from .corpus import load_or_build_corpus
+        from .predictor import predict_theme
+
+        corpus = load_or_build_corpus(album_id, artist, album_name, year, None)
+        corpus["genre"] = genre
+
+        theme_rows = con.execute(text("""
+            SELECT id, artist, album_name, genre, theme FROM album
+            WHERE status='rated' AND theme IS NOT NULL AND user_id = :uid
+            ORDER BY CASE WHEN genre = :g THEN 0 ELSE 1 END, theme DESC
+            LIMIT 5
+        """), {"g": genre or "", "uid": user_id}).fetchall()
+
+        example_dicts = [
+            {"album_id": r[0], "artist": r[1], "album_name": r[2], "theme_score": r[4]}
+            for r in theme_rows
+        ]
+        corpora_map = {r[0]: _rag_corpus(r[1], r[2], r[3]) for r in theme_rows}
+
+        score, reasoning = predict_theme(corpus, example_dicts, corpora_map)
+        if score is not None:
+            norm_score = round(max(1.0, min(10.0, float(score))))
+            con.execute(
+                text("UPDATE album SET predicted_theme = :theme, predicted_theme_reasoning = :reasoning WHERE id = :id"),
+                {"theme": norm_score, "reasoning": reasoning, "id": album_id},
+            )
+            con.commit()
+            print(f"[predict_single] theme={norm_score}")
+    except Exception as e:
+        print(f"[predict_single] theme failed: {e}")
+
+    # ── Distinctness ──
+    try:
+        from .corpus import load_or_build_corpus
+        from .distinctness_predictor import predict_distinctness
+
+        corpus = load_or_build_corpus(album_id, artist, album_name, year, None)
+        corpus["genre"] = genre
+
+        dist_rows = con.execute(text("""
+            SELECT id, artist, album_name, genre, distinctness FROM album
+            WHERE status='rated' AND distinctness IS NOT NULL AND user_id = :uid
+            ORDER BY CASE WHEN genre = :g THEN 0 ELSE 1 END, distinctness DESC
+            LIMIT 5
+        """), {"g": genre or "", "uid": user_id}).fetchall()
+
+        d_examples = [
+            {"album_id": r[0], "artist": r[1], "album_name": r[2], "theme_score": r[4]}
+            for r in dist_rows
+        ]
+        d_corpora = {r[0]: _rag_corpus(r[1], r[2], r[3]) for r in dist_rows}
+
+        d_score, _ = predict_distinctness(corpus, d_examples, d_corpora)
+        if d_score is not None:
+            norm = round(max(1.0, min(10.0, d_score)), 0)
+            con.execute(
+                text("UPDATE album SET predicted_distinctness = :dist WHERE id = :id"),
+                {"dist": norm, "id": album_id},
+            )
+            con.commit()
+            print(f"[predict_single] distinctness={norm}")
+    except Exception as e:
+        print(f"[predict_single] distinctness failed: {e}")
+
+
+def normalize_predicted_themes(only_user: int | None = None):
     """Remap all predicted_theme values so their distribution matches the user's actual
     theme rating distribution. Prevents LLM scores from being systematically biased."""
     with engine.connect() as con:
         user_ids = [r[0] for r in con.execute(
-            text("SELECT DISTINCT user_id FROM album WHERE status='to_listen' AND predicted_theme IS NOT NULL")
+            text("SELECT DISTINCT user_id FROM album WHERE status IN ('to_listen', 'listening') AND predicted_theme IS NOT NULL")
         ).fetchall()]
+        if only_user is not None:
+            user_ids = [u for u in user_ids if u == only_user]
         for user_id in user_ids:
             target_mu, target_sd = _factor_stats(con, "theme", user_id)
             rows = con.execute(
-                text("SELECT id, predicted_theme FROM album WHERE user_id=:uid AND status='to_listen' AND predicted_theme IS NOT NULL"),
+                text("SELECT id, predicted_theme FROM album WHERE user_id=:uid AND status IN ('to_listen', 'listening') AND predicted_theme IS NOT NULL"),
                 {"uid": user_id},
             ).fetchall()
             if not rows:
@@ -362,14 +377,24 @@ def recompute_all_predictions():
         _recompute_unrated(con)
 
 
-def _recompute_unrated(con):
-    # Get all distinct users who have unrated albums with predictions
+def _recompute_unrated(con, only_user: int | None = None,
+                       use_stored_replay: bool = False):
+    """Recompute predicted_replay + composite predicted_score per user.
+
+    use_stored_replay=True (nightly worker): predicted_replay was already
+    written by the cluster-based replay stage — consume it instead of
+    recomputing the artist/genre-average heuristic, which would clobber it.
+    Heuristic remains the fallback for albums the replay stage couldn't
+    cover (no analyzed audio → no cluster assignment)."""
     user_ids = [r[0] for r in con.execute(
         text(
             "SELECT DISTINCT user_id FROM album"
-            " WHERE status='to_listen' AND predicted_theme IS NOT NULL AND predicted_distinctness IS NOT NULL"
+            " WHERE status IN ('to_listen', 'listening')"
+            " AND predicted_theme IS NOT NULL AND predicted_distinctness IS NOT NULL"
         )
     ).fetchall()]
+    if only_user is not None:
+        user_ids = [u for u in user_ids if u == only_user]
 
     for user_id in user_ids:
         theme_mu, theme_sd   = _factor_stats(con, "theme", user_id)
@@ -385,19 +410,23 @@ def _recompute_unrated(con):
 
         unrated = con.execute(
             text(
-                "SELECT id, artist, genre, predicted_theme, predicted_distinctness, predicted_song_mean FROM album"
-                " WHERE status='to_listen' AND user_id = :uid"
+                "SELECT id, artist, genre, predicted_theme, predicted_distinctness,"
+                " predicted_song_mean, predicted_replay FROM album"
+                " WHERE status IN ('to_listen', 'listening') AND user_id = :uid"
                 " AND predicted_theme IS NOT NULL AND predicted_distinctness IS NOT NULL"
             ),
             {"uid": user_id},
         ).fetchall()
 
-        for album_id, artist, genre, pred_theme, pred_dist, stored_song_mean in unrated:
-            row = con.execute(
-                text("SELECT AVG(replay_value) FROM album WHERE status='rated' AND user_id = :uid AND replay_value IS NOT NULL AND artist = :artist"),
-                {"uid": user_id, "artist": artist},
-            ).fetchone()
-            pred_replay = row[0] if row and row[0] else None
+        for album_id, artist, genre, pred_theme, pred_dist, stored_song_mean, stored_replay in unrated:
+            pred_replay = stored_replay if use_stored_replay else None
+
+            if pred_replay is None:
+                row = con.execute(
+                    text("SELECT AVG(replay_value) FROM album WHERE status='rated' AND user_id = :uid AND replay_value IS NOT NULL AND artist = :artist"),
+                    {"uid": user_id, "artist": artist},
+                ).fetchone()
+                pred_replay = row[0] if row and row[0] else None
 
             if pred_replay is None:
                 row = con.execute(
@@ -424,7 +453,8 @@ def _recompute_unrated(con):
             z_theme  = (pred_theme  - theme_mu)  / theme_sd
             z_replay = (pred_replay - replay_mu) / replay_sd
             z_dist   = (pred_dist   - dist_mu)   / dist_sd
-            pred_score = round(1.0 * song_component + 0.25 * z_theme + 0.15 * z_replay + 0.05 * z_dist, 2)
+            # Capped at 10/10 — small-sample factor sds can inflate z-terms
+            pred_score = min(round(1.0 * song_component + 0.25 * z_theme + 0.15 * z_replay + 0.05 * z_dist, 2), 10.0)
 
             con.execute(
                 text("UPDATE album SET predicted_replay = :replay, predicted_score = :score WHERE id = :id"),

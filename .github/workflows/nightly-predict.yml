@@ -1,0 +1,41 @@
+name: Nightly predictions
+
+# Per-user prediction pipeline (PLAN_ml_worker_split §4, phase B).
+# Audio ingest (phase A) runs separately on the Mac via launchd — see
+# ops/com.pressd.audio-ingest.plist — until the 30s-preview ingest lands.
+
+on:
+  schedule:
+    - cron: "30 9 * * *" # 2:30am PT
+  workflow_dispatch:
+    inputs:
+      user:
+        description: "Run for a single user id (blank = all eligible users)"
+        required: false
+        type: string
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements-worker.txt
+
+      - name: Run nightly predictions
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+        run: |
+          if [ -n "${{ inputs.user }}" ]; then
+            python -m worker.nightly_predict --user "${{ inputs.user }}"
+          else
+            python -m worker.nightly_predict
+          fi

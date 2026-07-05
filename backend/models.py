@@ -102,6 +102,7 @@ class Song(SQLModel, table=True):
     loudness_db: Optional[float] = None
 
     album_id: int = Field(foreign_key="album.id", index=True)
+    track_id: Optional[int] = Field(default=None, foreign_key="track.id", index=True)
     album: Optional[Album] = Relationship(back_populates="songs")
     audio_features: Optional["SongAudioFeatures"] = Relationship(back_populates="song")
 
@@ -148,6 +149,63 @@ class Like(SQLModel, table=True):
     user_id: int = Field(foreign_key="pressuser.id", index=True)
     album_id: int = Field(foreign_key="album.id", index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class Track(SQLModel, table=True):
+    """Global, user-agnostic identity for a unique recording. Dedup key is
+    normalized (artist, title) — spotify_id is unpopulated in this DB. Audio
+    is analyzed once per track and shared across every user's copy."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    track_key: str = Field(unique=True, index=True)
+    artist_norm: str = Field(index=True)
+    title_norm: str
+    duration_ms: Optional[int] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class TrackAudio(SQLModel, table=True):
+    """Essentia features for one Track. Never mix `source` values between
+    training and prediction (30s-preview features shift vs full tracks)."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    track_id: int = Field(foreign_key="track.id", unique=True, index=True)
+    analyzed_at: datetime = Field(default_factory=datetime.utcnow)
+    source: str = Field(default="yt_full")  # 'yt_full' | 'preview_30s'
+
+    bpm: Optional[float] = None
+    bpm_confidence: Optional[float] = None
+    key: Optional[str] = None
+    scale: Optional[str] = None
+    key_strength: Optional[float] = None
+    chords_changes_rate: Optional[float] = None
+    loudness_db: Optional[float] = None
+    dynamic_complexity: Optional[float] = None
+    danceability: Optional[float] = None
+    energy: Optional[float] = None
+    dissonance: Optional[float] = None
+    spectral_centroid: Optional[float] = None
+    onset_rate: Optional[float] = None
+    loudness_lufs: Optional[float] = None
+    mfcc: Optional[str] = None  # JSON array of 13 mean coefficients
+
+
+class AlbumCorpus(SQLModel, table=True):
+    """Shared LLM album-analysis corpus (was local corpus/*.json files),
+    keyed by normalized artist+album so all users reuse one analysis."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    album_key: str = Field(unique=True, index=True)
+    corpus_json: str
+    built_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class WorkerRun(SQLModel, table=True):
+    """One row per worker job execution (audio ingest / per-user predict)."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    job: str = Field(index=True)  # 'audio_ingest' | 'nightly_predict'
+    user_id: Optional[int] = Field(default=None, index=True)
+    started_at: datetime = Field(default_factory=datetime.utcnow)
+    finished_at: Optional[datetime] = None
+    status: str = Field(default="running")  # running | ok | error | below_threshold
+    detail_json: Optional[str] = None
 
 
 class ArtistMeta(SQLModel, table=True):

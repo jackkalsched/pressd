@@ -13,7 +13,6 @@ Usage:
 """
 
 import json
-import pickle
 import re
 import sys
 import pathlib
@@ -61,44 +60,48 @@ _META_COLS = [
 _AUDIO_COLS = [
     "bpm", "bpm_confidence", "key", "scale", "key_strength", "chords_changes_rate",
     "loudness_db", "dynamic_complexity", "danceability", "energy", "dissonance",
-    "spectral_centroid", "inharmonicity", "onset_rate", "loudness_lufs", "mfcc",
+    "spectral_centroid", "onset_rate", "loudness_lufs", "mfcc",
 ]
 _FEATURE_COLS = _META_COLS[:3] + ["score"] + _META_COLS[3:] + _AUDIO_COLS
 _PREDICT_COLS = _META_COLS + _AUDIO_COLS
 
-_TRAINING_SQL = text("""
+# Audio comes from the shared global track store (trackaudio via song.track_id):
+# one analysis per unique recording, reused across every user's copy.
+# Training is strictly per-user — each user's model sees only their ratings.
+_AF_SELECT = """
+           af.bpm, af.bpm_confidence, af.key, af.scale, af.key_strength,
+           af.chords_changes_rate, af.loudness_db, af.dynamic_complexity,
+           af.danceability, af.energy, af.dissonance, af.spectral_centroid,
+           af.onset_rate, af.loudness_lufs, af.mfcc
+"""
+
+_TRAINING_SQL = text(f"""
     SELECT s.id AS song_id, s.title, s.artist, s.score,
            a.id AS album_id, a.album_name, a.genre,
            a.sub_genre1, a.sub_genre2, a.sub_genre3, a.year,
            a.theme, a.replay_value, a.production, a.distinctness,
-           af.bpm, af.bpm_confidence, af.key, af.scale, af.key_strength,
-           af.chords_changes_rate, af.loudness_db, af.dynamic_complexity,
-           af.danceability, af.energy, af.dissonance, af.spectral_centroid,
-           af.inharmonicity, af.onset_rate, af.loudness_lufs, af.mfcc
+           {_AF_SELECT}
     FROM song s
     JOIN album a ON a.id = s.album_id
-    JOIN songaudiofeatures af ON af.song_id = s.id
-    WHERE s.score IS NOT NULL AND af.bpm IS NOT NULL
+    JOIN trackaudio af ON af.track_id = s.track_id
+    WHERE s.score IS NOT NULL AND af.bpm IS NOT NULL AND a.user_id = :uid
 """)
 
-_ALBUM_SQL = text("""
+_ALBUM_SQL = text(f"""
     SELECT s.id AS song_id, s.title, s.artist,
            a.id AS album_id, a.album_name, a.genre,
            a.sub_genre1, a.sub_genre2, a.sub_genre3, a.year,
            a.theme, a.replay_value, a.production, a.distinctness,
-           af.bpm, af.bpm_confidence, af.key, af.scale, af.key_strength,
-           af.chords_changes_rate, af.loudness_db, af.dynamic_complexity,
-           af.danceability, af.energy, af.dissonance, af.spectral_centroid,
-           af.inharmonicity, af.onset_rate, af.loudness_lufs, af.mfcc
+           {_AF_SELECT}
     FROM song s
     JOIN album a ON a.id = s.album_id
-    JOIN songaudiofeatures af ON af.song_id = s.id
+    JOIN trackaudio af ON af.track_id = s.track_id
     WHERE s.album_id = :album_id AND af.bpm IS NOT NULL
 """)
 
 
-def load_data(con) -> pd.DataFrame:
-    result = con.execute(_TRAINING_SQL)
+def load_data(con, user_id: int = 1) -> pd.DataFrame:
+    result = con.execute(_TRAINING_SQL, {"uid": user_id})
     return pd.DataFrame(result.fetchall(), columns=_FEATURE_COLS)
 
 
@@ -444,9 +447,36 @@ class TasteModel:
         return self
 
 
-def fit_taste_full(df: pd.DataFrame, artist_k: int = ARTIST_K,
-                   album_k: int = ALBUM_K) -> TasteModel:
+def fit_taste_full(df: pd.DataFrame, artist_k: int | None = None,
+                   album_k: int | None = None) -> TasteModel:
+    """k=None auto-scales cluster counts to the library: the tuned (12, 55)
+    assumes a ~360-album library and would overfit a small user's data."""
+    if artist_k is None:
+        artist_k = int(np.clip(df["artist"].nunique() // 4, 2, ARTIST_K))
+    if album_k is None:
+        album_k = int(np.clip(df["album_id"].nunique() // 6, 2, ALBUM_K))
     return TasteModel(artist_k, album_k).prepare(df).fit_clusters().fit_scores(df)
+
+
+def artist_cluster_replay_mean(df: pd.DataFrame, taste: TasteModel,
+                               artist: str) -> float | None:
+    """Mean replay_value of rated albums by the artist's cluster-mates,
+    ensemble-averaged across the KMeans seeds. The artist's own albums are
+    excluded so the 50/50 blend with their own mean stays independent.
+    Works for unseen artists after taste.extend() has mapped them."""
+    alb = (df.drop_duplicates("album_id")[["artist", "replay_value"]]
+             .dropna(subset=["replay_value"]))
+    if alb.empty:
+        return None
+    vals = []
+    for cmap in taste.artist_clusters:
+        c = cmap.get(artist)
+        if c is None:
+            continue
+        mates = alb[(alb["artist"].map(cmap) == c) & (alb["artist"] != artist)]
+        if len(mates):
+            vals.append(float(mates["replay_value"].mean()))
+    return float(np.mean(vals)) if vals else None
 
 
 def fold_features(df: pd.DataFrame, taste: TasteModel) -> pd.DataFrame:
@@ -707,170 +737,125 @@ def train_and_predict(df: pd.DataFrame, target: pd.Series, taste: TasteModel):
 
 
 # ── 11. Backend integration (train / predict for an album) ───────────────────
-
-_MODEL_PATH = pathlib.Path(__file__).parent / "song_score_model.pkl"
-_META_PATH  = pathlib.Path(__file__).parent / "song_score_model_meta.json"
-_FEAT_VERSION = 2   # bump when the feature set changes to invalidate old caches
+# No model cache: the nightly worker retrains per user per run (~1–2 min), so
+# artifact management (per-user .pkl files, staleness keys) buys nothing.
 
 
-def _load_cached_model(n_songs: int):
-    """Return cached pipeline if trained on exactly n_songs with the current
-    feature set, else None."""
-    try:
-        if not _MODEL_PATH.exists() or not _META_PATH.exists():
-            return None
-        with open(_META_PATH) as f:
-            meta = json.load(f)
-        if meta.get("n_songs") != n_songs or meta.get("feat_version") != _FEAT_VERSION:
-            return None
-        with open(_MODEL_PATH, "rb") as f:
-            pipe = pickle.load(f)
-        print(f"[song_score_model] loaded cached model ({n_songs} training songs)")
-        return pipe
-    except Exception as e:
-        print(f"[song_score_model] cache load failed: {e}")
-        return None
+class UserModel:
+    """A user's fitted library: training frame, taste model, and pipeline.
+    taste.extend() calls during prediction accumulate, so cluster-based
+    features (and replay cluster means) stay available for unseen artists."""
+    def __init__(self, user_id: int, df: pd.DataFrame, taste: TasteModel, pipe):
+        self.user_id = user_id
+        self.df = df
+        self.taste = taste
+        self.pipe = pipe
 
 
-def _save_model(pipe, n_songs: int, model_name: str):
-    try:
-        with open(_MODEL_PATH, "wb") as f:
-            pickle.dump(pipe, f)
-        with open(_META_PATH, "w") as f:
-            json.dump({"n_songs": n_songs, "model": model_name,
-                       "feat_version": _FEAT_VERSION}, f)
-        print(f"[song_score_model] saved model → {_MODEL_PATH.name}  ({n_songs} songs, {model_name})")
-    except Exception as e:
-        print(f"[song_score_model] save failed: {e}")
-
-
-def train_model(con):
-    """Train on all rated songs with audio features, save .pkl, return pipeline."""
-    df_raw = load_data(con)
-    n = len(df_raw)
-    if n < 20:
-        print(f"[song_score_model] only {n} training songs — need ≥20")
-        return None, n
-
-    df = prepare_frame(df_raw)
+def fit_user_model(con, user_id: int = 1) -> UserModel | None:
+    """Train the song score model on one user's rated+analyzed songs only."""
+    df = prepare_frame(load_data(con, user_id))
     if len(df) < 20:
-        return None, n
+        print(f"[song_score_model] user {user_id}: only {len(df)} training songs — need ≥20")
+        return None
 
     taste = fit_taste_full(df)
     feats = fold_features(df, taste)
 
     models = get_models()
-    pipe = None
-    chosen = None
     for model_name in ("LightGBM", "XGBoost", "RandomForest"):
         if model_name not in models:
             continue
         try:
-            p = models[model_name]
-            p.fit(feats, df["score"])
-            pipe = p
-            chosen = model_name
-            print(f"[song_score_model] trained {model_name} on {len(df)} songs")
-            break
+            pipe = models[model_name]
+            pipe.fit(feats, df["score"])
+            print(f"[song_score_model] user {user_id}: trained {model_name} on {len(df)} songs")
+            return UserModel(user_id, df, taste, pipe)
         except Exception as e:
             print(f"[song_score_model] {model_name} failed ({e}), trying next")
-
-    if pipe:
-        _save_model(pipe, n, chosen)
-    return pipe, n
+    return None
 
 
-def predict_for_album(con, album_id: int) -> float | None:
-    """Load or train model, predict song scores for album_id. Returns mean predicted score."""
-    df_raw = load_data(con)
-    n = len(df_raw)
-    if n < 20:
-        return None
+def train_model(con, user_id: int = 1):
+    """Legacy-shaped wrapper: returns (pipeline, n_training_songs)."""
+    um = fit_user_model(con, user_id)
+    return (um.pipe if um else None), (len(um.df) if um else 0)
 
-    result = con.execute(_ALBUM_SQL, {"album_id": album_id})
-    rows = result.fetchall()
+
+def _album_frame(con, album_id: int) -> pd.DataFrame | None:
+    rows = con.execute(_ALBUM_SQL, {"album_id": album_id}).fetchall()
     if not rows:
         return None
     df_pred = prepare_frame(pd.DataFrame(rows, columns=_PREDICT_COLS))
-    if df_pred.empty:
+    return None if df_pred.empty else df_pred
+
+
+def predict_song_mean(con, um: UserModel, album_id: int) -> float | None:
+    """Predict one album's mean song score with an already-fitted UserModel."""
+    df_pred = _album_frame(con, album_id)
+    if df_pred is None:
         return None
+    um.taste.extend(df_pred)   # nearest-cluster assignment for unseen artist/album
+    preds = um.pipe.predict(fold_features(df_pred, um.taste))
+    return float(np.mean(preds))
 
-    df = prepare_frame(df_raw)
-    taste = fit_taste_full(df)
-    taste.extend(df_pred)   # nearest-cluster assignment for unseen artist/album
-    feats_pred = fold_features(df_pred, taste)
 
-    # Use cached model if training data unchanged, otherwise retrain
-    pipe = _load_cached_model(n)
-    if pipe is None:
-        pipe, _ = train_model(con)
-    if pipe is None:
+def predict_for_album(con, album_id: int) -> float | None:
+    """Self-contained single-album prediction (fits the album owner's model
+    from scratch — prefer fit_user_model + predict_song_mean for batches)."""
+    row = con.execute(text("SELECT user_id FROM album WHERE id = :id"),
+                      {"id": album_id}).fetchone()
+    if not row:
         return None
-
-    preds = pipe.predict(feats_pred)
-    avg = float(np.mean(preds))
-    print(f"[song_score_model] album {album_id}: {len(preds)} songs → avg={round(avg, 3)}")
+    um = fit_user_model(con, row[0] or 1)
+    if um is None:
+        return None
+    avg = predict_song_mean(con, um, album_id)
+    if avg is not None:
+        print(f"[song_score_model] album {album_id}: avg={round(avg, 3)}")
     return avg
 
 
-def repredict_all_song_means(con) -> dict:
-    """Refresh predicted_song_mean for every to_listen album using the current
-    library, then recompute composite predicted scores.
+def repredict_all_song_means(con, user_id: int = 1, um: UserModel | None = None,
+                             recompute_composites: bool = True) -> dict:
+    """Refresh predicted_song_mean for every one of the user's unrated albums
+    (to_listen + listening) that has analyzed audio.
 
-    This is the post-rating pipeline: call it whenever a new album is rated so
-    predictions absorb the new data. The model cache is keyed on training-set
-    size, so a newly rated album automatically triggers a retrain. Fits the
-    taste model once and reuses it for all albums. Skips albums whose songs
-    have no analyzed audio features.
-    """
+    This is the post-rating pipeline: run it whenever the user rates an album
+    so predictions absorb the new data. Pass a prefitted UserModel to reuse
+    across pipeline stages (the nightly worker does); the worker also passes
+    recompute_composites=False because it runs its own composite stage."""
     albums = con.execute(text(
-        "SELECT id FROM album WHERE status = 'to_listen' ORDER BY id"
-    )).fetchall()
+        "SELECT id FROM album WHERE status IN ('to_listen', 'listening')"
+        " AND user_id = :uid ORDER BY id"), {"uid": user_id}).fetchall()
 
-    df_raw = load_data(con)
-    n = len(df_raw)
-    if n < 20:
-        print(f"[song_score_model] only {n} training songs — skipping repredict")
-        return {"updated": 0, "skipped": len(albums)}
-
-    df = prepare_frame(df_raw)
-    taste = fit_taste_full(df)
-
-    pipe = _load_cached_model(n)
-    if pipe is None:
-        pipe, _ = train_model(con)
-    if pipe is None:
+    if um is None:
+        um = fit_user_model(con, user_id)
+    if um is None:
         return {"updated": 0, "skipped": len(albums)}
 
     updated, skipped = 0, 0
     for (album_id,) in albums:
-        rows = con.execute(_ALBUM_SQL, {"album_id": album_id}).fetchall()
-        if not rows:
+        mean = predict_song_mean(con, um, album_id)
+        if mean is None:
             skipped += 1
             continue
-        df_pred = prepare_frame(pd.DataFrame(rows, columns=_PREDICT_COLS))
-        if df_pred.empty:
-            skipped += 1
-            continue
-
-        taste.extend(df_pred)
-        feats = fold_features(df_pred, taste)
-        mean = round(float(np.mean(pipe.predict(feats))), 4)
         con.execute(
             text("UPDATE album SET predicted_song_mean = :mean WHERE id = :id"),
-            {"mean": mean, "id": album_id},
+            {"mean": round(mean, 4), "id": album_id},
         )
         updated += 1
 
     con.commit()
-    print(f"[song_score_model] repredicted {updated} to_listen albums "
+    print(f"[song_score_model] user {user_id}: repredicted {updated} unrated albums "
           f"({skipped} skipped, no analyzed audio)")
 
-    try:
-        from theme_predictor.predict_single import recompute_all_predictions
-        recompute_all_predictions()
-    except Exception as e:
-        print(f"[song_score_model] composite recompute failed: {e}")
+    if recompute_composites:
+        try:
+            from theme_predictor.predict_single import recompute_all_predictions
+            recompute_all_predictions()
+        except Exception as e:
+            print(f"[song_score_model] composite recompute failed: {e}")
 
     return {"updated": updated, "skipped": skipped}
 

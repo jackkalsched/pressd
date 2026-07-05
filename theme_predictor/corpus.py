@@ -125,17 +125,59 @@ def build_corpus(album_id: int, artist: str, album_name: str,
     }
 
 
+def _db_corpus_read(artist: str, album_name: str) -> dict | None:
+    """Shared albumcorpus table — the canonical store; one analysis per album
+    across all users. Local CACHE_DIR is a read-through fallback."""
+    try:
+        from sqlalchemy import text as _text
+        from backend.database import engine
+        from backend.trackkeys import album_key
+        with engine.connect() as con:
+            row = con.execute(
+                _text("SELECT corpus_json FROM albumcorpus WHERE album_key = :k"),
+                {"k": album_key(artist, album_name)}).fetchone()
+        return json.loads(row[0]) if row else None
+    except Exception as e:
+        print(f"[corpus] DB read failed ({e}) — falling back to local cache")
+        return None
+
+
+def _db_corpus_write(artist: str, album_name: str, corpus: dict):
+    try:
+        from sqlalchemy import text as _text
+        from backend.database import engine
+        from backend.trackkeys import album_key
+        with engine.connect() as con:
+            con.execute(_text(
+                "INSERT INTO albumcorpus (album_key, corpus_json, built_at)"
+                " VALUES (:k, :c, NOW()) ON CONFLICT (album_key)"
+                " DO UPDATE SET corpus_json = :c, built_at = NOW()"),
+                {"k": album_key(artist, album_name), "c": json.dumps(corpus)})
+            con.commit()
+    except Exception as e:
+        print(f"[corpus] DB write failed ({e}) — local cache only")
+
+
 def load_or_build_corpus(album_id: int, artist: str, album_name: str,
                           year: int | None, theme_score: float | None,
                           force: bool = False) -> dict:
+    if not force:
+        data = _db_corpus_read(artist, album_name)
+        if data is not None:
+            data["theme_score"] = theme_score
+            return data
+
     path = CACHE_DIR / f"{_safe_filename(artist, album_name)}.json"
     if path.exists() and not force:
         data = json.loads(path.read_text())
         # Update theme_score in case it was added since caching
         data["theme_score"] = theme_score
+        _db_corpus_write(artist, album_name, data)  # promote to shared store
         return data
+
     corpus = build_corpus(album_id, artist, album_name, year, theme_score)
     path.write_text(json.dumps(corpus, indent=2, ensure_ascii=False))
+    _db_corpus_write(artist, album_name, corpus)
     return corpus
 
 

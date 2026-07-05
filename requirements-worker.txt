@@ -1,0 +1,16 @@
+# Nightly ML worker (worker/nightly_predict.py) — see PLAN_ml_worker_split.md.
+# The web service's requirements.txt deliberately excludes all of this;
+# audio ingest additionally needs essentia + yt-dlp (local Mac only for now).
+pandas==2.3.3
+numpy>=1.26
+scikit-learn>=1.5
+scipy>=1.13
+lightgbm>=4.3
+sqlalchemy==2.0.36
+sqlmodel==0.0.38
+psycopg2-binary==2.9.12
+python-dotenv==1.2.1
+anthropic>=0.40.0
+pylast>=5.2
+requests==2.32.5
+beautifulsoup4==4.14.3
