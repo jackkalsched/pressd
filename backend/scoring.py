@@ -11,6 +11,10 @@ WEIGHTS = {
 BANG_THRESHOLD = 8.0
 SKIP_THRESHOLD = 6.5
 
+# Albums this short are EPs: the rating flow skips the four factor ratings,
+# and the album score is just the song mean (mirrors isEP in RatingScreen.tsx)
+EP_MAX_TRACKS = 6
+
 
 def compute_a_score(score: float) -> float:
     return (15 * score - 14) / 13
@@ -87,22 +91,29 @@ def recompute_all_scores(session) -> None:
             select(Album).where(
                 Album.status == "rated",
                 Album.user_id == user_id,
-                Album.theme.is_not(None),
-                Album.replay_value.is_not(None),
-                Album.production.is_not(None),
-                Album.distinctness.is_not(None),
             ).options(selectinload(Album.songs))
         ).all()
 
         for album in albums:
             song_scores = [s.score for s in album.songs if s.score is not None]
-            if song_scores:
+            if not song_scores:
+                continue
+            has_factors = all(
+                getattr(album, f) is not None
+                for f in ("theme", "replay_value", "production", "distinctness")
+            )
+            if has_factors:
                 album.score = compute_album_score(
                     song_scores,
                     album.theme, album.replay_value,
                     album.production, album.distinctness,
                     factor_stats,
                 )
-                session.add(album)
+            elif len(album.songs) <= EP_MAX_TRACKS:
+                # EP: no factor ratings by design — score is the song mean
+                album.score = round(sum(song_scores) / len(song_scores), 2)
+            else:
+                continue  # full album still awaiting factor ratings
+            session.add(album)
 
     session.commit()

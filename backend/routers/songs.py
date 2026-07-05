@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 from ..database import get_session
 from ..deps import current_user, authorize_view
 from ..models import Song, Album, PressUser
-from ..scoring import compute_a_score, compute_album_score, get_factor_stats
+from ..scoring import compute_a_score, compute_album_score, get_factor_stats, EP_MAX_TRACKS
 
 router = APIRouter(prefix="/songs", tags=["songs"])
 
@@ -76,23 +76,28 @@ def rate_song(
 
     session.add(song)
 
-    # Recompute album score if all songs rated and factors set
+    # Recompute album score if all songs rated: composite when the four
+    # factors are set, song mean for EPs (which skip factors by design)
     album = session.get(Album, song.album_id)
     if album:
         rated = [s.score for s in album.songs if s.score is not None]
-        if (
-            len(rated) == len(album.songs)
-            and album.theme is not None
+        has_factors = (
+            album.theme is not None
             and album.replay_value is not None
             and album.production is not None
             and album.distinctness is not None
-        ):
-            factor_stats = get_factor_stats(session)
+        )
+        if len(rated) == len(album.songs) and has_factors:
+            factor_stats = get_factor_stats(session, user_id=album.user_id)
             album.score = compute_album_score(
                 rated, album.theme, album.replay_value,
                 album.production, album.distinctness,
                 factor_stats,
             )
+            session.add(album)
+        elif (len(rated) == len(album.songs) and not has_factors
+              and len(album.songs) <= EP_MAX_TRACKS):
+            album.score = round(sum(rated) / len(rated), 2)
             session.add(album)
 
     session.commit()
