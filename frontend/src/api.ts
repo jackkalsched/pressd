@@ -232,6 +232,8 @@ export interface SpotifyAlbumResult {
   total_tracks: number
   tracks: SpotifyTrack[]
   genre?: string | null
+  release_date?: string | null
+  upcoming?: boolean
 }
 
 export async function searchSpotify(q: string): Promise<SpotifyAlbumResult[]> {
