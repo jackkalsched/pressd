@@ -47,16 +47,9 @@ def list_albums(
 ):
     target_id = user_id if user_id is not None else user.id
     authorize_view(user, target_id, session)
-    song_count = (
-        select(func.count(Song.id))
-        .where(Song.album_id == Album.id)
-        .correlate(Album)
-        .scalar_subquery()
-    )
+    # Short releases (EPs/singles) are included everywhere; the frontend
+    # renders an EP/Single tag to distinguish them from full albums
     q = select(Album).where(Album.user_id == target_id)
-    # Only exclude short releases (singles/EPs) for rated albums; unrated albums may have no tracks yet
-    if status not in ("to_listen", "listening"):
-        q = q.where(song_count > 6)
     if status:
         q = q.where(Album.status == status)
     if genre:

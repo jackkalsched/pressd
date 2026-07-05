@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchAlbums, fetchScatterData, fetchArtistStats } from '../api'
 import { useUser } from '../context/UserContext'
 import { Loader2, Music } from 'lucide-react'
+import { shortReleaseLabel } from '../types'
 
 // ── Album table ───────────────────────────────────────────────────────────────
 
@@ -400,6 +401,11 @@ export default function Ratings() {
                                 : <Music size={14} className="text-[#b0a090]" strokeWidth={1.5} />}
                             </div>
                             <span className="text-[#1c1917] text-sm font-medium">{album.albumName}</span>
+                            {shortReleaseLabel(album) && (
+                              <span className="shrink-0 text-[#a8a29e] text-[9px] font-bold uppercase tracking-[0.08em] border border-[#ddd5c8] rounded px-1.5 py-0.5">
+                                {shortReleaseLabel(album)}
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="py-3 px-4 text-sm">

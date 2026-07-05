@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Play, ChevronRight, Star, Trash2, Music, Sparkles } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Album } from '../types'
-import { SKIP_THRESHOLD } from '../types'
+import { SKIP_THRESHOLD, shortReleaseLabel } from '../types'
 import RecommendModal from './RecommendModal'
 import { deleteAlbum, fetchScoreRange } from '../api'
 import { useUser } from '../context/UserContext'
@@ -69,6 +69,8 @@ export default function AlbumCard({ album, showActions = true }: Props) {
     album.status === 'rated' &&
     ratedScores.length > 7 &&
     ratedScores.every(s => s >= SKIP_THRESHOLD)
+
+  const releaseTag = shortReleaseLabel(album)
 
   return (
     <>
@@ -158,6 +160,18 @@ export default function AlbumCard({ album, showActions = true }: Props) {
               <Sparkles size={11} className="text-[#2d6a4f]" strokeWidth={2.25} />
               <span className="text-[#2d6a4f] text-[9px] font-bold uppercase tracking-[0.08em] leading-none">
                 No skips
+              </span>
+            </div>
+          )}
+
+          {/* EP / Single tag — short releases score as the song mean */}
+          {releaseTag && album.status !== 'listening' && (
+            <div
+              className="absolute bottom-2.5 right-2.5 bg-white/85 backdrop-blur-sm rounded-full px-2 py-1 shadow-sm ring-1 ring-black/5 select-none"
+              title={`${releaseTag} — scored as the average of its songs`}
+            >
+              <span className="text-[#78716c] text-[9px] font-bold uppercase tracking-[0.08em] leading-none">
+                {releaseTag}
               </span>
             </div>
           )}

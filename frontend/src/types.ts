@@ -62,6 +62,16 @@ export interface ArtistStats {
 export const BANG_THRESHOLD = 8.0
 export const SKIP_THRESHOLD = 6.5
 
+// Short releases (≤6 tracks) skip the factor ratings and score as the song
+// mean; they show everywhere with a tag so they read differently from LPs
+export const EP_MAX_TRACKS = 6
+
+export function shortReleaseLabel(album: Album): 'EP' | 'Single' | null {
+  const n = album.songs.length
+  if (n === 0 || n > EP_MAX_TRACKS) return null
+  return n <= 2 ? 'Single' : 'EP'
+}
+
 // Maps a 1–10 song score to a gradient color (dark red → dark forest green)
 export function songScoreColor(score: number): string {
   const hue = Math.round(((score - 1) / 9) * 130)
