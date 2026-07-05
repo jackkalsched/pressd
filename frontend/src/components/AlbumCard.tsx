@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Play, ChevronRight, Star, Trash2, Music } from 'lucide-react'
+import { Play, ChevronRight, Star, Trash2, Music, Sparkles } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Album } from '../types'
+import { SKIP_THRESHOLD } from '../types'
 import RecommendModal from './RecommendModal'
 import { deleteAlbum, fetchScoreRange } from '../api'
 import { useUser } from '../context/UserContext'
@@ -61,6 +62,13 @@ export default function AlbumCard({ album, showActions = true }: Props) {
 
   const artists = [album.artist, ...album.extraArtists].join(', ')
   const ratedSongs = album.songs.filter(s => s.score !== null).length
+
+  // "No skips" — a rated album where every rated track cleared the skip line
+  const ratedScores = album.songs.filter(s => s.score !== null).map(s => s.score as number)
+  const noSkips =
+    album.status === 'rated' &&
+    ratedScores.length > 7 &&
+    ratedScores.every(s => s >= SKIP_THRESHOLD)
 
   return (
     <>
@@ -138,6 +146,19 @@ export default function AlbumCard({ album, showActions = true }: Props) {
               title="Predicted score"
             >
               ~{album.predictedScore.toFixed(2)}
+            </div>
+          )}
+
+          {/* No-skips badge — every track cleared the skip line */}
+          {noSkips && (
+            <div
+              className="absolute bottom-2.5 left-2.5 flex items-center gap-1 bg-white/85 backdrop-blur-sm rounded-full pl-1.5 pr-2 py-1 shadow-sm ring-1 ring-black/5 select-none"
+              title="No skips — every track scored above the skip line"
+            >
+              <Sparkles size={11} className="text-[#2d6a4f]" strokeWidth={2.25} />
+              <span className="text-[#2d6a4f] text-[9px] font-bold uppercase tracking-[0.08em] leading-none">
+                No skips
+              </span>
             </div>
           )}
 
