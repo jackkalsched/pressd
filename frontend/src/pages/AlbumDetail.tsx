@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2, Pencil, Trash2, MessageCircle, Star, Music } from 'lucide-react'
-import { fetchAlbum, deleteAlbum, fetchFriendRatings, importAlbum } from '../api'
+import { ArrowLeft, Loader2, Pencil, Trash2, MessageCircle, Star, Music, BookOpen } from 'lucide-react'
+import { fetchAlbum, deleteAlbum, fetchFriendRatings, importAlbum, saveReview, deleteReview } from '../api'
 import { useUser } from '../context/UserContext'
 import { BANG_THRESHOLD, SKIP_THRESHOLD, songScoreColor } from '../types'
+import type { Album } from '../types'
 import RecommendModal from '../components/RecommendModal'
+import CommentThread from '../components/CommentThread'
 
 function shareRatingViaIMessage(albumName: string, artist: string, score: number | null, viewingName?: string) {
   const who = viewingName ? `${viewingName} rated` : 'I rated'
@@ -41,6 +43,123 @@ function useAlbumColors(album: string | null, artist: string | null): { color: s
     staleTime: Infinity,
   })
   return data ?? { color: null, color2: null }
+}
+
+function ReviewSection({ album, editable, authorName }: { album: Album; editable: boolean; authorName: string }) {
+  const queryClient = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(album.review ?? '')
+  const [saving, setSaving] = useState(false)
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ['album', album.id] })
+    queryClient.invalidateQueries({ queryKey: ['feed'] })
+    queryClient.invalidateQueries({ queryKey: ['friend-reviews'] })
+  }
+
+  async function handleSave() {
+    if (saving) return
+    setSaving(true)
+    try {
+      await saveReview(album.id, draft)
+      invalidate()
+      setEditing(false)
+    } catch { /* keep editing so the draft survives */ } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm('Delete your review?')) return
+    setSaving(true)
+    try {
+      await deleteReview(album.id)
+      setDraft('')
+      invalidate()
+      setEditing(false)
+    } catch { /* ignore */ } finally {
+      setSaving(false)
+    }
+  }
+
+  // Friend's review — read-only, only shown when one exists.
+  if (!editable) {
+    if (!album.review) return null
+    return (
+      <div className="mt-10 max-w-2xl">
+        <p className="text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.14em] mb-4 flex items-center gap-1.5">
+          <BookOpen size={12} /> {authorName}'s Review
+        </p>
+        <div className="bg-white/70 border border-[#e8e2d9] rounded-2xl p-6">
+          <p className="text-[15px] text-[#3c3530] leading-relaxed whitespace-pre-wrap break-words">{album.review}</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Your own album — editable composer.
+  return (
+    <div className="mt-10 max-w-2xl">
+      <p className="text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.14em] mb-4 flex items-center gap-1.5">
+        <BookOpen size={12} /> Your Review
+      </p>
+
+      {editing ? (
+        <div className="bg-white/70 border border-[#e8e2d9] rounded-2xl p-4">
+          <textarea
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            autoFocus
+            rows={8}
+            placeholder="Write your thoughts on this album — what worked, what didn't, standout tracks, how it sits in the artist's catalog…"
+            className="w-full resize-y bg-transparent text-[15px] text-[#3c3530] leading-relaxed placeholder:text-[#b8ada0] focus:outline-none"
+          />
+          <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-[#ece5da]">
+            {album.review && (
+              <button
+                onClick={handleDelete}
+                disabled={saving}
+                className="mr-auto flex items-center gap-1.5 text-[13px] font-medium text-[#a8998a] hover:text-[#c0392b] transition-colors disabled:opacity-50"
+              >
+                <Trash2 size={13} /> Delete
+              </button>
+            )}
+            <button
+              onClick={() => { setDraft(album.review ?? ''); setEditing(false) }}
+              disabled={saving}
+              className="text-[13px] font-medium text-[#78716c] hover:text-[#1c1917] px-3 py-1.5 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !draft.trim()}
+              className="flex items-center gap-1.5 text-[13px] font-medium bg-[#2d6a4f] hover:bg-[#245c43] text-white px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {saving && <Loader2 size={13} className="animate-spin" />} Save
+            </button>
+          </div>
+        </div>
+      ) : album.review ? (
+        <div className="bg-white/70 border border-[#e8e2d9] rounded-2xl p-6 group relative">
+          <p className="text-[15px] text-[#3c3530] leading-relaxed whitespace-pre-wrap break-words">{album.review}</p>
+          <button
+            onClick={() => { setDraft(album.review ?? ''); setEditing(true) }}
+            className="absolute top-4 right-4 flex items-center gap-1.5 text-[12px] font-medium text-[#a8998a] hover:text-[#2d6a4f] opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <Pencil size={12} /> Edit
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => { setDraft(''); setEditing(true) }}
+          className="w-full flex items-center justify-center gap-2 py-6 border border-dashed border-[#d0c8be] rounded-2xl text-[#a8998a] hover:text-[#2d6a4f] hover:border-[#2d6a4f]/40 transition-colors text-sm"
+        >
+          <Pencil size={14} /> Write a review
+        </button>
+      )}
+    </div>
+  )
 }
 
 export default function AlbumDetail() {
@@ -406,6 +525,9 @@ export default function AlbumDetail() {
           ))}
         </div>
 
+        {/* ── Review ───────────────────────────────────────────────── */}
+        <ReviewSection album={album} editable={!isViewingFriend} authorName={isViewingFriend ? viewingUser.name : (activeUser?.name ?? 'You')} />
+
         {/* ── Friends' ratings ─────────────────────────────────────── */}
         {!isViewingFriend && friendRatings.length > 0 && (
           <div className="mt-2">
@@ -499,6 +621,16 @@ export default function AlbumDetail() {
             </div>
           </div>
         )}
+
+        {/* ── Comments ─────────────────────────────────────────────── */}
+        <div className="mt-10 max-w-2xl">
+          <p className="text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.14em] mb-5">
+            Comments
+          </p>
+          <div className="bg-white/70 border border-[#e8e2d9] rounded-2xl p-5">
+            <CommentThread albumId={album.id} />
+          </div>
+        </div>
 
       </div>
 
