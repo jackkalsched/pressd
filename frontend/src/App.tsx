@@ -14,7 +14,6 @@ import RatingScreen from './pages/RatingScreen'
 import AlbumDetail from './pages/AlbumDetail'
 import ArtistPage from './pages/ArtistPage'
 import Join from './pages/Join'
-import Login from './pages/Login'
 import LandingPage from './pages/LandingPage'
 
 function PublicHome() {
@@ -70,7 +69,6 @@ export default function App() {
           <Route path="/rate/:id" element={<RequireUser><RatingScreen /></RequireUser>} />
           <Route path="/welcome" element={<RequireUser><Onboarding /></RequireUser>} />
           <Route path="/join" element={<Join />} />
-          <Route path="/login" element={<Login />} />
           <Route path="/*" element={<ProtectedRoutes />} />
         </Routes>
       </BrowserRouter>

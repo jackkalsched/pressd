@@ -19,7 +19,8 @@ export function setToken(token: string | null): void {
 
 /**
  * fetch wrapper that attaches the bearer token on every call and, on a 401,
- * clears the stale session and bounces to /login. All API calls go through this.
+ * clears the stale session and bounces to the landing page. All API calls go
+ * through this.
  */
 async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
   const token = getToken()
@@ -29,8 +30,8 @@ async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> 
   if (res.status === 401) {
     setToken(null)
     try { localStorage.removeItem('pressd_active_user') } catch { /* ignore */ }
-    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-      window.location.href = '/login'
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      window.location.href = '/'
     }
     throw new Error('Session expired')
   }

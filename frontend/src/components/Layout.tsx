@@ -170,7 +170,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
   function handleSignOut() {
     signOut()
     onClose()
-    navigate('/login', { replace: true })
+    navigate('/', { replace: true })
   }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
