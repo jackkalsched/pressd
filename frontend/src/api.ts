@@ -87,6 +87,8 @@ function transformAlbum(a: Record<string, unknown>): Album {
     predictedScore: a.predicted_score as number | null ?? null,
     recommendedBy: a.recommended_by as number | null ?? null,
     recommendedByName: a.recommended_by_name as string | null ?? null,
+    review: a.review as string | null ?? null,
+    reviewAt: a.review_at as string | null ?? null,
     songs,
   }
 }
@@ -712,20 +714,100 @@ export async function recommendAlbum(albumId: number, friendId: number, recommen
 }
 
 export interface FeedItem {
+  type: 'rating' | 'recommendation' | 'review'
   friend: { id: number; name: string; avatar_url?: string }
   album_id: number
   album_name: string
   artist: string
   album_art_url?: string
-  score: number
+  score: number | null
   date_rated?: string
-  like_count: number
-  liked_by_me: boolean
+  recommended_at?: string
+  review_excerpt?: string
+  review_at?: string
+  like_count?: number
+  liked_by_me?: boolean
+  comment_count?: number
 }
 
 export async function fetchFeed(userId: number): Promise<FeedItem[]> {
   const res = await apiFetch(`${BASE}/social/feed?user_id=${userId}`)
   if (!res.ok) throw new Error('Failed to fetch feed')
+  return res.json()
+}
+
+// ── Comments ──────────────────────────────────────────────────────────────────
+
+export interface Comment {
+  id: number
+  album_id: number
+  body: string
+  created_at: string | null
+  author: { id: number; name: string; avatar_url?: string | null }
+  can_delete: boolean
+}
+
+export async function fetchComments(albumId: number): Promise<Comment[]> {
+  const res = await apiFetch(`${BASE}/albums/${albumId}/comments`)
+  if (!res.ok) throw new Error('Failed to fetch comments')
+  return res.json()
+}
+
+export async function postComment(albumId: number, body: string): Promise<Comment> {
+  const res = await apiFetch(`${BASE}/albums/${albumId}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ body }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? 'Failed to post comment')
+  }
+  return res.json()
+}
+
+export async function deleteComment(commentId: number): Promise<void> {
+  const res = await apiFetch(`${BASE}/comments/${commentId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to delete comment')
+}
+
+// ── Reviews ───────────────────────────────────────────────────────────────────
+
+export async function saveReview(albumId: number, body: string): Promise<{ review: string | null; review_at: string | null }> {
+  const res = await apiFetch(`${BASE}/albums/${albumId}/review`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ body }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? 'Failed to save review')
+  }
+  return res.json()
+}
+
+export async function deleteReview(albumId: number): Promise<void> {
+  const res = await apiFetch(`${BASE}/albums/${albumId}/review`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to delete review')
+}
+
+export interface FriendReview {
+  friend: { id: number; name: string; avatar_url?: string }
+  album_id: number
+  album_name: string
+  artist: string
+  album_art_url?: string
+  score: number | null
+  review: string
+  review_at?: string
+  like_count: number
+  liked_by_me: boolean
+  comment_count: number
+}
+
+export async function fetchFriendReviews(sort: 'recent' | 'top' = 'recent'): Promise<FriendReview[]> {
+  const res = await apiFetch(`${BASE}/social/reviews?sort=${sort}`)
+  if (!res.ok) throw new Error('Failed to fetch reviews')
   return res.json()
 }
 

@@ -1,11 +1,23 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select, func
 from ..database import get_session
 from ..deps import current_user
-from ..models import Album, Friendship, Like, PressUser
+from ..models import Album, Comment, Friendship, Like, PressUser
 
 router = APIRouter(prefix="/social", tags=["social"])
+
+EXCERPT_LEN = 280
+
+
+def _excerpt(text: str) -> str:
+    """First ~280 chars of a review body for feed/list cards, cut on a word."""
+    text = " ".join(text.split())  # collapse whitespace for the preview
+    if len(text) <= EXCERPT_LEN:
+        return text
+    cut = text[:EXCERPT_LEN].rsplit(" ", 1)[0]
+    return cut + "…"
 
 
 @router.get("/feed")
@@ -13,6 +25,140 @@ def get_feed(
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
+    """Merged activity stream: friends' ratings + recommendations sent to you.
+
+    Each item carries a `type` discriminator ("rating" | "recommendation") and
+    the whole list is sorted newest-first by the event's timestamp.
+    """
+    user_id = user.id
+    friendships = session.exec(
+        select(Friendship).where(
+            (Friendship.user_id_a == user_id) | (Friendship.user_id_b == user_id),
+            Friendship.status == "accepted",
+        )
+    ).all()
+    friend_ids = [
+        f.user_id_b if f.user_id_a == user_id else f.user_id_a
+        for f in friendships
+    ]
+
+    items: list[dict] = []
+
+    # ── Rating events: friends' recently rated albums ──────────────────────
+    if friend_ids:
+        friends = {u.id: u for u in [session.get(PressUser, fid) for fid in friend_ids] if u}
+        rating_albums = session.exec(
+            select(Album)
+            .where(Album.user_id.in_(friend_ids))
+            .where(Album.status == "rated")
+            .where(Album.score.is_not(None))
+            .order_by(Album.date_rated.desc(), Album.id.desc())
+            .limit(100)
+        ).all()
+
+        album_ids = [a.id for a in rating_albums]
+        like_counts: dict[int, int] = {}
+        comment_counts: dict[int, int] = {}
+        liked_by_me: set[int] = set()
+        if album_ids:
+            like_counts = {
+                row[0]: row[1]
+                for row in session.exec(
+                    select(Like.album_id, func.count(Like.id))
+                    .where(Like.album_id.in_(album_ids))
+                    .group_by(Like.album_id)
+                ).all()
+            }
+            comment_counts = {
+                row[0]: row[1]
+                for row in session.exec(
+                    select(Comment.album_id, func.count(Comment.id))
+                    .where(Comment.album_id.in_(album_ids))
+                    .group_by(Comment.album_id)
+                ).all()
+            }
+            liked_by_me = set(session.exec(
+                select(Like.album_id)
+                .where(Like.album_id.in_(album_ids))
+                .where(Like.user_id == user_id)
+            ).all())
+
+        for album in rating_albums:
+            friend = friends.get(album.user_id)
+            if not friend:
+                continue
+            base = {
+                "friend": {"id": friend.id, "name": friend.name, "avatar_url": friend.avatar_url},
+                "album_id": album.id,
+                "album_name": album.album_name,
+                "artist": album.artist,
+                "album_art_url": album.album_art_url,
+                "score": album.score,
+                "like_count": like_counts.get(album.id, 0),
+                "liked_by_me": album.id in liked_by_me,
+                "comment_count": comment_counts.get(album.id, 0),
+            }
+            if album.review and album.review_at:
+                # A rating that carries a review is a higher-signal event.
+                items.append({
+                    **base,
+                    "type": "review",
+                    "review_excerpt": _excerpt(album.review),
+                    "review_at": album.review_at.isoformat(),
+                    "date_rated": album.date_rated.isoformat() if album.date_rated else None,
+                    "_ts": album.review_at,
+                })
+            else:
+                items.append({
+                    **base,
+                    "type": "rating",
+                    "date_rated": album.date_rated.isoformat() if album.date_rated else None,
+                    "_ts": datetime.combine(album.date_rated, datetime.min.time()) if album.date_rated else datetime.min,
+                })
+
+    # ── Recommendation events: albums a friend recommended TO you ──────────
+    recommended = session.exec(
+        select(Album)
+        .where(Album.user_id == user_id)
+        .where(Album.recommended_by.is_not(None))
+        .where(Album.recommended_at.is_not(None))
+        .order_by(Album.recommended_at.desc())
+        .limit(50)
+    ).all()
+    for album in recommended:
+        recommender = session.get(PressUser, album.recommended_by)
+        if not recommender:
+            continue
+        items.append({
+            "type": "recommendation",
+            "friend": {"id": recommender.id, "name": recommender.name, "avatar_url": recommender.avatar_url},
+            "album_id": album.id,
+            "album_name": album.album_name,
+            "artist": album.artist,
+            "album_art_url": album.album_art_url,
+            "score": None,
+            "recommended_at": album.recommended_at.isoformat() if album.recommended_at else None,
+            "_ts": album.recommended_at or datetime.min,
+        })
+
+    # Newest-first across both event types, then strip the internal sort key.
+    items.sort(key=lambda it: it["_ts"], reverse=True)
+    for it in items:
+        it.pop("_ts", None)
+    return items[:100]
+
+
+@router.get("/reviews")
+def get_friend_reviews(
+    sort: str = Query("recent"),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Friends-only reviews stream for the Reviews tab.
+
+    sort="recent" → newest first by review_at; sort="top" → most-liked first.
+    Returns the full review body (the frontend truncates with a "read more").
+    """
     user_id = user.id
     friendships = session.exec(
         select(Friendship).where(
@@ -28,38 +174,44 @@ def get_feed(
         return []
 
     friends = {u.id: u for u in [session.get(PressUser, fid) for fid in friend_ids] if u}
-
-    albums = session.exec(
+    reviewed = session.exec(
         select(Album)
         .where(Album.user_id.in_(friend_ids))
-        .where(Album.status == "rated")
-        .where(Album.score.is_not(None))
-        .order_by(Album.date_rated.desc(), Album.id.desc())
+        .where(Album.review.is_not(None))
+        .where(Album.review_at.is_not(None))
+        .order_by(Album.review_at.desc())
         .limit(100)
     ).all()
 
-    album_ids = [a.id for a in albums]
-
-    # Like counts per album
+    album_ids = [a.id for a in reviewed]
     like_counts: dict[int, int] = {}
+    comment_counts: dict[int, int] = {}
     liked_by_me: set[int] = set()
     if album_ids:
-        counts = session.exec(
-            select(Like.album_id, func.count(Like.id).label("cnt"))
-            .where(Like.album_id.in_(album_ids))
-            .group_by(Like.album_id)
-        ).all()
-        like_counts = {row[0]: row[1] for row in counts}
-
-        my_likes = session.exec(
+        like_counts = {
+            row[0]: row[1]
+            for row in session.exec(
+                select(Like.album_id, func.count(Like.id))
+                .where(Like.album_id.in_(album_ids))
+                .group_by(Like.album_id)
+            ).all()
+        }
+        comment_counts = {
+            row[0]: row[1]
+            for row in session.exec(
+                select(Comment.album_id, func.count(Comment.id))
+                .where(Comment.album_id.in_(album_ids))
+                .group_by(Comment.album_id)
+            ).all()
+        }
+        liked_by_me = set(session.exec(
             select(Like.album_id)
             .where(Like.album_id.in_(album_ids))
             .where(Like.user_id == user_id)
-        ).all()
-        liked_by_me = set(my_likes)
+        ).all())
 
     items = []
-    for album in albums:
+    for album in reviewed:
         friend = friends.get(album.user_id)
         if not friend:
             continue
@@ -70,11 +222,16 @@ def get_feed(
             "artist": album.artist,
             "album_art_url": album.album_art_url,
             "score": album.score,
-            "date_rated": album.date_rated.isoformat() if album.date_rated else None,
+            "review": album.review,
+            "review_at": album.review_at.isoformat() if album.review_at else None,
             "like_count": like_counts.get(album.id, 0),
             "liked_by_me": album.id in liked_by_me,
+            "comment_count": comment_counts.get(album.id, 0),
         })
 
+    if sort == "top":
+        items.sort(key=lambda it: it["like_count"], reverse=True)
+    # "recent" is already ordered by the review_at DESC query above.
     return items
 
 

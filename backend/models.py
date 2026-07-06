@@ -75,6 +75,11 @@ class Album(SQLModel, table=True):
 
     recommended_by: Optional[int] = None
     recommended_by_name: Optional[str] = None
+    recommended_at: Optional[datetime] = None  # when the recommendation was made (feed event)
+
+    # Long-form review — optional prose attached to this album rating.
+    review: Optional[str] = None
+    review_at: Optional[datetime] = None  # set on first write, immutable on edit (feed ordering)
 
     date_added: Optional[date] = Field(default_factory=date.today)
     date_rated: Optional[date] = None
@@ -206,6 +211,14 @@ class WorkerRun(SQLModel, table=True):
     finished_at: Optional[datetime] = None
     status: str = Field(default="running")  # running | ok | error | below_threshold
     detail_json: Optional[str] = None
+
+
+class Comment(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    album_id: int = Field(foreign_key="album.id", index=True)
+    user_id: int = Field(foreign_key="pressuser.id", index=True)
+    body: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class ArtistMeta(SQLModel, table=True):

@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Music, Search, UserPlus, Check, Heart, X, Clock } from 'lucide-react'
+import { Loader2, Music, Search, UserPlus, Check, Heart, X, Clock, MessageCircle, Star, BookOpen } from 'lucide-react'
 import {
   fetchFeed, searchUsers, addFriend, toggleLike,
   fetchFriendRequests, acceptFriendRequest, declineFriendRequest,
+  fetchFriendReviews,
 } from '../api'
-import type { FeedItem, UserSearchResult } from '../api'
+import type { FeedItem, UserSearchResult, FriendReview } from '../api'
 import { useUser } from '../context/UserContext'
+import CommentThread from '../components/CommentThread'
 
 function timeAgo(dateStr?: string): string {
   if (!dateStr) return ''
@@ -61,13 +63,21 @@ function FeedCard({ item }: { item: FeedItem }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  const [liked, setLiked] = useState(item.liked_by_me)
-  const [likeCount, setLikeCount] = useState(item.like_count)
+  const isRec = item.type === 'recommendation'
+  const isReview = item.type === 'review'
+  const [liked, setLiked] = useState(!!item.liked_by_me)
+  const [likeCount, setLikeCount] = useState(item.like_count ?? 0)
   const [liking, setLiking] = useState(false)
+  const [showComments, setShowComments] = useState(false)
 
   function handleView() {
-    setViewingUser({ id: item.friend.id, name: item.friend.name, avatarUrl: item.friend.avatar_url })
-    navigate(`/album/${item.album_id}`)
+    if (isRec) {
+      // A recommendation lands in your own library — view it as yourself.
+      navigate(`/album/${item.album_id}`)
+    } else {
+      setViewingUser({ id: item.friend.id, name: item.friend.name, avatarUrl: item.friend.avatar_url })
+      navigate(`/album/${item.album_id}`)
+    }
   }
 
   async function handleLike() {
@@ -89,66 +99,127 @@ function FeedCard({ item }: { item: FeedItem }) {
     }
   }
 
+  const timestamp = isRec ? item.recommended_at : isReview ? item.review_at : item.date_rated
+
   return (
-    <div className="bg-white border border-[#e2e2e2] rounded-2xl p-5 flex gap-5 hover:border-[#c8c8c8] transition-colors">
-      {/* Album art */}
-      <div className="w-24 h-24 shrink-0 rounded-xl overflow-hidden bg-[#e8e8e8] flex items-center justify-center text-[#aaa]">
-        {item.album_art_url
-          ? <img src={item.album_art_url} alt={item.album_name} className="w-full h-full object-cover" />
-          : <Music size={30} />}
-      </div>
+    <div className="bg-white border border-[#e2e2e2] rounded-2xl p-5 hover:border-[#c8c8c8] transition-colors self-start">
+      <div className="flex gap-5">
+        {/* Album art */}
+        <div className="w-24 h-24 shrink-0 rounded-xl overflow-hidden bg-[#e8e8e8] flex items-center justify-center text-[#aaa]">
+          {item.album_art_url
+            ? <img src={item.album_art_url} alt={item.album_name} className="w-full h-full object-cover" />
+            : <Music size={30} />}
+        </div>
 
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <div className="flex items-center gap-2 min-w-0">
-            <FriendAvatar name={item.friend.name} avatarUrl={item.friend.avatar_url} size={22} />
-            <span className="text-sm font-semibold text-[#111] truncate">{item.friend.name}</span>
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <FriendAvatar name={item.friend.name} avatarUrl={item.friend.avatar_url} size={22} />
+              <span className="text-sm font-semibold text-[#111] truncate">{item.friend.name}</span>
+            </div>
+            {timestamp && (
+              <span className="text-xs text-[#aaa] shrink-0">{timeAgo(timestamp)}</span>
+            )}
           </div>
-          {item.date_rated && (
-            <span className="text-xs text-[#aaa] shrink-0">{timeAgo(item.date_rated)}</span>
+
+          {isRec ? (
+            <p className="text-sm text-[#444] leading-snug mb-3 flex items-start gap-1.5">
+              <Star size={13} className="text-[#ea7a2a] shrink-0 mt-0.5" fill="#ea7a2a" strokeWidth={0} />
+              <span>
+                recommended{' '}
+                <span className="font-medium text-[#111]">{item.album_name}</span>
+                {' '}by{' '}
+                <span className="font-medium text-[#111]">{item.artist}</span>
+                {' '}to you
+              </span>
+            </p>
+          ) : isReview ? (
+            <>
+              <p className="text-sm text-[#444] leading-snug mb-2 flex items-start gap-1.5">
+                <BookOpen size={13} className="text-[#2d6a4f] shrink-0 mt-0.5" strokeWidth={2} />
+                <span>
+                  reviewed{' '}
+                  <span className="font-medium text-[#111]">{item.album_name}</span>
+                  {' '}by{' '}
+                  <span className="font-medium text-[#111]">{item.artist}</span>
+                  {item.score != null && (
+                    <>
+                      {' · '}
+                      <span className="font-bold tabular-nums" style={{ color: scoreColor(item.score) }}>
+                        {item.score.toFixed(2)}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </p>
+              {item.review_excerpt && (
+                <p className="text-[13px] text-[#555] leading-relaxed mb-3 italic border-l-2 border-[#e2e2e2] pl-3">
+                  {item.review_excerpt}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-[#444] leading-snug mb-3">
+              rated{' '}
+              <span className="font-medium text-[#111]">{item.album_name}</span>
+              {' '}by{' '}
+              <span className="font-medium text-[#111]">{item.artist}</span>
+              {' '}a{' '}
+              <span className="font-bold tabular-nums" style={{ color: scoreColor(item.score ?? 0) }}>
+                {(item.score ?? 0).toFixed(2)}
+              </span>
+            </p>
           )}
-        </div>
 
-        <p className="text-sm text-[#444] leading-snug mb-3">
-          rated{' '}
-          <span className="font-medium text-[#111]">{item.album_name}</span>
-          {' '}by{' '}
-          <span className="font-medium text-[#111]">{item.artist}</span>
-          {' '}a{' '}
-          <span className="font-bold tabular-nums" style={{ color: scoreColor(item.score) }}>
-            {item.score.toFixed(2)}
-          </span>
-        </p>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={handleView}
+              className="text-xs font-medium text-[#2d6a4f] hover:text-[#245c43] transition-colors"
+            >
+              {isRec ? 'View album →' : isReview ? 'Read full review →' : 'View full rating →'}
+            </button>
 
-        <div className="flex items-center justify-between">
-          <button
-            onClick={handleView}
-            className="text-xs font-medium text-[#2d6a4f] hover:text-[#245c43] transition-colors"
-          >
-            View full rating →
-          </button>
+            {!isRec && (
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setShowComments(s => !s)}
+                  className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
+                    showComments ? 'text-[#2d6a4f]' : 'text-[#bbb] hover:text-[#2d6a4f]'
+                  }`}
+                  aria-label="Comments"
+                >
+                  <MessageCircle size={14} strokeWidth={1.75} />
+                  {(item.comment_count ?? 0) > 0 && <span>{item.comment_count}</span>}
+                </button>
 
-          <button
-            onClick={handleLike}
-            disabled={liking}
-            className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
-              liked
-                ? 'text-[#e05555]'
-                : 'text-[#bbb] hover:text-[#e05555]'
-            }`}
-            aria-label={liked ? 'Unlike' : 'Like'}
-          >
-            <Heart
-              size={14}
-              className="transition-transform active:scale-125"
-              fill={liked ? 'currentColor' : 'none'}
-              strokeWidth={liked ? 0 : 1.75}
-            />
-            {likeCount > 0 && <span>{likeCount}</span>}
-          </button>
+                <button
+                  onClick={handleLike}
+                  disabled={liking}
+                  className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
+                    liked ? 'text-[#e05555]' : 'text-[#bbb] hover:text-[#e05555]'
+                  }`}
+                  aria-label={liked ? 'Unlike' : 'Like'}
+                >
+                  <Heart
+                    size={14}
+                    className="transition-transform active:scale-125"
+                    fill={liked ? 'currentColor' : 'none'}
+                    strokeWidth={liked ? 0 : 1.75}
+                  />
+                  {likeCount > 0 && <span>{likeCount}</span>}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {!isRec && showComments && (
+        <div className="mt-3 pt-3 border-t border-[#f0f0f0]">
+          <CommentThread albumId={item.album_id} />
+        </div>
+      )}
     </div>
   )
 }
@@ -326,8 +397,156 @@ function FindPeople() {
   )
 }
 
+function ReviewCard({ review }: { review: FriendReview }) {
+  const { activeUser, setViewingUser } = useUser()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [liked, setLiked] = useState(review.liked_by_me)
+  const [likeCount, setLikeCount] = useState(review.like_count)
+  const [liking, setLiking] = useState(false)
+  const [showComments, setShowComments] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+
+  const isLong = review.review.length > 420
+  const shown = isLong && !expanded ? review.review.slice(0, 420).trimEnd() + '…' : review.review
+
+  function handleView() {
+    setViewingUser({ id: review.friend.id, name: review.friend.name, avatarUrl: review.friend.avatar_url })
+    navigate(`/album/${review.album_id}`)
+  }
+
+  async function handleLike() {
+    if (!activeUser || liking) return
+    setLiking(true)
+    const wasLiked = liked
+    setLiked(!wasLiked)
+    setLikeCount(c => wasLiked ? c - 1 : c + 1)
+    try {
+      await toggleLike(activeUser.id, review.album_id)
+      queryClient.invalidateQueries({ queryKey: ['friend-reviews'] })
+    } catch {
+      setLiked(wasLiked)
+      setLikeCount(c => wasLiked ? c + 1 : c - 1)
+    } finally {
+      setLiking(false)
+    }
+  }
+
+  return (
+    <div className="bg-white border border-[#e2e2e2] rounded-2xl p-5 hover:border-[#c8c8c8] transition-colors self-start">
+      <div className="flex gap-4 mb-3">
+        <div className="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-[#e8e8e8] flex items-center justify-center text-[#aaa]">
+          {review.album_art_url
+            ? <img src={review.album_art_url} alt={review.album_name} className="w-full h-full object-cover" />
+            : <Music size={22} />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <FriendAvatar name={review.friend.name} avatarUrl={review.friend.avatar_url} size={20} />
+            <span className="text-sm font-semibold text-[#111] truncate">{review.friend.name}</span>
+            {review.review_at && <span className="text-xs text-[#aaa] shrink-0 ml-auto">{timeAgo(review.review_at)}</span>}
+          </div>
+          <p className="text-xs text-[#666] mt-1 truncate">
+            <span className="font-medium text-[#111]">{review.album_name}</span>
+            {' · '}{review.artist}
+            {review.score != null && (
+              <>{' · '}<span className="font-bold tabular-nums" style={{ color: scoreColor(review.score) }}>{review.score.toFixed(2)}</span></>
+            )}
+          </p>
+        </div>
+      </div>
+
+      <p className="text-[13px] text-[#3c3530] leading-relaxed whitespace-pre-wrap break-words mb-1">{shown}</p>
+      {isLong && (
+        <button onClick={() => setExpanded(e => !e)} className="text-xs font-medium text-[#2d6a4f] hover:text-[#245c43] mb-2">
+          {expanded ? 'Show less' : 'Read more'}
+        </button>
+      )}
+
+      <div className="flex items-center justify-between mt-2">
+        <button onClick={handleView} className="text-xs font-medium text-[#2d6a4f] hover:text-[#245c43] transition-colors">
+          View album →
+        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowComments(s => !s)}
+            className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${showComments ? 'text-[#2d6a4f]' : 'text-[#bbb] hover:text-[#2d6a4f]'}`}
+            aria-label="Comments"
+          >
+            <MessageCircle size={14} strokeWidth={1.75} />
+            {review.comment_count > 0 && <span>{review.comment_count}</span>}
+          </button>
+          <button
+            onClick={handleLike}
+            disabled={liking}
+            className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${liked ? 'text-[#e05555]' : 'text-[#bbb] hover:text-[#e05555]'}`}
+            aria-label={liked ? 'Unlike' : 'Like'}
+          >
+            <Heart size={14} className="transition-transform active:scale-125" fill={liked ? 'currentColor' : 'none'} strokeWidth={liked ? 0 : 1.75} />
+            {likeCount > 0 && <span>{likeCount}</span>}
+          </button>
+        </div>
+      </div>
+
+      {showComments && (
+        <div className="mt-3 pt-3 border-t border-[#f0f0f0]">
+          <CommentThread albumId={review.album_id} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ReviewsTab() {
+  const { activeUser } = useUser()
+  const [sort, setSort] = useState<'recent' | 'top'>('recent')
+
+  const { data: reviews = [], isLoading } = useQuery({
+    queryKey: ['friend-reviews', sort, activeUser?.id],
+    queryFn: () => fetchFriendReviews(sort),
+    enabled: !!activeUser,
+    staleTime: 60_000,
+  })
+
+  const sortBtn = (key: 'recent' | 'top', label: string) => (
+    <button
+      onClick={() => setSort(key)}
+      className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+        sort === key ? 'bg-[#2d6a4f] text-white' : 'bg-[#f0f0f0] text-[#777] hover:bg-[#e8e8e8]'
+      }`}
+    >
+      {label}
+    </button>
+  )
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        {sortBtn('recent', 'Recent')}
+        {sortBtn('top', 'Most liked')}
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-[#aaa]">
+          <Loader2 size={16} className="animate-spin" /> Loading…
+        </div>
+      ) : reviews.length === 0 ? (
+        <div className="text-center py-16">
+          <p className="text-[#bbb] text-sm">No reviews yet.</p>
+          <p className="text-[#ccc] text-xs mt-1">When your friends write reviews, they'll show up here.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+          {reviews.map(r => <ReviewCard key={r.album_id} review={r} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Social() {
   const { activeUser } = useUser()
+  const [tab, setTab] = useState<'activity' | 'reviews'>('activity')
 
   const { data: feed = [], isLoading } = useQuery({
     queryKey: ['feed', activeUser?.id],
@@ -336,27 +555,45 @@ export default function Social() {
     staleTime: 60_000,
   })
 
+  const tabBtn = (key: 'activity' | 'reviews', label: string) => (
+    <button
+      onClick={() => setTab(key)}
+      className={`text-sm font-semibold px-1 py-2 border-b-2 transition-colors ${
+        tab === key ? 'border-[#2d6a4f] text-[#111]' : 'border-transparent text-[#999] hover:text-[#555]'
+      }`}
+    >
+      {label}
+    </button>
+  )
+
   return (
     <div className="p-4 md:p-8">
-      <h1 className="font-display text-3xl font-bold text-[#111] mb-6">Friends' Activity</h1>
+      <h1 className="font-display text-3xl font-bold text-[#111] mb-6">Friends</h1>
       <div className="max-w-lg">
         <FriendRequests />
         <FindPeople />
       </div>
 
-      {isLoading ? (
+      <div className="flex items-center gap-5 border-b border-[#eee] mb-6">
+        {tabBtn('activity', 'Activity')}
+        {tabBtn('reviews', 'Reviews')}
+      </div>
+
+      {tab === 'reviews' ? (
+        <ReviewsTab />
+      ) : isLoading ? (
         <div className="flex items-center gap-2 text-[#aaa]">
           <Loader2 size={16} className="animate-spin" /> Loading…
         </div>
       ) : feed.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-[#bbb] text-sm">No activity yet.</p>
-          <p className="text-[#ccc] text-xs mt-1">Ratings from your friends will show up here.</p>
+          <p className="text-[#ccc] text-xs mt-1">Ratings, reviews, and recommendations from your friends will show up here.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
           {feed.map((item) => (
-            <FeedCard key={`${item.friend.id}-${item.album_id}`} item={item} />
+            <FeedCard key={`${item.type}-${item.friend.id}-${item.album_id}`} item={item} />
           ))}
         </div>
       )}

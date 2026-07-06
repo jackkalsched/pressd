@@ -6,11 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
-from datetime import date
+from datetime import date, datetime
 
 from ..database import get_session
 from ..deps import current_user, authorize_view, are_friends
-from ..models import Album, Song, SongAudioFeatures, PressUser, Like
+from ..models import Album, Song, SongAudioFeatures, PressUser, Like, Comment
 from ..scoring import compute_a_score, recompute_all_scores, BANG_THRESHOLD, SKIP_THRESHOLD
 
 router = APIRouter(prefix="/albums", tags=["albums"])
@@ -631,6 +631,7 @@ def recommend_album(
     if existing:
         existing.recommended_by = recommender_id
         existing.recommended_by_name = recommender.name
+        existing.recommended_at = datetime.utcnow()
         session.add(existing)
         session.commit()
         return {"ok": True, "already_existed": True}
@@ -651,10 +652,67 @@ def recommend_album(
         user_id=friend_id,
         recommended_by=recommender_id,
         recommended_by_name=recommender.name,
+        recommended_at=datetime.utcnow(),
     )
     session.add(new_album)
     session.commit()
     return {"ok": True, "already_existed": False}
+
+
+MAX_REVIEW_LEN = 20000
+
+
+@router.put("/{album_id}/review")
+def save_review(
+    album_id: int,
+    data: dict,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Write or update the long-form review on your own album rating.
+
+    An empty body clears the review. `review_at` is stamped on the first write
+    and left untouched on edits, so editing an old review doesn't re-surface it
+    to the top of friends' feeds.
+    """
+    album = session.get(Album, album_id)
+    if not album:
+        raise HTTPException(status_code=404, detail="Album not found")
+    if album.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not your album")
+
+    body = (data.get("body") or "").strip()
+    if not body:
+        album.review = None
+        album.review_at = None
+    else:
+        if not album.review or not album.review_at:
+            album.review_at = datetime.utcnow()  # first write only
+        album.review = body[:MAX_REVIEW_LEN]
+    session.add(album)
+    session.commit()
+    return {
+        "review": album.review,
+        "review_at": album.review_at.isoformat() if album.review_at else None,
+    }
+
+
+@router.delete("/{album_id}/review")
+def delete_review(
+    album_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    album = session.get(Album, album_id)
+    if not album:
+        raise HTTPException(status_code=404, detail="Album not found")
+    if album.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not your album")
+    album.review = None
+    album.review_at = None
+    session.add(album)
+    session.commit()
+    return {"ok": True}
 
 
 @router.post("/enrich-covers")
@@ -736,6 +794,8 @@ def delete_album(
         raise HTTPException(status_code=403, detail="Not your album")
     for like in session.exec(select(Like).where(Like.album_id == album_id)).all():
         session.delete(like)
+    for comment in session.exec(select(Comment).where(Comment.album_id == album_id)).all():
+        session.delete(comment)
     for song in album.songs:
         af = session.exec(select(SongAudioFeatures).where(SongAudioFeatures.song_id == song.id)).first()
         if af:

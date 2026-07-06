@@ -43,6 +43,8 @@ export interface Album {
   predictedScore: number | null
   recommendedBy: number | null
   recommendedByName: string | null
+  review: string | null
+  reviewAt: string | null
 }
 
 export interface ArtistStats {
