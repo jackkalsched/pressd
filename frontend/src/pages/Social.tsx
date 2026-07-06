@@ -340,21 +340,18 @@ function FindPeople() {
   }
 
   return (
-    <div className="mb-8">
-      <h2 className="text-sm font-semibold text-[#777] mb-3">Find People</h2>
-      <div className="relative">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#bbb] pointer-events-none" />
-        <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="Search by username…"
-          className="w-full pl-8 pr-4 py-2.5 bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl text-sm text-[#111] placeholder:text-[#bbb] focus:outline-none focus:border-[#2d6a4f] transition-colors"
-        />
-        {searching && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#bbb] animate-spin" />}
-      </div>
+    <div className="relative w-44 sm:w-64 md:w-72 shrink-0">
+      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#bbb] pointer-events-none" />
+      <input
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        placeholder="Find people…"
+        className="w-full pl-8 pr-8 py-2.5 bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl text-sm text-[#111] placeholder:text-[#bbb] focus:outline-none focus:border-[#2d6a4f] transition-colors"
+      />
+      {searching && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#bbb] animate-spin" />}
 
       {results.length > 0 && (
-        <div className="mt-2 border border-[#e2e2e2] rounded-xl overflow-hidden divide-y divide-[#f0f0f0]">
+        <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white border border-[#e2e2e2] rounded-xl overflow-hidden divide-y divide-[#f0f0f0] shadow-lg z-20">
           {results.map(u => {
             const isFriend = u.already_friends || becameFriends.has(u.id)
             const requested = !isFriend && (u.request_sent || sent.has(u.id))
@@ -391,7 +388,9 @@ function FindPeople() {
       )}
 
       {query.trim() && !searching && results.length === 0 && (
-        <p className="text-xs text-[#bbb] mt-3 px-1">No users found.</p>
+        <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white border border-[#e2e2e2] rounded-xl px-4 py-3 shadow-lg z-20">
+          <p className="text-xs text-[#bbb]">No users found.</p>
+        </div>
       )}
     </div>
   )
@@ -568,10 +567,12 @@ export default function Social() {
 
   return (
     <div className="p-4 md:p-8">
-      <h1 className="font-display text-3xl font-bold text-[#111] mb-6">Friends</h1>
+      <div className="flex items-center justify-between gap-3 mb-6">
+        <h1 className="font-display text-3xl font-bold text-[#111]">Friends</h1>
+        <FindPeople />
+      </div>
       <div className="max-w-lg">
         <FriendRequests />
-        <FindPeople />
       </div>
 
       <div className="flex items-center gap-5 border-b border-[#eee] mb-6">
