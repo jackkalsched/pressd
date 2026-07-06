@@ -504,6 +504,12 @@ export interface ScatterData {
   mean_external: number | null
 }
 
+export async function fetchArtStrip(): Promise<string[]> {
+  const res = await apiFetch(`${BASE}/albums/art-strip`)
+  if (!res.ok) return []
+  return res.json()
+}
+
 export async function fetchScoreRange(userId = 1): Promise<{ mu: number; sd: number; min: number; max: number }> {
   const res = await apiFetch(`${BASE}/stats/score-range?user_id=${userId}`)
   return res.json()

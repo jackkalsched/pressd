@@ -15,6 +15,28 @@
   .card-pop { animation: none; opacity: 1; }
 }
 
+/* Onboarding conveyor: content is duplicated once, so sliding -50% → 0
+   loops seamlessly while covers drift left → right */
+@keyframes belt-scroll {
+  from { transform: translateX(-50%); }
+  to   { transform: translateX(0); }
+}
+
+.belt-track {
+  display: flex;
+  width: max-content;
+  animation: belt-scroll var(--belt-duration, 60s) linear infinite;
+}
+
+.belt-fade {
+  mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .belt-track { animation: none; }
+}
+
 /* On touch devices there's no hover, so always show the action row */
 @media (hover: none) {
   .card-action-row {

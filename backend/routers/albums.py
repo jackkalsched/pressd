@@ -62,6 +62,31 @@ def list_albums(
     return albums
 
 
+@router.get("/art-strip")
+def art_strip(
+    limit: int = Query(40, le=80),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Album art URLs from across the whole library (all users), for the
+    onboarding conveyor. Art only — no titles, scores, or owners."""
+    rows = session.exec(
+        select(Album.album_art_url)
+        .where(Album.album_art_url.is_not(None))
+        .order_by(func.random())
+        .limit(limit * 3)  # oversample: same album can exist for many users
+    ).all()
+    seen: set[str] = set()
+    urls: list[str] = []
+    for u in rows:
+        if u not in seen:
+            seen.add(u)
+            urls.append(u)
+        if len(urls) >= limit:
+            break
+    return urls
+
+
 @router.get("/{album_id}")
 def get_album(
     album_id: int,

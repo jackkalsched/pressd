@@ -1,7 +1,10 @@
 import type { ReactElement } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { GoogleOAuthProvider } from '@react-oauth/google'
+import { useQuery } from '@tanstack/react-query'
+import { fetchAlbums } from './api'
 import { UserProvider, useUser } from './context/UserContext'
+import Onboarding, { ONBOARDING_SKIP_KEY } from './pages/Onboarding'
 import Layout from './components/Layout'
 import Library from './pages/Library'
 import Ratings from './pages/Ratings'
@@ -28,7 +31,20 @@ function RequireUser({ children }: { children: ReactElement }) {
 
 function ProtectedRoutes() {
   const { activeUser } = useUser()
+  // First-login onboarding: no rated albums yet → rate one before reaching
+  // the main site (skippable per session). /rate/:id stays reachable — it's
+  // the flow the onboarding page hands off to.
+  const skipped = sessionStorage.getItem(ONBOARDING_SKIP_KEY) === '1'
+  const { data: rated, isLoading } = useQuery({
+    queryKey: ['albums', 'rated', activeUser?.id],
+    queryFn: () => fetchAlbums({ status: 'rated', userId: activeUser!.id }),
+    enabled: !!activeUser && !skipped,
+  })
   if (!activeUser) return <Navigate to="/" replace />
+  if (!skipped) {
+    if (isLoading) return null
+    if ((rated ?? []).length === 0) return <Navigate to="/welcome" replace />
+  }
   return (
     <Layout>
       <Routes>
@@ -52,6 +68,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<PublicHome />} />
           <Route path="/rate/:id" element={<RequireUser><RatingScreen /></RequireUser>} />
+          <Route path="/welcome" element={<RequireUser><Onboarding /></RequireUser>} />
           <Route path="/join" element={<Join />} />
           <Route path="/login" element={<Login />} />
           <Route path="/*" element={<ProtectedRoutes />} />

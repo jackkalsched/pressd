@@ -2,31 +2,9 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { X, Loader2, Search, Music, ArrowLeft } from 'lucide-react'
-import { searchSpotify, searchMusicBrainz, searchItunes, searchDeezer, importAlbum, createAlbum } from '../api'
+import { importAlbum, createAlbum } from '../api'
 import type { SpotifyAlbumResult } from '../api'
-
-function normalizeKey(name: string, artist: string): string {
-  return `${name}|||${artist}`.toLowerCase().replace(/[^a-z0-9|]/g, '')
-}
-
-function mergeResults(
-  itunes: SpotifyAlbumResult[],
-  spotify: SpotifyAlbumResult[],
-  deezer: SpotifyAlbumResult[],
-  mb: SpotifyAlbumResult[],
-): SpotifyAlbumResult[] {
-  const seen = new Map<string, SpotifyAlbumResult>()
-  for (const r of [...itunes, ...spotify, ...deezer, ...mb]) {
-    const key = normalizeKey(r.album_name, r.artist)
-    const existing = seen.get(key)
-    if (!existing) {
-      seen.set(key, r)
-    } else if (!existing.cover_url && r.cover_url) {
-      seen.set(key, r)
-    }
-  }
-  return [...seen.values()].slice(0, 12)
-}
+import { useAlbumSearch } from '../hooks/useAlbumSearch'
 
 export default function AddAlbumModal({ onClose, userId }: { onClose: () => void; userId: number }) {
   const [query, setQuery] = useState('')
@@ -34,11 +12,7 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
   const [albumName, setAlbumName] = useState('')
   const [artist, setArtist] = useState('')
   const [status, setStatus] = useState<'listening' | 'to_listen'>('listening')
-  const [results, setResults] = useState<SpotifyAlbumResult[]>([])
   const [selected, setSelected] = useState<SpotifyAlbumResult | null>(null)
-  const [searching, setSearching] = useState(false)
-  const [mbPending, setMbPending] = useState(false)
-  const [noResults, setNoResults] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -46,62 +20,14 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
   const queryClient = useQueryClient()
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Fan out to all 4 APIs simultaneously. The three fast sources (iTunes,
-  // Spotify, Deezer) populate the dropdown immediately; MusicBrainz — slow
-  // (global ~1 req/s limit) but the only source with announced/unreleased
-  // albums — is merged in when it arrives instead of holding everything up.
-  useEffect(() => {
-    if (query.trim().length < 2) {
-      setResults([])
-      setShowDropdown(false)
-      setSearching(false)
-      setMbPending(false)
-      setNoResults(false)
-      return
-    }
-    setSearching(true)
-    setMbPending(false)
-    setNoResults(false)
-    let cancelled = false
-    const timer = setTimeout(async () => {
-      const q = query.trim()
-      const mbPromise = searchMusicBrainz(q).catch(() => [] as SpotifyAlbumResult[])
-      try {
-        const [itunesRes, spotifyRes, deezerRes] = await Promise.allSettled([
-          searchItunes(q),
-          searchSpotify(`album:${q}`),
-          searchDeezer(q),
-        ])
-        if (cancelled) return
-        const itunes  = itunesRes.status  === 'fulfilled' ? itunesRes.value  : []
-        const spotify = spotifyRes.status === 'fulfilled' ? spotifyRes.value : []
-        const deezer  = deezerRes.status  === 'fulfilled' ? deezerRes.value  : []
-        const fast = mergeResults(itunes, spotify, deezer, [])
-        setResults(fast)
-        // Keep the dropdown open even with zero fast results — the pending
-        // row tells the user slower sources are still being searched
-        setShowDropdown(true)
-        setMbPending(true)
+  // 4-source fan-out with late MusicBrainz merge — shared with Onboarding
+  const { results, searching, mbPending, noResults } = useAlbumSearch(query)
 
-        const mb = await mbPromise
-        if (cancelled) return
-        setMbPending(false)
-        const merged = mergeResults(itunes, spotify, deezer, mb)
-        setResults(merged)
-        setShowDropdown(merged.length > 0)
-        setNoResults(merged.length === 0)
-      } catch {
-        if (cancelled) return
-        setResults([])
-        setShowDropdown(false)
-        setMbPending(false)
-        setNoResults(true)
-      } finally {
-        if (!cancelled) setSearching(false)
-      }
-    }, 380)
-    return () => { cancelled = true; clearTimeout(timer) }
-  }, [query])
+  // Keep the dropdown open even with zero fast results — the pending row
+  // tells the user slower sources are still being searched
+  useEffect(() => {
+    setShowDropdown(results.length > 0 || mbPending)
+  }, [results, mbPending])
 
   useEffect(() => {
     function handler(e: MouseEvent) {
