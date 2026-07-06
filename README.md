@@ -6,7 +6,7 @@
 
 Press'd is a music rating app for people who take albums seriously. Rate every song, track your listening, get AI-powered predictions of what you'll love next, and see what your friends are into.
 
-**[▶ Try it live](https://pressd-eta.vercel.app)** · Sign in with Google — no setup required.
+**[▶ Try it live](https://www.pressdmusic.com)** · Sign in with Google — no setup required.
 
 </div>
 
