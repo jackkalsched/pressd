@@ -582,9 +582,9 @@ export default function LandingPage() {
             </div>
 
             <div className="friend-chip">
-              <span className="avatar">M</span>
+              <span className="avatar">R</span>
               <span>
-                <strong>Maya</strong> just rated <strong>Blonde</strong>{' '}
+                <strong>Roxy</strong> just rated <strong>Blonde</strong>{' '}
                 <span className="chip-score">9.5</span>
               </span>
             </div>
