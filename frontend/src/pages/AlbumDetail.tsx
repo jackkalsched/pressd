@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2, Pencil, Trash2, MessageCircle, Star, Music, BookOpen } from 'lucide-react'
+import { ArrowLeft, Loader2, Pencil, Trash2, MessageCircle, Star, Music, BookOpen, Users } from 'lucide-react'
 import { fetchAlbum, deleteAlbum, fetchFriendRatings, importAlbum, saveReview, deleteReview } from '../api'
 import { useUser } from '../context/UserContext'
 import { BANG_THRESHOLD, SKIP_THRESHOLD, songScoreColor } from '../types'
@@ -525,102 +525,60 @@ export default function AlbumDetail() {
           ))}
         </div>
 
-        {/* ── Review ───────────────────────────────────────────────── */}
-        <ReviewSection album={album} editable={!isViewingFriend} authorName={isViewingFriend ? viewingUser.name : (activeUser?.name ?? 'You')} />
-
-        {/* ── Friends' ratings ─────────────────────────────────────── */}
+        {/* ── Friends' take — under the track list, above the review ── */}
         {!isViewingFriend && friendRatings.length > 0 && (
-          <div className="mt-2">
-            <p className="text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.14em] mb-5">
-              Friends' Ratings
-            </p>
-            <div className="flex flex-col gap-4">
-              {friendRatings.map(({ friend, album: fa }) => {
-                const friendSorted = [...fa.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
-                const friendRated = fa.songs.filter(s => s.score !== null)
-                const friendAvg = friendRated.length > 0
-                  ? friendRated.reduce((s, s2) => s + s2.score!, 0) / friendRated.length
-                  : null
-                const friendBangs = friendRated.filter(s => s.score! >= BANG_THRESHOLD)
-                const friendSkips = friendRated.filter(s => s.score! < SKIP_THRESHOLD)
-
-                return (
-                  <div key={friend.id} className="bg-[#f7f3ee] border border-[#e8e2d9] rounded-2xl p-5">
-                    <div className="flex items-center justify-between mb-5">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                          style={{ backgroundColor: '#2d6a4f' }}
-                        >
-                          {friend.name[0].toUpperCase()}
+          <div className="flex items-center gap-4 mb-10 rounded-2xl border border-[#cfe0d6] px-5 py-4">
+            <div className="w-9 h-9 rounded-full bg-[#2d6a4f]/12 flex items-center justify-center shrink-0">
+              <Users size={17} className="text-[#2d6a4f]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-[#1c1917] mb-2">
+                {friendRatings.length === 1
+                  ? `${friendRatings[0].friend.name} rated this too`
+                  : `${friendRatings.length} friends rated this too`}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                {friendRatings.map(({ friend, album: fa }) => {
+                  const rated = fa.songs.filter(s => s.score !== null)
+                  const fav = rated.length ? rated.reduce((a, b) => (b.score! > a.score! ? b : a)) : null
+                  return (
+                    <div
+                      key={friend.id}
+                      className="inline-flex items-center gap-2 bg-white border border-[#e8e2d9] rounded-xl px-2.5 py-1.5 shadow-sm max-w-[16rem]"
+                    >
+                      <span
+                        className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                        style={{ backgroundColor: '#2d6a4f' }}
+                      >
+                        {friend.name[0].toUpperCase()}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[12px] font-medium text-[#57534e] truncate">{friend.name}</span>
+                          {fa.score !== null && (
+                            <span className="text-[13px] font-bold tabular-nums shrink-0" style={{ color: songScoreColor(fa.score) }}>
+                              {fa.score.toFixed(2)}
+                            </span>
+                          )}
                         </div>
-                        <span className="text-sm font-semibold text-[#1c1917]">{friend.name}</span>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm">
-                        {friendAvg !== null && (
-                          <span className="text-[#78716c]">Avg <span className="font-semibold text-[#1c1917] tabular-nums">{friendAvg.toFixed(2)}</span></span>
-                        )}
-                        {friendRated.length > 0 && (
-                          <span className="text-[#78716c]">Bang% <span className="font-semibold text-[#2d6a4f] tabular-nums">{Math.round(friendBangs.length / friendRated.length * 100)}%</span></span>
-                        )}
-                        {friendRated.length > 0 && (
-                          <span className="text-[#78716c]">Skip% <span className="font-semibold text-[#c0392b] tabular-nums">{Math.round(friendSkips.length / friendRated.length * 100)}%</span></span>
-                        )}
-                        {fa.score !== null && (
-                          <span className="text-2xl font-bold tabular-nums text-[#2d6a4f]">{fa.score.toFixed(2)}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {fa.songs.length > 6 && (fa.theme ?? fa.replayValue ?? fa.production ?? fa.distinctness) && (
-                      <div className="grid grid-cols-4 gap-2 mb-4">
-                        {[
-                          { label: 'Theme',   value: fa.theme },
-                          { label: 'Replay',  value: fa.replayValue },
-                          { label: 'Prod.',   value: fa.production },
-                          { label: 'Distinct',value: fa.distinctness },
-                        ].map(({ label, value }) => (
-                          <div key={label} className="bg-[#f0ebe3] border border-[#e8e2d9] rounded-xl p-3 text-center">
-                            <p className="text-[9px] text-[#a8998a] uppercase tracking-[0.1em] mb-1.5">{label}</p>
-                            <p className="text-xl font-bold text-[#1c1917] tabular-nums">{value ?? '—'}</p>
+                        {fav && (
+                          <div className="flex items-center gap-1 text-[11px] text-[#a8998a] min-w-0 mt-0.5" title={`${friend.name}'s favorite track`}>
+                            <Star size={9} fill="#c8a84b" strokeWidth={0} className="shrink-0" />
+                            <span className="truncate">{fav.title}</span>
+                            <span className="font-semibold text-[#78716c] tabular-nums shrink-0">{fav.score!.toFixed(2)}</span>
                           </div>
-                        ))}
+                        )}
                       </div>
-                    )}
-
-                    <div className="flex flex-col">
-                      {friendSorted.map((song, idx) => (
-                        <div
-                          key={song.id}
-                          className={`flex items-center gap-3 py-2.5 ${idx < friendSorted.length - 1 ? 'border-b border-[#ece5da]' : ''}`}
-                        >
-                          <div
-                            className="w-[3px] h-4 rounded-full shrink-0"
-                            style={{ backgroundColor: song.score !== null ? songScoreColor(song.score) : '#e8e2d9' }}
-                          />
-                          <span className="text-[#c2b8ad] text-xs w-4 text-right shrink-0 tabular-nums">{song.trackNumber}</span>
-                          <span className="flex-1 text-[#57534e] text-sm truncate">{song.title}</span>
-                          {song.score !== null && song.score >= BANG_THRESHOLD && (
-                            <span className="text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: songScoreColor(song.score) }}>bang</span>
-                          )}
-                          {song.score !== null && song.score < SKIP_THRESHOLD && (
-                            <span className="text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: songScoreColor(song.score) }}>skip</span>
-                          )}
-                          <span
-                            className="text-sm font-semibold tabular-nums w-10 text-right shrink-0"
-                            style={{ color: song.score !== null ? songScoreColor(song.score) : '#d4ccc4' }}
-                          >
-                            {song.score ?? '—'}
-                          </span>
-                        </div>
-                      ))}
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           </div>
         )}
+
+        {/* ── Review ───────────────────────────────────────────────── */}
+        <ReviewSection album={album} editable={!isViewingFriend} authorName={isViewingFriend ? viewingUser.name : (activeUser?.name ?? 'You')} />
 
         {/* ── Comments ─────────────────────────────────────────────── */}
         <div className="mt-10 max-w-2xl">
