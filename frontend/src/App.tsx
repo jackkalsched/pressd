@@ -6,6 +6,7 @@ import { fetchAlbums } from './api'
 import { UserProvider, useUser } from './context/UserContext'
 import Onboarding, { ONBOARDING_SKIP_KEY } from './pages/Onboarding'
 import Layout from './components/Layout'
+import ForYou from './pages/ForYou'
 import Library from './pages/Library'
 import Ratings from './pages/Ratings'
 import Stats from './pages/Stats'
@@ -18,7 +19,7 @@ import LandingPage from './pages/LandingPage'
 
 function PublicHome() {
   const { activeUser } = useUser()
-  if (activeUser) return <Navigate to="/library" replace />
+  if (activeUser) return <Navigate to="/for-you" replace />
   return <LandingPage />
 }
 
@@ -47,7 +48,8 @@ function ProtectedRoutes() {
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<Navigate to="/library" replace />} />
+        <Route path="/" element={<Navigate to="/for-you" replace />} />
+        <Route path="/for-you" element={<ForYou />} />
         <Route path="/library" element={<Library />} />
         <Route path="/ratings" element={<Ratings />} />
         <Route path="/stats" element={<Stats />} />
