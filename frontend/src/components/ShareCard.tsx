@@ -172,8 +172,8 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
               {/* header */}
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
-                  <div style={{ width: 42, height: 42, borderRadius: 12, background: GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', font: "800 26px 'Playfair Display', serif" }}>P</div>
-                  <span style={{ font: "800 25px 'Plus Jakarta Sans', sans-serif", letterSpacing: '.22em', color: INK }}>PRESS&rsquo;D</span>
+                  <img src="/logo.png" alt="" style={{ height: 44, width: 'auto', display: 'block' }} />
+                  <span style={{ font: "800 30px 'Plus Jakarta Sans', sans-serif", letterSpacing: '-.02em', color: INK }}>Press&rsquo;d</span>
                 </div>
                 <span style={{ font: "600 17px 'DM Sans'", letterSpacing: '.14em', textTransform: 'uppercase', color: WARM }}>{dateStr}</span>
               </div>
@@ -201,7 +201,7 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
                   {album.score !== null ? album.score.toFixed(2) : '—'}
                   <span style={{ font: "600 40px 'Plus Jakarta Sans'", color: WARM2 }}> /10</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 12, marginTop: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 12, marginTop: 28 }}>
                   <span style={pillNeutral()}>Ranked #{stats.rank} of {stats.total}</span>
                   <span style={tercileStyle}>{tercileLabel}</span>
                   {stats.noSkips && (
@@ -290,8 +290,8 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
               <div style={{ position: 'relative', marginTop: 'auto', paddingTop: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 11, borderTop: '1px solid #e6ded2' }}>
                 <span style={{ font: "500 19px 'DM Sans'", color: WARM }}>Rate your albums on</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                  <div style={{ width: 30, height: 30, borderRadius: 8, background: GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', font: "800 18px 'Playfair Display', serif" }}>P</div>
-                  <span style={{ font: "800 22px 'Plus Jakarta Sans'", letterSpacing: '.02em', color: INK }}>Press&rsquo;d</span>
+                  <img src="/logo.png" alt="" style={{ height: 32, width: 'auto', display: 'block' }} />
+                  <span style={{ font: "800 22px 'Plus Jakarta Sans', sans-serif", letterSpacing: '-.02em', color: INK }}>Press&rsquo;d</span>
                 </div>
               </div>
             </div>
