@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2, Pencil, Trash2, MessageCircle, Star, Music, BookOpen, Users } from 'lucide-react'
+import { ArrowLeft, Loader2, Pencil, Trash2, MessageCircle, Star, Music, BookOpen, Users, Share2 } from 'lucide-react'
 import { fetchAlbum, deleteAlbum, fetchFriendRatings, importAlbum, saveReview, deleteReview } from '../api'
 import { useUser } from '../context/UserContext'
 import { BANG_THRESHOLD, SKIP_THRESHOLD, songScoreColor } from '../types'
 import type { Album } from '../types'
 import RecommendModal from '../components/RecommendModal'
 import CommentThread from '../components/CommentThread'
+import ShareCardModal from '../components/ShareCard'
 
 function shareRatingViaIMessage(albumName: string, artist: string, score: number | null, viewingName?: string) {
   const who = viewingName ? `${viewingName} rated` : 'I rated'
@@ -17,10 +18,6 @@ function shareRatingViaIMessage(albumName: string, artist: string, score: number
 }
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
-
-function lightenHsl(hsl: string, l: number): string {
-  return hsl.replace(/,\s*\d+%\)$/, `, ${l}%)`)
-}
 
 function accentToPageGradient(hsl: string | null): string {
   if (!hsl) return '#faf8f5'
@@ -168,6 +165,7 @@ export default function AlbumDetail() {
   const queryClient = useQueryClient()
   const { isViewingFriend, viewingUser, activeUser } = useUser()
   const [showRecommend, setShowRecommend] = useState(false)
+  const [showShareCard, setShowShareCard] = useState(false)
   const [ratingItYourself, setRatingItYourself] = useState(false)
   const [addingToLibrary, setAddingToLibrary] = useState(false)
   const [addedToLibrary, setAddedToLibrary] = useState(false)
@@ -331,6 +329,11 @@ export default function AlbumDetail() {
                 className={btnNeutral}
               >
                 <MessageCircle size={12} /> Share
+              </button>
+            )}
+            {album.status === 'rated' && (
+              <button onClick={() => setShowShareCard(true)} className={btnNeutral}>
+                <Share2 size={12} /> Share Card
               </button>
             )}
             {album.status === 'rated' && !isViewingFriend && (
@@ -594,6 +597,9 @@ export default function AlbumDetail() {
 
       {showRecommend && album && (
         <RecommendModal album={album} onClose={() => setShowRecommend(false)} />
+      )}
+      {showShareCard && album && (
+        <ShareCardModal album={album} onClose={() => setShowShareCard(false)} />
       )}
     </div>
   )
