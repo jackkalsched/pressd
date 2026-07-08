@@ -209,11 +209,6 @@ export default function RatingScreen() {
   const bigLabel = displayBig === null ? 'START RATING' : isFinal ? 'FINAL SCORE' : 'PROJECTED'
   const shownScore = useCountUp(displayBig)
 
-  // Gauge geometry
-  const GAUGE_R = 78
-  const GAUGE_CIRC = 2 * Math.PI * GAUGE_R
-  const gaugeFraction = Math.min(10, Math.max(0, displayBig ?? 0)) / 10
-
   // Track ribbon tallies
   const bangs = scores.filter((s) => s !== null && s >= BANG_THRESHOLD).length
   const skips = scores.filter((s) => s !== null && s < SKIP_THRESHOLD).length
@@ -447,39 +442,20 @@ export default function RatingScreen() {
           </div>
         ) : (
           <>
-            {/* Radial gauge */}
-            <div className="relative mx-auto mb-5" style={{ width: 186, height: 186 }}>
-              <svg viewBox="0 0 186 186" className="w-full h-full">
-                <circle cx="93" cy="93" r={GAUGE_R} fill="none" stroke="#dfe9e2" strokeWidth="13" />
-                <circle
-                  cx="93"
-                  cy="93"
-                  r={GAUGE_R}
-                  fill="none"
-                  stroke="#2d6a4f"
-                  strokeWidth="13"
-                  strokeLinecap="round"
-                  transform="rotate(-90 93 93)"
-                  style={{
-                    strokeDasharray: `${gaugeFraction * GAUGE_CIRC} ${GAUGE_CIRC}`,
-                    transition: 'stroke-dasharray .6s cubic-bezier(.34,1.3,.6,1)',
-                  }}
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span
-                  className="tabular-nums leading-none"
-                  style={{ fontFamily: "'Playfair Display', serif", fontSize: '2.7rem', color: '#2d6a4f' }}
-                >
-                  {displayBig !== null ? shownScore.toFixed(2) : '—'}
-                </span>
-                <span
-                  className="mt-2 text-[10px] font-semibold uppercase"
-                  style={{ color: isFinal ? '#2d6a4f' : '#b3a99c', letterSpacing: '.14em' }}
-                >
-                  {bigLabel}
-                </span>
+            {/* Big score */}
+            <div className="mb-5">
+              <div
+                className="tabular-nums leading-none"
+                style={{ fontFamily: "'Playfair Display', serif", fontWeight: 800, fontSize: '4.75rem', color: '#2d6a4f' }}
+              >
+                {displayBig !== null ? shownScore.toFixed(2) : '—'}
               </div>
+              <p
+                className="mt-1.5 text-[10px] font-semibold uppercase"
+                style={{ color: isFinal ? '#2d6a4f' : '#b3a99c', letterSpacing: '.14em' }}
+              >
+                {bigLabel}
+              </p>
             </div>
 
             {/* Track-by-track dot ribbon */}
@@ -519,20 +495,17 @@ export default function RatingScreen() {
 
         <div className="flex flex-col gap-3">
           {(isEP
-            ? [{ label: 'Avg Song Score', value: avgSong, weight: '×1.00' }]
+            ? [{ label: 'Avg Song Score', value: avgSong }]
             : [
-                { label: 'Avg Song Score', value: avgSong,     weight: '×1.00' },
-                { label: 'Theme / Cohesion', value: theme,        weight: 'z ×0.25' },
-                { label: 'Replay Value',    value: replayValue,  weight: 'z ×0.15' },
-                { label: 'Production',      value: production,   weight: 'z ×0.15' },
-                { label: 'Distinctness',    value: distinctness, weight: 'z ×0.05' },
+                { label: 'Avg Song Score', value: avgSong },
+                { label: 'Theme / Cohesion', value: theme },
+                { label: 'Replay Value',    value: replayValue },
+                { label: 'Production',      value: production },
+                { label: 'Distinctness',    value: distinctness },
               ]
-          ).map(({ label, value, weight }) => (
+          ).map(({ label, value }) => (
             <div key={label} className="flex items-center justify-between">
-              <div>
-                <p className="text-[#777] text-xs">{label}</p>
-                <p className="text-[#aaa] text-[10px]">{weight}</p>
-              </div>
+              <p className="text-[#777] text-xs">{label}</p>
               <span className="text-[#111] text-sm font-medium tabular-nums">
                 {value !== null ? (value as number).toFixed(2) : '—'}
               </span>
