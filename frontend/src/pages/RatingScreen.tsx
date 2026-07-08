@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Check, Loader2, Save, SkipForward } from 'lucide-react'
-import { fetchAlbum, batchRateSongs, updateAlbum, fetchFactorStats, fetchAlbumReport } from '../api'
+import { fetchAlbum, batchRateSongs, updateAlbum, fetchFactorStats, fetchFactorWeights, fetchAlbumReport } from '../api'
 import type { AlbumReportData } from '../api'
 import { computeAlbumScore, BANG_THRESHOLD, SKIP_THRESHOLD, songScoreColor } from '../types'
 import type { Song } from '../types'
@@ -99,6 +99,15 @@ export default function RatingScreen() {
   const { data: factorStats } = useQuery({
     queryKey: ['factor-stats'],
     queryFn: fetchFactorStats,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // The user's own factor weights so the live preview matches how the server
+  // will score the album (falls back to defaults until loaded).
+  const { data: factorWeights } = useQuery({
+    queryKey: ['factor-weights', userId],
+    queryFn: () => fetchFactorWeights(userId),
+    enabled: userId > 0,
     staleTime: 5 * 60 * 1000,
   })
 
@@ -200,6 +209,7 @@ export default function RatingScreen() {
           sortedSongs.map((s, i) => ({ ...s, score: scores[i] })) as Song[],
           theme!, replayValue!, production!, distinctness!,
           factorStats!,
+          factorWeights?.points,
         )
     : null
 

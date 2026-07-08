@@ -11,6 +11,14 @@ class PressUser(SQLModel, table=True):
     google_sub: Optional[str] = Field(default=None, unique=True, index=True)
     email: Optional[str] = None
 
+    # Per-user external-factor weights, stored as a 60-point budget (each ≥ 5).
+    # Weight applied in scoring = points / 100. Defaults mirror the historical
+    # global weights (0.25 / 0.15 / 0.15 / 0.05).
+    theme_pts: int = Field(default=25)
+    replay_pts: int = Field(default=15)
+    production_pts: int = Field(default=15)
+    distinctness_pts: int = Field(default=5)
+
     albums: list["Album"] = Relationship(back_populates="user")
 
 

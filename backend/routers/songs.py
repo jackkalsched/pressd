@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 from ..database import get_session
 from ..deps import current_user, authorize_view
 from ..models import Song, Album, PressUser
-from ..scoring import compute_a_score, compute_album_score, get_factor_stats, EP_MAX_TRACKS
+from ..scoring import compute_a_score, compute_album_score, get_factor_stats, get_user_weights, EP_MAX_TRACKS
 
 router = APIRouter(prefix="/songs", tags=["songs"])
 
@@ -89,10 +89,11 @@ def rate_song(
         )
         if len(rated) == len(album.songs) and has_factors:
             factor_stats = get_factor_stats(session, user_id=album.user_id)
+            owner = session.get(PressUser, album.user_id)
             album.score = compute_album_score(
                 rated, album.theme, album.replay_value,
                 album.production, album.distinctness,
-                factor_stats,
+                factor_stats, get_user_weights(owner) if owner else None,
             )
             session.add(album)
         elif (len(rated) == len(album.songs) and not has_factors

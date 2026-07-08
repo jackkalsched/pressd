@@ -1,4 +1,4 @@
-import type { Album, Song, ArtistStats, FactorStats } from './types'
+import type { Album, Song, ArtistStats, FactorStats, FactorPoints } from './types'
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
@@ -390,6 +390,35 @@ export interface Summary {
 
 export async function fetchFactorStats(): Promise<FactorStats> {
   const res = await apiFetch(`${BASE}/stats/factor-stats`)
+  return res.json()
+}
+
+export interface FactorWeightsResponse {
+  points: FactorPoints
+  default: FactorPoints
+  total: number
+  min: number
+}
+
+export async function fetchFactorWeights(userId: number): Promise<FactorWeightsResponse> {
+  const res = await apiFetch(`${BASE}/users/${userId}/factor-weights`)
+  if (!res.ok) throw new Error('Failed to load scoring weights')
+  return res.json()
+}
+
+export async function updateFactorWeights(
+  userId: number,
+  points: FactorPoints,
+): Promise<{ points: FactorPoints; recomputed: number }> {
+  const res = await apiFetch(`${BASE}/users/${userId}/factor-weights`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(points),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? 'Failed to save scoring weights')
+  }
   return res.json()
 }
 

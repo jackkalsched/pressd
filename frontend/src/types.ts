@@ -91,6 +91,27 @@ export interface FactorStats {
   distinctness: [number, number]
 }
 
+// Per-user external-factor weighting, stored as a fixed 60-point budget
+// (each factor ≥ 5). The scoring weight applied to a factor is points / 100.
+export interface FactorPoints {
+  theme:        number
+  replay_value: number
+  production:   number
+  distinctness: number
+}
+
+export const DEFAULT_FACTOR_POINTS: FactorPoints = { theme: 25, replay_value: 15, production: 15, distinctness: 5 }
+export const TOTAL_FACTOR_POINTS = 60
+export const MIN_FACTOR_POINTS = 5
+
+// Display order + labels for the four factors (mirrors the rating screen)
+export const FACTOR_META: { key: keyof FactorPoints; label: string; desc: string }[] = [
+  { key: 'theme',        label: 'Theme / Cohesion', desc: 'Strength and cohesion of the central idea' },
+  { key: 'replay_value', label: 'Replay Value',     desc: 'How replayable the album is' },
+  { key: 'production',   label: 'Production',        desc: 'Sound quality, mixing, sonic palette' },
+  { key: 'distinctness', label: 'Distinctness',      desc: 'Originality and genre-bending' },
+]
+
 export function computeAlbumScore(
   songs: Song[],
   theme: number,
@@ -98,6 +119,7 @@ export function computeAlbumScore(
   production: number,
   distinctness: number,
   factorStats: FactorStats,
+  points: FactorPoints = DEFAULT_FACTOR_POINTS,
 ): number {
   const rated = songs.filter((s) => s.score !== null && s.score !== undefined)
   if (rated.length === 0) return 0
@@ -110,9 +132,9 @@ export function computeAlbumScore(
 
   return (
     1.00 * avgSong +
-    0.25 * z(theme,        'theme') +
-    0.15 * z(replayValue,  'replay_value') +
-    0.15 * z(production,   'production') +
-    0.05 * z(distinctness, 'distinctness')
+    (points.theme        / 100) * z(theme,        'theme') +
+    (points.replay_value / 100) * z(replayValue,  'replay_value') +
+    (points.production   / 100) * z(production,   'production') +
+    (points.distinctness / 100) * z(distinctness, 'distinctness')
   )
 }

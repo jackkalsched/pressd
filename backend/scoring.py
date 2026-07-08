@@ -8,6 +8,40 @@ WEIGHTS = {
     "distinctness": 0.05,
 }
 
+# The four external factors share a fixed 60-point budget (each ≥ 5). A user's
+# allocation is stored on PressUser and converted to weights here (weight =
+# points / 100). Defaults mirror the historical global WEIGHTS above.
+FACTOR_KEYS = ("theme", "replay_value", "production", "distinctness")
+DEFAULT_FACTOR_POINTS = {"theme": 25, "replay_value": 15, "production": 15, "distinctness": 5}
+TOTAL_FACTOR_POINTS = 60
+MIN_FACTOR_POINTS = 5
+# Maps a factor key to its PressUser column
+_POINT_COLS = {
+    "theme":        "theme_pts",
+    "replay_value": "replay_pts",
+    "production":   "production_pts",
+    "distinctness": "distinctness_pts",
+}
+
+
+def get_user_points(user) -> dict:
+    """A user's factor point allocation, falling back to defaults for any unset column."""
+    return {
+        key: (getattr(user, col) if getattr(user, col, None) is not None else DEFAULT_FACTOR_POINTS[key])
+        for key, col in _POINT_COLS.items()
+    }
+
+
+def weights_from_points(points: dict) -> dict:
+    """Convert a factor point allocation to a scoring weights dict (weight = points / 100)."""
+    return {"song": 1.00, **{key: points.get(key, DEFAULT_FACTOR_POINTS[key]) / 100 for key in FACTOR_KEYS}}
+
+
+def get_user_weights(user) -> dict:
+    """Scoring weights for a PressUser, derived from their factor points."""
+    return weights_from_points(get_user_points(user))
+
+
 BANG_THRESHOLD = 8.0
 SKIP_THRESHOLD = 6.5
 
@@ -57,9 +91,11 @@ def compute_album_score(
     production: float,
     distinctness: float,
     factor_stats: dict,
+    weights: dict | None = None,
 ) -> float:
     if not song_scores:
         return 0.0
+    w = weights or WEIGHTS
     avg_song = sum(song_scores) / len(song_scores)
 
     def z(val, key):
@@ -67,53 +103,63 @@ def compute_album_score(
         return (val - mu) / sd
 
     return round(
-        WEIGHTS["song"]         * avg_song
-        + WEIGHTS["theme"]        * z(theme,        "theme")
-        + WEIGHTS["replay_value"] * z(replay_value, "replay_value")
-        + WEIGHTS["production"]   * z(production,   "production")
-        + WEIGHTS["distinctness"] * z(distinctness, "distinctness"),
+        w["song"]         * avg_song
+        + w["theme"]        * z(theme,        "theme")
+        + w["replay_value"] * z(replay_value, "replay_value")
+        + w["production"]   * z(production,   "production")
+        + w["distinctness"] * z(distinctness, "distinctness"),
         4,
     )
 
 
-def recompute_all_scores(session) -> None:
-    """Recompute and persist scores for every rated album, using each user's own factor stats."""
+def recompute_user_scores(session, user) -> int:
+    """Recompute (but don't commit) every rated album for one user, using their
+    own factor stats and weights. Returns the number of albums re-scored."""
     from sqlmodel import select
     from sqlalchemy.orm import selectinload
-    from .models import Album, PressUser
+    from .models import Album
 
-    user_ids = list(session.exec(select(PressUser.id)).all())
+    factor_stats = get_factor_stats(session, user_id=user.id)
+    weights = get_user_weights(user)
 
-    for user_id in user_ids:
-        factor_stats = get_factor_stats(session, user_id=user_id)
+    albums = session.exec(
+        select(Album).where(
+            Album.status == "rated",
+            Album.user_id == user.id,
+        ).options(selectinload(Album.songs))
+    ).all()
 
-        albums = session.exec(
-            select(Album).where(
-                Album.status == "rated",
-                Album.user_id == user_id,
-            ).options(selectinload(Album.songs))
-        ).all()
-
-        for album in albums:
-            song_scores = [s.score for s in album.songs if s.score is not None]
-            if not song_scores:
-                continue
-            has_factors = all(
-                getattr(album, f) is not None
-                for f in ("theme", "replay_value", "production", "distinctness")
+    count = 0
+    for album in albums:
+        song_scores = [s.score for s in album.songs if s.score is not None]
+        if not song_scores:
+            continue
+        has_factors = all(getattr(album, f) is not None for f in FACTOR_KEYS)
+        if has_factors:
+            album.score = compute_album_score(
+                song_scores,
+                album.theme, album.replay_value,
+                album.production, album.distinctness,
+                factor_stats, weights,
             )
-            if has_factors:
-                album.score = compute_album_score(
-                    song_scores,
-                    album.theme, album.replay_value,
-                    album.production, album.distinctness,
-                    factor_stats,
-                )
-            elif len(album.songs) <= EP_MAX_TRACKS:
-                # EP: no factor ratings by design — score is the song mean
-                album.score = round(sum(song_scores) / len(song_scores), 2)
-            else:
-                continue  # full album still awaiting factor ratings
-            session.add(album)
+        elif len(album.songs) <= EP_MAX_TRACKS:
+            # EP: no factor ratings by design — score is the song mean
+            album.score = round(sum(song_scores) / len(song_scores), 2)
+        else:
+            continue  # full album still awaiting factor ratings
+        session.add(album)
+        count += 1
+
+    return count
+
+
+def recompute_all_scores(session) -> None:
+    """Recompute and persist scores for every rated album, using each user's own factor stats and weights."""
+    from sqlmodel import select
+    from .models import PressUser
+
+    users = session.exec(select(PressUser)).all()
+    for user in users:
+        recompute_user_scores(session, user)
 
     session.commit()

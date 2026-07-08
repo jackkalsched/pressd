@@ -11,6 +11,14 @@ from sqlmodel import Session, select
 from ..database import get_session
 from ..deps import current_user, optional_user, authorize_view, auth_response
 from ..models import PressUser, Invite, Friendship
+from ..scoring import (
+    get_user_points,
+    recompute_user_scores,
+    DEFAULT_FACTOR_POINTS,
+    FACTOR_KEYS,
+    MIN_FACTOR_POINTS,
+    TOTAL_FACTOR_POINTS,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -259,6 +267,61 @@ def update_user(
     session.commit()
     session.refresh(user)
     return {"id": user.id, "name": user.name, "avatar_url": user.avatar_url}
+
+
+@router.get("/{user_id}/factor-weights")
+def get_factor_weights(
+    user_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """The user's external-factor point allocation (60-point budget), plus the
+    default allocation and the budget constraints so the UI can seed sliders."""
+    if user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return {
+        "points": get_user_points(user),
+        "default": DEFAULT_FACTOR_POINTS,
+        "total": TOTAL_FACTOR_POINTS,
+        "min": MIN_FACTOR_POINTS,
+    }
+
+
+@router.put("/{user_id}/factor-weights")
+def set_factor_weights(
+    user_id: int,
+    data: dict,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Persist a new factor point allocation and re-score the user's rated albums.
+    Enforces the budget: every factor ≥ MIN, and the four summing to TOTAL."""
+    if user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    points: dict[str, int] = {}
+    for key in FACTOR_KEYS:
+        raw = data.get(key)
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)) or (isinstance(raw, float) and not raw.is_integer()):
+            raise HTTPException(status_code=400, detail=f"{key} must be a whole number")
+        value = int(raw)
+        if value < MIN_FACTOR_POINTS:
+            raise HTTPException(status_code=400, detail=f"{key} must be at least {MIN_FACTOR_POINTS}")
+        points[key] = value
+
+    if sum(points.values()) != TOTAL_FACTOR_POINTS:
+        raise HTTPException(status_code=400, detail=f"Points must sum to {TOTAL_FACTOR_POINTS}")
+
+    user.theme_pts = points["theme"]
+    user.replay_pts = points["replay_value"]
+    user.production_pts = points["production"]
+    user.distinctness_pts = points["distinctness"]
+    session.add(user)
+
+    recomputed = recompute_user_scores(session, user)
+    session.commit()
+
+    return {"points": points, "recomputed": recomputed}
 
 
 @router.get("/{user_id}/friends")

@@ -103,6 +103,15 @@ def init_db():
             # ── Reviews: long-form prose attached to an album rating ──
             "ALTER TABLE album ADD COLUMN review TEXT",
             "ALTER TABLE album ADD COLUMN review_at TIMESTAMP",
+            # ── Per-user external-factor weights (60-point budget) ──
+            "ALTER TABLE pressuser ADD COLUMN theme_pts INTEGER DEFAULT 25",
+            "ALTER TABLE pressuser ADD COLUMN replay_pts INTEGER DEFAULT 15",
+            "ALTER TABLE pressuser ADD COLUMN production_pts INTEGER DEFAULT 15",
+            "ALTER TABLE pressuser ADD COLUMN distinctness_pts INTEGER DEFAULT 5",
+            "UPDATE pressuser SET theme_pts = 25 WHERE theme_pts IS NULL",
+            "UPDATE pressuser SET replay_pts = 15 WHERE replay_pts IS NULL",
+            "UPDATE pressuser SET production_pts = 15 WHERE production_pts IS NULL",
+            "UPDATE pressuser SET distinctness_pts = 5 WHERE distinctness_pts IS NULL",
         ]:
             _exec_migration(conn, stmt)
 
