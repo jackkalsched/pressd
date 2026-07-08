@@ -223,7 +223,7 @@ export default function ForYou() {
 
   return (
     <div className="min-h-screen bg-[#efece6] text-[#1c1917]">
-      <div className="mx-auto w-full max-w-[1080px] px-5 md:px-8 py-8 pb-24 flex flex-col lg:flex-row gap-8">
+      <div className="mx-auto w-full max-w-[1600px] px-6 md:px-12 py-8 pb-24 flex flex-col lg:flex-row gap-8">
 
         {/* ─────────── FEED COLUMN ─────────── */}
         <div className="flex-1 min-w-0">
@@ -365,19 +365,36 @@ export default function ForYou() {
           )}
 
           {/* community reviews */}
-          {reviews.length > 0 && (
-            <section>
-              <div className="flex items-baseline justify-between mb-4">
-                <h2 className={SECTION_LABEL}>Fresh reviews from friends</h2>
-                <button onClick={() => navigate('/social')} className="text-[12px] font-semibold text-[#2d6a4f] hover:text-[#245c43] flex items-center gap-1">See more <ArrowRight size={12} /></button>
-              </div>
+          <section>
+            <div className="flex items-baseline justify-between mb-4">
+              <h2 className={SECTION_LABEL}>Fresh reviews from friends</h2>
+              <button onClick={() => navigate('/social')} className="text-[12px] font-semibold text-[#2d6a4f] hover:text-[#245c43] flex items-center gap-1">See more <ArrowRight size={12} /></button>
+            </div>
+            {reviews.length > 0 ? (
               <div className="flex flex-col gap-3.5">
                 {reviews.slice(0, 4).map((rv) => (
                   <ReviewCard key={`${rv.friend.id}-${rv.album_id}`} rv={rv} onOpen={() => navigate(`/album/${rv.album_id}`)} onLike={() => handleLike(rv.album_id)} />
                 ))}
               </div>
-            </section>
-          )}
+            ) : (
+              <div className="rounded-[18px] border border-dashed border-[#d8cfc1] bg-[#faf8f5] px-6 py-10 flex flex-col items-center text-center">
+                <div className="w-11 h-11 rounded-full bg-[#eef1ec] flex items-center justify-center mb-3">
+                  <MessageCircle size={20} className="text-[#a8998a]" strokeWidth={1.75} />
+                </div>
+                <p className="m-0 font-bold text-[14.5px]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>No reviews yet</p>
+                <p className="m-0 mt-1 max-w-[320px] text-[12.5px] leading-snug text-[#8a7f72]">
+                  When your friends write reviews, they&rsquo;ll show up here. Add friends or write the first review yourself.
+                </p>
+                <button
+                  onClick={() => navigate('/social')}
+                  className="mt-4 rounded-[11px] border border-[#2d6a4f] bg-transparent text-[#2d6a4f] hover:bg-[#2d6a4f] hover:text-white px-4 py-2 text-[12.5px] font-bold transition-colors flex items-center gap-1.5"
+                  style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                >
+                  Find friends <ArrowRight size={13} />
+                </button>
+              </div>
+            )}
+          </section>
         </div>
 
         {/* ─────────── RIGHT RAIL ─────────── */}
