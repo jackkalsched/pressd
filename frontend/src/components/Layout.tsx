@@ -332,10 +332,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {!isViewingFriend && (
             <button
               onClick={() => setShowAddAlbum(true)}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-[#777] hover:text-[#111] hover:bg-[#f0f0f0] w-full text-left mt-1"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors bg-[#2d6a4f] hover:bg-[#245c43] text-white w-full text-left mt-1"
             >
               <Plus size={16} />
-              Add Album
+              Rate an Album
             </button>
           )}
         </nav>
@@ -465,7 +465,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           onClick={() => setShowAddAlbum(true)}
           className="md:hidden fixed bottom-20 right-4 z-30 w-12 h-12 rounded-full bg-[#2d6a4f] hover:bg-[#245c43] text-white shadow-lg flex items-center justify-center transition-colors"
           style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
-          aria-label="Add Album"
+          aria-label="Rate an Album"
         >
           <Plus size={22} />
         </button>
