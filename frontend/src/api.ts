@@ -300,6 +300,40 @@ export async function backfillCovers(): Promise<{ updated: number; skipped: numb
   return res.json()
 }
 
+// ── Discover: new releases (Deezer) ───────────────────────────────────────────
+
+export interface NewRelease {
+  deezerId: number
+  albumName: string
+  artist: string
+  coverUrl: string | null
+  year: number | null
+  releaseDate: string | null
+  nbTracks: number | null
+}
+
+export async function fetchNewReleases(limit = 12): Promise<NewRelease[]> {
+  const res = await apiFetch(`${BASE}/discover/new-releases?limit=${limit}`)
+  if (!res.ok) throw new Error('Failed to load new releases')
+  const data = await res.json()
+  return (data as Record<string, unknown>[]).map((r) => ({
+    deezerId: r.deezer_id as number,
+    albumName: r.album_name as string,
+    artist: r.artist as string,
+    coverUrl: (r.cover_url as string | null) ?? null,
+    year: (r.year as number | null) ?? null,
+    releaseDate: (r.release_date as string | null) ?? null,
+    nbTracks: (r.nb_tracks as number | null) ?? null,
+  }))
+}
+
+// Resolve a Deezer release to the full album+tracks shape importAlbum consumes
+export async function resolveDeezerAlbum(deezerId: number): Promise<SpotifyAlbumResult> {
+  const res = await apiFetch(`${BASE}/discover/deezer/${deezerId}`)
+  if (!res.ok) throw new Error('Failed to load album')
+  return res.json()
+}
+
 export interface AlbumReportSong {
   title: string
   track_number: number | null

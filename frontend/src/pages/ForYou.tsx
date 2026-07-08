@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check } from 'lucide-react'
-import { fetchAlbums, fetchFeed, fetchFriendReviews, toggleLike } from '../api'
-import type { FriendReview } from '../api'
+import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Loader2 } from 'lucide-react'
+import { fetchAlbums, fetchFeed, fetchFriendReviews, toggleLike, fetchNewReleases, resolveDeezerAlbum, importAlbum } from '../api'
+import type { FriendReview, NewRelease } from '../api'
 import { songScoreColor } from '../types'
 import { useUser } from '../context/UserContext'
 
@@ -139,6 +139,12 @@ export default function ForYou() {
   const { data: reviews = [] } = useQuery({
     queryKey: ['for-you-reviews'],
     queryFn: () => fetchFriendReviews('recent'),
+    enabled: userId > 0,
+  })
+  const { data: newReleases = [] } = useQuery({
+    queryKey: ['new-releases'],
+    queryFn: () => fetchNewReleases(12),
+    staleTime: 60 * 60 * 1000,
     enabled: userId > 0,
   })
 
@@ -277,6 +283,21 @@ export default function ForYou() {
                 Continue <ArrowRight size={15} />
               </button>
             </div>
+          )}
+
+          {/* new releases (Deezer) */}
+          {newReleases.length > 0 && (
+            <section className="mb-9">
+              <div className="flex items-baseline justify-between mb-4">
+                <h2 className={SECTION_LABEL}>New Releases</h2>
+                <span className="text-[11px] text-[#b3a99c]">via Deezer</span>
+              </div>
+              <div className="flex gap-4 overflow-x-auto pb-3.5 pt-1" style={{ scrollSnapType: 'x mandatory' }}>
+                {newReleases.map((r) => (
+                  <NewReleaseCard key={r.deezerId} release={r} userId={userId} onRate={(id) => navigate(`/rate/${id}`)} onAdded={() => queryClient.invalidateQueries({ queryKey: ['albums'] })} />
+                ))}
+              </div>
+            </section>
           )}
 
           {/* ready to rate (queue) */}
@@ -498,6 +519,87 @@ export default function ForYou() {
           )}
         </aside>
       </div>
+    </div>
+  )
+}
+
+// ── new release card ──────────────────────────────────────────────────────────
+
+function NewReleaseCard({
+  release, userId, onRate, onAdded,
+}: {
+  release: NewRelease
+  userId: number
+  onRate: (albumId: number) => void
+  onAdded: () => void
+}) {
+  const [pending, setPending] = useState<'listen' | 'rate' | null>(null)
+  const [added, setAdded] = useState(false)
+  const [error, setError] = useState(false)
+  const [revealed, setRevealed] = useState(false)
+
+  async function act(kind: 'listen' | 'rate') {
+    if (pending || added) return
+    setPending(kind)
+    setError(false)
+    try {
+      const full = await resolveDeezerAlbum(release.deezerId)
+      const album = await importAlbum(full, kind === 'listen' ? 'to_listen' : 'listening', userId)
+      if (kind === 'rate') {
+        onRate(album.id)
+        return
+      }
+      setAdded(true)
+      onAdded()
+    } catch {
+      setError(true)
+    } finally {
+      if (kind !== 'rate') setPending(null)
+    }
+  }
+
+  const overlayShown = revealed
+  return (
+    <div style={{ width: 172, flexShrink: 0, scrollSnapAlign: 'start' }}>
+      <div className="relative group" style={{ width: 172, height: 172, borderRadius: 16, overflow: 'hidden', boxShadow: '0 14px 34px -18px rgba(60,45,30,.5)' }}>
+        <button type="button" onClick={() => setRevealed((v) => !v)} className="absolute inset-0 z-0" aria-label={`${release.albumName} — options`}>
+          <Cover artUrl={release.coverUrl} seed={release.artist} size={172} radius={16} fontSize={46} />
+        </button>
+        <span className="absolute top-2.5 left-2.5 z-0 text-[9px] font-bold tracking-[0.1em] text-white px-2 py-1 rounded-full pointer-events-none" style={{ background: 'rgba(28,25,23,.72)' }}>NEW</span>
+        <div
+          className={
+            'absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 transition-opacity focus-within:opacity-100 focus-within:pointer-events-auto ' +
+            (overlayShown ? 'opacity-100 pointer-events-auto ' : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto')
+          }
+          style={{ background: 'rgba(28,25,23,.58)', backdropFilter: 'blur(2px)' }}
+        >
+          {added ? (
+            <span className="text-white text-[12.5px] font-semibold flex items-center gap-1.5"><Check size={15} /> In your library</span>
+          ) : (
+            <>
+              <button
+                onClick={() => act('rate')}
+                disabled={!!pending}
+                className="w-[130px] py-2 rounded-[10px] bg-[#2d6a4f] hover:bg-[#245c43] text-white text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                {pending === 'rate' ? <Loader2 size={13} className="animate-spin" /> : <Play size={12} fill="currentColor" />} Rate now
+              </button>
+              <button
+                onClick={() => act('listen')}
+                disabled={!!pending}
+                className="w-[130px] py-2 rounded-[10px] bg-white/90 hover:bg-white text-[#1c1917] text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                {pending === 'listen' ? <Loader2 size={13} className="animate-spin" /> : <Plus size={14} />} To listen
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      <p className="mt-2.5 mb-0 font-bold text-[14px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{release.albumName}</p>
+      <p className="m-0 mt-0.5 text-[12px] text-[#8a7f72] truncate">{release.artist}{release.year ? ` · ${release.year}` : ''}</p>
+      {error && <p className="m-0 mt-1 text-[11px] text-[#c0392b]">Couldn&rsquo;t add — try again</p>}
     </div>
   )
 }
