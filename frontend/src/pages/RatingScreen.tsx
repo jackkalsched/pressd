@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Check, Loader2, Save, SkipForward } from 'lucide-react'
@@ -9,6 +9,34 @@ import type { Song } from '../types'
 import clsx from 'clsx'
 import RatingReport from '../components/RatingReport'
 import { useUser } from '../context/UserContext'
+
+function useCountUp(target: number | null, duration = 550) {
+  const [display, setDisplay] = useState(0)
+  const raf = useRef<number>()
+  const from = useRef(0)
+  useEffect(() => {
+    if (target === null) return
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (reduced) {
+      setDisplay(target)
+      from.current = target
+      return
+    }
+    cancelAnimationFrame(raf.current!)
+    const start = from.current
+    const t0 = performance.now()
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - t0) / duration)
+      const e = 1 - Math.pow(1 - p, 3) // easeOutCubic
+      const v = start + (target - start) * e
+      setDisplay(v); from.current = v
+      if (p < 1) raf.current = requestAnimationFrame(tick)
+    }
+    raf.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf.current!)
+  }, [target, duration])
+  return display
+}
 
 function ScoreInput({
   value,
@@ -153,24 +181,9 @@ export default function RatingScreen() {
     },
   })
 
-  if (reportData) {
-    return (
-      <RatingReport
-        data={reportData}
-        onClose={() => navigate(isEditing ? `/album/${id}` : '/library')}
-      />
-    )
-  }
-
-  if (isLoading || !album) {
-    return (
-      <div className="flex items-center justify-center h-64 text-[#aaa] gap-2">
-        <Loader2 size={16} className="animate-spin" /> Loading album…
-      </div>
-    )
-  }
-
-  const sortedSongs = [...album.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
+  const sortedSongs = album
+    ? [...album.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
+    : []
   const ratedCount = scores.filter((s) => s !== null).length
   const doneCount = scores.filter((s, i) => s !== null || skipped.has(i)).length
   const avgSong = ratedCount > 0
@@ -189,6 +202,38 @@ export default function RatingScreen() {
           factorStats!,
         )
     : null
+
+  // Big number: true final score once computable, otherwise the running song average
+  const displayBig = previewScore !== null ? previewScore : avgSong
+  const isFinal = previewScore !== null
+  const bigLabel = displayBig === null ? 'START RATING' : isFinal ? 'FINAL SCORE' : 'PROJECTED'
+  const shownScore = useCountUp(displayBig)
+
+  // Gauge geometry
+  const GAUGE_R = 78
+  const GAUGE_CIRC = 2 * Math.PI * GAUGE_R
+  const gaugeFraction = Math.min(10, Math.max(0, displayBig ?? 0)) / 10
+
+  // Track ribbon tallies
+  const bangs = scores.filter((s) => s !== null && s >= BANG_THRESHOLD).length
+  const skips = scores.filter((s) => s !== null && s < SKIP_THRESHOLD).length
+
+  if (reportData) {
+    return (
+      <RatingReport
+        data={reportData}
+        onClose={() => navigate(isEditing ? `/album/${id}` : '/library')}
+      />
+    )
+  }
+
+  if (isLoading || !album) {
+    return (
+      <div className="flex items-center justify-center h-64 text-[#aaa] gap-2">
+        <Loader2 size={16} className="animate-spin" /> Loading album…
+      </div>
+    )
+  }
 
   const isSubmitting = submitMutation.isPending
   const isSavingDraft = saveMutation.isPending
@@ -402,10 +447,73 @@ export default function RatingScreen() {
           </div>
         ) : (
           <>
-            <div className="text-5xl font-bold text-[#2d6a4f] mb-1 tabular-nums">
-              {previewScore !== null ? previewScore.toFixed(2) : '—'}
+            {/* Radial gauge */}
+            <div className="relative mx-auto mb-5" style={{ width: 186, height: 186 }}>
+              <svg viewBox="0 0 186 186" className="w-full h-full">
+                <circle cx="93" cy="93" r={GAUGE_R} fill="none" stroke="#dfe9e2" strokeWidth="13" />
+                <circle
+                  cx="93"
+                  cy="93"
+                  r={GAUGE_R}
+                  fill="none"
+                  stroke="#2d6a4f"
+                  strokeWidth="13"
+                  strokeLinecap="round"
+                  transform="rotate(-90 93 93)"
+                  style={{
+                    strokeDasharray: `${gaugeFraction * GAUGE_CIRC} ${GAUGE_CIRC}`,
+                    transition: 'stroke-dasharray .6s cubic-bezier(.34,1.3,.6,1)',
+                  }}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span
+                  className="tabular-nums leading-none"
+                  style={{ fontFamily: "'Playfair Display', serif", fontSize: '2.7rem', color: '#2d6a4f' }}
+                >
+                  {displayBig !== null ? shownScore.toFixed(2) : '—'}
+                </span>
+                <span
+                  className="mt-2 text-[10px] font-semibold uppercase"
+                  style={{ color: isFinal ? '#2d6a4f' : '#b3a99c', letterSpacing: '.14em' }}
+                >
+                  {bigLabel}
+                </span>
+              </div>
             </div>
-            <p className="text-[#aaa] text-xs mb-6">Final score</p>
+
+            {/* Track-by-track dot ribbon */}
+            <div className="flex flex-wrap justify-center gap-1.5 mb-3">
+              {sortedSongs.map((song, i) => {
+                const score = scores[i] ?? null
+                return (
+                  <div
+                    key={song.id}
+                    title={score !== null ? `${song.title}: ${score.toFixed(1)}` : song.title}
+                    style={{
+                      width: 15,
+                      height: 15,
+                      borderRadius: '50%',
+                      background: score !== null ? songScoreColor(score) : 'transparent',
+                      border: score !== null ? undefined : '1.5px dashed #cfc6b8',
+                      transition: 'background .3s',
+                    }}
+                  />
+                )
+              })}
+            </div>
+
+            {/* Legend */}
+            <div className="flex items-center justify-center gap-4 text-[10px] text-[#8a7f72] mb-6">
+              <span className="flex items-center gap-1.5">
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2d6a4f' }} />
+                {bangs} bangs
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#b0402f' }} />
+                {skips} skips
+              </span>
+            </div>
           </>
         )}
 
