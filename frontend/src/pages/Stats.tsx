@@ -44,7 +44,7 @@ function genreColor(genre: string | null | undefined): string {
   return GENRE_COLORS[genre] ?? '#bbb'
 }
 
-export default function Stats() {
+export default function Stats({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate()
   const { viewingUser, isViewingFriend } = useUser()
   const userId = viewingUser?.id ?? 1
@@ -92,7 +92,7 @@ export default function Stats() {
 
   if (loadingSummary) {
     return (
-      <div className="min-h-screen bg-[#f9f8f6] flex items-center justify-center">
+      <div className={`${embedded ? 'py-16' : 'min-h-screen'} bg-[#f9f8f6] flex items-center justify-center`}>
         <div className="flex items-center gap-2 text-[#a8998a]">
           <Loader2 size={16} className="animate-spin" />
           <span className="text-sm">Loading…</span>
@@ -103,7 +103,7 @@ export default function Stats() {
 
   if (!summary) {
     return (
-      <div className="min-h-screen bg-[#f9f8f6] flex items-center justify-center">
+      <div className={`${embedded ? 'py-16' : 'min-h-screen'} bg-[#f9f8f6] flex items-center justify-center`}>
         <p className="text-[#a8998a] text-sm">Failed to load stats — check that the backend is running.</p>
       </div>
     )
@@ -133,11 +133,13 @@ export default function Stats() {
   const tooltipStyle = { background: '#faf8f5', border: '1px solid #e8e2d9', borderRadius: 12, color: '#1c1917', fontSize: 12 }
 
   return (
-    <div className="min-h-screen bg-[#f9f8f6]">
-      <div className="p-4 md:p-8">
-        <h1 className="font-display text-4xl font-bold text-[#1c1917] mb-8 tracking-tight">
-          {isViewingFriend ? `${viewingUser?.name}'s Stats` : 'Stats'}
-        </h1>
+    <div className={embedded ? '' : 'min-h-screen bg-[#f9f8f6]'}>
+      <div className={embedded ? '' : 'p-4 md:p-8'}>
+        {!embedded && (
+          <h1 className="font-display text-4xl font-bold text-[#1c1917] mb-8 tracking-tight">
+            {isViewingFriend ? `${viewingUser?.name}'s Stats` : 'Stats'}
+          </h1>
+        )}
 
         {/* ── Row 1: Primary metrics ── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">

@@ -182,7 +182,7 @@ function ArtistRankingsTable({
 
 type Tab = 'albums' | 'artists'
 
-export default function Ratings() {
+export default function Ratings({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate()
   const { viewingUser } = useUser()
   const userId = viewingUser.id
@@ -270,19 +270,21 @@ export default function Ratings() {
     }`
 
   return (
-    <div className="min-h-screen bg-[#f9f8f6]">
-      <div className="p-4 md:p-8">
+    <div className={embedded ? '' : 'min-h-screen bg-[#f9f8f6]'}>
+      <div className={embedded ? '' : 'p-4 md:p-8'}>
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-5">
-          <h1 className="font-display text-3xl font-bold text-[#1c1917]">Ratings</h1>
-          {tab === 'albums' && (
-            <span className="text-[#a8998a] text-sm">{sorted.length} albums</span>
-          )}
-          {tab === 'artists' && (
-            <span className="text-[#a8998a] text-sm">≥{QUALIFIED} songs</span>
-          )}
-        </div>
+        {!embedded && (
+          <div className="flex items-center justify-between mb-5">
+            <h1 className="font-display text-3xl font-bold text-[#1c1917]">Ratings</h1>
+            {tab === 'albums' && (
+              <span className="text-[#a8998a] text-sm">{sorted.length} albums</span>
+            )}
+            {tab === 'artists' && (
+              <span className="text-[#a8998a] text-sm">≥{QUALIFIED} songs</span>
+            )}
+          </div>
+        )}
 
         {/* Tab bar */}
         <div className="flex border-b border-[#e8e2d9] mb-6">

@@ -295,7 +295,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   function viewFriend(id: number, name: string, avatarUrl?: string) {
     setViewingUser({ id, name, avatarUrl })
-    navigate('/library')
+    navigate(`/u/${id}`)
   }
 
   function returnToSelf() {

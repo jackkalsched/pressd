@@ -114,10 +114,16 @@ function FeedCard({ item }: { item: FeedItem }) {
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 mb-1">
-            <div className="flex items-center gap-2 min-w-0">
+            <button
+              onClick={() => {
+                setViewingUser({ id: item.friend.id, name: item.friend.name, avatarUrl: item.friend.avatar_url })
+                navigate(`/u/${item.friend.id}`)
+              }}
+              className="flex items-center gap-2 min-w-0 group/friend"
+            >
               <FriendAvatar name={item.friend.name} avatarUrl={item.friend.avatar_url} size={22} />
-              <span className="text-sm font-semibold text-[#111] truncate">{item.friend.name}</span>
-            </div>
+              <span className="text-sm font-semibold text-[#111] truncate group-hover/friend:underline underline-offset-2">{item.friend.name}</span>
+            </button>
             {timestamp && (
               <span className="text-xs text-[#aaa] shrink-0">{timeAgo(timestamp)}</span>
             )}
@@ -441,8 +447,16 @@ function ReviewCard({ review }: { review: FriendReview }) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
-            <FriendAvatar name={review.friend.name} avatarUrl={review.friend.avatar_url} size={20} />
-            <span className="text-sm font-semibold text-[#111] truncate">{review.friend.name}</span>
+            <button
+              onClick={() => {
+                setViewingUser({ id: review.friend.id, name: review.friend.name, avatarUrl: review.friend.avatar_url })
+                navigate(`/u/${review.friend.id}`)
+              }}
+              className="flex items-center gap-2 min-w-0 group/friend"
+            >
+              <FriendAvatar name={review.friend.name} avatarUrl={review.friend.avatar_url} size={20} />
+              <span className="text-sm font-semibold text-[#111] truncate group-hover/friend:underline underline-offset-2">{review.friend.name}</span>
+            </button>
             {review.review_at && <span className="text-xs text-[#aaa] shrink-0 ml-auto">{timeAgo(review.review_at)}</span>}
           </div>
           <p className="text-xs text-[#666] mt-1 truncate">

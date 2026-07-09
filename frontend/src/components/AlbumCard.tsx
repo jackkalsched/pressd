@@ -215,8 +215,10 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           )}
         </div>
 
-        {/* ── Action row — collapses to 0 height, expands on hover ────── */}
-        {showActions && !(isViewingFriend && (album.status === 'to_listen' || album.status === 'listening')) && (
+        {/* ── Action row — collapses to 0 height, expands on hover ──────
+             Hidden entirely when viewing a friend: their library is read-only,
+             so no rate/edit/recommend/discard affordances. */}
+        {showActions && !isViewingFriend && (
           <div className={`grid transition-[grid-template-rows] duration-150 ease-out ${confirmDelete ? 'grid-rows-[1fr]' : 'grid-rows-[0fr] group-hover:grid-rows-[1fr]'}`}>
             <div className="overflow-hidden min-h-0">
               <div className="px-3 pb-3 pt-1 flex gap-1.5">

@@ -14,7 +14,7 @@ const TABS: { key: AlbumStatus; label: string }[] = [
 ]
 
 
-export default function Library() {
+export default function Library({ embedded = false }: { embedded?: boolean } = {}) {
   const { activeUser, viewingUser, isViewingFriend } = useUser()
   const userId = viewingUser.id
   const queryClient = useQueryClient()
@@ -63,12 +63,14 @@ export default function Library() {
     : filteredAlbums
 
   return (
-    <div className="p-4 md:p-8">
-<div className="mb-6">
-        <h1 className="font-display text-3xl font-bold text-[#111]">
-          {isViewingFriend ? `${viewingUser.name}'s Library` : 'Library'}
-        </h1>
-      </div>
+    <div className={embedded ? '' : 'p-4 md:p-8'}>
+      {!embedded && (
+        <div className="mb-6">
+          <h1 className="font-display text-3xl font-bold text-[#111]">
+            {isViewingFriend ? `${viewingUser.name}'s Library` : 'Library'}
+          </h1>
+        </div>
+      )}
 
       <div className="flex gap-1 mb-8 border-b border-[#e2e2e2]">
         {TABS.map(({ key, label }) => (
