@@ -113,9 +113,14 @@ export default function FriendProfile() {
     }
   }
 
+  function exitToFriends() {
+    setViewingUser(activeUser)
+    navigate('/social')
+  }
+
   const backToFriends = (
     <button
-      onClick={() => navigate('/social')}
+      onClick={exitToFriends}
       className="flex items-center gap-1.5 text-[#57534e] hover:text-[#1c1917] text-sm transition-colors"
     >
       <ArrowLeft size={16} /> Friends

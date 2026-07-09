@@ -317,6 +317,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <NavLink
               key={to}
               to={to}
+              onClick={() => { if (isViewingFriend) returnToSelf() }}
               className={({ isActive }) =>
                 clsx(
                   'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
@@ -391,44 +392,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        {/* Active user / viewing indicator at bottom */}
+        {/* Active user at bottom — always your own profile */}
         <div className="mt-auto pt-4 border-t border-[#e2e2e2]">
-          {isViewingFriend ? (
-            <div className="px-2">
-              <p className="text-[10px] text-[#aaa] uppercase tracking-wider mb-1">Viewing</p>
-              <div className="flex items-center gap-2 mb-0.5">
-                <Avatar user={viewingUser} size={22} />
-                <p className="text-sm font-medium text-[#2d6a4f]">{viewingUser?.name}</p>
-              </div>
-              <button onClick={returnToSelf} className="text-[11px] text-[#aaa] hover:text-[#555] transition-colors">
-                ← Back to your data
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowProfile(true)}
-              className="flex items-center gap-2 px-2 w-full group hover:bg-[#f5f5f5] rounded-lg py-1.5 transition-colors"
-            >
-              <Avatar user={activeUser} size={26} />
-              <span className="text-sm text-[#777] group-hover:text-[#111] transition-colors flex-1 text-left truncate">{activeUser?.name}</span>
-              <Pencil size={12} className="text-[#ccc] group-hover:text-[#aaa] transition-colors shrink-0" />
-            </button>
-          )}
+          <button
+            onClick={() => setShowProfile(true)}
+            className="flex items-center gap-2 px-2 w-full group hover:bg-[#f5f5f5] rounded-lg py-1.5 transition-colors"
+          >
+            <Avatar user={activeUser} size={26} />
+            <span className="text-sm text-[#777] group-hover:text-[#111] transition-colors flex-1 text-left truncate">{activeUser?.name}</span>
+            <Pencil size={12} className="text-[#ccc] group-hover:text-[#aaa] transition-colors shrink-0" />
+          </button>
         </div>
       </aside>
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
-        {isViewingFriend && (
-          <div className="bg-[#2d6a4f]/8 border-b border-[#2d6a4f]/20 px-4 py-2 flex items-center gap-3">
-            <span className="text-xs text-[#2d6a4f] font-medium">
-              Viewing {viewingUser?.name}'s data
-            </span>
-            <button onClick={returnToSelf} className="text-xs text-[#aaa] hover:text-[#555] transition-colors ml-auto">
-              ← Back to your data
-            </button>
-          </div>
-        )}
         {children}
       </main>
 
@@ -439,6 +417,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <NavLink
             key={to}
             to={to}
+            onClick={() => { if (isViewingFriend) returnToSelf() }}
             className={({ isActive }) =>
               clsx(
                 'flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors',
