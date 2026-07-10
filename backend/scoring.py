@@ -102,14 +102,17 @@ def compute_album_score(
         mu, sd = factor_stats[key]
         return (val - mu) / sd
 
-    return round(
+    composite = (
         w["song"]         * avg_song
         + w["theme"]        * z(theme,        "theme")
         + w["replay_value"] * z(replay_value, "replay_value")
         + w["production"]   * z(production,   "production")
-        + w["distinctness"] * z(distinctness, "distinctness"),
-        4,
+        + w["distinctness"] * z(distinctness, "distinctness")
     )
+    # Clamp to the 1–10 display scale: above-average factors add z-score
+    # bonuses on top of the song mean, which can otherwise push a standout
+    # album past 10 (or a weak one below 1).
+    return round(max(1.0, min(10.0, composite)), 4)
 
 
 def recompute_user_scores(session, user) -> int:

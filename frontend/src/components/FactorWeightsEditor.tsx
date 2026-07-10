@@ -38,7 +38,7 @@ export default function FactorWeightsEditor({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[11px] text-[#8a7f72] leading-snug">
-        Distribute 60 points across the four factors — each factor's weight is its points ÷ 100.
+        Set how much each factor matters to you.
       </p>
 
       {FACTOR_META.map(({ key, label }) => {
@@ -116,17 +116,17 @@ export function FactorWeightsSection({ userId }: { userId: number }) {
       setSaved(res.points)
       setDraft(res.points)
       setError(null)
-      setStatus(`Saved — re-scored ${res.recomputed} album${res.recomputed === 1 ? '' : 's'}`)
+      setStatus(`Saved — updated ${res.recomputed} album${res.recomputed === 1 ? '' : 's'}`)
       queryClient.invalidateQueries({ queryKey: ['albums'] })
       queryClient.invalidateQueries({ queryKey: ['stats'] })
       queryClient.invalidateQueries({ queryKey: ['factor-weights', userId] })
     },
-    onError: (e: unknown) => setError(e instanceof Error ? e.message : 'Failed to save scoring weights'),
+    onError: (e: unknown) => setError(e instanceof Error ? e.message : 'Failed to save preferences'),
   })
 
   function handleSave() {
     if (!draft) return
-    if (!confirm('Re-score all your rated albums with the new weights?')) return
+    if (!confirm('Update your album scores to match your new preferences?')) return
     setStatus(null)
     mutation.mutate()
   }
@@ -138,8 +138,8 @@ export function FactorWeightsSection({ userId }: { userId: number }) {
         className="w-full flex items-center justify-between text-left"
       >
         <div>
-          <p className="text-sm text-[#111] font-medium">Scoring weights</p>
-          <p className="text-[11px] text-[#8a7f72]">How much each external factor counts</p>
+          <p className="text-sm text-[#111] font-medium">Preferences</p>
+          <p className="text-[11px] text-[#8a7f72]">Adjust your external factor preferences</p>
         </div>
         <ChevronDown size={16} className={clsx('text-[#aaa] transition-transform shrink-0', open && 'rotate-180')} />
       </button>
@@ -160,7 +160,7 @@ export function FactorWeightsSection({ userId }: { userId: number }) {
                 disabled={!canSave || mutation.isPending}
                 className="w-full mt-3 py-2 rounded-xl text-sm font-semibold bg-[#2d6a4f] hover:bg-[#245c43] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {mutation.isPending ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save weights'}
+                {mutation.isPending ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save preferences'}
               </button>
             </>
           )}
