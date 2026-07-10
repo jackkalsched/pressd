@@ -7,12 +7,15 @@ existing album-import flow consumes, so a card can be added to a user's library
 or opened straight into the rating screen.
 """
 import time
+from datetime import date, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlmodel import Session, select
 
+from ..database import get_session
 from ..deps import current_user
-from ..models import PressUser
+from ..models import Album, PressUser
 
 router = APIRouter(prefix="/discover", tags=["discover"])
 
@@ -70,6 +73,78 @@ async def new_releases(
     _cache["releases"] = releases
     _cache["expires"] = now + CACHE_TTL
     return releases[:limit]
+
+
+@router.get("/trending")
+def trending(
+    period: str = Query("week", pattern="^(week|all|top)$"),
+    limit: int = Query(8, ge=1, le=20),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Popular albums across the whole userbase.
+
+    Albums are stored as per-user copies, so we group every rated copy by
+    (album, artist) and rank the groups:
+      - week: rated in the last 7 days, by number of distinct raters, then recency
+      - all:  all-time, by number of distinct raters, then recency
+      - top:  all-time, by average score
+
+    Each row links to the current user's own copy when they have one, otherwise
+    to the most recently rated copy.
+    """
+    q = (
+        select(Album)
+        .where(Album.status == "rated")
+        .where(Album.score.is_not(None))
+    )
+    if period == "week":
+        q = q.where(Album.date_rated >= date.today() - timedelta(days=7))
+    albums = session.exec(q).all()
+
+    groups: dict[tuple[str, str], dict] = {}
+    for a in albums:
+        key = (a.album_name.strip().lower(), a.artist.strip().lower())
+        g = groups.get(key)
+        if g is None:
+            g = {
+                "album_name": a.album_name, "artist": a.artist, "year": a.year,
+                "album_art_url": a.album_art_url, "scores": [], "raters": set(),
+                "last": None, "own_album_id": None,
+                "rep_album_id": a.id, "rep_last": a.date_rated,
+            }
+            groups[key] = g
+        g["scores"].append(a.score)
+        if a.user_id is not None:
+            g["raters"].add(a.user_id)
+        if a.album_art_url and not g["album_art_url"]:
+            g["album_art_url"] = a.album_art_url
+        if a.date_rated and (g["last"] is None or a.date_rated > g["last"]):
+            g["last"] = a.date_rated
+        if a.date_rated and (g["rep_last"] is None or a.date_rated > g["rep_last"]):
+            g["rep_last"], g["rep_album_id"] = a.date_rated, a.id
+        if a.user_id == user.id:
+            g["own_album_id"] = a.id
+
+    rows = [
+        {
+            "album_id": g["own_album_id"] or g["rep_album_id"],
+            "album_name": g["album_name"],
+            "artist": g["artist"],
+            "album_art_url": g["album_art_url"],
+            "year": g["year"],
+            "avg_score": round(sum(g["scores"]) / len(g["scores"]), 2) if g["scores"] else None,
+            "rater_count": len(g["raters"]),
+            "last_rated": g["last"].isoformat() if g["last"] else None,
+        }
+        for g in groups.values()
+    ]
+
+    if period == "top":
+        rows.sort(key=lambda r: (r["avg_score"] or 0, r["rater_count"]), reverse=True)
+    else:
+        rows.sort(key=lambda r: (r["rater_count"], r["last_rated"] or ""), reverse=True)
+    return rows[:limit]
 
 
 @router.get("/deezer/{deezer_id}")

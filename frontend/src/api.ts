@@ -327,6 +327,27 @@ export async function fetchNewReleases(limit = 12): Promise<NewRelease[]> {
   }))
 }
 
+// Popular albums across the whole userbase (grouped over per-user copies).
+export interface TrendingAlbum {
+  album_id: number
+  album_name: string
+  artist: string
+  album_art_url: string | null
+  year: number | null
+  avg_score: number | null
+  rater_count: number
+  last_rated: string | null
+}
+
+export async function fetchTrending(
+  period: 'week' | 'all' | 'top' = 'week',
+  limit = 8,
+): Promise<TrendingAlbum[]> {
+  const res = await apiFetch(`${BASE}/discover/trending?period=${period}&limit=${limit}`)
+  if (!res.ok) throw new Error('Failed to load trending')
+  return res.json()
+}
+
 // Resolve a Deezer release to the full album+tracks shape importAlbum consumes
 export async function resolveDeezerAlbum(deezerId: number): Promise<SpotifyAlbumResult> {
   const res = await apiFetch(`${BASE}/discover/deezer/${deezerId}`)

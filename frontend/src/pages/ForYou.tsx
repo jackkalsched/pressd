@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Loader2 } from 'lucide-react'
-import { fetchAlbums, fetchFeed, fetchFriendReviews, toggleLike, fetchNewReleases, resolveDeezerAlbum, importAlbum } from '../api'
+import { fetchAlbums, fetchFeed, fetchFriendReviews, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, importAlbum } from '../api'
 import type { FriendReview, NewRelease } from '../api'
 import { songScoreColor } from '../types'
 import { useUser } from '../context/UserContext'
@@ -164,15 +164,13 @@ export default function ForYou() {
     return { album: a, done, total, pct: total > 0 ? Math.round((done / total) * 100) : 0 }
   }, [listening])
 
-  // Trending: friends' ratings from the feed, deduped per album
-  const trending = useMemo(() => {
-    const ratings = feed.filter((f) => f.type === 'rating' && f.score != null)
-    const seen = new Set<number>()
-    let items = ratings.filter((r) => (seen.has(r.album_id) ? false : (seen.add(r.album_id), true)))
-    if (trendTab === 'week') items = items.filter((r) => withinDays(r.date_rated, 7))
-    else if (trendTab === 'top') items = [...items].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-    return items.slice(0, 5)
-  }, [feed, trendTab])
+  // Trending on Press'd: popular albums across the whole userbase
+  const { data: trending = [] } = useQuery({
+    queryKey: ['trending', trendTab],
+    queryFn: () => fetchTrending(trendTab, 8),
+    enabled: userId > 0,
+    staleTime: 5 * 60 * 1000,
+  })
 
   // Friends leaderboard: albums rated in the last 7 days, friends + you
   const leaders = useMemo(() => {
@@ -343,7 +341,7 @@ export default function ForYou() {
           {trending.length > 0 && (
             <section className="mb-9">
               <div className="flex items-center justify-between mb-4 gap-3.5">
-                <h2 className={SECTION_LABEL}>Trending with friends</h2>
+                <h2 className={SECTION_LABEL}>Trending on Press&rsquo;d</h2>
                 <div className="flex gap-1 rounded-[11px] border border-[#e6ded2] bg-[#f0ebe3] p-[3px]">
                   {(['week', 'all', 'top'] as const).map((k) => (
                     <button
@@ -375,10 +373,11 @@ export default function ForYou() {
                       <p className="m-0 font-bold text-[14.5px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{row.album_name}</p>
                       <p className="m-0 mt-0.5 text-[12px] text-[#8a7f72] truncate">{row.artist}</p>
                     </div>
-                    <span className="text-[11.5px] text-[#8a7f72] shrink-0 hidden sm:block" style={{ width: 118 }}>
-                      {row.friend.name.split(' ')[0]} · {timeAgo(row.date_rated)}
+                    <span className="text-[11.5px] text-[#8a7f72] shrink-0 hidden sm:block text-right" style={{ width: 118 }}>
+                      {row.rater_count} {row.rater_count === 1 ? 'rating' : 'ratings'}
+                      {row.last_rated ? ` · ${timeAgo(row.last_rated)}` : ''}
                     </span>
-                    {row.score != null && <ScorePill score={row.score} />}
+                    {row.avg_score != null && <ScorePill score={row.avg_score} />}
                   </button>
                 ))}
               </div>
