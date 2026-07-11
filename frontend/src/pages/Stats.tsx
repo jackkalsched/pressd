@@ -224,7 +224,7 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
             </p>
             {summary?.top_song && (
               <p className="text-[#a8998a] text-sm mt-2 truncate">
-                {summary.top_song.artist} · <span className="text-[#2d6a4f] font-semibold">{summary.top_song.score.toFixed(2)}</span>
+                {summary.top_song.artist} · <span className="text-[#2d6a4f] font-semibold">{summary.top_song.score.toFixed(1)}</span>
               </p>
             )}
           </div>

@@ -265,13 +265,13 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
                   <div style={{ background: 'rgba(255,255,255,.5)', border: '1px solid rgba(45,106,79,.3)', borderRadius: 22, padding: '18px 22px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Star size={18} fill={GREEN} strokeWidth={0} /><span style={{ font: "800 14px 'Plus Jakarta Sans'", letterSpacing: '.16em', textTransform: 'uppercase', color: GREEN }}>Favorite</span></div>
                     <p style={{ margin: '11px 0 0', font: "700 32px/1 'Playfair Display', serif", color: INK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stats.favorite.title}</p>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginTop: 9 }}><span style={{ font: "800 40px 'Playfair Display', serif", color: songScoreColor(stats.favorite.score!) }}>{stats.favorite.score!.toFixed(2)}</span><span style={{ font: "600 17px 'DM Sans'", color: WARM2 }}>/10</span></div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginTop: 9 }}><span style={{ font: "800 40px 'Playfair Display', serif", color: songScoreColor(stats.favorite.score!) }}>{stats.favorite.score!.toFixed(1)}</span><span style={{ font: "600 17px 'DM Sans'", color: WARM2 }}>/10</span></div>
                   </div>
                   {stats.least && (
                     <div style={{ background: 'rgba(255,255,255,.5)', border: '1px solid rgba(176,64,47,.3)', borderRadius: 22, padding: '18px 22px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18, color: CORAL }}>▽</span><span style={{ font: "800 14px 'Plus Jakarta Sans'", letterSpacing: '.16em', textTransform: 'uppercase', color: CORAL }}>Least Favorite</span></div>
                       <p style={{ margin: '11px 0 0', font: "700 32px/1 'Playfair Display', serif", color: INK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stats.least.title}</p>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginTop: 9 }}><span style={{ font: "800 40px 'Playfair Display', serif", color: songScoreColor(stats.least.score!) }}>{stats.least.score!.toFixed(2)}</span><span style={{ font: "600 17px 'DM Sans'", color: WARM2 }}>/10</span></div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginTop: 9 }}><span style={{ font: "800 40px 'Playfair Display', serif", color: songScoreColor(stats.least.score!) }}>{stats.least.score!.toFixed(1)}</span><span style={{ font: "600 17px 'DM Sans'", color: WARM2 }}>/10</span></div>
                     </div>
                   )}
                 </div>

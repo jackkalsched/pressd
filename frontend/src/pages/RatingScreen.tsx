@@ -475,7 +475,7 @@ export default function RatingScreen() {
                 return (
                   <div
                     key={song.id}
-                    title={score !== null ? `${song.title}: ${score.toFixed(2)}` : song.title}
+                    title={score !== null ? `${song.title}: ${score.toFixed(1)}` : song.title}
                     style={{
                       width: 15,
                       height: 15,

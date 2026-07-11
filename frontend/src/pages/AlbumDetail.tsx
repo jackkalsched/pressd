@@ -163,7 +163,7 @@ export default function AlbumDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { isViewingFriend, viewingUser, activeUser } = useUser()
+  const { isViewingFriend, viewingUser, activeUser, setViewingUser } = useUser()
   const [showRecommend, setShowRecommend] = useState(false)
   const [showShareCard, setShowShareCard] = useState(false)
   const [ratingItYourself, setRatingItYourself] = useState(false)
@@ -529,7 +529,7 @@ export default function AlbumDetail() {
                 className="text-base font-semibold tabular-nums w-10 text-right shrink-0"
                 style={{ color: song.score !== null ? songScoreColor(song.score) : '#d4ccc4' }}
               >
-                {song.score !== null ? song.score.toFixed(2) : '—'}
+                {song.score !== null ? song.score.toFixed(1) : '—'}
               </span>
             </div>
           ))}
@@ -543,18 +543,22 @@ export default function AlbumDetail() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-[#1c1917] mb-2">
-                {friendRatings.length === 1
-                  ? `${friendRatings[0].friend.name} rated this too`
-                  : `${friendRatings.length} friends rated this too`}
+                Check out what your friends gave this album
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 {friendRatings.map(({ friend, album: fa }) => {
                   const rated = fa.songs.filter(s => s.score !== null)
                   const fav = rated.length ? rated.reduce((a, b) => (b.score! > a.score! ? b : a)) : null
                   return (
-                    <div
+                    <button
                       key={friend.id}
-                      className="inline-flex items-center gap-2 bg-white border border-[#e8e2d9] rounded-xl px-2.5 py-1.5 shadow-sm max-w-[16rem]"
+                      type="button"
+                      onClick={() => {
+                        setViewingUser({ id: friend.id, name: friend.name, avatarUrl: friend.avatarUrl })
+                        navigate(`/album/${fa.id}`)
+                      }}
+                      title={`See ${friend.name}'s full rating`}
+                      className="inline-flex items-center gap-2 bg-white border border-[#e8e2d9] rounded-xl px-2.5 py-1.5 shadow-sm max-w-[16rem] text-left transition-colors hover:border-[#2d6a4f]/50 hover:bg-[#f7faf8]"
                     >
                       <span
                         className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
@@ -575,11 +579,11 @@ export default function AlbumDetail() {
                           <div className="flex items-center gap-1 text-[11px] text-[#a8998a] min-w-0 mt-0.5" title={`${friend.name}'s favorite track`}>
                             <Star size={9} fill="#c8a84b" strokeWidth={0} className="shrink-0" />
                             <span className="truncate">{fav.title}</span>
-                            <span className="font-semibold text-[#78716c] tabular-nums shrink-0">{fav.score!.toFixed(2)}</span>
+                            <span className="font-semibold text-[#78716c] tabular-nums shrink-0">{fav.score!.toFixed(1)}</span>
                           </div>
                         )}
                       </div>
-                    </div>
+                    </button>
                   )
                 })}
               </div>
