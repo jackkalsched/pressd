@@ -100,7 +100,7 @@ function ScorePill({ score, big }: { score: number; big?: boolean }) {
         fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: big ? 16 : 13, flexShrink: 0,
       }}
     >
-      {score.toFixed(1)}
+      {score.toFixed(2)}
     </span>
   )
 }
@@ -114,7 +114,6 @@ export default function ForYou() {
   const queryClient = useQueryClient()
   const { activeUser } = useUser()
   const userId = activeUser?.id ?? 0
-  const [trendTab, setTrendTab] = useState<'week' | 'all' | 'top'>('week')
 
   const { data: listening = [] } = useQuery({
     queryKey: ['albums', 'listening', userId],
@@ -164,10 +163,10 @@ export default function ForYou() {
     return { album: a, done, total, pct: total > 0 ? Math.round((done / total) * 100) : 0 }
   }, [listening])
 
-  // Trending on Press'd: popular albums across the whole userbase
+  // Trending on Press'd this week: popular albums across the whole userbase
   const { data: trending = [] } = useQuery({
-    queryKey: ['trending', trendTab],
-    queryFn: () => fetchTrending(trendTab, 8),
+    queryKey: ['trending', 'week'],
+    queryFn: () => fetchTrending('week', 8),
     enabled: userId > 0,
     staleTime: 5 * 60 * 1000,
   })
@@ -222,7 +221,6 @@ export default function ForYou() {
     } catch { /* ignore */ }
   }
 
-  const trendTabLabels: Record<typeof trendTab, string> = { week: 'This week', all: 'All time', top: 'Top rated' }
   const nothingYet = !resume && toListen.length === 0 && rated.length === 0
 
   return (
@@ -288,7 +286,6 @@ export default function ForYou() {
             <section className="mb-9">
               <div className="flex items-baseline justify-between mb-4">
                 <h2 className={SECTION_LABEL}>New Releases</h2>
-                <span className="text-[11px] text-[#b3a99c]">via Deezer</span>
               </div>
               <div className="flex gap-4 overflow-x-auto pb-3.5 pt-1" style={{ scrollSnapType: 'x mandatory' }}>
                 {newReleases.map((r) => (
@@ -324,7 +321,7 @@ export default function ForYou() {
                     <div className="mt-2 flex items-center gap-2">
                       {a.predictedScore != null ? (
                         <>
-                          <span className="text-[11px] px-2 py-0.5 rounded-md tabular-nums" style={{ background: scoreTint(a.predictedScore), color: songScoreColor(a.predictedScore) }}>~{a.predictedScore.toFixed(1)}</span>
+                          <span className="text-[11px] px-2 py-0.5 rounded-md tabular-nums" style={{ background: scoreTint(a.predictedScore), color: songScoreColor(a.predictedScore) }}>~{a.predictedScore.toFixed(2)}</span>
                           <span className="text-[11px] text-[#b3a99c]">predicted</span>
                         </>
                       ) : (
@@ -340,38 +337,28 @@ export default function ForYou() {
           {/* trending */}
           {trending.length > 0 && (
             <section className="mb-9">
-              <div className="flex items-center justify-between mb-4 gap-3.5">
+              <div className="flex items-baseline justify-between mb-4 gap-3.5">
                 <h2 className={SECTION_LABEL}>Trending on Press&rsquo;d</h2>
-                <div className="flex gap-1 rounded-[11px] border border-[#e6ded2] bg-[#f0ebe3] p-[3px]">
-                  {(['week', 'all', 'top'] as const).map((k) => (
-                    <button
-                      key={k}
-                      onClick={() => setTrendTab(k)}
-                      className="px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors"
-                      style={{
-                        background: trendTab === k ? '#faf8f5' : 'transparent',
-                        color: trendTab === k ? '#1c1917' : '#8a7f72',
-                        boxShadow: trendTab === k ? '0 2px 6px -3px rgba(60,45,30,.4)' : 'none',
-                      }}
-                    >
-                      {trendTabLabels[k]}
-                    </button>
-                  ))}
-                </div>
+                <span className="text-[11px] text-[#b3a99c]">This week</span>
               </div>
               <div className="rounded-[18px] border border-[#e6ded2] bg-[#faf8f5] overflow-hidden">
                 {trending.map((row, i) => (
                   <button
                     key={row.album_id}
                     onClick={() => navigate(`/album/${row.album_id}`)}
-                    className="w-full flex items-center gap-3.5 text-left hover:bg-[#f3efe8] transition-colors"
-                    style={{ borderTop: i === 0 ? 'none' : '1px solid #f0ebe3', padding: '13px 18px' }}
+                    className="group w-full flex items-center gap-4 text-left hover:bg-[#f3efe8] transition-colors"
+                    style={{ borderTop: i === 0 ? 'none' : '1px solid #f0ebe3', padding: '15px 18px' }}
                   >
                     <span className="w-[22px] text-center shrink-0 tabular-nums" style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 15, color: '#c2b8ad' }}>{i + 1}</span>
-                    <Cover artUrl={row.album_art_url} seed={row.artist} size={40} radius={10} fontSize={17} />
+                    <div
+                      className="shrink-0 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-[1.13] group-hover:-rotate-3 group-active:scale-105"
+                      style={{ willChange: 'transform' }}
+                    >
+                      <Cover artUrl={row.album_art_url} seed={row.artist} size={58} radius={13} fontSize={24} />
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <p className="m-0 font-bold text-[14.5px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{row.album_name}</p>
-                      <p className="m-0 mt-0.5 text-[12px] text-[#8a7f72] truncate">{row.artist}</p>
+                      <p className="m-0 font-bold text-[15px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{row.album_name}</p>
+                      <p className="m-0 mt-0.5 text-[12.5px] text-[#8a7f72] truncate">{row.artist}</p>
                     </div>
                     <span className="text-[11.5px] text-[#8a7f72] shrink-0 hidden sm:block text-right" style={{ width: 118 }}>
                       {row.rater_count} {row.rater_count === 1 ? 'rating' : 'ratings'}
@@ -502,7 +489,7 @@ export default function ForYou() {
                     {suggestion.recommendedByName
                       ? `Recommended by ${suggestion.recommendedByName}`
                       : suggestion.predictedScore != null
-                        ? `We think you'll rate this ~${suggestion.predictedScore.toFixed(1)}`
+                        ? `We think you'll rate this ~${suggestion.predictedScore.toFixed(2)}`
                         : 'Next up in your queue'}
                   </p>
                 </div>

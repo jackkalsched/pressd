@@ -431,6 +431,13 @@ export default function AlbumDetail() {
                 <span className="text-[#c2b8ad] text-sm self-end mb-0.5">predicted</span>
               </div>
             )}
+
+            {/* Whose rating this is — shown only when viewing a friend */}
+            {isViewingFriend && album.score !== null && (
+              <p className="text-[12px] text-[#78716c] mt-2">
+                Rated by <span className="font-semibold text-[#2d6a4f]">{viewingUser.name}</span>
+              </p>
+            )}
           </div>
 
           {/* Sidebar stats */}
@@ -522,7 +529,7 @@ export default function AlbumDetail() {
                 className="text-base font-semibold tabular-nums w-10 text-right shrink-0"
                 style={{ color: song.score !== null ? songScoreColor(song.score) : '#d4ccc4' }}
               >
-                {song.score ?? '—'}
+                {song.score !== null ? song.score.toFixed(2) : '—'}
               </span>
             </div>
           ))}

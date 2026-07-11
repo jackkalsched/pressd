@@ -224,7 +224,7 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
             </p>
             {summary?.top_song && (
               <p className="text-[#a8998a] text-sm mt-2 truncate">
-                {summary.top_song.artist} · <span className="text-[#2d6a4f] font-semibold">{summary.top_song.score}</span>
+                {summary.top_song.artist} · <span className="text-[#2d6a4f] font-semibold">{summary.top_song.score.toFixed(2)}</span>
               </p>
             )}
           </div>
@@ -308,22 +308,6 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
                 </div>
               ))}
             </div>
-            {(() => {
-              const factors = [
-                { label: 'Theme', value: summary?.avg_theme },
-                { label: 'Replay', value: summary?.avg_replay },
-                { label: 'Production', value: summary?.avg_production },
-                { label: 'Distinctness', value: summary?.avg_distinctness },
-              ].filter((f): f is { label: string; value: number } => f.value != null)
-              if (factors.length < 2) return null
-              const best = factors.reduce((a, b) => a.value > b.value ? a : b)
-              const worst = factors.reduce((a, b) => a.value < b.value ? a : b)
-              return (
-                <p className="text-[#a8998a] text-xs mt-5 leading-relaxed border-t border-[#e8e2d9] pt-4">
-                  {best.label} is your strongest factor at {best.value.toFixed(1)}. {worst.label} has the most room to grow at {worst.value.toFixed(1)}.
-                </p>
-              )
-            })()}
           </div>
         </div>
 

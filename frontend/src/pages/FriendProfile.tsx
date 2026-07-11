@@ -183,7 +183,7 @@ export default function FriendProfile() {
           <div className="flex flex-wrap gap-3 mt-5">
             <StatTile
               label="Avg Score"
-              value={summary?.avg_album_score != null ? summary.avg_album_score.toFixed(1) : '—'}
+              value={summary?.avg_album_score != null ? summary.avg_album_score.toFixed(2) : '—'}
               color="#2d6a4f"
             />
             <StatTile

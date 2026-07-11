@@ -234,8 +234,12 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
+              placeholder="Pick a username"
               className="w-full bg-[#f5f5f5] border border-[#e2e2e2] text-[#111] text-sm px-4 py-2.5 rounded-lg focus:outline-none focus:border-[#2d6a4f] transition-colors"
             />
+            <p className="text-[11px] text-[#999] mt-1">
+              This is the name friends see — it doesn't have to be your real name.
+            </p>
           </div>
           {error && <p className="text-[#c0392b] text-xs">{error}</p>}
           <button

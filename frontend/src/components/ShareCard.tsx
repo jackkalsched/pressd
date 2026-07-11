@@ -156,16 +156,19 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
                 fontFamily: "'DM Sans', system-ui, sans-serif",
               }}
             >
-              {/* faint album-art watermark (like the album page) */}
+              {/* faint album-art watermark (like the album page). The image is
+                  sized to bleed past every card edge, so overflow:hidden clips
+                  it and no square outline is ever visible; the radial gradient
+                  then dissolves it into the cream, leaving a soft top-right bloom. */}
               {album.albumArtUrl && (
                 <>
                   <img
                     src={album.albumArtUrl}
                     alt=""
                     crossOrigin="anonymous"
-                    style={{ position: 'absolute', top: -60, right: -80, width: 760, height: 760, objectFit: 'cover', opacity: 0.16, filter: 'blur(2px)', pointerEvents: 'none' }}
+                    style={{ position: 'absolute', top: -120, right: -140, width: 1320, height: 1560, objectFit: 'cover', opacity: 0.18, filter: 'blur(3px)', pointerEvents: 'none' }}
                   />
-                  <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 82% 66% at 72% 20%, transparent 0%, rgba(250,248,245,.72) 58%, rgba(250,248,245,.92) 100%)', pointerEvents: 'none' }} />
+                  <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 90% 72% at 74% 15%, transparent 0%, rgba(250,248,245,.5) 44%, rgba(250,248,245,.86) 72%, #faf8f5 100%)', pointerEvents: 'none' }} />
                 </>
               )}
 
@@ -262,13 +265,13 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
                   <div style={{ background: 'rgba(255,255,255,.5)', border: '1px solid rgba(45,106,79,.3)', borderRadius: 22, padding: '18px 22px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Star size={18} fill={GREEN} strokeWidth={0} /><span style={{ font: "800 14px 'Plus Jakarta Sans'", letterSpacing: '.16em', textTransform: 'uppercase', color: GREEN }}>Favorite</span></div>
                     <p style={{ margin: '11px 0 0', font: "700 32px/1 'Playfair Display', serif", color: INK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stats.favorite.title}</p>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginTop: 9 }}><span style={{ font: "800 40px 'Playfair Display', serif", color: songScoreColor(stats.favorite.score!) }}>{stats.favorite.score!.toFixed(1)}</span><span style={{ font: "600 17px 'DM Sans'", color: WARM2 }}>/10</span></div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginTop: 9 }}><span style={{ font: "800 40px 'Playfair Display', serif", color: songScoreColor(stats.favorite.score!) }}>{stats.favorite.score!.toFixed(2)}</span><span style={{ font: "600 17px 'DM Sans'", color: WARM2 }}>/10</span></div>
                   </div>
                   {stats.least && (
                     <div style={{ background: 'rgba(255,255,255,.5)', border: '1px solid rgba(176,64,47,.3)', borderRadius: 22, padding: '18px 22px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18, color: CORAL }}>▽</span><span style={{ font: "800 14px 'Plus Jakarta Sans'", letterSpacing: '.16em', textTransform: 'uppercase', color: CORAL }}>Least Favorite</span></div>
                       <p style={{ margin: '11px 0 0', font: "700 32px/1 'Playfair Display', serif", color: INK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stats.least.title}</p>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginTop: 9 }}><span style={{ font: "800 40px 'Playfair Display', serif", color: songScoreColor(stats.least.score!) }}>{stats.least.score!.toFixed(1)}</span><span style={{ font: "600 17px 'DM Sans'", color: WARM2 }}>/10</span></div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginTop: 9 }}><span style={{ font: "800 40px 'Playfair Display', serif", color: songScoreColor(stats.least.score!) }}>{stats.least.score!.toFixed(2)}</span><span style={{ font: "600 17px 'DM Sans'", color: WARM2 }}>/10</span></div>
                     </div>
                   )}
                 </div>
