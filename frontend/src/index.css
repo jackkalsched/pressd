@@ -37,11 +37,12 @@
   .belt-track { animation: none; }
 }
 
-/* On touch devices there's no hover, so always show the action row */
+/* On touch devices there's no hover, so the album card's action row
+   (Start Rating / Continue / View) stays expanded instead of revealing
+   on group-hover */
 @media (hover: none) {
   .card-action-row {
-    opacity: 1 !important;
-    transform: none !important;
+    grid-template-rows: 1fr !important;
   }
 }
 
