@@ -77,6 +77,7 @@ function transformAlbum(a: Record<string, unknown>): Album {
     genre: a.genre as string | null,
     subGenre1: a.sub_genre1 as string | null,
     subGenre2: a.sub_genre2 as string | null,
+    subGenre3: a.sub_genre3 as string | null,
     spotifyId: a.spotify_id as string | null,
     extraArtists: (() => { try { const v = JSON.parse(a.extra_artists as string); return Array.isArray(v) ? v : [] } catch { return [] } })(),
     albumArtUrl: a.album_art_url as string | null,
@@ -660,7 +661,7 @@ export async function signInWithGoogle(
   const data = await res.json()
   setToken(data.token)
   const u = data.user
-  return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined }
+  return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined, bio: u.bio ?? undefined }
 }
 
 // ── Users / Invites / Friends ─────────────────────────────────────────────────
@@ -669,6 +670,7 @@ export interface UserInfo {
   id: number
   name: string
   avatarUrl?: string
+  bio?: string
 }
 
 export async function fetchUsers(): Promise<UserInfo[]> {
@@ -754,14 +756,14 @@ export async function acceptInvite(token: string, name?: string, userId?: number
   const data = await res.json()
   setToken(data.token)
   const u = data.user
-  return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined }
+  return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined, bio: u.bio ?? undefined }
 }
 
 export async function fetchFriends(userId: number): Promise<UserInfo[]> {
   const res = await apiFetch(`${BASE}/users/${userId}/friends`)
   const data = await res.json()
-  return data.map((u: { id: number; name: string; avatar_url?: string }) => ({
-    id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined,
+  return data.map((u: { id: number; name: string; avatar_url?: string; bio?: string }) => ({
+    id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined, bio: u.bio ?? undefined,
   }))
 }
 
@@ -770,18 +772,18 @@ export async function removeFriend(userId: number, friendId: number): Promise<vo
   if (!res.ok) throw new Error('Failed to remove friend')
 }
 
-export async function updateUser(userId: number, data: { name?: string; avatarUrl?: string }): Promise<UserInfo> {
+export async function updateUser(userId: number, data: { name?: string; avatarUrl?: string; bio?: string }): Promise<UserInfo> {
   const res = await apiFetch(`${BASE}/users/${userId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: data.name, avatar_url: data.avatarUrl }),
+    body: JSON.stringify({ name: data.name, avatar_url: data.avatarUrl, bio: data.bio }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { detail?: string }).detail ?? 'Failed to update profile')
   }
   const u = await res.json()
-  return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined }
+  return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined, bio: u.bio ?? undefined }
 }
 
 export async function recommendAlbum(albumId: number, friendId: number, recommenderId: number): Promise<{ alreadyExisted: boolean }> {

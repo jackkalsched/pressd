@@ -153,6 +153,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate()
   const [name, setName] = useState(activeUser?.name ?? '')
   const [avatarUrl, setAvatarUrl] = useState(activeUser?.avatarUrl ?? '')
+  const [bio, setBio] = useState(activeUser?.bio ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -197,6 +198,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
       const updated = await updateUser(activeUser.id, {
         name: name.trim() !== activeUser.name ? name.trim() : undefined,
         avatarUrl: avatarUrl !== (activeUser.avatarUrl ?? '') ? avatarUrl : undefined,
+        bio: bio.trim() !== (activeUser.bio ?? '') ? bio.trim() : undefined,
       })
       setActiveUser(updated)
       onClose()
@@ -240,6 +242,17 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
             <p className="text-[11px] text-[#999] mt-1">
               This is the name friends see — it doesn't have to be your real name.
             </p>
+          </div>
+          <div>
+            <label className="text-xs text-[#888] mb-1 block">Bio</label>
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value.slice(0, 240))}
+              placeholder="A line about your taste…"
+              rows={3}
+              className="w-full bg-[#f5f5f5] border border-[#e2e2e2] text-[#111] text-sm px-4 py-2.5 rounded-lg focus:outline-none focus:border-[#2d6a4f] transition-colors resize-none"
+            />
+            <p className="text-[11px] text-[#999] mt-1 text-right">{bio.length}/240</p>
           </div>
           {error && <p className="text-[#c0392b] text-xs">{error}</p>}
           <button

@@ -4,6 +4,7 @@ export interface UserInfo {
   id: number
   name: string
   avatarUrl?: string
+  bio?: string
 }
 
 interface UserContextValue {

@@ -2,12 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Check, Loader2, Save, SkipForward } from 'lucide-react'
-import { fetchAlbum, batchRateSongs, updateAlbum, fetchFactorStats, fetchFactorWeights, fetchAlbumReport } from '../api'
-import type { AlbumReportData } from '../api'
+import { fetchAlbum, batchRateSongs, updateAlbum, fetchFactorStats, fetchFactorWeights } from '../api'
 import { computeAlbumScore, BANG_THRESHOLD, SKIP_THRESHOLD, songScoreColor } from '../types'
-import type { Song } from '../types'
+import type { Song, Album } from '../types'
 import clsx from 'clsx'
-import RatingReport from '../components/RatingReport'
+import ShareCardModal from '../components/ShareCard'
 import { useUser } from '../context/UserContext'
 
 function useCountUp(target: number | null, duration = 550) {
@@ -119,7 +118,7 @@ export default function RatingScreen() {
   const [production, setProduction] = useState<number | null>(null)
   const [distinctness, setDistinctness] = useState<number | null>(null)
   const [extraArtists, setExtraArtists] = useState('')
-  const [reportData, setReportData] = useState<AlbumReportData | null>(null)
+  const [shareAlbum, setShareAlbum] = useState<Album | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -156,8 +155,9 @@ export default function RatingScreen() {
       queryClient.invalidateQueries({ queryKey: ['stats'] })
       queryClient.invalidateQueries({ queryKey: ['album', Number(id)] })
       try {
-        const report = await fetchAlbumReport(Number(id))
-        setReportData(report)
+        // Fresh fetch so the card shows the just-computed final score
+        const fresh = await fetchAlbum(Number(id))
+        setShareAlbum(fresh)
       } catch {
         navigate(`/album/${id}`)
       }
@@ -223,10 +223,10 @@ export default function RatingScreen() {
   const bangs = scores.filter((s) => s !== null && s >= BANG_THRESHOLD).length
   const skips = scores.filter((s) => s !== null && s < SKIP_THRESHOLD).length
 
-  if (reportData) {
+  if (shareAlbum) {
     return (
-      <RatingReport
-        data={reportData}
+      <ShareCardModal
+        album={shareAlbum}
         onClose={() => navigate(isEditing ? `/album/${id}` : '/library')}
       />
     )

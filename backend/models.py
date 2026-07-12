@@ -8,6 +8,7 @@ class PressUser(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
     avatar_url: Optional[str] = None
+    bio: Optional[str] = None
     google_sub: Optional[str] = Field(default=None, unique=True, index=True)
     email: Optional[str] = None
 

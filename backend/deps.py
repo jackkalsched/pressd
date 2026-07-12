@@ -34,7 +34,8 @@ def auth_response(user: PressUser) -> dict:
     """Standard login payload: a session token plus the public user fields."""
     return {
         "token": create_access_token(user.id),
-        "user": {"id": user.id, "name": user.name, "avatar_url": user.avatar_url},
+        "user": {"id": user.id, "name": user.name, "avatar_url": user.avatar_url,
+                 "bio": user.bio},
     }
 
 

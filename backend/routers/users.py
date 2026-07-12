@@ -263,10 +263,15 @@ def update_user(
         user.name = name
     if "avatar_url" in data:
         user.avatar_url = (data["avatar_url"] or "").strip() or None
+    if "bio" in data:
+        bio = (data["bio"] or "").strip()
+        if len(bio) > 240:
+            raise HTTPException(status_code=400, detail="Bio must be 240 characters or fewer")
+        user.bio = bio or None
     session.add(user)
     session.commit()
     session.refresh(user)
-    return {"id": user.id, "name": user.name, "avatar_url": user.avatar_url}
+    return {"id": user.id, "name": user.name, "avatar_url": user.avatar_url, "bio": user.bio}
 
 
 @router.get("/{user_id}/factor-weights")
@@ -342,7 +347,8 @@ def list_friends(
         for f in friendships
     ]
     friends = [session.get(PressUser, fid) for fid in friend_ids]
-    return [{"id": u.id, "name": u.name, "avatar_url": u.avatar_url} for u in friends if u]
+    return [{"id": u.id, "name": u.name, "avatar_url": u.avatar_url, "bio": u.bio}
+            for u in friends if u]
 
 
 @router.post("/{user_id}/friends")

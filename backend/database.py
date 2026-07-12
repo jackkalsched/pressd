@@ -98,6 +98,8 @@ def init_db():
             # ── ML worker split: shared global track store ──
             "ALTER TABLE song ADD COLUMN track_id INTEGER",
             "CREATE INDEX IF NOT EXISTS ix_song_track_id ON song (track_id)",
+            # ── Profile bio ──
+            "ALTER TABLE pressuser ADD COLUMN bio TEXT",
             # ── Social: recommendations as feed events ──
             "ALTER TABLE album ADD COLUMN recommended_at TIMESTAMP",
             # ── Reviews: long-form prose attached to an album rating ──

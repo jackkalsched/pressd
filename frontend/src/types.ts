@@ -31,6 +31,7 @@ export interface Album {
   genre: string | null
   subGenre1: string | null
   subGenre2: string | null
+  subGenre3: string | null
   extraArtists: string[]
   albumArtUrl: string | null
   totalTracks: number | null

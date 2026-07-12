@@ -38,13 +38,21 @@ function Avatar({ name, avatarUrl, size }: { name: string; avatarUrl?: string; s
   )
 }
 
-function StatTile({ label, value, color }: { label: string; value: string; color: string }) {
+function InlineStat({ value, label }: { value: string; label: string }) {
   return (
-    <div className="bg-white border border-[#e8e2d9] rounded-2xl px-5 py-3 min-w-[104px]">
-      <p className="font-metric font-bold text-2xl leading-none tabular-nums" style={{ color }}>{value}</p>
-      <p className="text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] mt-1.5">{label}</p>
-    </div>
+    <span className="text-sm text-[#78716c] whitespace-nowrap">
+      <span className="font-semibold text-[#1c1917] tabular-nums">{value}</span> {label}
+    </span>
   )
+}
+
+/** Top-N values by frequency across a list of (possibly null) tags. */
+function topTags(tags: (string | null)[], n: number): string[] {
+  const counts = new Map<string, number>()
+  for (const t of tags) {
+    if (t) counts.set(t, (counts.get(t) ?? 0) + 1)
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([t]) => t)
 }
 
 export default function FriendProfile() {
@@ -91,6 +99,10 @@ export default function FriendProfile() {
   })
   const weekAgo = Date.now() - 7 * 86_400_000
   const thisWeek = rated.filter(a => a.dateRated && new Date(a.dateRated).getTime() >= weekAgo).length
+
+  // Favorite genres: most common genre / subgenre tags across rated albums
+  const topGenres = topTags(rated.map(a => a.genre), 3)
+  const topSubgenres = topTags(rated.flatMap(a => [a.subGenre1, a.subGenre2, a.subGenre3]), 3)
 
   // Drive the global "view-as" context so the embedded pages and album detail
   // render this friend's data (read-only).
@@ -176,27 +188,45 @@ export default function FriendProfile() {
             )}
           </div>
 
-          <p className="text-[#78716c] text-sm mt-1.5">
-            {summary ? `${summary.total_albums_rated} albums rated` : ' '}
-          </p>
-
-          <div className="flex flex-wrap gap-3 mt-5">
-            <StatTile
-              label="Avg Score"
+          {/* Leading metrics — plain inline stats (friendships are mutual,
+              so followers and following are the same set) */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mt-3">
+            <InlineStat value={String(theirFriends.length)} label="followers" />
+            <InlineStat value={String(theirFriends.length)} label="following" />
+            <InlineStat value={String(summary?.total_albums_rated ?? '—')} label="albums rated" />
+            <InlineStat
               value={summary?.avg_album_score != null ? summary.avg_album_score.toFixed(2) : '—'}
-              color="#2d6a4f"
+              label="avg score"
             />
-            <StatTile
-              label="Day Streak"
-              value={String(summary?.longest_streak ?? 0)}
-              color="#b45309"
-            />
-            <StatTile
-              label="This Week"
-              value={String(thisWeek)}
-              color="#1c1917"
-            />
+            <InlineStat value={String(summary?.longest_streak ?? 0)} label="day streak" />
+            <InlineStat value={String(thisWeek)} label="this week" />
           </div>
+
+          {friend.bio && (
+            <p className="text-sm text-[#57534e] mt-3 max-w-xl whitespace-pre-line leading-relaxed">
+              {friend.bio}
+            </p>
+          )}
+
+          {(topGenres.length > 0 || topSubgenres.length > 0) && (
+            <div className="mt-4">
+              <p className="text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] mb-1.5">
+                Favorite genres
+              </p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {topGenres.map((g) => (
+                  <span key={g} className="text-xs font-semibold text-[#2d6a4f] bg-[#2d6a4f]/10 px-2.5 py-1 rounded-full">
+                    {g}
+                  </span>
+                ))}
+                {topSubgenres.map((g) => (
+                  <span key={g} className="text-xs font-medium text-[#78716c] bg-[#efe9e0] px-2.5 py-1 rounded-full">
+                    {g}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <button
@@ -210,13 +240,8 @@ export default function FriendProfile() {
         </button>
       </div>
 
-      {/* ── Section header + tab switcher ────────────────────────── */}
-      <div className="flex items-center justify-between gap-3 border-t border-[#e8e2d9] pt-5 mb-6">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <Avatar name={friend.name} avatarUrl={friend.avatarUrl} size={26} />
-          <span className="font-display font-bold text-lg text-[#1c1917] truncate">{friend.name}'s Profile</span>
-        </div>
-
+      {/* ── Tab switcher ─────────────────────────────────────────── */}
+      <div className="flex items-center border-t border-[#e8e2d9] pt-5 mb-6">
         <div className="flex items-center gap-1 bg-[#efe9e0] rounded-xl p-1 shrink-0">
           {tabs.map(({ key, label }) => (
             <button
