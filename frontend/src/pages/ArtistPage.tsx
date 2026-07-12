@@ -7,7 +7,7 @@ import { useUser } from '../context/UserContext'
 import type { AotyAlbum, ArtistDetail } from '../api'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
-  ScatterChart, Scatter, ZAxis,
+  ScatterChart, Scatter, ZAxis, ComposedChart, Line,
 } from 'recharts'
 
 // ── Percentile bar ────────────────────────────────────────────────────────────
@@ -132,6 +132,29 @@ function histColor(score: number) {
   if (score >= 8.0) return '#1a7a3c'  // bang — forest green
   if (score < 6.5)  return '#c0392b'  // skip — dark red
   return '#7a9e78'                     // middle — muted sage
+}
+
+// KDE gate: below this the curve is mostly bandwidth artifact, not shape
+const KDE_MIN_SONGS = 30
+
+/** Gaussian KDE over song scores, evaluated at each bin center and scaled to
+ *  count units (density × n × binWidth) so it shares the histogram's y-axis. */
+function kdeOverlay(scores: number[], bins: { score: number }[]): number[] {
+  const n = scores.length
+  const mean = scores.reduce((a, b) => a + b, 0) / n
+  const sd = Math.sqrt(scores.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1))
+  const sorted = [...scores].sort((a, b) => a - b)
+  const q = (p: number) => sorted[Math.min(n - 1, Math.floor(p * n))]
+  const iqr = q(0.75) - q(0.25)
+  const spread = Math.min(sd || Infinity, iqr / 1.34) || sd || 0.3
+  // Silverman's rule, floored at 0.15: scores are quantized to 0.1, and a
+  // narrower bandwidth just draws spikes on the quantization grid
+  const h = Math.max(0.9 * spread * Math.pow(n, -0.2), 0.15)
+  const K = (u: number) => Math.exp(-0.5 * u * u) / Math.sqrt(2 * Math.PI)
+  const binWidth = 0.1
+  return bins.map(b =>
+    (scores.reduce((acc, s) => acc + K((b.score - s) / h), 0) / (n * h)) * n * binWidth
+  )
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -458,7 +481,14 @@ export default function ArtistPage() {
   if (error || !data) return <div className="p-8 text-[#aaa]">Artist not found.</div>
 
   const stats    = buildStats(data)
-  const histData = buildHistogram(data.song_scores)
+  const histBins = buildHistogram(data.song_scores)
+  const showKde = data.song_scores.length >= KDE_MIN_SONGS
+  const histData = showKde
+    ? (() => {
+        const kde = kdeOverlay(data.song_scores, histBins)
+        return histBins.map((b, i) => ({ ...b, kde: kde[i] }))
+      })()
+    : histBins
   const others   = data.all_artists.filter(
     (a) => a.artist !== data.artist && a.avg_song_score !== null && a.avg_external !== null,
   )
@@ -537,9 +567,14 @@ export default function ArtistPage() {
       <div className="mb-10">
         <h2 className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-4">
           Song Score Distribution
+          {showKde && (
+            <span className="normal-case tracking-normal font-normal text-[#c2b8ad] ml-2">
+              — curve: smoothed density (KDE)
+            </span>
+          )}
         </h2>
         <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={histData} barSize={10} margin={{ left: -20, right: 10 }}>
+          <ComposedChart data={histData} barSize={10} margin={{ left: -20, right: 10 }}>
             <XAxis
               dataKey="label"
               tick={{ fill: '#aaa', fontSize: 10 }}
@@ -564,7 +599,20 @@ export default function ArtistPage() {
                 <Cell key={entry.label} fill={histColor(entry.score)} opacity={0.85} />
               ))}
             </Bar>
-          </BarChart>
+            {showKde && (
+              <Line
+                dataKey="kde"
+                type="monotone"
+                stroke="#57534e"
+                strokeWidth={2}
+                strokeOpacity={0.75}
+                dot={false}
+                activeDot={false}
+                tooltipType="none"
+                isAnimationActive={false}
+              />
+            )}
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
 
