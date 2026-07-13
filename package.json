@@ -1,0 +1,9 @@
+{
+  "name": "pressd",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "frontend",
+    "mobile"
+  ]
+}

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.2.8",
+    "@pressd/shared": "*",
     "@fontsource/outfit": "^5.2.8",
     "@fontsource/plus-jakarta-sans": "^5.2.8",
     "@fontsource/space-grotesk": "^5.2.10",

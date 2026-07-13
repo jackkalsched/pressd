@@ -17,7 +17,9 @@ from .models import PressUser, Friendship
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-insecure-secret-change-me")
 JWT_ALGO = "HS256"
-TOKEN_TTL_DAYS = 7
+# Web sessions default to a week; set TOKEN_TTL_DAYS higher on Render once the
+# mobile app ships so people aren't re-logging in on their phone every few days.
+TOKEN_TTL_DAYS = int(os.getenv("TOKEN_TTL_DAYS", "7"))
 
 
 def create_access_token(user_id: int) -> str:

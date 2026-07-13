@@ -49,3 +49,11 @@ backend/models/*.onnx
 
 # OS
 .DS_Store
+node_modules
+
+# Node (workspaces)
+node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/ios/
+mobile/android/
