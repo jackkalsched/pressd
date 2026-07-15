@@ -39,6 +39,15 @@ const STATUSES: { key: AlbumStatus; label: string }[] = [
   { key: 'to_listen', label: 'To Listen' },
 ]
 
+/** Top-N values by frequency across a list of (possibly null) tags. */
+function topTags(tags: (string | null)[], n: number): string[] {
+  const counts = new Map<string, number>()
+  for (const t of tags) {
+    if (t) counts.set(t, (counts.get(t) ?? 0) + 1)
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([t]) => t)
+}
+
 export default function Profile() {
   const { user, signOut } = useAuth()
   const [tab, setTab] = useState<Tab>('library')
@@ -69,6 +78,13 @@ export default function Profile() {
     const weekAgo = Date.now() - 7 * 86_400_000
     return rated.filter((a) => a.dateRated && new Date(a.dateRated).getTime() >= weekAgo).length
   }, [rated])
+
+  // Favorite genres / subgenres: most common tags across the rated library.
+  const topGenres = useMemo(() => topTags(rated.map((a) => a.genre), 3), [rated])
+  const topSubgenres = useMemo(
+    () => topTags(rated.flatMap((a) => [a.subGenre1, a.subGenre2, a.subGenre3]), 3),
+    [rated],
+  )
 
   if (!user) return null
 
@@ -104,6 +120,22 @@ export default function Profile() {
                 <LogOut size={20} color={colors.inkMuted} />
               </Pressable>
             </View>
+
+            {/* Favorite genres / subgenres — subheaders under the name */}
+            {(topGenres.length > 0 || topSubgenres.length > 0) && (
+              <View style={styles.genreRow}>
+                {topGenres.map((g) => (
+                  <View key={`g-${g}`} style={[styles.genrePill, styles.genrePillPrimary]}>
+                    <Text style={styles.genrePillPrimaryText}>{g}</Text>
+                  </View>
+                ))}
+                {topSubgenres.map((g) => (
+                  <View key={`s-${g}`} style={[styles.genrePill, styles.genrePillMuted]}>
+                    <Text style={styles.genrePillMutedText}>{g}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
 
             {/* Bio + edit */}
             <Pressable style={styles.bioRow} onPress={() => setEditing(true)}>
@@ -301,6 +333,13 @@ const styles = StyleSheet.create({
   avatarInitial: { fontFamily: fonts.bodyBold, fontSize: 26, color: '#ffffff' },
   name: { fontFamily: fonts.display, fontSize: 28, color: colors.ink, letterSpacing: 1 },
   count: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary, marginTop: 2 },
+
+  genreRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.md },
+  genrePill: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: radii.pill },
+  genrePillPrimary: { backgroundColor: colors.greenSoft },
+  genrePillPrimaryText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },
+  genrePillMuted: { backgroundColor: colors.inset },
+  genrePillMutedText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkTertiary },
 
   bioRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.md },
   bio: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.inkSecondary, lineHeight: 19 },
