@@ -1,32 +1,83 @@
-// Profile — Phase 0's end-to-end proof: authed fetch of the signed-in user's
-// rated library rendered as the 3-column art grid from the mockup. Stats and
-// Ratings tabs join in Phase 1/2.
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
+// Profile — the signed-in user's home: identity + bio, top-line stats, and a
+// Library / Stats / Ratings switcher. Library (the score-badged art grid with a
+// Rated / Listening / To Listen filter) is built out here; Stats and Ratings are
+// placeholders until their phases land.
+import { useEffect, useMemo, useState } from 'react'
+import {
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
-import { LogOut } from 'lucide-react-native'
-import { fetchAlbums } from '../../lib/api'
+import { Check, LogOut, Pencil, X } from 'lucide-react-native'
+import { fetchAlbums, fetchSummary } from '../../lib/api'
+import type { Album, AlbumStatus } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const GAP = 10
+const BIO_MAX = 240
+
+type Tab = 'library' | 'stats' | 'ratings'
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'library', label: 'Library' },
+  { key: 'stats', label: 'Stats' },
+  { key: 'ratings', label: 'Ratings' },
+]
+
+const STATUSES: { key: AlbumStatus; label: string }[] = [
+  { key: 'rated', label: 'Rated' },
+  { key: 'listening', label: 'Listening' },
+  { key: 'to_listen', label: 'To Listen' },
+]
 
 export default function Profile() {
   const { user, signOut } = useAuth()
+  const [tab, setTab] = useState<Tab>('library')
+  const [libStatus, setLibStatus] = useState<AlbumStatus>('rated')
+  const [editing, setEditing] = useState(false)
 
-  const { data: rated = [], isLoading, refetch, isRefetching } = useQuery({
+  // Rated set drives the header count + "this week"; shares its key with the
+  // grid query when the Rated filter is active, so React Query serves one fetch.
+  const { data: rated = [] } = useQuery({
     queryKey: ['albums', 'rated', user?.id],
     queryFn: () => fetchAlbums({ status: 'rated', userId: user!.id }),
     enabled: !!user,
   })
 
+  const { data: grid = [], isLoading: gridLoading, refetch, isRefetching } = useQuery({
+    queryKey: ['albums', libStatus, user?.id],
+    queryFn: () => fetchAlbums({ status: libStatus, userId: user!.id }),
+    enabled: !!user && tab === 'library',
+  })
+
+  const { data: summary } = useQuery({
+    queryKey: ['stats', 'summary', user?.id],
+    queryFn: () => fetchSummary(user!.id),
+    enabled: !!user,
+  })
+
+  const thisWeek = useMemo(() => {
+    const weekAgo = Date.now() - 7 * 86_400_000
+    return rated.filter((a) => a.dateRated && new Date(a.dateRated).getTime() >= weekAgo).length
+  }, [rated])
+
   if (!user) return null
+
+  const gridData = tab === 'library' ? grid : []
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <FlatList
-        data={rated}
+        data={gridData}
         keyExtractor={(a) => String(a.id)}
         numColumns={3}
         columnWrapperStyle={{ gap: GAP }}
@@ -35,7 +86,8 @@ export default function Profile() {
           <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.green} />
         }
         ListHeaderComponent={
-          <View style={styles.header}>
+          <View>
+            {/* Identity */}
             <View style={styles.identity}>
               <View style={styles.avatar}>
                 {user.avatarUrl ? (
@@ -46,44 +98,196 @@ export default function Profile() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{user.name}</Text>
-                <Text style={styles.count}>
-                  {isLoading ? 'Loading library…' : `${rated.length} albums rated`}
-                </Text>
+                <Text style={styles.count}>{rated.length} albums rated</Text>
               </View>
               <Pressable onPress={signOut} hitSlop={12} accessibilityLabel="Sign out">
                 <LogOut size={20} color={colors.inkMuted} />
               </Pressable>
             </View>
-            {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
+
+            {/* Bio + edit */}
+            <Pressable style={styles.bioRow} onPress={() => setEditing(true)}>
+              <Text style={user.bio ? styles.bio : styles.bioEmpty} numberOfLines={4}>
+                {user.bio || 'Add a bio'}
+              </Text>
+              <Pencil size={13} color={colors.inkMuted} />
+            </Pressable>
+
+            {/* Stat tiles */}
+            <View style={styles.tiles}>
+              <StatTile
+                value={summary?.avg_album_score != null ? summary.avg_album_score.toFixed(1) : '—'}
+                label="Avg score"
+              />
+              <StatTile value={String(summary?.longest_streak ?? 0)} label="Day streak" />
+              <StatTile value={String(thisWeek)} label="This week" />
+            </View>
+
+            {/* Library / Stats / Ratings */}
+            <View style={styles.tabBar}>
+              {TABS.map(({ key, label }) => (
+                <Pressable
+                  key={key}
+                  style={[styles.tab, tab === key && styles.tabActive]}
+                  onPress={() => setTab(key)}
+                >
+                  <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Status filter (Library only) */}
+            {tab === 'library' && (
+              <View style={styles.statusRow}>
+                {STATUSES.map(({ key, label }) => (
+                  <Pressable
+                    key={key}
+                    style={[styles.chip, libStatus === key && styles.chipActive]}
+                    onPress={() => setLibStatus(key)}
+                  >
+                    <Text style={[styles.chipText, libStatus === key && styles.chipTextActive]}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={styles.cell}>
-            {item.albumArtUrl ? (
-              <Image source={{ uri: item.albumArtUrl }} style={styles.art} contentFit="cover" />
-            ) : (
-              <View style={[styles.art, styles.artFallback]}>
-                <Text style={styles.artInitial}>{item.albumName[0]?.toUpperCase()}</Text>
-              </View>
-            )}
-            {item.score != null && (
-              <View style={styles.scoreChip}>
-                <Text style={styles.scoreText}>{item.score.toFixed(1)}</Text>
-              </View>
-            )}
-            <Text style={styles.albumName} numberOfLines={1}>{item.albumName}</Text>
-          </View>
-        )}
+        renderItem={({ item }) => <AlbumCell album={item} />}
+        ListEmptyComponent={
+          tab !== 'library' ? (
+            <Placeholder label={tab === 'stats' ? 'Stats' : 'Ratings'} />
+          ) : gridLoading ? (
+            <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
+          ) : (
+            <Text style={styles.emptyText}>
+              {libStatus === 'rated'
+                ? 'No rated albums yet.'
+                : libStatus === 'listening'
+                ? 'Nothing in progress.'
+                : 'Your to-listen queue is empty.'}
+            </Text>
+          )
+        }
+      />
+
+      <EditBioModal
+        visible={editing}
+        initial={user.bio ?? ''}
+        onClose={() => setEditing(false)}
       />
     </SafeAreaView>
+  )
+}
+
+function StatTile({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={styles.tile}>
+      <Text style={styles.tileValue}>{value}</Text>
+      <Text style={styles.tileLabel}>{label}</Text>
+    </View>
+  )
+}
+
+function AlbumCell({ album }: { album: Album }) {
+  const showScore = album.status === 'rated' && album.score != null
+  return (
+    <View style={styles.cell}>
+      <View style={styles.artWrap}>
+        {album.albumArtUrl ? (
+          <Image source={{ uri: album.albumArtUrl }} style={styles.art} contentFit="cover" />
+        ) : (
+          <View style={[styles.art, styles.artFallback]}>
+            <Text style={styles.artInitial}>{album.albumName[0]?.toUpperCase()}</Text>
+          </View>
+        )}
+        {showScore && (
+          <View style={styles.scoreChip}>
+            <Text style={styles.scoreText}>{album.score!.toFixed(1)}</Text>
+          </View>
+        )}
+      </View>
+      <Text style={styles.albumName} numberOfLines={1}>{album.albumName}</Text>
+    </View>
+  )
+}
+
+function Placeholder({ label }: { label: string }) {
+  return (
+    <View style={styles.placeholder}>
+      <Text style={styles.placeholderTitle}>{label}</Text>
+      <Text style={styles.placeholderBody}>Coming in a later phase.</Text>
+    </View>
+  )
+}
+
+function EditBioModal({
+  visible,
+  initial,
+  onClose,
+}: {
+  visible: boolean
+  initial: string
+  onClose: () => void
+}) {
+  const [text, setText] = useState(initial)
+  const [saving, setSaving] = useState(false)
+  const { updateProfile } = useAuth()
+
+  // Reset the field whenever the modal reopens on a fresh bio.
+  useEffect(() => {
+    if (visible) setText(initial)
+  }, [visible, initial])
+
+  async function save() {
+    setSaving(true)
+    try {
+      await updateProfile({ bio: text.trim() })
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.modalCard}>
+          <View style={styles.modalHead}>
+            <Pressable onPress={onClose} hitSlop={10}>
+              <X size={22} color={colors.inkTertiary} />
+            </Pressable>
+            <Text style={styles.modalTitle}>Edit bio</Text>
+            <Pressable onPress={save} hitSlop={10} disabled={saving}>
+              {saving ? (
+                <ActivityIndicator color={colors.green} />
+              ) : (
+                <Check size={22} color={colors.green} />
+              )}
+            </Pressable>
+          </View>
+          <TextInput
+            style={styles.bioInput}
+            value={text}
+            onChangeText={(t) => setText(t.slice(0, BIO_MAX))}
+            placeholder="Say something about your taste…"
+            placeholderTextColor={colors.inkMuted}
+            multiline
+            autoFocus
+          />
+          <Text style={styles.counter}>{text.length}/{BIO_MAX}</Text>
+        </View>
+      </View>
+    </Modal>
   )
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: spacing.lg, paddingBottom: 120, gap: GAP + 4 },
-  header: { marginTop: spacing.lg, marginBottom: spacing.md },
-  identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+
+  identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.lg },
   avatar: {
     width: 64,
     height: 64,
@@ -95,28 +299,114 @@ const styles = StyleSheet.create({
   },
   avatarImg: { width: '100%', height: '100%' },
   avatarInitial: { fontFamily: fonts.bodyBold, fontSize: 26, color: '#ffffff' },
-  name: { fontFamily: fonts.display, fontSize: 28, color: colors.ink, letterSpacing: 1.5 },
+  name: { fontFamily: fonts.display, fontSize: 28, color: colors.ink, letterSpacing: 1 },
   count: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary, marginTop: 2 },
-  bio: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSecondary, marginTop: spacing.md, lineHeight: 19 },
+
+  bioRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.md },
+  bio: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.inkSecondary, lineHeight: 19 },
+  bioEmpty: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.inkMuted, fontStyle: 'italic' },
+
+  tiles: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
+  tile: {
+    flex: 1,
+    backgroundColor: colors.raised,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+  },
+  tileValue: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.ink },
+  tileLabel: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 10,
+    color: colors.inkTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: colors.inset,
+    borderRadius: radii.md,
+    padding: 4,
+    marginTop: spacing.lg,
+  },
+  tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: radii.sm },
+  tabActive: { backgroundColor: colors.raised },
+  tabText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.inkTertiary },
+  tabTextActive: { color: colors.ink },
+
+  statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
+  chip: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    backgroundColor: colors.raised,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chipActive: { backgroundColor: colors.green, borderColor: colors.green },
+  chipText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkSecondary },
+  chipTextActive: { color: '#ffffff' },
+
   cell: { flex: 1 / 3 },
-  art: { width: '100%', aspectRatio: 1, borderRadius: radii.md },
+  artWrap: { width: '100%', aspectRatio: 1, borderRadius: radii.md, overflow: 'hidden' },
+  art: { width: '100%', height: '100%' },
   artFallback: { backgroundColor: colors.inset, alignItems: 'center', justifyContent: 'center' },
   artInitial: { fontFamily: fonts.display, fontSize: 28, color: colors.inkMuted },
   scoreChip: {
     position: 'absolute',
     right: 6,
-    top: undefined,
-    bottom: 28,
+    bottom: 6,
     backgroundColor: colors.scoreChipBg,
     borderRadius: radii.sm,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   scoreText: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.scoreChipText },
-  albumName: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 12,
-    color: colors.inkSecondary,
-    marginTop: 5,
+  albumName: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary, marginTop: 5 },
+
+  emptyText: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.inkTertiary,
+    textAlign: 'center',
+    marginTop: spacing.xxl,
+  },
+  placeholder: { alignItems: 'center', marginTop: spacing.xxl, gap: spacing.xs },
+  placeholderTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
+  placeholderBody: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary },
+
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.4)', justifyContent: 'flex-end' },
+  modalCard: {
+    backgroundColor: colors.bg,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  modalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  modalTitle: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink },
+  bioInput: {
+    marginTop: spacing.lg,
+    minHeight: 96,
+    backgroundColor: colors.raised,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.ink,
+    textAlignVertical: 'top',
+  },
+  counter: {
+    fontFamily: fonts.body,
+    fontSize: 11,
+    color: colors.inkMuted,
+    textAlign: 'right',
+    marginTop: spacing.xs,
   },
 })

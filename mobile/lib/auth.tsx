@@ -3,7 +3,7 @@
 // sign-in / sign-out flows to screens.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import * as SecureStore from 'expo-secure-store'
-import { signInWithGoogle, fetchUsers, type UserInfo } from '@pressd/shared/api'
+import { signInWithGoogle, fetchUsers, updateUser, type UserInfo } from '@pressd/shared/api'
 import { getToken, setToken, loadStoredToken, setUnauthorizedHandler } from './api'
 
 const USER_KEY = 'pressd_user'
@@ -15,6 +15,8 @@ interface AuthContextValue {
   ready: boolean
   signInWithGoogleToken: (accessToken: string) => Promise<void>
   signInWithDevToken: (jwt: string) => Promise<void>
+  /** Persist profile edits (e.g. bio) and reflect them in context. */
+  updateProfile: (data: { name?: string; avatarUrl?: string; bio?: string }) => Promise<void>
   signOut: () => void
 }
 
@@ -90,9 +92,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     persistUser(u)
   }, [persistUser])
 
+  const updateProfile = useCallback(
+    async (data: { name?: string; avatarUrl?: string; bio?: string }) => {
+      if (!user) return
+      const updated = await updateUser(user.id, data)
+      persistUser(updated)
+    },
+    [user, persistUser],
+  )
+
   const value = useMemo(
-    () => ({ user, ready, signInWithGoogleToken, signInWithDevToken, signOut }),
-    [user, ready, signInWithGoogleToken, signInWithDevToken, signOut],
+    () => ({ user, ready, signInWithGoogleToken, signInWithDevToken, updateProfile, signOut }),
+    [user, ready, signInWithGoogleToken, signInWithDevToken, updateProfile, signOut],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
