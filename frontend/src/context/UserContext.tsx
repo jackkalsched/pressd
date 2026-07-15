@@ -11,7 +11,7 @@ interface UserContextValue {
   activeUser: UserInfo | null
   setActiveUser: (user: UserInfo | null) => void
   viewingUser: UserInfo | null
-  setViewingUser: (user: UserInfo) => void
+  setViewingUser: (user: UserInfo | null) => void
   isViewingFriend: boolean
   signOut: () => void
 }

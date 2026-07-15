@@ -193,7 +193,7 @@ export default function AlbumDetail() {
           genre: album.genre ?? null,
         },
         'to_listen',
-        activeUser.id,
+        activeUser!.id,
       )
       setAddedToLibrary(true)
     } catch { /* silently fail */ } finally {
@@ -224,7 +224,7 @@ export default function AlbumDetail() {
           genre: album.genre ?? null,
         },
         'listening',
-        activeUser.id,
+        activeUser!.id,
       )
       navigate(`/rate/${result.id}`)
     } catch { setRatingItYourself(false) }
@@ -238,8 +238,8 @@ export default function AlbumDetail() {
   const { color: accentColor, color2 } = useAlbumColors(album?.albumName ?? null, album?.artist ?? null)
 
   const { data: friendRatings = [] } = useQuery({
-    queryKey: ['friend-ratings', album?.albumName, album?.artist, activeUser.id],
-    queryFn: () => fetchFriendRatings(album!.albumName, album!.artist, activeUser.id),
+    queryKey: ['friend-ratings', album?.albumName, album?.artist, activeUser?.id],
+    queryFn: () => fetchFriendRatings(album!.albumName, album!.artist, activeUser!.id),
     enabled: !!album && !isViewingFriend,
     staleTime: 60_000,
   })
@@ -325,7 +325,7 @@ export default function AlbumDetail() {
             )}
             {album.status === 'rated' && (
               <button
-                onClick={() => shareRatingViaIMessage(album.albumName, album.artist, album.score, isViewingFriend ? viewingUser.name : undefined)}
+                onClick={() => shareRatingViaIMessage(album.albumName, album.artist, album.score, isViewingFriend ? viewingUser!.name : undefined)}
                 className={btnNeutral}
               >
                 <MessageCircle size={12} /> Share
@@ -435,7 +435,7 @@ export default function AlbumDetail() {
             {/* Whose rating this is — shown only when viewing a friend */}
             {isViewingFriend && album.score !== null && (
               <p className="text-[12px] text-[#78716c] mt-2">
-                Rated by <span className="font-semibold text-[#2d6a4f]">{viewingUser.name}</span>
+                Rated by <span className="font-semibold text-[#2d6a4f]">{viewingUser!.name}</span>
               </p>
             )}
           </div>
@@ -592,7 +592,7 @@ export default function AlbumDetail() {
         )}
 
         {/* ── Review ───────────────────────────────────────────────── */}
-        <ReviewSection album={album} editable={!isViewingFriend} authorName={isViewingFriend ? viewingUser.name : (activeUser?.name ?? 'You')} />
+        <ReviewSection album={album} editable={!isViewingFriend} authorName={isViewingFriend ? viewingUser!.name : (activeUser?.name ?? 'You')} />
 
         {/* ── Comments ─────────────────────────────────────────────── */}
         <div className="mt-10 max-w-2xl">

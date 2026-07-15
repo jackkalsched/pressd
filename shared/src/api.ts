@@ -226,7 +226,7 @@ export interface SpotifyTrack {
   track_number: number
   duration_ms: number | null
   explicit: boolean
-  spotify_id: string
+  spotify_id: string | null
   artist: string
 }
 

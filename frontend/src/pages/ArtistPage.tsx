@@ -6,7 +6,7 @@ import { fetchArtistDetail, fetchAotyAlbums, refreshAotyArtist, searchSpotify, i
 import { useUser } from '../context/UserContext'
 import type { AotyAlbum, ArtistDetail } from '../api'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   ScatterChart, Scatter, ZAxis, ComposedChart, Line,
 } from 'recharts'
 
@@ -463,7 +463,7 @@ export default function ArtistPage() {
   const { name } = useParams<{ name: string }>()
   const navigate  = useNavigate()
   const { viewingUser } = useUser()
-  const userId = viewingUser.id
+  const userId = viewingUser!.id
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['artist', name, userId],
@@ -591,7 +591,7 @@ export default function ArtistPage() {
             <Tooltip
               contentStyle={{ background: '#fff', border: '1px solid #e2e2e2', borderRadius: 8, color: '#111', fontSize: 12 }}
               cursor={{ fill: '#00000008' }}
-              formatter={(val: number) => [val, 'Songs']}
+              formatter={(val) => [Number(val), 'Songs']}
               labelFormatter={(label) => `Score ${label}`}
             />
             <Bar dataKey="count" radius={[2, 2, 0, 0]}>
@@ -668,7 +668,7 @@ export default function ArtistPage() {
             {selfPoint && (
               <Scatter
                 data={[selfPoint]}
-                shape={(props: { cx: number; cy: number }) => (
+                shape={(props: { cx?: number; cy?: number }) => (
                   <circle cx={props.cx} cy={props.cy} r={7} fill="#2d6a4f" />
                 )}
               />

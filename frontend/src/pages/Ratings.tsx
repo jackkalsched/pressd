@@ -185,7 +185,7 @@ type Tab = 'albums' | 'artists'
 export default function Ratings({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate()
   const { viewingUser } = useUser()
-  const userId = viewingUser.id
+  const userId = viewingUser!.id
   const [tab, setTab] = useState<Tab>('albums')
   const [sortKey, setSortKey] = useState<AlbumSortKey>('score')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')

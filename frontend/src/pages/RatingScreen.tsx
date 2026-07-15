@@ -11,7 +11,7 @@ import { useUser } from '../context/UserContext'
 
 function useCountUp(target: number | null, duration = 550) {
   const [display, setDisplay] = useState(0)
-  const raf = useRef<number>()
+  const raf = useRef<number | undefined>(undefined)
   const from = useRef(0)
   useEffect(() => {
     if (target === null) return

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X, Loader2, Search } from 'lucide-react'
 import { fetchAlbums, enrichCovers } from '../api'
-import { useNavigate } from 'react-router-dom'
 import AlbumCard from '../components/AlbumCard'
 import { useUser } from '../context/UserContext'
 import type { AlbumStatus } from '../types'
@@ -15,8 +14,8 @@ const TABS: { key: AlbumStatus; label: string }[] = [
 
 
 export default function Library({ embedded = false }: { embedded?: boolean } = {}) {
-  const { activeUser, viewingUser, isViewingFriend } = useUser()
-  const userId = viewingUser.id
+  const { viewingUser, isViewingFriend } = useUser()
+  const userId = viewingUser!.id
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<AlbumStatus>('rated')
   const [toListenSearch, setToListenSearch] = useState('')
@@ -67,7 +66,7 @@ export default function Library({ embedded = false }: { embedded?: boolean } = {
       {!embedded && (
         <div className="mb-6">
           <h1 className="font-display text-3xl font-bold text-[#111]">
-            {isViewingFriend ? `${viewingUser.name}'s Library` : 'Library'}
+            {isViewingFriend ? `${viewingUser!.name}'s Library` : 'Library'}
           </h1>
         </div>
       )}

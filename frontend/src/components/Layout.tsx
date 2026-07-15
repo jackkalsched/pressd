@@ -17,23 +17,24 @@ function avatarColor(name: string): string {
   return colors[h]
 }
 
-function Avatar({ user, size = 28 }: { user: Pick<UserInfo, 'name' | 'avatarUrl'>; size?: number }) {
-  if (user.avatarUrl) {
+function Avatar({ user, size = 28 }: { user: Pick<UserInfo, 'name' | 'avatarUrl'> | null; size?: number }) {
+  const name = user?.name || '?'
+  if (user?.avatarUrl) {
     return (
       <img
         src={user.avatarUrl}
-        alt={user.name}
+        alt={name}
         style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
       />
     )
   }
   return (
     <div style={{
-      width: size, height: size, borderRadius: '50%', background: avatarColor(user.name),
+      width: size, height: size, borderRadius: '50%', background: avatarColor(name),
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       color: '#fff', fontSize: size * 0.4, fontWeight: 700, flexShrink: 0,
     }}>
-      {user.name[0].toUpperCase()}
+      {name[0].toUpperCase()}
     </div>
   )
 }
