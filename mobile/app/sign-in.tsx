@@ -10,25 +10,52 @@ import { colors, fonts, radii, spacing } from '../theme/tokens'
 WebBrowser.maybeCompleteAuthSession()
 
 const DEV_TOKEN = process.env.EXPO_PUBLIC_DEV_TOKEN
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
+
+// `Google.useAuthRequest` throws on native when no platform client id is set,
+// so it lives in a child that only mounts once the iOS client id exists. Until
+// then the dev-token path below is the way in.
+function GoogleButton({
+  onToken,
+  onError,
+}: {
+  onToken: (accessToken: string) => void
+  onError: (message: string) => void
+}) {
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    iosClientId: GOOGLE_IOS_CLIENT_ID,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  })
+
+  useEffect(() => {
+    const accessToken = response?.type === 'success' ? response.authentication?.accessToken : null
+    if (accessToken) onToken(accessToken)
+    else if (response?.type === 'error') onError(response.error?.message ?? 'Google sign-in failed')
+  }, [response, onToken, onError])
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.googleBtn, pressed && { backgroundColor: colors.greenPressed }]}
+      disabled={!request}
+      onPress={() => promptAsync()}
+    >
+      <Text style={styles.googleBtnText}>Continue with Google</Text>
+    </Pressable>
+  )
+}
 
 export default function SignIn() {
   const { signInWithGoogleToken, signInWithDevToken } = useAuth()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-  })
-
-  useEffect(() => {
-    const accessToken = response?.type === 'success' ? response.authentication?.accessToken : null
-    if (!accessToken) return
+  function handleGoogleToken(accessToken: string) {
     setBusy(true)
+    setError(null)
     signInWithGoogleToken(accessToken)
       .catch((e: Error) => setError(e.message))
       .finally(() => setBusy(false))
-  }, [response, signInWithGoogleToken])
+  }
 
   async function handleDevToken() {
     if (!DEV_TOKEN) return
@@ -56,18 +83,20 @@ export default function SignIn() {
           <ActivityIndicator color={colors.green} />
         ) : (
           <>
-            <Pressable
-              style={({ pressed }) => [styles.googleBtn, pressed && { backgroundColor: colors.greenPressed }]}
-              disabled={!request}
-              onPress={() => promptAsync()}
-            >
-              <Text style={styles.googleBtnText}>Continue with Google</Text>
-            </Pressable>
+            {GOOGLE_IOS_CLIENT_ID ? (
+              <GoogleButton onToken={handleGoogleToken} onError={setError} />
+            ) : null}
 
             {DEV_TOKEN ? (
               <Pressable style={styles.devBtn} onPress={handleDevToken}>
                 <Text style={styles.devBtnText}>Continue with dev token</Text>
               </Pressable>
+            ) : null}
+
+            {!GOOGLE_IOS_CLIENT_ID && !DEV_TOKEN ? (
+              <Text style={styles.hint}>
+                Set EXPO_PUBLIC_DEV_TOKEN or EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID in mobile/.env to sign in.
+              </Text>
             ) : null}
           </>
         )}
@@ -101,5 +130,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.raised,
   },
   devBtnText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary },
+  hint: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, textAlign: 'center' },
   error: { fontFamily: fonts.body, fontSize: 13, color: '#b91c1c', textAlign: 'center' },
 })
