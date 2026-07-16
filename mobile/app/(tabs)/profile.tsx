@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
+import { useRouter } from 'expo-router'
 import { Check, LogOut, Pencil, X } from 'lucide-react-native'
 import { fetchAlbums, fetchSummary } from '../../lib/api'
 import type { Album, AlbumStatus } from '@pressd/shared/types'
@@ -50,6 +51,7 @@ function topTags(tags: (string | null)[], n: number): string[] {
 
 export default function Profile() {
   const { user, signOut } = useAuth()
+  const router = useRouter()
   const [tab, setTab] = useState<Tab>('library')
   const [libStatus, setLibStatus] = useState<AlbumStatus>('rated')
   const [editing, setEditing] = useState(false)
@@ -186,7 +188,16 @@ export default function Profile() {
             )}
           </View>
         }
-        renderItem={({ item }) => <AlbumCell album={item} />}
+        renderItem={({ item }) => (
+          <AlbumCell
+            album={item}
+            onPress={() =>
+              item.status === 'rated'
+                ? router.push({ pathname: '/album/[id]', params: { id: String(item.id) } })
+                : router.push({ pathname: '/rate/[id]', params: { id: String(item.id) } })
+            }
+          />
+        )}
         ListEmptyComponent={
           tab !== 'library' ? (
             <Placeholder label={tab === 'stats' ? 'Stats' : 'Ratings'} />
@@ -222,10 +233,10 @@ function StatTile({ value, label }: { value: string; label: string }) {
   )
 }
 
-function AlbumCell({ album }: { album: Album }) {
+function AlbumCell({ album, onPress }: { album: Album; onPress: () => void }) {
   const showScore = album.status === 'rated' && album.score != null
   return (
-    <View style={styles.cell}>
+    <Pressable style={styles.cell} onPress={onPress}>
       <View style={styles.artWrap}>
         {album.albumArtUrl ? (
           <Image source={{ uri: album.albumArtUrl }} style={styles.art} contentFit="cover" />
@@ -241,7 +252,7 @@ function AlbumCell({ album }: { album: Album }) {
         )}
       </View>
       <Text style={styles.albumName} numberOfLines={1}>{album.albumName}</Text>
-    </View>
+    </Pressable>
   )
 }
 
