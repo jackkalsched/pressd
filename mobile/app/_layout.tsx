@@ -49,6 +49,7 @@ function RootNavigator() {
         <Stack.Screen name="add" options={{ presentation: 'modal' }} />
         <Stack.Screen name="rate/[id]" />
         <Stack.Screen name="album/[id]" />
+        <Stack.Screen name="friend/[id]" />
       </Stack.Protected>
       <Stack.Protected guard={!user}>
         <Stack.Screen name="sign-in" />
