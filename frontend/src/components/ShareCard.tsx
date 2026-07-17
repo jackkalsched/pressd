@@ -166,9 +166,18 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
                     src={album.albumArtUrl}
                     alt=""
                     crossOrigin="anonymous"
-                    style={{ position: 'absolute', top: -120, right: -140, width: 1320, height: 1560, objectFit: 'cover', opacity: 0.18, filter: 'blur(3px)', pointerEvents: 'none' }}
+                    style={{
+                      position: 'absolute', top: -120, right: -140, width: 1320, height: 1560, objectFit: 'cover',
+                      opacity: 0.2, filter: 'blur(2px)', pointerEvents: 'none',
+                      // Dissolve the art's own alpha radially from the top-right so it
+                      // fades to nothing well before any square edge can show.
+                      WebkitMaskImage: 'radial-gradient(66% 58% at 100% 0%, #000 0%, rgba(0,0,0,.5) 46%, transparent 74%)',
+                      maskImage: 'radial-gradient(66% 58% at 100% 0%, #000 0%, rgba(0,0,0,.5) 46%, transparent 74%)',
+                    }}
                   />
-                  <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 90% 72% at 74% 15%, transparent 0%, rgba(250,248,245,.5) 44%, rgba(250,248,245,.86) 72%, #faf8f5 100%)', pointerEvents: 'none' }} />
+                  {/* Cream wash anchored to the card's top-right corner — reinforces
+                      the bloom (and covers renderers that ignore mask-image). */}
+                  <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(80% 70% at 100% 0%, transparent 0%, rgba(250,248,245,.3) 40%, rgba(250,248,245,.76) 64%, #faf8f5 84%)', pointerEvents: 'none' }} />
                 </>
               )}
 
