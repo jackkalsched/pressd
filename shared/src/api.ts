@@ -669,6 +669,26 @@ export async function signInWithGoogle(
   return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined, bio: u.bio ?? undefined }
 }
 
+export async function signInWithApple(
+  identityToken: string,
+  fullName?: string,
+  linkUserId?: number,
+): Promise<UserInfo> {
+  const res = await apiFetch(`${BASE()}/auth/apple`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identity_token: identityToken, full_name: fullName, link_user_id: linkUserId }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? 'Sign in failed')
+  }
+  const data = await res.json()
+  config.setToken(data.token)
+  const u = data.user
+  return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined, bio: u.bio ?? undefined }
+}
+
 // ── Users / Invites / Friends ─────────────────────────────────────────────────
 
 export interface UserInfo {

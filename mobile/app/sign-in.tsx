@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import * as WebBrowser from 'expo-web-browser'
 import * as Google from 'expo-auth-session/providers/google'
+import * as AppleAuthentication from 'expo-apple-authentication'
 import { useAuth } from '../lib/auth'
 import { colors, fonts, radii, spacing } from '../theme/tokens'
 
@@ -45,9 +46,14 @@ function GoogleButton({
 }
 
 export default function SignIn() {
-  const { signInWithGoogleToken, signInWithDevToken } = useAuth()
+  const { signInWithGoogleToken, signInWithAppleToken, signInWithDevToken } = useAuth()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [appleAvailable, setAppleAvailable] = useState(false)
+
+  useEffect(() => {
+    if (Platform.OS === 'ios') AppleAuthentication.isAvailableAsync().then(setAppleAvailable).catch(() => {})
+  }, [])
 
   function handleGoogleToken(accessToken: string) {
     setBusy(true)
@@ -55,6 +61,27 @@ export default function SignIn() {
     signInWithGoogleToken(accessToken)
       .catch((e: Error) => setError(e.message))
       .finally(() => setBusy(false))
+  }
+
+  async function handleApple() {
+    setError(null)
+    try {
+      const cred = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      })
+      if (!cred.identityToken) throw new Error('No identity token from Apple')
+      const fullName = [cred.fullName?.givenName, cred.fullName?.familyName].filter(Boolean).join(' ') || undefined
+      setBusy(true)
+      await signInWithAppleToken(cred.identityToken, fullName)
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('canceled')) return
+      setError(e instanceof Error ? e.message : 'Apple sign-in failed')
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function handleDevToken() {
@@ -83,6 +110,16 @@ export default function SignIn() {
           <ActivityIndicator color={colors.green} />
         ) : (
           <>
+            {appleAvailable ? (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                cornerRadius={radii.lg}
+                style={styles.appleBtn}
+                onPress={handleApple}
+              />
+            ) : null}
+
             {GOOGLE_IOS_CLIENT_ID ? (
               <GoogleButton onToken={handleGoogleToken} onError={setError} />
             ) : null}
@@ -121,6 +158,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   googleBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: '#ffffff' },
+  appleBtn: { height: 52, width: '100%' },
   devBtn: {
     borderRadius: radii.lg,
     paddingVertical: 14,

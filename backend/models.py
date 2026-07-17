@@ -10,6 +10,7 @@ class PressUser(SQLModel, table=True):
     avatar_url: Optional[str] = None
     bio: Optional[str] = None
     google_sub: Optional[str] = Field(default=None, unique=True, index=True)
+    apple_sub: Optional[str] = Field(default=None, unique=True, index=True)
     email: Optional[str] = None
 
     # Per-user external-factor weights, stored as a 60-point budget (each ≥ 5).

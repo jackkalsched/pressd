@@ -9,7 +9,8 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.pressd.app"
+      "bundleIdentifier": "com.pressd.app",
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "com.pressd.app",

@@ -3,7 +3,7 @@
 // sign-in / sign-out flows to screens.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import * as SecureStore from 'expo-secure-store'
-import { signInWithGoogle, fetchUsers, updateUser, type UserInfo } from '@pressd/shared/api'
+import { signInWithGoogle, signInWithApple, fetchUsers, updateUser, type UserInfo } from '@pressd/shared/api'
 import { getToken, setToken, loadStoredToken, setUnauthorizedHandler } from './api'
 
 const USER_KEY = 'pressd_user'
@@ -14,6 +14,7 @@ interface AuthContextValue {
   /** false until the Keychain has been read at launch */
   ready: boolean
   signInWithGoogleToken: (accessToken: string) => Promise<void>
+  signInWithAppleToken: (identityToken: string, fullName?: string) => Promise<void>
   signInWithDevToken: (jwt: string) => Promise<void>
   /** Persist profile edits (e.g. bio) and reflect them in context. */
   updateProfile: (data: { name?: string; avatarUrl?: string; bio?: string }) => Promise<void>
@@ -78,6 +79,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     persistUser(u)
   }, [persistUser])
 
+  const signInWithAppleToken = useCallback(async (identityToken: string, fullName?: string) => {
+    const u = await signInWithApple(identityToken, fullName)
+    persistUser(u)
+  }, [persistUser])
+
   // Dev-only shortcut: paste a backend-minted JWT (EXPO_PUBLIC_DEV_TOKEN) to
   // test in Expo Go before the Google iOS client exists.
   const signInWithDevToken = useCallback(async (jwt: string) => {
@@ -102,8 +108,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const value = useMemo(
-    () => ({ user, ready, signInWithGoogleToken, signInWithDevToken, updateProfile, signOut }),
-    [user, ready, signInWithGoogleToken, signInWithDevToken, updateProfile, signOut],
+    () => ({ user, ready, signInWithGoogleToken, signInWithAppleToken, signInWithDevToken, updateProfile, signOut }),
+    [user, ready, signInWithGoogleToken, signInWithAppleToken, signInWithDevToken, updateProfile, signOut],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
