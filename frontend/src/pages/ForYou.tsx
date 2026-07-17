@@ -285,7 +285,7 @@ export default function ForYou() {
           {newReleases.length > 0 && (
             <section className="mb-9">
               <div className="flex items-baseline justify-between mb-4">
-                <h2 className={SECTION_LABEL}>New Releases</h2>
+                <h2 className={SECTION_LABEL}>Trending Releases</h2>
               </div>
               <div className="flex gap-4 overflow-x-auto pb-3.5 pt-1" style={{ scrollSnapType: 'x mandatory' }}>
                 {newReleases.map((r) => (
@@ -551,7 +551,7 @@ function NewReleaseCard({
         <button type="button" onClick={() => setRevealed((v) => !v)} className="absolute inset-0 z-0" aria-label={`${release.albumName} — options`}>
           <Cover artUrl={release.coverUrl} seed={release.artist} size={172} radius={16} fontSize={46} />
         </button>
-        <span className="absolute top-2.5 left-2.5 z-0 text-[9px] font-bold tracking-[0.1em] text-white px-2 py-1 rounded-full pointer-events-none" style={{ background: 'rgba(28,25,23,.72)' }}>NEW</span>
+        <span className="absolute top-2.5 left-2.5 z-0 text-[9px] font-bold tracking-[0.1em] text-white px-2 py-1 rounded-full pointer-events-none" style={{ background: 'rgba(28,25,23,.72)' }}>TRENDING</span>
         <div
           className={
             'absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 transition-opacity focus-within:opacity-100 focus-within:pointer-events-auto ' +

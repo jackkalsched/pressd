@@ -45,11 +45,12 @@ async def new_releases(
         resp = await client.get(f"{DEEZER_BASE}/editorial/0/releases", params={"limit": 40})
         items = resp.json().get("data", []) if resp.is_success else []
         if not items:
-            # Deezer's editorial "releases" feed is frequently empty; fall back to
-            # the global top-albums chart so the section always stays populated.
-            resp = await client.get(f"{DEEZER_BASE}/chart/0/albums", params={"limit": 40})
+            # Deezer has stopped populating its editorial "releases" feed, so fall
+            # back to the editorial "selection" — a curated set of trending albums
+            # (fresher/more intentional than the raw top-albums chart).
+            resp = await client.get(f"{DEEZER_BASE}/editorial/0/selection", params={"limit": 40})
             if not resp.is_success:
-                raise HTTPException(status_code=502, detail="Could not load new releases")
+                raise HTTPException(status_code=502, detail="Could not load trending releases")
             items = resp.json().get("data", [])
 
     releases: list[dict] = []
