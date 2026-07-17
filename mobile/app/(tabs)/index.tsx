@@ -305,19 +305,36 @@ export default function ForYou() {
           </View>
         )}
 
-        {/* What are pressers talking about — userbase-wide reviews for the day */}
-        {reviews.length > 0 && (
+        {/* What are pressers talking about — userbase-wide reviews for the day.
+            Shown even on a quiet day, as an invitation to post the first one. */}
+        {topReviews && (
           <View style={styles.block}>
-            <SectionHead label="WHAT ARE PRESSERS TALKING ABOUT" meta={dayLabel(topReviews?.day ?? null)} />
-            {reviews.map((rv, i) => (
-              <ReviewQuote
-                key={`${rv.album_id}-${rv.author.id}`}
-                review={rv}
-                first={i === 0}
-                onOpen={() => openAlbum(rv.album_id)}
-                onLike={() => likeReview(rv.album_id)}
-              />
-            ))}
+            <SectionHead
+              label="WHAT ARE PRESSERS TALKING ABOUT"
+              meta={reviews.length > 0 ? dayLabel(topReviews.day) : undefined}
+            />
+            {reviews.length > 0 ? (
+              reviews.map((rv, i) => (
+                <ReviewQuote
+                  key={`${rv.album_id}-${rv.author.id}`}
+                  review={rv}
+                  first={i === 0}
+                  onOpen={() => openAlbum(rv.album_id)}
+                  onLike={() => likeReview(rv.album_id)}
+                />
+              ))
+            ) : (
+              <View style={styles.reviewEmpty}>
+                <Text style={styles.reviewEmptyQuote}>No reviews yet today.</Text>
+                <Text style={styles.reviewEmptyBody}>
+                  Be the first — rate an album and leave your take to start the conversation.
+                </Text>
+                <Pressable style={styles.reviewEmptyCta} onPress={() => router.push('/add')}>
+                  <Text style={styles.textCtaLabel}>Add an album</Text>
+                  <ArrowRight size={14} color={colors.green} />
+                </Pressable>
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
@@ -456,6 +473,11 @@ const styles = StyleSheet.create({
   reviewActions: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.md, paddingLeft: 40 + spacing.sm },
   reviewAction: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   reviewActionText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary },
+
+  reviewEmpty: { paddingTop: spacing.xs },
+  reviewEmptyQuote: { fontFamily: fonts.display, fontSize: 19, color: colors.ink },
+  reviewEmptyBody: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, lineHeight: 19, marginTop: 6, maxWidth: 320 },
+  reviewEmptyCta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.md },
 
   coverFallback: { backgroundColor: colors.inset, alignItems: 'center', justifyContent: 'center' },
   coverInitial: { fontFamily: fonts.display, color: colors.inkMuted },
