@@ -1,20 +1,24 @@
 // Album detail — read view for any album, and the entry into the rating screen:
 // "Rate" (to-listen), "Continue" (listening), or "Edit rating" (rated). Shows
 // the final or predicted score, factor breakdown, and per-track scores.
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useState } from 'react'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
-import { ArrowLeft } from 'lucide-react-native'
-import { fetchAlbum } from '../../lib/api'
-import { songScoreColor, EP_MAX_TRACKS } from '@pressd/shared/types'
+import { ArrowLeft, Check, Pencil, Trash2 } from 'lucide-react-native'
+import { fetchAlbum, saveReview, deleteReview } from '../../lib/api'
+import { songScoreColor, EP_MAX_TRACKS, type Album } from '@pressd/shared/types'
+import { useAuth } from '../../lib/auth'
+import CommentThread from '../../components/CommentThread'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 export default function AlbumDetail() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const albumId = Number(id)
   const router = useRouter()
+  const { user } = useAuth()
 
   const { data: album, isLoading } = useQuery({
     queryKey: ['album', albumId],
@@ -37,6 +41,7 @@ export default function AlbumDetail() {
 
   const cta =
     album.status === 'rated' ? 'Edit rating' : album.status === 'listening' ? 'Continue' : 'Rate this album'
+  const isMine = user != null && album.userId === user.id
 
   const factors: { label: string; value: number | null }[] = isEP
     ? []
@@ -113,8 +118,98 @@ export default function AlbumDetail() {
             )}
           </View>
         ))}
+
+        <ReviewSection album={album} editable={isMine} />
+
+        <CommentThread albumId={albumId} />
       </ScrollView>
     </SafeAreaView>
+  )
+}
+
+function ReviewSection({ album, editable }: { album: Album; editable: boolean }) {
+  const queryClient = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(album.review ?? '')
+  const [busy, setBusy] = useState(false)
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ['album', album.id] })
+    queryClient.invalidateQueries({ queryKey: ['feed'] })
+    queryClient.invalidateQueries({ queryKey: ['reviews'] })
+  }
+
+  async function save() {
+    setBusy(true)
+    try {
+      await saveReview(album.id, draft.trim())
+      setEditing(false)
+      invalidate()
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function remove() {
+    setBusy(true)
+    try {
+      await deleteReview(album.id)
+      setDraft('')
+      setEditing(false)
+      invalidate()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Not mine and no review → nothing to show.
+  if (!editable && !album.review) return null
+
+  return (
+    <View>
+      <Text style={styles.sectionLabel}>REVIEW</Text>
+      {editing ? (
+        <View>
+          <TextInput
+            style={styles.reviewInput}
+            value={draft}
+            onChangeText={setDraft}
+            placeholder="Write your thoughts on this album…"
+            placeholderTextColor={colors.inkMuted}
+            multiline
+            autoFocus
+          />
+          <View style={styles.reviewActions}>
+            <Pressable style={styles.reviewSave} onPress={save} disabled={busy}>
+              {busy ? <ActivityIndicator size="small" color="#fff" /> : <Check size={15} color="#fff" />}
+              <Text style={styles.reviewSaveText}>Save</Text>
+            </Pressable>
+            <Pressable style={styles.reviewCancel} onPress={() => { setDraft(album.review ?? ''); setEditing(false) }}>
+              <Text style={styles.reviewCancelText}>Cancel</Text>
+            </Pressable>
+            {album.review && (
+              <Pressable style={styles.reviewDelete} onPress={remove} disabled={busy} hitSlop={8}>
+                <Trash2 size={16} color="#b91c1c" />
+              </Pressable>
+            )}
+          </View>
+        </View>
+      ) : album.review ? (
+        <View>
+          <Text style={styles.reviewBody}>{album.review}</Text>
+          {editable && (
+            <Pressable style={styles.reviewEdit} onPress={() => { setDraft(album.review ?? ''); setEditing(true) }}>
+              <Pencil size={13} color={colors.inkTertiary} />
+              <Text style={styles.reviewEditText}>Edit review</Text>
+            </Pressable>
+          )}
+        </View>
+      ) : (
+        <Pressable style={styles.reviewWrite} onPress={() => setEditing(true)}>
+          <Pencil size={14} color={colors.green} />
+          <Text style={styles.reviewWriteText}>Write a review</Text>
+        </Pressable>
+      )}
+    </View>
   )
 }
 
@@ -179,4 +274,44 @@ const styles = StyleSheet.create({
   trackTitle: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.ink },
   trackScore: { fontFamily: fonts.bodyBold, fontSize: 15 },
   trackScoreEmpty: { fontFamily: fonts.body, fontSize: 15, color: colors.inkMuted },
+
+  reviewBody: { fontFamily: fonts.body, fontSize: 15, color: colors.inkSecondary, lineHeight: 22 },
+  reviewInput: {
+    minHeight: 90,
+    backgroundColor: colors.raised,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    fontFamily: fonts.body,
+    fontSize: 15,
+    color: colors.ink,
+    textAlignVertical: 'top',
+  },
+  reviewActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
+  reviewSave: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.green,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: radii.md,
+  },
+  reviewSaveText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: '#fff' },
+  reviewCancel: { paddingHorizontal: 14, paddingVertical: 9 },
+  reviewCancelText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkTertiary },
+  reviewDelete: { marginLeft: 'auto', padding: spacing.sm },
+  reviewEdit: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.sm },
+  reviewEditText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary },
+  reviewWrite: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.greenSoft,
+    paddingVertical: 11,
+    borderRadius: radii.md,
+    justifyContent: 'center',
+  },
+  reviewWriteText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
 })

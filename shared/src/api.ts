@@ -69,6 +69,7 @@ function transformAlbum(a: Record<string, unknown>): Album {
     : []
   return {
     id: a.id as number,
+    userId: (a.user_id as number | undefined) ?? null,
     albumName: a.album_name as string,
     artist: a.artist as string,
     year: a.year as number,

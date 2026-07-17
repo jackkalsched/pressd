@@ -19,6 +19,7 @@ export interface Song {
 
 export interface Album {
   id: number
+  userId: number | null
   albumName: string
   artist: string
   year: number
