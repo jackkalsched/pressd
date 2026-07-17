@@ -46,6 +46,7 @@ function RootNavigator() {
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Protected guard={!!user}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="welcome" />
         <Stack.Screen name="add" options={{ presentation: 'modal' }} />
         <Stack.Screen name="rate/[id]" />
         <Stack.Screen name="album/[id]" />
