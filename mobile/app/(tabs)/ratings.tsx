@@ -201,7 +201,7 @@ export default function Ratings() {
               </View>
               {item.score != null && (
                 <Text style={[styles.rowScore, { color: songScoreColor(item.score) }]}>
-                  {item.score.toFixed(1)}
+                  {item.score.toFixed(2)}
                 </Text>
               )}
             </Pressable>

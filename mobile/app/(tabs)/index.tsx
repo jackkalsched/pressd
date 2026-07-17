@@ -224,7 +224,7 @@ export default function ForYou() {
                   </View>
                   {t.avg_score != null && (
                     <View style={styles.scoreChip}>
-                      <Text style={styles.scoreText}>{t.avg_score.toFixed(1)}</Text>
+                      <Text style={styles.scoreText}>{t.avg_score.toFixed(2)}</Text>
                     </View>
                   )}
                 </Pressable>

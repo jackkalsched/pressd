@@ -181,7 +181,7 @@ function FeedCard({ item, onLike, onAlbum, onFriend }: { item: FeedItem; onLike:
           {item.review_excerpt ? <Text style={styles.excerpt} numberOfLines={2}>"{item.review_excerpt}"</Text> : null}
         </View>
         {item.score != null && (
-          <Text style={[styles.score, { color: songScoreColor(item.score) }]}>{item.score.toFixed(1)}</Text>
+          <Text style={[styles.score, { color: songScoreColor(item.score) }]}>{item.score.toFixed(2)}</Text>
         )}
       </Pressable>
       <SocialActions item={item} onLike={onLike} onAlbum={onAlbum} />
@@ -214,7 +214,7 @@ function ReviewCard({ item, onLike, onAlbum, onFriend }: { item: FriendReview; o
           <Text style={styles.albumArtist} numberOfLines={1}>{item.artist}</Text>
         </View>
         {item.score != null && (
-          <Text style={[styles.score, { color: songScoreColor(item.score) }]}>{item.score.toFixed(1)}</Text>
+          <Text style={[styles.score, { color: songScoreColor(item.score) }]}>{item.score.toFixed(2)}</Text>
         )}
       </Pressable>
       <Text style={styles.reviewBody}>{item.review}</Text>

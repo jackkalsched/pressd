@@ -134,7 +134,7 @@ export default function FriendProfile() {
       </Pressable>
 
       <View style={styles.statTiles}>
-        <StatTile value={summary?.avg_album_score != null ? summary.avg_album_score.toFixed(1) : '—'} label="Avg score" />
+        <StatTile value={summary?.avg_album_score != null ? summary.avg_album_score.toFixed(2) : '—'} label="Avg score" />
         <StatTile value={String(summary?.longest_streak ?? 0)} label="Day streak" />
         <StatTile value={String(thisWeek)} label="This week" />
       </View>
@@ -197,7 +197,7 @@ export default function FriendProfile() {
                   </View>
                 )}
                 {item.score != null && (
-                  <View style={styles.scoreChip}><Text style={styles.scoreChipText}>{item.score.toFixed(1)}</Text></View>
+                  <View style={styles.scoreChip}><Text style={styles.scoreChipText}>{item.score.toFixed(2)}</Text></View>
                 )}
               </View>
               <Text style={styles.cellName} numberOfLines={1}>{item.albumName}</Text>
@@ -227,7 +227,7 @@ export default function FriendProfile() {
                 <Text style={styles.ratingArtist} numberOfLines={1}>{item.artist}</Text>
               </View>
               {item.score != null && (
-                <Text style={[styles.ratingScore, { color: songScoreColor(item.score) }]}>{item.score.toFixed(1)}</Text>
+                <Text style={[styles.ratingScore, { color: songScoreColor(item.score) }]}>{item.score.toFixed(2)}</Text>
               )}
             </Pressable>
           )}

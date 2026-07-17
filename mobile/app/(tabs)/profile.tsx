@@ -150,7 +150,7 @@ export default function Profile() {
             {/* Stat tiles */}
             <View style={styles.tiles}>
               <StatTile
-                value={summary?.avg_album_score != null ? summary.avg_album_score.toFixed(1) : '—'}
+                value={summary?.avg_album_score != null ? summary.avg_album_score.toFixed(2) : '—'}
                 label="Avg score"
               />
               <StatTile value={String(summary?.longest_streak ?? 0)} label="Day streak" />
@@ -247,7 +247,7 @@ function AlbumCell({ album, onPress }: { album: Album; onPress: () => void }) {
         )}
         {showScore && (
           <View style={styles.scoreChip}>
-            <Text style={styles.scoreText}>{album.score!.toFixed(1)}</Text>
+            <Text style={styles.scoreText}>{album.score!.toFixed(2)}</Text>
           </View>
         )}
       </View>
