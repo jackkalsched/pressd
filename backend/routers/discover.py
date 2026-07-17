@@ -38,14 +38,19 @@ async def new_releases(
     user: PressUser = Depends(current_user),
 ):
     now = time.monotonic()
-    if _cache["releases"] is not None and _cache["expires"] > now:
+    if _cache["releases"] and _cache["expires"] > now:  # only serve a non-empty cache
         return _cache["releases"][:limit]
 
     async with httpx.AsyncClient(timeout=12) as client:
         resp = await client.get(f"{DEEZER_BASE}/editorial/0/releases", params={"limit": 40})
-        if not resp.is_success:
-            raise HTTPException(status_code=502, detail="Could not load new releases")
-        items = resp.json().get("data", [])
+        items = resp.json().get("data", []) if resp.is_success else []
+        if not items:
+            # Deezer's editorial "releases" feed is frequently empty; fall back to
+            # the global top-albums chart so the section always stays populated.
+            resp = await client.get(f"{DEEZER_BASE}/chart/0/albums", params={"limit": 40})
+            if not resp.is_success:
+                raise HTTPException(status_code=502, detail="Could not load new releases")
+            items = resp.json().get("data", [])
 
     releases: list[dict] = []
     seen: set[tuple[str, str]] = set()
@@ -70,8 +75,9 @@ async def new_releases(
             "nb_tracks": a.get("nb_tracks"),
         })
 
-    _cache["releases"] = releases
-    _cache["expires"] = now + CACHE_TTL
+    if releases:  # never cache an empty result — retry on the next request
+        _cache["releases"] = releases
+        _cache["expires"] = now + CACHE_TTL
     return releases[:limit]
 
 
