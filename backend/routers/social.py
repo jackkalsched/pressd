@@ -235,6 +235,82 @@ def get_friend_reviews(
     return items
 
 
+@router.get("/top-reviews")
+def get_top_reviews(
+    limit: int = Query(8),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """'What are pressers talking about' — the most-liked reviews across the
+    entire userbase for the latest calendar day anyone reviewed. Userbase-wide
+    (not friends-only); ranked by like count, then recency, for that one day."""
+    reviewed = session.exec(
+        select(Album)
+        .where(Album.review.is_not(None))
+        .where(Album.review_at.is_not(None))
+        .order_by(Album.review_at.desc())
+        .limit(300)
+    ).all()
+    if not reviewed:
+        return {"day": None, "reviews": []}
+
+    # The "day" is the calendar date of the most recent review; show that day's
+    # talk (today when someone's reviewed today, else the last active day).
+    target_day = reviewed[0].review_at.date()
+    day_albums = [a for a in reviewed if a.review_at.date() == target_day]
+    album_ids = [a.id for a in day_albums]
+
+    authors = {
+        u.id: u
+        for u in session.exec(
+            select(PressUser).where(PressUser.id.in_([a.user_id for a in day_albums]))
+        ).all()
+    }
+    like_counts = {
+        row[0]: row[1]
+        for row in session.exec(
+            select(Like.album_id, func.count(Like.id))
+            .where(Like.album_id.in_(album_ids))
+            .group_by(Like.album_id)
+        ).all()
+    }
+    comment_counts = {
+        row[0]: row[1]
+        for row in session.exec(
+            select(Comment.album_id, func.count(Comment.id))
+            .where(Comment.album_id.in_(album_ids))
+            .group_by(Comment.album_id)
+        ).all()
+    }
+    liked_by_me = set(session.exec(
+        select(Like.album_id)
+        .where(Like.album_id.in_(album_ids))
+        .where(Like.user_id == user.id)
+    ).all())
+
+    items = []
+    for album in day_albums:
+        author = authors.get(album.user_id)
+        if not author:
+            continue
+        items.append({
+            "author": {"id": author.id, "name": author.name, "avatar_url": author.avatar_url},
+            "album_id": album.id,
+            "album_name": album.album_name,
+            "artist": album.artist,
+            "album_art_url": album.album_art_url,
+            "score": album.score,
+            "review": album.review,
+            "review_at": album.review_at.isoformat() if album.review_at else None,
+            "like_count": like_counts.get(album.id, 0),
+            "liked_by_me": album.id in liked_by_me,
+            "comment_count": comment_counts.get(album.id, 0),
+        })
+
+    items.sort(key=lambda it: (it["like_count"], it["review_at"] or ""), reverse=True)
+    return {"day": target_day.isoformat(), "reviews": items[:limit]}
+
+
 @router.post("/like")
 def toggle_like(
     album_id: int = Query(...),

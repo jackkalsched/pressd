@@ -923,6 +923,32 @@ export async function fetchFriendReviews(sort: 'recent' | 'top' = 'recent'): Pro
   return res.json()
 }
 
+// Userbase-wide "most talked about" reviews for the latest active calendar day.
+export interface TopReview {
+  author: { id: number; name: string; avatar_url?: string }
+  album_id: number
+  album_name: string
+  artist: string
+  album_art_url?: string
+  score: number | null
+  review: string
+  review_at?: string
+  like_count: number
+  liked_by_me: boolean
+  comment_count: number
+}
+
+export interface TopReviewsResponse {
+  day: string | null
+  reviews: TopReview[]
+}
+
+export async function fetchTopReviews(limit = 8): Promise<TopReviewsResponse> {
+  const res = await apiFetch(`${BASE()}/social/top-reviews?limit=${limit}`)
+  if (!res.ok) throw new Error('Failed to fetch top reviews')
+  return res.json()
+}
+
 export async function toggleLike(userId: number, albumId: number): Promise<{ liked: boolean }> {
   const res = await apiFetch(`${BASE()}/social/like?user_id=${userId}&album_id=${albumId}`, {
     method: 'POST',

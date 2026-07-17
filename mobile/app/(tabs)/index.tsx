@@ -1,6 +1,7 @@
-// For You — the home feed: "pick up where you left off", a "rate this next"
-// recommendation from the queue, new & popular releases, and userbase-wide
-// trending. Mirrors the website's For You page, mobile-first.
+// For You — the home feed as one fluid editorial column: resume, a "rate this
+// next" pick, new releases, Press'd Trending, and "what are pressers talking
+// about" (userbase-wide top reviews for the day). No boxed cards — sections are
+// separated by whitespace and hairline rules so it reads top-to-bottom.
 import { useMemo, useState } from 'react'
 import {
   ActivityIndicator,
@@ -12,17 +13,20 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { ArrowRight } from 'lucide-react-native'
+import { ArrowRight, Heart, MessageCircle } from 'lucide-react-native'
 import {
   fetchAlbums,
   fetchNewReleases,
   fetchTrending,
+  fetchTopReviews,
+  toggleLike,
   resolveDeezerAlbum,
   importAlbum,
   type NewRelease,
+  type TopReview,
 } from '../../lib/api'
 import { songScoreColor } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
@@ -42,8 +46,29 @@ function scoreTint(s: number): string {
   return `hsl(${hue}, 46%, 94%)`
 }
 
+function dayLabel(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso + 'T00:00:00')
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const diff = Math.round((today.getTime() - d.getTime()) / 86_400_000)
+  if (diff <= 0) return 'Today'
+  if (diff === 1) return 'Yesterday'
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+}
+
+function SectionHead({ label, meta }: { label: string; meta?: string }) {
+  return (
+    <View style={styles.sectionHead}>
+      <Text style={styles.sectionLabel}>{label}</Text>
+      {meta ? <Text style={styles.sectionMeta}>{meta}</Text> : null}
+    </View>
+  )
+}
+
 export default function ForYou() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { user } = useAuth()
   const userId = user?.id ?? 0
   const [importingId, setImportingId] = useState<number | null>(null)
@@ -67,28 +92,33 @@ export default function ForYou() {
     queryKey: ['discover', 'trending', 'week'],
     queryFn: () => fetchTrending('week', 8),
   })
+  const { data: topReviews, refetch: refetchTopReviews } = useQuery({
+    queryKey: ['top-reviews'],
+    queryFn: () => fetchTopReviews(8),
+    enabled: userId > 0,
+  })
 
   async function onRefresh() {
     setRefreshing(true)
-    await Promise.all([refetchListening(), refetchToListen(), refetchNew(), refetchTrending()])
+    await Promise.all([
+      refetchListening(),
+      refetchToListen(),
+      refetchNew(),
+      refetchTrending(),
+      refetchTopReviews(),
+    ])
     setRefreshing(false)
   }
 
-  // Pick up where you left off: most recently added in-progress album.
   const continueAlbum = useMemo(() => {
     if (listening.length === 0) return null
     return [...listening].sort((a, b) => (b.dateAdded ?? '').localeCompare(a.dateAdded ?? ''))[0]
   }, [listening])
 
-  // Rate this next: a friend-recommended album first, else next in the queue.
   const suggestion = useMemo(() => {
     if (toListen.length === 0) return null
     return toListen.find((a) => a.recommendedByName) ?? toListen[0]
   }, [toListen])
-
-  const today = new Date()
-    .toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-    .toUpperCase()
 
   async function openNewRelease(r: NewRelease) {
     if (importingId || !user) return
@@ -98,7 +128,7 @@ export default function ForYou() {
       const album = await importAlbum(full, 'listening', user.id)
       router.push({ pathname: '/rate/[id]', params: { id: String(album.id) } })
     } catch {
-      /* ignore — leave the card in place */
+      /* leave the card in place */
     } finally {
       setImportingId(null)
     }
@@ -108,7 +138,21 @@ export default function ForYou() {
     router.push({ pathname: '/album/[id]', params: { id: String(id) } })
   }
 
+  async function likeReview(albumId: number) {
+    if (!user) return
+    try {
+      await toggleLike(user.id, albumId)
+      queryClient.invalidateQueries({ queryKey: ['top-reviews'] })
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const today = new Date()
+    .toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    .toUpperCase()
   const firstName = user?.name?.split(' ')[0] ?? ''
+  const reviews = topReviews?.reviews ?? []
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -125,239 +169,294 @@ export default function ForYou() {
           {greeting()}{firstName ? ` ${firstName},` : ''} here's what's moving this week.
         </Text>
 
-        {/* Continue */}
+        {/* Pick up where you left off */}
         {continueAlbum && (
-          <Pressable
-            style={({ pressed }) => [styles.continueCard, pressed && { opacity: 0.85 }]}
-            onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(continueAlbum.id) } })}
-          >
-            {continueAlbum.albumArtUrl ? (
-              <Image source={{ uri: continueAlbum.albumArtUrl }} style={styles.continueArt} contentFit="cover" />
-            ) : (
-              <View style={[styles.continueArt, styles.artFallback]}>
-                <Text style={styles.artInitial}>{continueAlbum.albumName[0]}</Text>
-              </View>
-            )}
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.continueLabel}>PICK UP WHERE YOU LEFT OFF</Text>
-              <Text style={styles.continueName} numberOfLines={1}>{continueAlbum.albumName}</Text>
-              <Text style={styles.continueProgress}>
-                {continueAlbum.songs.filter((s) => s.score != null).length} / {continueAlbum.songs.length} tracks scored
-              </Text>
-            </View>
-          </Pressable>
-        )}
-
-        {/* Rate this next — a recommendation from the To Listen queue */}
-        {suggestion && (
-          <>
-            <Text style={styles.sectionLabel}>RATE THIS NEXT</Text>
-            <View style={styles.suggestCard}>
-              <View style={styles.suggestTop}>
-                {suggestion.albumArtUrl ? (
-                  <Image source={{ uri: suggestion.albumArtUrl }} style={styles.suggestArt} contentFit="cover" />
-                ) : (
-                  <View style={[styles.suggestArt, styles.artFallback]}>
-                    <Text style={styles.artInitial}>{suggestion.albumName[0]}</Text>
+          <View style={styles.block}>
+            <SectionHead label="PICK UP WHERE YOU LEFT OFF" />
+            <Pressable
+              style={styles.mediaRow}
+              onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(continueAlbum.id) } })}
+            >
+              <Cover uri={continueAlbum.albumArtUrl} seed={continueAlbum.albumName} size={64} />
+              <View style={styles.mediaText}>
+                <Text style={styles.rowTitle} numberOfLines={1}>{continueAlbum.albumName}</Text>
+                <Text style={styles.rowSub} numberOfLines={1}>
+                  {continueAlbum.artist}{continueAlbum.year ? ` · ${continueAlbum.year}` : ''}
+                </Text>
+                <View style={styles.progressRow}>
+                  <View style={styles.progressTrack}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: `${
+                            continueAlbum.songs.length
+                              ? (continueAlbum.songs.filter((s) => s.score != null).length /
+                                  continueAlbum.songs.length) *
+                                100
+                              : 0
+                          }%`,
+                        },
+                      ]}
+                    />
                   </View>
-                )}
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.suggestName} numberOfLines={1}>{suggestion.albumName}</Text>
-                  <Text style={styles.suggestArtist} numberOfLines={1}>
-                    {suggestion.artist}{suggestion.year ? ` · ${suggestion.year}` : ''}
-                  </Text>
-                  <Text style={styles.suggestWhy} numberOfLines={2}>
-                    {suggestion.recommendedByName
-                      ? `Recommended by ${suggestion.recommendedByName}`
-                      : suggestion.predictedScore != null
-                      ? `We think you'll rate this ~${suggestion.predictedScore.toFixed(2)}`
-                      : 'Next up in your queue'}
+                  <Text style={styles.progressText}>
+                    {continueAlbum.songs.filter((s) => s.score != null).length}/{continueAlbum.songs.length}
                   </Text>
                 </View>
-                {suggestion.predictedScore != null && (
-                  <View style={styles.predictBadge}>
-                    <Text style={[styles.predictScore, { color: songScoreColor(suggestion.predictedScore) }]}>
-                      {suggestion.predictedScore.toFixed(2)}
-                    </Text>
-                    <Text style={styles.predictLabel}>PREDICTED</Text>
-                  </View>
-                )}
               </View>
-              <Pressable
-                style={({ pressed }) => [styles.suggestBtn, pressed && { backgroundColor: colors.greenPressed }]}
-                onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(suggestion.id) } })}
-              >
-                <Text style={styles.suggestBtnText}>Start rating</Text>
-                <ArrowRight size={15} color="#fff" />
-              </Pressable>
-            </View>
-          </>
+              <ArrowRight size={18} color={colors.green} />
+            </Pressable>
+          </View>
         )}
 
-        {/* New & Popular */}
+        {/* Rate this next */}
+        {suggestion && (
+          <View style={styles.block}>
+            <SectionHead label="RATE THIS NEXT" />
+            <Pressable
+              style={styles.mediaRow}
+              onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(suggestion.id) } })}
+            >
+              <Cover uri={suggestion.albumArtUrl} seed={suggestion.albumName} size={64} />
+              <View style={styles.mediaText}>
+                <Text style={styles.rowTitle} numberOfLines={1}>{suggestion.albumName}</Text>
+                <Text style={styles.rowSub} numberOfLines={1}>{suggestion.artist}</Text>
+                <Text style={styles.suggestWhy} numberOfLines={1}>
+                  {suggestion.recommendedByName
+                    ? `Recommended by ${suggestion.recommendedByName}`
+                    : suggestion.predictedScore != null
+                    ? `We think you'll rate this about ${suggestion.predictedScore.toFixed(2)}`
+                    : 'Next up in your queue'}
+                </Text>
+              </View>
+              {suggestion.predictedScore != null && (
+                <View style={styles.predict}>
+                  <Text style={[styles.predictScore, { color: songScoreColor(suggestion.predictedScore) }]}>
+                    {suggestion.predictedScore.toFixed(2)}
+                  </Text>
+                  <Text style={styles.predictLabel}>PREDICTED</Text>
+                </View>
+              )}
+            </Pressable>
+            <Pressable
+              style={styles.textCta}
+              onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(suggestion.id) } })}
+            >
+              <Text style={styles.textCtaLabel}>Start rating</Text>
+              <ArrowRight size={14} color={colors.green} />
+            </Pressable>
+          </View>
+        )}
+
+        {/* New & Popular — horizontal art rail */}
         {newReleases.length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>NEW & POPULAR</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hscroll}>
+          <View style={styles.block}>
+            <SectionHead label="NEW & POPULAR" />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rail}>
               {newReleases.map((r) => (
                 <Pressable
                   key={r.deezerId}
-                  style={styles.releaseCard}
+                  style={styles.railItem}
                   onPress={() => openNewRelease(r)}
                   disabled={!!importingId}
                 >
                   <View>
-                    {r.coverUrl ? (
-                      <Image source={{ uri: r.coverUrl }} style={styles.releaseArt} contentFit="cover" />
-                    ) : (
-                      <View style={[styles.releaseArt, styles.artFallback]}>
-                        <Text style={styles.artInitial}>{r.albumName[0]}</Text>
-                      </View>
-                    )}
+                    <Cover uri={r.coverUrl} seed={r.albumName} size={128} radius={radii.md} />
                     {importingId === r.deezerId && (
-                      <View style={styles.releaseBusy}>
+                      <View style={styles.railBusy}>
                         <ActivityIndicator color="#fff" />
                       </View>
                     )}
                   </View>
-                  <Text style={styles.releaseName} numberOfLines={1}>{r.albumName}</Text>
-                  <Text style={styles.releaseArtist} numberOfLines={1}>{r.artist}</Text>
+                  <Text style={styles.railName} numberOfLines={1}>{r.albumName}</Text>
+                  <Text style={styles.railArtist} numberOfLines={1}>{r.artist}</Text>
                 </Pressable>
               ))}
             </ScrollView>
-          </>
+          </View>
         )}
 
-        {/* Trending */}
+        {/* Press'd Trending */}
         {trending.length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>TRENDING THIS WEEK</Text>
-            <View style={styles.card}>
-              {trending.map((t, i) => (
-                <Pressable
-                  key={t.album_id}
-                  style={[styles.row, i > 0 && styles.rowBorder]}
-                  onPress={() => openAlbum(t.album_id)}
-                >
-                  <Text style={styles.rank}>{i + 1}</Text>
-                  {t.album_art_url ? (
-                    <Image source={{ uri: t.album_art_url }} style={styles.rowArt} contentFit="cover" />
-                  ) : (
-                    <View style={[styles.rowArt, { backgroundColor: colors.inset }]} />
-                  )}
-                  <View style={styles.rowText}>
-                    <Text style={styles.rowName} numberOfLines={1}>{t.album_name}</Text>
-                    <Text style={styles.rowArtist} numberOfLines={1}>{t.artist}</Text>
+          <View style={styles.block}>
+            <SectionHead label="PRESS'D TRENDING" meta="this week" />
+            {trending.map((t, i) => (
+              <Pressable
+                key={t.album_id}
+                style={[styles.trendRow, i > 0 && styles.hairline]}
+                onPress={() => openAlbum(t.album_id)}
+              >
+                <Text style={styles.rank}>{i + 1}</Text>
+                <Cover uri={t.album_art_url} seed={t.album_name} size={46} />
+                <View style={styles.mediaText}>
+                  <Text style={styles.rowTitle} numberOfLines={1}>{t.album_name}</Text>
+                  <Text style={styles.rowSub} numberOfLines={1}>{t.artist}</Text>
+                </View>
+                {t.avg_score != null && (
+                  <View style={[styles.scorePill, { backgroundColor: scoreTint(t.avg_score) }]}>
+                    <Text style={[styles.scorePillText, { color: songScoreColor(t.avg_score) }]}>
+                      {t.avg_score.toFixed(2)}
+                    </Text>
                   </View>
-                  {t.avg_score != null && (
-                    <View style={[styles.scoreChip, { backgroundColor: scoreTint(t.avg_score) }]}>
-                      <Text style={[styles.scoreText, { color: songScoreColor(t.avg_score) }]}>
-                        {t.avg_score.toFixed(2)}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-              ))}
-            </View>
-          </>
+                )}
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {/* What are pressers talking about — userbase-wide reviews for the day */}
+        {reviews.length > 0 && (
+          <View style={styles.block}>
+            <SectionHead label="WHAT ARE PRESSERS TALKING ABOUT" meta={dayLabel(topReviews?.day ?? null)} />
+            {reviews.map((rv, i) => (
+              <ReviewQuote
+                key={`${rv.album_id}-${rv.author.id}`}
+                review={rv}
+                first={i === 0}
+                onOpen={() => openAlbum(rv.album_id)}
+                onLike={() => likeReview(rv.album_id)}
+              />
+            ))}
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
   )
 }
 
+function ReviewQuote({
+  review,
+  first,
+  onOpen,
+  onLike,
+}: {
+  review: TopReview
+  first: boolean
+  onOpen: () => void
+  onLike: () => void
+}) {
+  return (
+    <View style={[styles.review, !first && styles.hairline]}>
+      <Pressable onPress={onOpen}>
+        <Text style={styles.reviewQuote}>“{review.review}”</Text>
+        <View style={styles.reviewAttr}>
+          <Cover uri={review.album_art_url} seed={review.album_name} size={40} />
+          <View style={styles.mediaText}>
+            <Text style={styles.reviewAlbum} numberOfLines={1}>{review.album_name}</Text>
+            <Text style={styles.reviewBy} numberOfLines={1}>
+              {review.author.name} · {review.artist}
+            </Text>
+          </View>
+          {review.score != null && (
+            <Text style={[styles.reviewScore, { color: songScoreColor(review.score) }]}>
+              {review.score.toFixed(2)}
+            </Text>
+          )}
+        </View>
+      </Pressable>
+      <View style={styles.reviewActions}>
+        <Pressable style={styles.reviewAction} onPress={onLike} hitSlop={8}>
+          <Heart
+            size={15}
+            color={review.liked_by_me ? '#c0392b' : colors.inkMuted}
+            fill={review.liked_by_me ? '#c0392b' : 'transparent'}
+          />
+          <Text style={styles.reviewActionText}>{review.like_count}</Text>
+        </Pressable>
+        <Pressable style={styles.reviewAction} onPress={onOpen} hitSlop={8}>
+          <MessageCircle size={15} color={colors.inkMuted} />
+          <Text style={styles.reviewActionText}>{review.comment_count}</Text>
+        </Pressable>
+      </View>
+    </View>
+  )
+}
+
+function Cover({
+  uri,
+  seed,
+  size,
+  radius = radii.sm,
+}: {
+  uri?: string | null
+  seed: string
+  size: number
+  radius?: number
+}) {
+  if (uri) {
+    return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: radius }} contentFit="cover" />
+  }
+  return (
+    <View style={[styles.coverFallback, { width: size, height: size, borderRadius: radius }]}>
+      <Text style={[styles.coverInitial, { fontSize: size * 0.36 }]}>{seed[0]?.toUpperCase()}</Text>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
+  content: { paddingHorizontal: spacing.lg, paddingBottom: 130 },
   date: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.2, color: colors.inkMuted, marginTop: spacing.lg },
   title: { fontFamily: fonts.display, fontSize: 38, color: colors.ink, letterSpacing: 1, marginTop: 2 },
   sub: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkTertiary, marginTop: 4 },
 
-  continueCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.raised,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    marginTop: spacing.md,
-  },
-  continueArt: { width: 56, height: 56, borderRadius: radii.sm },
-  continueLabel: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1, color: colors.green },
-  continueName: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink, marginTop: 2 },
-  continueProgress: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 2 },
+  // Sections flow with whitespace; no borders/cards.
+  block: { marginTop: spacing.xxl },
+  sectionHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: spacing.md },
+  sectionLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.4, color: colors.inkMuted },
+  sectionMeta: { fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.inkMuted },
 
-  suggestCard: {
-    backgroundColor: colors.raised,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-  },
-  suggestTop: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
-  suggestArt: { width: 60, height: 60, borderRadius: radii.md },
-  suggestName: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink },
-  suggestArtist: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, marginTop: 1 },
-  suggestWhy: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted, fontStyle: 'italic', marginTop: 5 },
-  predictBadge: { alignItems: 'center', minWidth: 52 },
+  hairline: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+
+  mediaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 2 },
+  mediaText: { flex: 1, minWidth: 0 },
+  rowTitle: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink },
+  rowSub: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, marginTop: 1 },
+
+  progressRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 8 },
+  progressTrack: { flex: 1, maxWidth: 200, height: 4, borderRadius: 2, backgroundColor: colors.inset, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: colors.green, borderRadius: 2 },
+  progressText: { fontFamily: fonts.body, fontSize: 11, color: colors.inkTertiary },
+
+  suggestWhy: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted, fontStyle: 'italic', marginTop: 6 },
+  predict: { alignItems: 'center', minWidth: 52 },
   predictScore: { fontFamily: fonts.bodyBold, fontSize: 22 },
   predictLabel: { fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 0.8, color: colors.inkMuted, marginTop: 1 },
-  suggestBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: colors.green,
-    borderRadius: radii.md,
-    paddingVertical: 12,
-    marginTop: spacing.md,
-  },
-  suggestBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: '#fff' },
+  textCta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.md, paddingLeft: 64 + spacing.md },
+  textCtaLabel: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
 
-  sectionLabel: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 11,
-    letterSpacing: 1.2,
-    color: colors.inkMuted,
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
+  rail: { marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg },
+  railItem: { width: 128, marginRight: spacing.md },
+  railBusy: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(28,25,23,0.4)', borderRadius: radii.md,
+    alignItems: 'center', justifyContent: 'center',
   },
-  hscroll: { marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg },
-  releaseCard: { width: 124, marginRight: spacing.md },
-  releaseArt: { width: 124, height: 124, borderRadius: radii.md },
-  releaseBusy: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(28,25,23,0.4)',
-    borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  releaseName: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink, marginTop: 6 },
-  releaseArtist: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
+  railName: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink, marginTop: 7 },
+  railArtist: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
 
-  card: {
-    backgroundColor: colors.raised,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-  },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, gap: spacing.md },
-  rowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
-  rank: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkMuted, width: 14, textAlign: 'center' },
-  rowArt: { width: 44, height: 44, borderRadius: radii.sm },
-  rowText: { flex: 1, minWidth: 0 },
-  rowName: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.ink },
-  rowArtist: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, marginTop: 1 },
-  scoreChip: { borderRadius: radii.sm, paddingHorizontal: 8, paddingVertical: 4, minWidth: 44, alignItems: 'center' },
-  scoreText: { fontFamily: fonts.bodyBold, fontSize: 14 },
+  trendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  rank: { fontFamily: fonts.display, fontSize: 16, color: colors.inkMuted, width: 20, textAlign: 'center' },
+  scorePill: { borderRadius: radii.sm, paddingHorizontal: 8, paddingVertical: 4, minWidth: 46, alignItems: 'center' },
+  scorePillText: { fontFamily: fonts.bodyBold, fontSize: 14 },
 
-  artFallback: { backgroundColor: colors.inset, alignItems: 'center', justifyContent: 'center' },
-  artInitial: { fontFamily: fonts.display, fontSize: 24, color: colors.inkMuted },
+  review: { paddingVertical: spacing.lg },
+  reviewQuote: {
+    fontFamily: fonts.display,
+    fontSize: 19,
+    lineHeight: 27,
+    color: colors.ink,
+    marginBottom: spacing.md,
+  },
+  reviewAttr: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  reviewAlbum: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.ink },
+  reviewBy: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
+  reviewScore: { fontFamily: fonts.bodyBold, fontSize: 18 },
+  reviewActions: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.md, paddingLeft: 40 + spacing.sm },
+  reviewAction: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  reviewActionText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary },
+
+  coverFallback: { backgroundColor: colors.inset, alignItems: 'center', justifyContent: 'center' },
+  coverInitial: { fontFamily: fonts.display, color: colors.inkMuted },
 })
