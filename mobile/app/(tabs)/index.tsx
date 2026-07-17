@@ -1,6 +1,6 @@
-// For You — the home feed: a streak banner, "pick up where you left off",
-// new & popular releases, and userbase-wide trending. Mirrors the website's
-// For You page, mobile-first.
+// For You — the home feed: "pick up where you left off", a "rate this next"
+// recommendation from the queue, new & popular releases, and userbase-wide
+// trending. Mirrors the website's For You page, mobile-first.
 import { useMemo, useState } from 'react'
 import {
   ActivityIndicator,
@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { Flame } from 'lucide-react-native'
+import { ArrowRight } from 'lucide-react-native'
 import {
   fetchAlbums,
   fetchNewReleases,
@@ -24,6 +24,7 @@ import {
   importAlbum,
   type NewRelease,
 } from '../../lib/api'
+import { songScoreColor } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
@@ -34,13 +35,11 @@ function greeting(): string {
   return 'Good evening.'
 }
 
-// Monday-based start of the week (ms) for streak counting.
-function weekStart(d: Date): number {
-  const x = new Date(d)
-  x.setHours(0, 0, 0, 0)
-  const day = (x.getDay() + 6) % 7 // Mon=0
-  x.setDate(x.getDate() - day)
-  return x.getTime()
+// Light tint of a score's own hue (dark-red → dark-green), matching the web
+// ScorePill background; paired with songScoreColor() for the text.
+function scoreTint(s: number): string {
+  const hue = Math.round(((s - 1) / 9) * 130)
+  return `hsl(${hue}, 46%, 94%)`
 }
 
 export default function ForYou() {
@@ -48,49 +47,44 @@ export default function ForYou() {
   const { user } = useAuth()
   const userId = user?.id ?? 0
   const [importingId, setImportingId] = useState<number | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
 
-  const { data: rated = [], refetch: refetchRated, isRefetching } = useQuery({
-    queryKey: ['albums', 'rated', userId],
-    queryFn: () => fetchAlbums({ status: 'rated', userId }),
-    enabled: userId > 0,
-  })
-  const { data: listening = [] } = useQuery({
+  const { data: listening = [], refetch: refetchListening } = useQuery({
     queryKey: ['albums', 'listening', userId],
     queryFn: () => fetchAlbums({ status: 'listening', userId }),
     enabled: userId > 0,
   })
-  const { data: newReleases = [] } = useQuery({
+  const { data: toListen = [], refetch: refetchToListen } = useQuery({
+    queryKey: ['albums', 'to_listen', userId],
+    queryFn: () => fetchAlbums({ status: 'to_listen', userId }),
+    enabled: userId > 0,
+  })
+  const { data: newReleases = [], refetch: refetchNew } = useQuery({
     queryKey: ['new-releases'],
     queryFn: () => fetchNewReleases(12),
   })
-  const { data: trending = [] } = useQuery({
+  const { data: trending = [], refetch: refetchTrending } = useQuery({
     queryKey: ['discover', 'trending', 'week'],
     queryFn: () => fetchTrending('week', 8),
   })
 
-  // Streak: consecutive weeks (incl. this one) with ≥1 rating + last-7-days count.
-  const { weeks, thisWeek } = useMemo(() => {
-    const days = rated
-      .map((a) => a.dateRated)
-      .filter((d): d is string => !!d)
-      .map((d) => new Date(d))
-    const weekSet = new Set(days.map((d) => weekStart(d)))
-    let w = 0
-    let cur = weekStart(new Date())
-    while (weekSet.has(cur)) {
-      w += 1
-      cur = weekStart(new Date(cur - 7 * 86_400_000))
-    }
-    const weekAgo = Date.now() - 7 * 86_400_000
-    const recent = days.filter((d) => d.getTime() >= weekAgo).length
-    return { weeks: w, thisWeek: recent }
-  }, [rated])
+  async function onRefresh() {
+    setRefreshing(true)
+    await Promise.all([refetchListening(), refetchToListen(), refetchNew(), refetchTrending()])
+    setRefreshing(false)
+  }
 
   // Pick up where you left off: most recently added in-progress album.
   const continueAlbum = useMemo(() => {
     if (listening.length === 0) return null
     return [...listening].sort((a, b) => (b.dateAdded ?? '').localeCompare(a.dateAdded ?? ''))[0]
   }, [listening])
+
+  // Rate this next: a friend-recommended album first, else next in the queue.
+  const suggestion = useMemo(() => {
+    if (toListen.length === 0) return null
+    return toListen.find((a) => a.recommendedByName) ?? toListen[0]
+  }, [toListen])
 
   const today = new Date()
     .toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
@@ -122,7 +116,7 @@ export default function ForYou() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetchRated} tintColor={colors.green} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.green} />
         }
       >
         <Text style={styles.date}>{today}</Text>
@@ -130,19 +124,6 @@ export default function ForYou() {
         <Text style={styles.sub}>
           {greeting()}{firstName ? ` ${firstName},` : ''} here's what's moving this week.
         </Text>
-
-        {/* Streak banner */}
-        <View style={styles.streak}>
-          <Flame size={26} color="#f5b301" />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.streakBig}>
-              {weeks} week{weeks === 1 ? '' : 's'} streak
-            </Text>
-            <Text style={styles.streakSub}>
-              {thisWeek} album{thisWeek === 1 ? '' : 's'} rated in the last 7 days
-            </Text>
-          </View>
-        </View>
 
         {/* Continue */}
         {continueAlbum && (
@@ -165,6 +146,52 @@ export default function ForYou() {
               </Text>
             </View>
           </Pressable>
+        )}
+
+        {/* Rate this next — a recommendation from the To Listen queue */}
+        {suggestion && (
+          <>
+            <Text style={styles.sectionLabel}>RATE THIS NEXT</Text>
+            <View style={styles.suggestCard}>
+              <View style={styles.suggestTop}>
+                {suggestion.albumArtUrl ? (
+                  <Image source={{ uri: suggestion.albumArtUrl }} style={styles.suggestArt} contentFit="cover" />
+                ) : (
+                  <View style={[styles.suggestArt, styles.artFallback]}>
+                    <Text style={styles.artInitial}>{suggestion.albumName[0]}</Text>
+                  </View>
+                )}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.suggestName} numberOfLines={1}>{suggestion.albumName}</Text>
+                  <Text style={styles.suggestArtist} numberOfLines={1}>
+                    {suggestion.artist}{suggestion.year ? ` · ${suggestion.year}` : ''}
+                  </Text>
+                  <Text style={styles.suggestWhy} numberOfLines={2}>
+                    {suggestion.recommendedByName
+                      ? `Recommended by ${suggestion.recommendedByName}`
+                      : suggestion.predictedScore != null
+                      ? `We think you'll rate this ~${suggestion.predictedScore.toFixed(2)}`
+                      : 'Next up in your queue'}
+                  </Text>
+                </View>
+                {suggestion.predictedScore != null && (
+                  <View style={styles.predictBadge}>
+                    <Text style={[styles.predictScore, { color: songScoreColor(suggestion.predictedScore) }]}>
+                      {suggestion.predictedScore.toFixed(2)}
+                    </Text>
+                    <Text style={styles.predictLabel}>PREDICTED</Text>
+                  </View>
+                )}
+              </View>
+              <Pressable
+                style={({ pressed }) => [styles.suggestBtn, pressed && { backgroundColor: colors.greenPressed }]}
+                onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(suggestion.id) } })}
+              >
+                <Text style={styles.suggestBtnText}>Start rating</Text>
+                <ArrowRight size={15} color="#fff" />
+              </Pressable>
+            </View>
+          </>
         )}
 
         {/* New & Popular */}
@@ -223,8 +250,10 @@ export default function ForYou() {
                     <Text style={styles.rowArtist} numberOfLines={1}>{t.artist}</Text>
                   </View>
                   {t.avg_score != null && (
-                    <View style={styles.scoreChip}>
-                      <Text style={styles.scoreText}>{t.avg_score.toFixed(2)}</Text>
+                    <View style={[styles.scoreChip, { backgroundColor: scoreTint(t.avg_score) }]}>
+                      <Text style={[styles.scoreText, { color: songScoreColor(t.avg_score) }]}>
+                        {t.avg_score.toFixed(2)}
+                      </Text>
                     </View>
                   )}
                 </Pressable>
@@ -244,18 +273,6 @@ const styles = StyleSheet.create({
   title: { fontFamily: fonts.display, fontSize: 38, color: colors.ink, letterSpacing: 1, marginTop: 2 },
   sub: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkTertiary, marginTop: 4 },
 
-  streak: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.green,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-    marginTop: spacing.lg,
-  },
-  streakBig: { fontFamily: fonts.bodyBold, fontSize: 18, color: '#fff' },
-  streakSub: { fontFamily: fonts.body, fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
-
   continueCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -271,6 +288,33 @@ const styles = StyleSheet.create({
   continueLabel: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1, color: colors.green },
   continueName: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink, marginTop: 2 },
   continueProgress: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 2 },
+
+  suggestCard: {
+    backgroundColor: colors.raised,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+  },
+  suggestTop: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
+  suggestArt: { width: 60, height: 60, borderRadius: radii.md },
+  suggestName: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink },
+  suggestArtist: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, marginTop: 1 },
+  suggestWhy: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted, fontStyle: 'italic', marginTop: 5 },
+  predictBadge: { alignItems: 'center', minWidth: 52 },
+  predictScore: { fontFamily: fonts.bodyBold, fontSize: 22 },
+  predictLabel: { fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 0.8, color: colors.inkMuted, marginTop: 1 },
+  suggestBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.green,
+    borderRadius: radii.md,
+    paddingVertical: 12,
+    marginTop: spacing.md,
+  },
+  suggestBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: '#fff' },
 
   sectionLabel: {
     fontFamily: fonts.bodyBold,
@@ -311,8 +355,8 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, minWidth: 0 },
   rowName: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.ink },
   rowArtist: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, marginTop: 1 },
-  scoreChip: { backgroundColor: colors.greenSoft, borderRadius: radii.sm, paddingHorizontal: 8, paddingVertical: 4 },
-  scoreText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.green },
+  scoreChip: { borderRadius: radii.sm, paddingHorizontal: 8, paddingVertical: 4, minWidth: 44, alignItems: 'center' },
+  scoreText: { fontFamily: fonts.bodyBold, fontSize: 14 },
 
   artFallback: { backgroundColor: colors.inset, alignItems: 'center', justifyContent: 'center' },
   artInitial: { fontFamily: fonts.display, fontSize: 24, color: colors.inkMuted },
