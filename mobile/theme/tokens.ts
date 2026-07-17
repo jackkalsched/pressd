@@ -26,6 +26,7 @@ export const colors = {
 
 export const fonts = {
   display: 'PlayfairDisplay_700Bold',
+  displayRegular: 'PlayfairDisplay_400Regular',
   displayBlack: 'PlayfairDisplay_900Black',
   body: 'PlusJakartaSans_400Regular',
   bodyMedium: 'PlusJakartaSans_500Medium',

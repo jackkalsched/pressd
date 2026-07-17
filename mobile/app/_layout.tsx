@@ -5,6 +5,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   useFonts,
+  PlayfairDisplay_400Regular,
   PlayfairDisplay_700Bold,
   PlayfairDisplay_900Black,
 } from '@expo-google-fonts/playfair-display'
@@ -28,6 +29,7 @@ function RootNavigator() {
   const { user, ready } = useAuth()
 
   const [fontsLoaded] = useFonts({
+    PlayfairDisplay_400Regular,
     PlayfairDisplay_700Bold,
     PlayfairDisplay_900Black,
     PlusJakartaSans_400Regular,

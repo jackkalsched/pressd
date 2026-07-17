@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { ArrowRight, Heart, MessageCircle } from 'lucide-react-native'
+import { ArrowRight, ChevronDown, Heart, MessageCircle } from 'lucide-react-native'
 import {
   fetchAlbums,
   fetchNewReleases,
@@ -57,11 +57,26 @@ function dayLabel(iso: string | null): string {
   return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
 }
 
-function SectionHead({ label, meta }: { label: string; meta?: string }) {
+function SectionHead({
+  label,
+  meta,
+  onMetaPress,
+}: {
+  label: string
+  meta?: string
+  onMetaPress?: () => void
+}) {
   return (
     <View style={styles.sectionHead}>
       <Text style={styles.sectionLabel}>{label}</Text>
-      {meta ? <Text style={styles.sectionMeta}>{meta}</Text> : null}
+      {meta == null ? null : onMetaPress ? (
+        <Pressable style={styles.sectionMetaBtn} onPress={onMetaPress} hitSlop={8}>
+          <Text style={styles.sectionMetaBtnText}>{meta}</Text>
+          <ChevronDown size={12} color={colors.green} />
+        </Pressable>
+      ) : (
+        <Text style={styles.sectionMeta}>{meta}</Text>
+      )}
     </View>
   )
 }
@@ -73,6 +88,7 @@ export default function ForYou() {
   const userId = user?.id ?? 0
   const [importingId, setImportingId] = useState<number | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [trendMode, setTrendMode] = useState<'week' | 'top'>('week')
 
   const { data: listening = [], refetch: refetchListening } = useQuery({
     queryKey: ['albums', 'listening', userId],
@@ -89,8 +105,8 @@ export default function ForYou() {
     queryFn: () => fetchNewReleases(12),
   })
   const { data: trending = [], refetch: refetchTrending } = useQuery({
-    queryKey: ['discover', 'trending', 'week'],
-    queryFn: () => fetchTrending('week', 8),
+    queryKey: ['discover', 'trending', trendMode],
+    queryFn: () => fetchTrending(trendMode, trendMode === 'top' ? 10 : 8),
   })
   const { data: topReviews, refetch: refetchTopReviews } = useQuery({
     queryKey: ['top-reviews'],
@@ -279,7 +295,11 @@ export default function ForYou() {
         {/* Press'd Trending */}
         {trending.length > 0 && (
           <View style={styles.block}>
-            <SectionHead label="PRESS'D TRENDING" meta="this week" />
+            <SectionHead
+              label="PRESS'D TRENDING"
+              meta={trendMode === 'week' ? 'This week' : 'All time'}
+              onMetaPress={() => setTrendMode((m) => (m === 'week' ? 'top' : 'week'))}
+            />
             {trending.map((t, i) => (
               <Pressable
                 key={t.album_id}
@@ -419,9 +439,19 @@ const styles = StyleSheet.create({
 
   // Sections flow with whitespace; no borders/cards.
   block: { marginTop: spacing.xxl },
-  sectionHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: spacing.md },
-  sectionLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.4, color: colors.inkMuted },
-  sectionMeta: { fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.inkMuted },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
+  sectionLabel: { fontFamily: fonts.bodyBold, fontSize: 13, letterSpacing: 0.6, color: colors.ink },
+  sectionMeta: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkTertiary },
+  sectionMetaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingVertical: 3,
+    paddingHorizontal: 9,
+    borderRadius: radii.pill,
+    backgroundColor: colors.greenSoft,
+  },
+  sectionMetaBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },
 
   hairline: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
 
@@ -442,7 +472,8 @@ const styles = StyleSheet.create({
   suggestCell: {
     backgroundColor: colors.greenSoft,
     borderRadius: radii.lg,
-    padding: spacing.md,
+    padding: spacing.lg,
+    marginHorizontal: -spacing.sm, // bleed wider than the text column, ~8px from the screen edge
   },
   suggestCta: {
     flexDirection: 'row',
@@ -472,7 +503,7 @@ const styles = StyleSheet.create({
 
   review: { paddingVertical: spacing.lg },
   reviewQuote: {
-    fontFamily: fonts.display,
+    fontFamily: fonts.displayRegular,
     fontSize: 19,
     lineHeight: 27,
     color: colors.ink,

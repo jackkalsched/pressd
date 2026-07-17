@@ -259,11 +259,17 @@ function AlbumCell({ album, onPress }: { album: Album; onPress: () => void }) {
             <Text style={styles.artInitial}>{album.albumName[0]?.toUpperCase()}</Text>
           </View>
         )}
-        {showScore && (
+        {showScore ? (
           <View style={styles.scoreChip}>
             <Text style={styles.scoreText}>{album.score!.toFixed(2)}</Text>
           </View>
-        )}
+        ) : album.status === 'to_listen' && album.predictedScore != null ? (
+          <View style={styles.predChip}>
+            <Text style={[styles.predText, { color: songScoreColor(album.predictedScore) }]}>
+              ~{album.predictedScore.toFixed(2)}
+            </Text>
+          </View>
+        ) : null}
       </View>
       <Text style={styles.albumName} numberOfLines={1}>{album.albumName}</Text>
     </Pressable>
@@ -444,6 +450,16 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   scoreText: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.scoreChipText },
+  predChip: {
+    position: 'absolute',
+    right: 6,
+    bottom: 6,
+    backgroundColor: 'rgba(249,248,246,0.92)',
+    borderRadius: radii.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  predText: { fontFamily: fonts.bodyBold, fontSize: 11 },
   albumName: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary, marginTop: 5 },
 
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
