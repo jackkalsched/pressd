@@ -306,6 +306,21 @@ export async function backfillCovers(): Promise<{ updated: number; skipped: numb
   return res.json()
 }
 
+// Dominant colors of an album's cover (hsl strings), for the album-art page wash.
+export interface AlbumColor {
+  color: string | null
+  color2: string | null
+}
+
+export async function fetchAlbumColor(album: string, artist: string): Promise<AlbumColor> {
+  const res = await apiFetch(
+    `${BASE()}/util/album-color?album=${encodeURIComponent(album)}&artist=${encodeURIComponent(artist)}`,
+  )
+  if (!res.ok) return { color: null, color2: null }
+  const json = await res.json()
+  return { color: json.color ?? null, color2: json.color2 ?? null }
+}
+
 // ── Discover: new releases (Deezer) ───────────────────────────────────────────
 
 export interface NewRelease {

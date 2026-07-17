@@ -210,41 +210,40 @@ export default function ForYou() {
           </View>
         )}
 
-        {/* Rate this next */}
+        {/* Rate this next — held in a subtle cell so the CTA stands apart */}
         {suggestion && (
           <View style={styles.block}>
             <SectionHead label="RATE THIS NEXT" />
             <Pressable
-              style={styles.mediaRow}
+              style={styles.suggestCell}
               onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(suggestion.id) } })}
             >
-              <Cover uri={suggestion.albumArtUrl} seed={suggestion.albumName} size={64} />
-              <View style={styles.mediaText}>
-                <Text style={styles.rowTitle} numberOfLines={1}>{suggestion.albumName}</Text>
-                <Text style={styles.rowSub} numberOfLines={1}>{suggestion.artist}</Text>
-                <Text style={styles.suggestWhy} numberOfLines={1}>
-                  {suggestion.recommendedByName
-                    ? `Recommended by ${suggestion.recommendedByName}`
-                    : suggestion.predictedScore != null
-                    ? `We think you'll rate this about ${suggestion.predictedScore.toFixed(2)}`
-                    : 'Next up in your queue'}
-                </Text>
-              </View>
-              {suggestion.predictedScore != null && (
-                <View style={styles.predict}>
-                  <Text style={[styles.predictScore, { color: songScoreColor(suggestion.predictedScore) }]}>
-                    {suggestion.predictedScore.toFixed(2)}
+              <View style={styles.mediaRow}>
+                <Cover uri={suggestion.albumArtUrl} seed={suggestion.albumName} size={64} />
+                <View style={styles.mediaText}>
+                  <Text style={styles.rowTitle} numberOfLines={1}>{suggestion.albumName}</Text>
+                  <Text style={styles.rowSub} numberOfLines={1}>{suggestion.artist}</Text>
+                  <Text style={styles.suggestWhy} numberOfLines={1}>
+                    {suggestion.recommendedByName
+                      ? `Recommended by ${suggestion.recommendedByName}`
+                      : suggestion.predictedScore != null
+                      ? `We think you'll rate this about ${suggestion.predictedScore.toFixed(2)}`
+                      : 'Next up in your queue'}
                   </Text>
-                  <Text style={styles.predictLabel}>PREDICTED</Text>
                 </View>
-              )}
-            </Pressable>
-            <Pressable
-              style={styles.textCta}
-              onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(suggestion.id) } })}
-            >
-              <Text style={styles.textCtaLabel}>Start rating</Text>
-              <ArrowRight size={14} color={colors.green} />
+                {suggestion.predictedScore != null && (
+                  <View style={styles.predict}>
+                    <Text style={[styles.predictScore, { color: songScoreColor(suggestion.predictedScore) }]}>
+                      {suggestion.predictedScore.toFixed(2)}
+                    </Text>
+                    <Text style={styles.predictLabel}>PREDICTED</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.suggestCta}>
+                <Text style={styles.textCtaLabel}>Start rating</Text>
+                <ArrowRight size={14} color={colors.green} />
+              </View>
             </Pressable>
           </View>
         )}
@@ -440,7 +439,20 @@ const styles = StyleSheet.create({
   predict: { alignItems: 'center', minWidth: 52 },
   predictScore: { fontFamily: fonts.bodyBold, fontSize: 22 },
   predictLabel: { fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 0.8, color: colors.inkMuted, marginTop: 1 },
-  textCta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.md, paddingLeft: 64 + spacing.md },
+  suggestCell: {
+    backgroundColor: colors.greenSoft,
+    borderRadius: radii.lg,
+    padding: spacing.md,
+  },
+  suggestCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(45,106,79,0.18)',
+  },
   textCtaLabel: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
 
   rail: { marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg },

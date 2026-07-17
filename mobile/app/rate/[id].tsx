@@ -38,6 +38,8 @@ import {
 import { useAuth } from '../../lib/auth'
 import ScoreSlider from '../../components/ScoreSlider'
 import ShareCard from '../../components/ShareCard'
+import AlbumBackdrop from '../../components/AlbumBackdrop'
+import BangSkip from '../../components/BangSkip'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const FACTORS = [
@@ -219,7 +221,9 @@ export default function RatingScreen() {
   const busy = submit.isPending || saveDraft.isPending
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
+    <View style={styles.root}>
+      <AlbumBackdrop albumArtUrl={album.albumArtUrl} album={album.albumName} artist={album.artist} />
+      <SafeAreaView style={styles.screen} edges={['top']}>
       {/* Top bar */}
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} hitSlop={10} style={styles.backBtn}>
@@ -286,6 +290,7 @@ export default function RatingScreen() {
                 <Text style={[styles.trackTitle, isSkipped && styles.strike]} numberOfLines={1}>
                   {song.title}
                 </Text>
+                <BangSkip score={scores[i] ?? null} />
                 <Pressable onPress={() => toggleSkip(i)} hitSlop={8} style={styles.skipBtn}>
                   <SkipForward size={14} color={isSkipped ? colors.green : colors.inkMuted} />
                   <Text style={[styles.skipText, isSkipped && { color: colors.green }]}>
@@ -362,12 +367,14 @@ export default function RatingScreen() {
           {scores.filter((s) => s !== null && s < SKIP_THRESHOLD).length} skips
         </Text>
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1, backgroundColor: colors.bg },
+  screen: { flex: 1, backgroundColor: 'transparent' },
   center: { alignItems: 'center', justifyContent: 'center' },
   topBar: {
     flexDirection: 'row',

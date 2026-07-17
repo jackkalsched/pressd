@@ -12,6 +12,8 @@ import { fetchAlbum, saveReview, deleteReview } from '../../lib/api'
 import { songScoreColor, EP_MAX_TRACKS, type Album } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import CommentThread from '../../components/CommentThread'
+import AlbumBackdrop from '../../components/AlbumBackdrop'
+import BangSkip from '../../components/BangSkip'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 export default function AlbumDetail() {
@@ -53,7 +55,9 @@ export default function AlbumDetail() {
       ]
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
+    <View style={styles.root}>
+      <AlbumBackdrop albumArtUrl={album.albumArtUrl} album={album.albumName} artist={album.artist} />
+      <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} hitSlop={10} style={styles.backBtn}>
           <ArrowLeft size={18} color={colors.inkSecondary} />
@@ -109,6 +113,7 @@ export default function AlbumDetail() {
           <View key={s.id} style={styles.trackRow}>
             <Text style={styles.trackNum}>{s.trackNumber}</Text>
             <Text style={styles.trackTitle} numberOfLines={1}>{s.title}</Text>
+            <BangSkip score={s.score} />
             {s.score != null ? (
               <Text style={[styles.trackScore, { color: songScoreColor(s.score) }]}>
                 {s.score.toFixed(1)}
@@ -123,7 +128,8 @@ export default function AlbumDetail() {
 
         <CommentThread albumId={albumId} />
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   )
 }
 
@@ -214,7 +220,8 @@ function ReviewSection({ album, editable }: { album: Album; editable: boolean })
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1, backgroundColor: colors.bg },
+  screen: { flex: 1, backgroundColor: 'transparent' },
   center: { alignItems: 'center', justifyContent: 'center' },
   topBar: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
