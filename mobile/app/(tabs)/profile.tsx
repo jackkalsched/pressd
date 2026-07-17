@@ -20,8 +20,9 @@ import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { Check, LogOut, Pencil, X } from 'lucide-react-native'
 import { fetchAlbums, fetchSummary } from '../../lib/api'
-import type { Album, AlbumStatus } from '@pressd/shared/types'
+import { songScoreColor, type Album, type AlbumStatus } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
+import StatsView from '../../components/StatsView'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const GAP = 10
@@ -90,15 +91,18 @@ export default function Profile() {
 
   if (!user) return null
 
-  const gridData = tab === 'library' ? grid : []
+  const isGrid = tab === 'library'
+  const ratingsSorted = tab === 'ratings' ? [...rated].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)) : []
+  const listData = isGrid ? grid : tab === 'ratings' ? ratingsSorted : []
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <FlatList
-        data={gridData}
+        key={isGrid ? 'grid' : 'list'}
+        data={listData}
         keyExtractor={(a) => String(a.id)}
-        numColumns={3}
-        columnWrapperStyle={{ gap: GAP }}
+        numColumns={isGrid ? 3 : 1}
+        columnWrapperStyle={isGrid ? { gap: GAP } : undefined}
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.green} />
@@ -186,24 +190,32 @@ export default function Profile() {
                 ))}
               </View>
             )}
+
+            {/* Stats sub-tab renders in the header so it scrolls as one page */}
+            {tab === 'stats' && <StatsView userId={user.id} summary={summary} />}
           </View>
         }
-        renderItem={({ item }) => (
-          <AlbumCell
-            album={item}
-            onPress={() =>
-              item.status === 'rated'
-                ? router.push({ pathname: '/album/[id]', params: { id: String(item.id) } })
-                : router.push({ pathname: '/rate/[id]', params: { id: String(item.id) } })
-            }
-          />
-        )}
-        ListEmptyComponent={
-          tab !== 'library' ? (
-            <Placeholder label={tab === 'stats' ? 'Stats' : 'Ratings'} />
-          ) : gridLoading ? (
-            <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
+        renderItem={({ item }) =>
+          isGrid ? (
+            <AlbumCell
+              album={item}
+              onPress={() =>
+                item.status === 'rated'
+                  ? router.push({ pathname: '/album/[id]', params: { id: String(item.id) } })
+                  : router.push({ pathname: '/rate/[id]', params: { id: String(item.id) } })
+              }
+            />
           ) : (
+            <RatingRow
+              album={item}
+              onPress={() => router.push({ pathname: '/album/[id]', params: { id: String(item.id) } })}
+            />
+          )
+        }
+        ListEmptyComponent={
+          tab === 'stats' ? null : isGrid && gridLoading ? (
+            <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
+          ) : isGrid ? (
             <Text style={styles.emptyText}>
               {libStatus === 'rated'
                 ? 'No rated albums yet.'
@@ -211,6 +223,8 @@ export default function Profile() {
                 ? 'Nothing in progress.'
                 : 'Your to-listen queue is empty.'}
             </Text>
+          ) : (
+            <Text style={styles.emptyText}>No rated albums yet.</Text>
           )
         }
       />
@@ -256,12 +270,26 @@ function AlbumCell({ album, onPress }: { album: Album; onPress: () => void }) {
   )
 }
 
-function Placeholder({ label }: { label: string }) {
+function RatingRow({ album, onPress }: { album: Album; onPress: () => void }) {
   return (
-    <View style={styles.placeholder}>
-      <Text style={styles.placeholderTitle}>{label}</Text>
-      <Text style={styles.placeholderBody}>Coming in a later phase.</Text>
-    </View>
+    <Pressable style={styles.ratingRow} onPress={onPress}>
+      {album.albumArtUrl ? (
+        <Image source={{ uri: album.albumArtUrl }} style={styles.ratingArt} contentFit="cover" />
+      ) : (
+        <View style={[styles.ratingArt, styles.artFallback]}>
+          <Text style={styles.artInitial}>{album.albumName[0]?.toUpperCase()}</Text>
+        </View>
+      )}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.ratingName} numberOfLines={1}>{album.albumName}</Text>
+        <Text style={styles.ratingArtist} numberOfLines={1}>{album.artist}</Text>
+      </View>
+      {album.score != null && (
+        <Text style={[styles.ratingScore, { color: songScoreColor(album.score) }]}>
+          {album.score.toFixed(2)}
+        </Text>
+      )}
+    </Pressable>
   )
 }
 
@@ -417,6 +445,12 @@ const styles = StyleSheet.create({
   },
   scoreText: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.scoreChipText },
   albumName: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary, marginTop: 5 },
+
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
+  ratingArt: { width: 48, height: 48, borderRadius: radii.sm },
+  ratingName: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.ink },
+  ratingArtist: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, marginTop: 1 },
+  ratingScore: { fontFamily: fonts.bodyBold, fontSize: 17 },
 
   emptyText: {
     fontFamily: fonts.body,

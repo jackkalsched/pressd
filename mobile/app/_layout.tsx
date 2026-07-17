@@ -50,6 +50,7 @@ function RootNavigator() {
         <Stack.Screen name="rate/[id]" />
         <Stack.Screen name="album/[id]" />
         <Stack.Screen name="friend/[id]" />
+        <Stack.Screen name="artist/[name]" />
       </Stack.Protected>
       <Stack.Protected guard={!user}>
         <Stack.Screen name="sign-in" />
