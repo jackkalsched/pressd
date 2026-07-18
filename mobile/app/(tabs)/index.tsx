@@ -2,9 +2,10 @@
 // this next" pick, new releases (with add actions), Press'd Trending, and "what
 // are pressers talking about" (userbase-wide top reviews for the day). No boxed
 // cards — sections are separated by whitespace and hairline rules.
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Animated,
   Modal,
   Pressable,
   RefreshControl,
@@ -158,18 +159,32 @@ export default function ForYou() {
   const firstName = user?.name?.split(' ')[0] ?? ''
   const reviews = topReviews?.reviews ?? []
 
+  // Scroll-reactive masthead: the big title lifts + fades as you scroll, and a
+  // compact title bar fades in at the top (native driver, so it stays smooth).
+  const scrollY = useRef(new Animated.Value(0)).current
+  const mastheadOpacity = scrollY.interpolate({ inputRange: [0, 96], outputRange: [1, 0], extrapolate: 'clamp' })
+  const mastheadShift = scrollY.interpolate({ inputRange: [0, 96], outputRange: [0, -24], extrapolate: 'clamp' })
+  const compactOpacity = scrollY.interpolate({ inputRange: [60, 118], outputRange: [0, 1], extrapolate: 'clamp' })
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <ScrollView
+      <Animated.View style={[styles.compactHeader, { opacity: compactOpacity }]} pointerEvents="none">
+        <Text style={styles.compactTitle}>For You</Text>
+      </Animated.View>
+      <Animated.ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.green} />}
       >
-        <Text style={styles.date}>{today}</Text>
-        <Text style={styles.title}>For You</Text>
-        <Text style={styles.sub}>
-          {greeting()}{firstName ? ` ${firstName},` : ''} here's what's moving this week.
-        </Text>
+        <Animated.View style={{ opacity: mastheadOpacity, transform: [{ translateY: mastheadShift }] }}>
+          <Text style={styles.date}>{today}</Text>
+          <Text style={styles.title}>For You</Text>
+          <Text style={styles.sub}>
+            {greeting()}{firstName ? ` ${firstName},` : ''} here's what's moving this week.
+          </Text>
+        </Animated.View>
 
         {/* Pick up where you left off */}
         {continueAlbum && (
@@ -304,7 +319,7 @@ export default function ForYou() {
             )}
           </View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* Press'd Trending range dropdown */}
       <Modal visible={trendPickerOpen} transparent animationType="slide" onRequestClose={() => setTrendPickerOpen(false)}>
@@ -462,6 +477,20 @@ function Cover({ uri, seed, size, radius = radii.sm }: { uri?: string | null; se
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: spacing.lg, paddingBottom: 130 },
+  compactHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: colors.bg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  compactTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.ink, letterSpacing: 0.5 },
   date: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.2, color: colors.inkMuted, marginTop: spacing.lg },
   title: { fontFamily: fonts.display, fontSize: 38, color: colors.ink, letterSpacing: 1, marginTop: 2 },
   sub: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkTertiary, marginTop: 4 },
