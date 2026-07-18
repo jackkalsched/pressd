@@ -1,10 +1,11 @@
-// For You — the home feed as one fluid editorial column: resume, a "rate this
-// next" pick, new releases, Press'd Trending, and "what are pressers talking
-// about" (userbase-wide top reviews for the day). No boxed cards — sections are
-// separated by whitespace and hairline rules so it reads top-to-bottom.
+// For You — the home feed as one fluid editorial column: resume, a daily "rate
+// this next" pick, new releases (with add actions), Press'd Trending, and "what
+// are pressers talking about" (userbase-wide top reviews for the day). No boxed
+// cards — sections are separated by whitespace and hairline rules.
 import { useMemo, useState } from 'react'
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -16,8 +17,9 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { ArrowRight, ChevronDown, Heart, MessageCircle } from 'lucide-react-native'
+import { ArrowRight, Check, ChevronDown, Heart, MessageCircle, Play, Plus, Star, ThumbsDown } from 'lucide-react-native'
 import {
+  fetchAlbum,
   fetchAlbums,
   fetchNewReleases,
   fetchTrending,
@@ -57,15 +59,7 @@ function dayLabel(iso: string | null): string {
   return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
 }
 
-function SectionHead({
-  label,
-  meta,
-  onMetaPress,
-}: {
-  label: string
-  meta?: string
-  onMetaPress?: () => void
-}) {
+function SectionHead({ label, meta, onMetaPress }: { label: string; meta?: string; onMetaPress?: () => void }) {
   return (
     <View style={styles.sectionHead}>
       <Text style={styles.sectionLabel}>{label}</Text>
@@ -86,9 +80,9 @@ export default function ForYou() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const userId = user?.id ?? 0
-  const [importingId, setImportingId] = useState<number | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [trendMode, setTrendMode] = useState<'week' | 'top'>('week')
+  const [trendPickerOpen, setTrendPickerOpen] = useState(false)
 
   const { data: listening = [], refetch: refetchListening } = useQuery({
     queryKey: ['albums', 'listening', userId],
@@ -114,54 +108,48 @@ export default function ForYou() {
     enabled: userId > 0,
   })
 
-  async function onRefresh() {
-    setRefreshing(true)
-    await Promise.all([
-      refetchListening(),
-      refetchToListen(),
-      refetchNew(),
-      refetchTrending(),
-      refetchTopReviews(),
-    ])
-    setRefreshing(false)
-  }
-
+  // Resume: most recently touched in-progress album. The list endpoint omits
+  // songs, so fetch the full album for an accurate rated-track count.
   const continueAlbum = useMemo(() => {
     if (listening.length === 0) return null
     return [...listening].sort((a, b) => (b.dateAdded ?? '').localeCompare(a.dateAdded ?? ''))[0]
   }, [listening])
+  const { data: continueFull } = useQuery({
+    queryKey: ['album', continueAlbum?.id],
+    queryFn: () => fetchAlbum(continueAlbum!.id),
+    enabled: !!continueAlbum,
+  })
+  const resumeDone = continueFull?.songs.filter((s) => s.score != null).length ?? 0
+  const resumeTotal = continueFull?.songs.length ?? continueAlbum?.totalTracks ?? 0
 
+  // Rate this next: rotates once per day through the queue (recommended albums
+  // first when any exist), stable within the day.
   const suggestion = useMemo(() => {
     if (toListen.length === 0) return null
-    return toListen.find((a) => a.recommendedByName) ?? toListen[0]
+    const recs = toListen.filter((a) => a.recommendedByName)
+    const pool = [...(recs.length ? recs : toListen)].sort((a, b) => a.id - b.id)
+    const dayIndex = Math.floor(Date.now() / 86_400_000)
+    return pool[dayIndex % pool.length]
   }, [toListen])
 
-  async function openNewRelease(r: NewRelease) {
-    if (importingId || !user) return
-    setImportingId(r.deezerId)
-    try {
-      const full = await resolveDeezerAlbum(r.deezerId)
-      const album = await importAlbum(full, 'listening', user.id)
-      router.push({ pathname: '/rate/[id]', params: { id: String(album.id) } })
-    } catch {
-      /* leave the card in place */
-    } finally {
-      setImportingId(null)
-    }
+  async function onRefresh() {
+    setRefreshing(true)
+    await Promise.all([refetchListening(), refetchToListen(), refetchNew(), refetchTrending(), refetchTopReviews()])
+    setRefreshing(false)
   }
 
   function openAlbum(id: number) {
     router.push({ pathname: '/album/[id]', params: { id: String(id) } })
   }
-
+  function openRate(id: number) {
+    router.push({ pathname: '/rate/[id]', params: { id: String(id) } })
+  }
   async function likeReview(albumId: number) {
     if (!user) return
     try {
       await toggleLike(user.id, albumId)
       queryClient.invalidateQueries({ queryKey: ['top-reviews'] })
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   }
 
   const today = new Date()
@@ -175,9 +163,7 @@ export default function ForYou() {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.green} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.green} />}
       >
         <Text style={styles.date}>{today}</Text>
         <Text style={styles.title}>For You</Text>
@@ -189,10 +175,7 @@ export default function ForYou() {
         {continueAlbum && (
           <View style={styles.block}>
             <SectionHead label="PICK UP WHERE YOU LEFT OFF" />
-            <Pressable
-              style={styles.mediaRow}
-              onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(continueAlbum.id) } })}
-            >
+            <Pressable style={styles.mediaRow} onPress={() => openRate(continueAlbum.id)}>
               <Cover uri={continueAlbum.albumArtUrl} seed={continueAlbum.albumName} size={64} />
               <View style={styles.mediaText}>
                 <Text style={styles.rowTitle} numberOfLines={1}>{continueAlbum.albumName}</Text>
@@ -201,24 +184,9 @@ export default function ForYou() {
                 </Text>
                 <View style={styles.progressRow}>
                   <View style={styles.progressTrack}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        {
-                          width: `${
-                            continueAlbum.songs.length
-                              ? (continueAlbum.songs.filter((s) => s.score != null).length /
-                                  continueAlbum.songs.length) *
-                                100
-                              : 0
-                          }%`,
-                        },
-                      ]}
-                    />
+                    <View style={[styles.progressFill, { width: `${resumeTotal ? (resumeDone / resumeTotal) * 100 : 0}%` }]} />
                   </View>
-                  <Text style={styles.progressText}>
-                    {continueAlbum.songs.filter((s) => s.score != null).length}/{continueAlbum.songs.length}
-                  </Text>
+                  <Text style={styles.progressText}>{resumeDone}/{resumeTotal}</Text>
                 </View>
               </View>
               <ArrowRight size={18} color={colors.green} />
@@ -230,10 +198,7 @@ export default function ForYou() {
         {suggestion && (
           <View style={styles.block}>
             <SectionHead label="RATE THIS NEXT" />
-            <Pressable
-              style={styles.suggestCell}
-              onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(suggestion.id) } })}
-            >
+            <Pressable style={styles.suggestCell} onPress={() => openRate(suggestion.id)}>
               <View style={styles.mediaRow}>
                 <Cover uri={suggestion.albumArtUrl} seed={suggestion.albumName} size={64} />
                 <View style={styles.mediaText}>
@@ -264,29 +229,19 @@ export default function ForYou() {
           </View>
         )}
 
-        {/* New & Popular — horizontal art rail */}
-        {newReleases.length > 0 && (
+        {/* New & Popular — tap a cover to reveal add actions */}
+        {newReleases.length > 0 && user && (
           <View style={styles.block}>
             <SectionHead label="NEW & POPULAR" />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rail}>
               {newReleases.map((r) => (
-                <Pressable
+                <NewReleaseCard
                   key={r.deezerId}
-                  style={styles.railItem}
-                  onPress={() => openNewRelease(r)}
-                  disabled={!!importingId}
-                >
-                  <View>
-                    <Cover uri={r.coverUrl} seed={r.albumName} size={128} radius={radii.md} />
-                    {importingId === r.deezerId && (
-                      <View style={styles.railBusy}>
-                        <ActivityIndicator color="#fff" />
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.railName} numberOfLines={1}>{r.albumName}</Text>
-                  <Text style={styles.railArtist} numberOfLines={1}>{r.artist}</Text>
-                </Pressable>
+                  release={r}
+                  userId={user.id}
+                  onRate={openRate}
+                  onAdded={() => queryClient.invalidateQueries({ queryKey: ['albums', 'to_listen', userId] })}
+                />
               ))}
             </ScrollView>
           </View>
@@ -298,14 +253,10 @@ export default function ForYou() {
             <SectionHead
               label="PRESS'D TRENDING"
               meta={trendMode === 'week' ? 'This week' : 'All time'}
-              onMetaPress={() => setTrendMode((m) => (m === 'week' ? 'top' : 'week'))}
+              onMetaPress={() => setTrendPickerOpen(true)}
             />
             {trending.map((t, i) => (
-              <Pressable
-                key={t.album_id}
-                style={[styles.trendRow, i > 0 && styles.hairline]}
-                onPress={() => openAlbum(t.album_id)}
-              >
+              <Pressable key={t.album_id} style={[styles.trendRow, i > 0 && styles.hairline]} onPress={() => openAlbum(t.album_id)}>
                 <Text style={styles.rank}>{i + 1}</Text>
                 <Cover uri={t.album_art_url} seed={t.album_name} size={46} />
                 <View style={styles.mediaText}>
@@ -314,9 +265,7 @@ export default function ForYou() {
                 </View>
                 {t.avg_score != null && (
                   <View style={[styles.scorePill, { backgroundColor: scoreTint(t.avg_score) }]}>
-                    <Text style={[styles.scorePillText, { color: songScoreColor(t.avg_score) }]}>
-                      {t.avg_score.toFixed(2)}
-                    </Text>
+                    <Text style={[styles.scorePillText, { color: songScoreColor(t.avg_score) }]}>{t.avg_score.toFixed(2)}</Text>
                   </View>
                 )}
               </Pressable>
@@ -324,8 +273,7 @@ export default function ForYou() {
           </View>
         )}
 
-        {/* What are pressers talking about — userbase-wide reviews for the day.
-            Shown even on a quiet day, as an invitation to post the first one. */}
+        {/* What are pressers talking about — userbase-wide reviews for the day */}
         {topReviews && (
           <View style={styles.block}>
             <SectionHead
@@ -334,7 +282,7 @@ export default function ForYou() {
             />
             {reviews.length > 0 ? (
               reviews.map((rv, i) => (
-                <ReviewQuote
+                <ReviewCell
                   key={`${rv.album_id}-${rv.author.id}`}
                   review={rv}
                   first={i === 0}
@@ -357,47 +305,138 @@ export default function ForYou() {
           </View>
         )}
       </ScrollView>
+
+      {/* Press'd Trending range dropdown */}
+      <Modal visible={trendPickerOpen} transparent animationType="slide" onRequestClose={() => setTrendPickerOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setTrendPickerOpen(false)}>
+          <Pressable style={styles.sheet}>
+            <Text style={styles.sheetTitle}>Press'd Trending</Text>
+            {([['week', 'This week'], ['top', 'All time']] as const).map(([key, label]) => (
+              <Pressable
+                key={key}
+                style={styles.optionRow}
+                onPress={() => { setTrendMode(key); setTrendPickerOpen(false) }}
+              >
+                <Text style={styles.optionText}>{label}</Text>
+                {trendMode === key && <Check size={18} color={colors.green} />}
+              </Pressable>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   )
 }
 
-function ReviewQuote({
-  review,
-  first,
-  onOpen,
-  onLike,
+function NewReleaseCard({
+  release,
+  userId,
+  onRate,
+  onAdded,
 }: {
-  review: TopReview
-  first: boolean
-  onOpen: () => void
-  onLike: () => void
+  release: NewRelease
+  userId: number
+  onRate: (id: number) => void
+  onAdded: () => void
 }) {
+  const [revealed, setRevealed] = useState(false)
+  const [pending, setPending] = useState<'rate' | 'listen' | null>(null)
+  const [added, setAdded] = useState(false)
+
+  async function act(kind: 'rate' | 'listen') {
+    if (pending || added) return
+    setPending(kind)
+    try {
+      const full = await resolveDeezerAlbum(release.deezerId)
+      const album = await importAlbum(full, kind === 'rate' ? 'listening' : 'to_listen', userId)
+      if (kind === 'rate') { onRate(album.id); return }
+      setAdded(true)
+      onAdded()
+    } catch {
+      /* leave the card in place */
+    } finally {
+      if (kind !== 'rate') setPending(null)
+    }
+  }
+
+  return (
+    <View style={styles.railItem}>
+      <Pressable onPress={() => setRevealed((v) => !v)}>
+        <Cover uri={release.coverUrl} seed={release.albumName} size={128} radius={radii.md} />
+        {added ? (
+          <View style={styles.railOverlay}>
+            <Check size={18} color="#fff" />
+            <Text style={styles.railOverlayText}>In your library</Text>
+          </View>
+        ) : revealed ? (
+          <View style={styles.railOverlay}>
+            <Pressable style={styles.railBtn} onPress={() => act('rate')} disabled={!!pending}>
+              {pending === 'rate' ? <ActivityIndicator size="small" color="#fff" /> : <Play size={13} color="#fff" fill="#fff" />}
+              <Text style={styles.railBtnText}>Rate now</Text>
+            </Pressable>
+            <Pressable style={[styles.railBtn, styles.railBtnAlt]} onPress={() => act('listen')} disabled={!!pending}>
+              {pending === 'listen' ? <ActivityIndicator size="small" color={colors.ink} /> : <Plus size={14} color={colors.ink} />}
+              <Text style={styles.railBtnAltText}>To listen</Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </Pressable>
+      <Text style={styles.railName} numberOfLines={1}>{release.albumName}</Text>
+      <Text style={styles.railArtist} numberOfLines={1}>{release.artist}</Text>
+    </View>
+  )
+}
+
+function ReviewCell({ review, first, onOpen, onLike }: { review: TopReview; first: boolean; onOpen: () => void; onLike: () => void }) {
   return (
     <View style={[styles.review, !first && styles.hairline]}>
       <Pressable onPress={onOpen}>
+        {/* Reviewer identity leads, bigger than the album */}
+        <View style={styles.reviewHead}>
+          <Cover uri={review.author.avatar_url} seed={review.author.name} size={38} radius={19} />
+          <View style={styles.mediaText}>
+            <Text style={styles.reviewAuthor} numberOfLines={1}>{review.author.name}</Text>
+            <Text style={styles.reviewOn} numberOfLines={1}>reviewed {review.album_name}</Text>
+          </View>
+          {review.score != null && (
+            <Text style={[styles.reviewScore, { color: songScoreColor(review.score) }]}>{review.score.toFixed(2)}</Text>
+          )}
+        </View>
+
         <Text style={styles.reviewQuote}>“{review.review}”</Text>
-        <View style={styles.reviewAttr}>
+
+        {/* Album cover + name, smaller than the reviewer */}
+        <View style={styles.reviewAlbumRow}>
           <Cover uri={review.album_art_url} seed={review.album_name} size={40} />
           <View style={styles.mediaText}>
             <Text style={styles.reviewAlbum} numberOfLines={1}>{review.album_name}</Text>
-            <Text style={styles.reviewBy} numberOfLines={1}>
-              {review.author.name} · {review.artist}
-            </Text>
+            <Text style={styles.reviewArtist} numberOfLines={1}>{review.artist}</Text>
           </View>
-          {review.score != null && (
-            <Text style={[styles.reviewScore, { color: songScoreColor(review.score) }]}>
-              {review.score.toFixed(2)}
-            </Text>
-          )}
         </View>
+
+        {(review.top_song || review.bottom_song) && (
+          <View style={styles.songNotes}>
+            {review.top_song && (
+              <View style={styles.songNote}>
+                <Star size={12} color={songScoreColor(review.top_song.score)} fill={songScoreColor(review.top_song.score)} />
+                <Text style={styles.songNoteText} numberOfLines={1}>{review.top_song.title}</Text>
+                <Text style={[styles.songNoteScore, { color: songScoreColor(review.top_song.score) }]}>{review.top_song.score.toFixed(1)}</Text>
+              </View>
+            )}
+            {review.bottom_song && (
+              <View style={styles.songNote}>
+                <ThumbsDown size={12} color={songScoreColor(review.bottom_song.score)} />
+                <Text style={styles.songNoteText} numberOfLines={1}>{review.bottom_song.title}</Text>
+                <Text style={[styles.songNoteScore, { color: songScoreColor(review.bottom_song.score) }]}>{review.bottom_song.score.toFixed(1)}</Text>
+              </View>
+            )}
+          </View>
+        )}
       </Pressable>
+
       <View style={styles.reviewActions}>
         <Pressable style={styles.reviewAction} onPress={onLike} hitSlop={8}>
-          <Heart
-            size={15}
-            color={review.liked_by_me ? '#c0392b' : colors.inkMuted}
-            fill={review.liked_by_me ? '#c0392b' : 'transparent'}
-          />
+          <Heart size={15} color={review.liked_by_me ? '#c0392b' : colors.inkMuted} fill={review.liked_by_me ? '#c0392b' : 'transparent'} />
           <Text style={styles.reviewActionText}>{review.like_count}</Text>
         </Pressable>
         <Pressable style={styles.reviewAction} onPress={onOpen} hitSlop={8}>
@@ -409,17 +448,7 @@ function ReviewQuote({
   )
 }
 
-function Cover({
-  uri,
-  seed,
-  size,
-  radius = radii.sm,
-}: {
-  uri?: string | null
-  seed: string
-  size: number
-  radius?: number
-}) {
+function Cover({ uri, seed, size, radius = radii.sm }: { uri?: string | null; seed: string; size: number; radius?: number }) {
   if (uri) {
     return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: radius }} contentFit="cover" />
   }
@@ -437,20 +466,11 @@ const styles = StyleSheet.create({
   title: { fontFamily: fonts.display, fontSize: 38, color: colors.ink, letterSpacing: 1, marginTop: 2 },
   sub: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkTertiary, marginTop: 4 },
 
-  // Sections flow with whitespace; no borders/cards.
   block: { marginTop: spacing.xxl },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
   sectionLabel: { fontFamily: fonts.bodyBold, fontSize: 13, letterSpacing: 0.6, color: colors.ink },
   sectionMeta: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkTertiary },
-  sectionMetaBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingVertical: 3,
-    paddingHorizontal: 9,
-    borderRadius: radii.pill,
-    backgroundColor: colors.greenSoft,
-  },
+  sectionMetaBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 3, paddingHorizontal: 9, borderRadius: radii.pill, backgroundColor: colors.greenSoft },
   sectionMetaBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },
 
   hairline: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
@@ -469,30 +489,22 @@ const styles = StyleSheet.create({
   predict: { alignItems: 'center', minWidth: 52 },
   predictScore: { fontFamily: fonts.bodyBold, fontSize: 22 },
   predictLabel: { fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 0.8, color: colors.inkMuted, marginTop: 1 },
-  suggestCell: {
-    backgroundColor: colors.greenSoft,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-    marginHorizontal: -spacing.sm, // bleed wider than the text column, ~8px from the screen edge
-  },
-  suggestCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: spacing.md,
-    paddingTop: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(45,106,79,0.18)',
-  },
+  suggestCell: { backgroundColor: colors.greenSoft, borderRadius: radii.lg, padding: spacing.lg, marginHorizontal: -spacing.sm },
+  suggestCta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(45,106,79,0.18)' },
   textCtaLabel: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
 
   rail: { marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg },
   railItem: { width: 128, marginRight: spacing.md },
-  railBusy: {
+  railOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(28,25,23,0.4)', borderRadius: radii.md,
-    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(28,25,23,0.6)', borderRadius: radii.md,
+    alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.sm,
   },
+  railOverlayText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: '#fff' },
+  railBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: colors.green, borderRadius: radii.sm, paddingVertical: 7, width: 104 },
+  railBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: '#fff' },
+  railBtnAlt: { backgroundColor: 'rgba(255,255,255,0.92)' },
+  railBtnAltText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.ink },
   railName: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink, marginTop: 7 },
   railArtist: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
 
@@ -501,19 +513,23 @@ const styles = StyleSheet.create({
   scorePill: { borderRadius: radii.sm, paddingHorizontal: 8, paddingVertical: 4, minWidth: 46, alignItems: 'center' },
   scorePillText: { fontFamily: fonts.bodyBold, fontSize: 14 },
 
+  // Review cell — reviewer leads (bigger), album secondary, smaller quote
   review: { paddingVertical: spacing.lg },
-  reviewQuote: {
-    fontFamily: fonts.displayRegular,
-    fontSize: 19,
-    lineHeight: 27,
-    color: colors.ink,
-    marginBottom: spacing.md,
-  },
-  reviewAttr: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  reviewAlbum: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.ink },
-  reviewBy: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
-  reviewScore: { fontFamily: fonts.bodyBold, fontSize: 18 },
-  reviewActions: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.md, paddingLeft: 40 + spacing.sm },
+  reviewHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  reviewAuthor: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.ink },
+  reviewOn: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
+  reviewScore: { fontFamily: fonts.bodyBold, fontSize: 20 },
+  reviewQuote: { fontFamily: fonts.displayRegular, fontSize: 15, lineHeight: 22, color: colors.ink, marginTop: spacing.md },
+  reviewAlbumRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
+  reviewAlbum: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink },
+  reviewArtist: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
+
+  songNotes: { marginTop: spacing.md, gap: 5 },
+  songNote: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  songNoteText: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary },
+  songNoteScore: { fontFamily: fonts.bodyBold, fontSize: 12 },
+
+  reviewActions: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.md, paddingLeft: 38 + spacing.sm },
   reviewAction: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   reviewActionText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary },
 
@@ -524,4 +540,11 @@ const styles = StyleSheet.create({
 
   coverFallback: { backgroundColor: colors.inset, alignItems: 'center', justifyContent: 'center' },
   coverInitial: { fontFamily: fonts.display, color: colors.inkMuted },
+
+  // Trending range dropdown sheet
+  backdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.4)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: colors.bg, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, paddingTop: spacing.lg, paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
+  sheetTitle: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink, marginBottom: spacing.sm },
+  optionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  optionText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.ink },
 })

@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select, func
 from ..database import get_session
 from ..deps import current_user
-from ..models import Album, Comment, Friendship, Like, PressUser
+from ..models import Album, Comment, Friendship, Like, PressUser, Song
 
 router = APIRouter(prefix="/social", tags=["social"])
 
@@ -288,11 +288,21 @@ def get_top_reviews(
         .where(Like.user_id == user.id)
     ).all())
 
+    # Favorite / least-favorite track per album (highest / lowest scored song).
+    songs_by_album: dict[int, list[Song]] = {}
+    for s in session.exec(
+        select(Song).where(Song.album_id.in_(album_ids)).where(Song.score.is_not(None))
+    ).all():
+        songs_by_album.setdefault(s.album_id, []).append(s)
+
     items = []
     for album in day_albums:
         author = authors.get(album.user_id)
         if not author:
             continue
+        songs = songs_by_album.get(album.id, [])
+        top = max(songs, key=lambda s: s.score) if songs else None
+        bottom = min(songs, key=lambda s: s.score) if len(songs) >= 2 else None
         items.append({
             "author": {"id": author.id, "name": author.name, "avatar_url": author.avatar_url},
             "album_id": album.id,
@@ -305,6 +315,8 @@ def get_top_reviews(
             "like_count": like_counts.get(album.id, 0),
             "liked_by_me": album.id in liked_by_me,
             "comment_count": comment_counts.get(album.id, 0),
+            "top_song": {"title": top.title, "score": top.score} if top else None,
+            "bottom_song": {"title": bottom.title, "score": bottom.score} if bottom else None,
         })
 
     items.sort(key=lambda it: (it["like_count"], it["review_at"] or ""), reverse=True)

@@ -951,6 +951,8 @@ export interface TopReview {
   like_count: number
   liked_by_me: boolean
   comment_count: number
+  top_song: { title: string; score: number } | null
+  bottom_song: { title: string; score: number } | null
 }
 
 export interface TopReviewsResponse {
