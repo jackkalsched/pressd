@@ -1,11 +1,13 @@
 """
-New-release discovery via Deezer's public editorial API (no auth required).
+New-release discovery.
 
-`/discover/new-releases` returns a lightweight, cached list of recent releases.
-`/discover/deezer/{id}` resolves one release to the full album+tracks shape the
-existing album-import flow consumes, so a card can be added to a user's library
-or opened straight into the rating screen.
+`/discover/new-releases` returns a cached list of recent album releases sourced
+from ListenBrainz's fresh-releases feed, each resolved to a Deezer album so the
+existing import flow (`/discover/deezer/{id}`) can add it to a library or open
+it in the rating screen. Falls back to Deezer's editorial/chart feed when
+ListenBrainz is unavailable.
 """
+import asyncio
 import time
 from datetime import date, timedelta
 
@@ -20,7 +22,9 @@ from ..models import Album, PressUser
 router = APIRouter(prefix="/discover", tags=["discover"])
 
 DEEZER_BASE = "https://api.deezer.com"
-CACHE_TTL = 6 * 3600  # editorial releases move slowly; refresh a few times a day
+LISTENBRAINZ_FRESH = "https://api.listenbrainz.org/1/explore/fresh-releases/"
+LB_UA = "Pressd/1.0 (https://www.pressdmusic.com)"
+CACHE_TTL = 6 * 3600  # releases move slowly; refresh a few times a day
 _cache: dict = {"releases": None, "expires": 0.0}
 
 
@@ -32,6 +36,80 @@ def _year(release_date: str | None) -> int | None:
     return int(release_date[:4]) if release_date and release_date[:4].isdigit() else None
 
 
+def _caa_cover(r: dict) -> str | None:
+    cid, mbid = r.get("caa_id"), r.get("caa_release_mbid")
+    return f"https://coverartarchive.org/release/{mbid}/{cid}-500.jpg" if cid and mbid else None
+
+
+async def _listenbrainz_fresh(client: httpx.AsyncClient) -> list[dict]:
+    """Recent album releases from ListenBrainz, most recent first."""
+    try:
+        resp = await client.get(
+            LISTENBRAINZ_FRESH,
+            params={"days": 90, "sort": "release_date", "past": "true", "future": "false"},
+            headers={"User-Agent": LB_UA},
+        )
+    except httpx.HTTPError:
+        return []
+    if not resp.is_success:  # 400 on a bad date / days > 90, etc.
+        return []
+    rels = resp.json().get("payload", {}).get("releases", [])
+    out: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for r in rels:
+        title, artist = r.get("release_name"), r.get("artist_credit_name")
+        if not (title and artist) or r.get("release_group_primary_type") != "Album":
+            continue
+        key = (title.lower(), artist.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"title": title, "artist": artist, "release_date": r.get("release_date"), "caa": _caa_cover(r)})
+    out.sort(key=lambda x: x["release_date"] or "", reverse=True)
+    return out
+
+
+async def _deezer_resolve(client: httpx.AsyncClient, title: str, artist: str) -> dict | None:
+    """Match a release to a Deezer album for the importable id + cover."""
+    try:
+        resp = await client.get(f"{DEEZER_BASE}/search/album", params={"q": f"{artist} {title}", "limit": 1})
+    except httpx.HTTPError:
+        return None
+    if not resp.is_success:
+        return None
+    data = resp.json().get("data", [])
+    if not data or not data[0].get("id"):
+        return None
+    a = data[0]
+    return {"deezer_id": a["id"], "cover_url": _cover(a), "nb_tracks": a.get("nb_tracks")}
+
+
+async def _deezer_editorial(client: httpx.AsyncClient) -> list[dict]:
+    """Fallback: Deezer's editorial releases, else the global album chart."""
+    resp = await client.get(f"{DEEZER_BASE}/editorial/0/releases", params={"limit": 40})
+    items = resp.json().get("data", []) if resp.is_success else []
+    if not items:
+        resp = await client.get(f"{DEEZER_BASE}/chart/0/albums", params={"limit": 40})
+        items = resp.json().get("data", []) if resp.is_success else []
+    out: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for a in items:
+        aid, title = a.get("id"), a.get("title")
+        artist = (a.get("artist") or {}).get("name")
+        if not (aid and title and artist):
+            continue
+        key = (title.lower(), artist.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        rd = a.get("release_date") or ""
+        out.append({
+            "deezer_id": aid, "album_name": title, "artist": artist, "cover_url": _cover(a),
+            "year": _year(rd), "release_date": rd or None, "nb_tracks": a.get("nb_tracks"),
+        })
+    return out
+
+
 @router.get("/new-releases")
 async def new_releases(
     limit: int = Query(12, ge=1, le=30),
@@ -41,39 +119,28 @@ async def new_releases(
     if _cache["releases"] and _cache["expires"] > now:  # only serve a non-empty cache
         return _cache["releases"][:limit]
 
-    async with httpx.AsyncClient(timeout=12) as client:
-        resp = await client.get(f"{DEEZER_BASE}/editorial/0/releases", params={"limit": 40})
-        items = resp.json().get("data", []) if resp.is_success else []
-        if not items:
-            # Deezer has stopped populating its editorial "releases" feed, so fall
-            # back to the global top-albums chart (surfaced as "Trending Releases").
-            resp = await client.get(f"{DEEZER_BASE}/chart/0/albums", params={"limit": 40})
-            if not resp.is_success:
-                raise HTTPException(status_code=502, detail="Could not load trending releases")
-            items = resp.json().get("data", [])
-
     releases: list[dict] = []
-    seen: set[tuple[str, str]] = set()
-    for a in items:
-        aid = a.get("id")
-        title = a.get("title")
-        artist = (a.get("artist") or {}).get("name")
-        if not (aid and title and artist):
-            continue
-        key = (title.lower(), artist.lower())
-        if key in seen:
-            continue
-        seen.add(key)
-        rd = a.get("release_date") or ""
-        releases.append({
-            "deezer_id": aid,
-            "album_name": title,
-            "artist": artist,
-            "cover_url": _cover(a),
-            "year": _year(rd),
-            "release_date": rd or None,
-            "nb_tracks": a.get("nb_tracks"),
-        })
+    async with httpx.AsyncClient(timeout=15) as client:
+        candidates = (await _listenbrainz_fresh(client))[:28]
+        # Resolve the newest candidates to Deezer albums concurrently.
+        resolved = await asyncio.gather(*[_deezer_resolve(client, c["title"], c["artist"]) for c in candidates])
+        for c, dz in zip(candidates, resolved):
+            if not dz:
+                continue
+            releases.append({
+                "deezer_id": dz["deezer_id"],
+                "album_name": c["title"],
+                "artist": c["artist"],
+                "cover_url": dz["cover_url"] or c["caa"],
+                "year": _year(c["release_date"]),
+                "release_date": c["release_date"],
+                "nb_tracks": dz["nb_tracks"],
+            })
+
+        if not releases:  # ListenBrainz down or nothing resolved → Deezer's own feed
+            releases = await _deezer_editorial(client)
+            if not releases:
+                raise HTTPException(status_code=502, detail="Could not load new releases")
 
     if releases:  # never cache an empty result — retry on the next request
         _cache["releases"] = releases
