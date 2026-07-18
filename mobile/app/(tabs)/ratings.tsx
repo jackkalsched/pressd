@@ -307,41 +307,46 @@ function ArtistsTab({ userId, onOpen }: { userId: number; onOpen: (name: string)
   }
 
   return (
-    <ScrollView style={styles.tableScroll} contentContainerStyle={{ paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
-      <View style={{ flexDirection: 'row', marginTop: spacing.md }}>
-        <View>
-          <Th label="Artist" width={150} active={sortKey === 'artist'} dir={sortDir} onPress={() => sort('artist')} align="left" />
-          {rows.map((r, i) => (
-            <Pressable key={r.artist} style={[styles.pinnedCell, { width: 150 }]} onPress={() => onOpen(r.artist)}>
-              <Text style={styles.rank}>{i + 1}</Text>
-              <Text style={styles.cellName} numberOfLines={1}>{r.artist}</Text>
+    <>
+      {/* Click-and-sort buttons. Tapping the active one flips asc <-> desc. */}
+      <FlatList
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.sortRow}
+        contentContainerStyle={styles.sortRowContent}
+        data={ARTIST_COLS}
+        keyExtractor={(c) => c.key}
+        renderItem={({ item }) => {
+          const on = sortKey === item.key
+          return (
+            <Pressable style={[styles.sortChip, on && styles.sortChipActive]} onPress={() => sort(item.key)}>
+              <Text style={[styles.sortChipText, on && styles.sortChipTextActive]}>
+                {item.label}{on ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
+              </Text>
             </Pressable>
-          ))}
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View>
-            <View style={{ flexDirection: 'row' }}>
-              {ARTIST_COLS.map((c) => (
-                <Th key={c.key} label={c.label} width={c.width} active={sortKey === c.key} dir={sortDir} onPress={() => sort(c.key)} />
-              ))}
-            </View>
-            {rows.map((r) => (
-              <Pressable key={r.artist} style={styles.metricRow} onPress={() => onOpen(r.artist)}>
-                {ARTIST_COLS.map((c) => {
-                  const { text, color } = fmt(r, c.key)
-                  return (
-                    <View key={c.key} style={[styles.td, { width: c.width }]}>
-                      <Text style={[styles.tdText, color ? { color, fontFamily: fonts.bodyBold } : null]} numberOfLines={1}>{text}</Text>
-                    </View>
-                  )
-                })}
-              </Pressable>
-            ))}
-          </View>
-        </ScrollView>
-      </View>
-      {rows.length === 0 && <Text style={styles.empty}>{scatter ? `No artists with at least ${QUALIFIED} rated songs yet.` : 'Loading…'}</Text>}
-    </ScrollView>
+          )
+        }}
+      />
+      <FlatList
+        data={rows}
+        keyExtractor={(r) => r.artist}
+        contentContainerStyle={styles.list}
+        renderItem={({ item, index }) => {
+          const metric = fmt(item, sortKey)
+          return (
+            <Pressable style={styles.artistRow} onPress={() => onOpen(item.artist)}>
+              <Text style={styles.rank}>{index + 1}</Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.cellName} numberOfLines={1}>{item.artist}</Text>
+                <Text style={styles.cellSub}>{item.songs} songs · avg {item.songScore.toFixed(2)}</Text>
+              </View>
+              <Text style={[styles.metricVal, metric.color ? { color: metric.color } : null]}>{metric.text}</Text>
+            </Pressable>
+          )
+        }}
+        ListEmptyComponent={<Text style={styles.empty}>{scatter ? `No artists with at least ${QUALIFIED} rated songs yet.` : 'Loading…'}</Text>}
+      />
+    </>
   )
 }
 
@@ -366,6 +371,17 @@ const styles = StyleSheet.create({
   chipActiveText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: '#fff', flexShrink: 1 },
 
   tableScroll: { flex: 1, paddingLeft: spacing.lg, marginTop: spacing.md },
+
+  // Artists — click-and-sort buttons (green active) + ranked list
+  sortRow: { flexGrow: 0, marginTop: spacing.md },
+  sortRowContent: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  sortChip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.greenSoft },
+  sortChipActive: { backgroundColor: colors.green },
+  sortChipText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.green },
+  sortChipTextActive: { color: '#fff', fontFamily: fonts.bodySemiBold },
+  list: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 140 },
+  artistRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  metricVal: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.ink, minWidth: 56, textAlign: 'right' },
 
   th: { height: HEAD_H, justifyContent: 'center', paddingHorizontal: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   thText: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 0.4, color: colors.inkMuted, textTransform: 'uppercase' },
