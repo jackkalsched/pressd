@@ -41,12 +41,12 @@ def _caa_cover(r: dict) -> str | None:
     return f"https://coverartarchive.org/release/{mbid}/{cid}-500.jpg" if cid and mbid else None
 
 
-async def _listenbrainz_fresh(client: httpx.AsyncClient) -> list[dict]:
+async def _listenbrainz_fresh(client: httpx.AsyncClient, days: int = 7) -> list[dict]:
     """Recent album releases from ListenBrainz, most recent first."""
     try:
         resp = await client.get(
             LISTENBRAINZ_FRESH,
-            params={"days": 90, "sort": "release_date", "past": "true", "future": "false"},
+            params={"days": days, "sort": "release_date", "past": "true", "future": "false"},
             headers={"User-Agent": LB_UA},
         )
     except httpx.HTTPError:
@@ -69,19 +69,52 @@ async def _listenbrainz_fresh(client: httpx.AsyncClient) -> list[dict]:
     return out
 
 
-async def _deezer_resolve(client: httpx.AsyncClient, title: str, artist: str) -> dict | None:
+async def _deezer_resolve(client: httpx.AsyncClient, sem: asyncio.Semaphore, title: str, artist: str) -> dict | None:
     """Match a release to a Deezer album for the importable id + cover."""
     try:
-        resp = await client.get(f"{DEEZER_BASE}/search/album", params={"q": f"{artist} {title}", "limit": 1})
+        async with sem:
+            resp = await client.get(f"{DEEZER_BASE}/search/album", params={"q": f"{artist} {title}", "limit": 1})
     except httpx.HTTPError:
         return None
     if not resp.is_success:
         return None
-    data = resp.json().get("data", [])
+    body = resp.json()
+    if body.get("error"):  # Deezer returns HTTP 200 + an error body when rate-limited
+        return None
+    data = body.get("data", [])
     if not data or not data[0].get("id"):
         return None
     a = data[0]
-    return {"deezer_id": a["id"], "cover_url": _cover(a), "nb_tracks": a.get("nb_tracks")}
+    # Guard against a wrong high-fan match (e.g. a different album of the same
+    # title): require some artist-name token overlap with the release.
+    dz_artist_obj = a.get("artist") or {}
+    dz_artist = (dz_artist_obj.get("name") or "").lower()
+    want = {t for t in artist.lower().replace("&", " ").split() if len(t) > 1}
+    have = set(dz_artist.split())
+    if want and have and not (want & have):
+        return None
+    return {
+        "deezer_id": a["id"],
+        "artist_id": dz_artist_obj.get("id"),
+        "cover_url": _cover(a),
+        "nb_tracks": a.get("nb_tracks"),
+    }
+
+
+async def _artist_fans(client: httpx.AsyncClient, sem: asyncio.Semaphore, artist_id: int | None) -> int:
+    """Total Deezer fan count of the releasing artist — the popularity signal we
+    rank by, so a fresh album by a well-known artist floats to the top."""
+    if not artist_id:
+        return 0
+    try:
+        async with sem:
+            resp = await client.get(f"{DEEZER_BASE}/artist/{artist_id}")
+    except httpx.HTTPError:
+        return 0
+    if not resp.is_success:
+        return 0
+    body = resp.json()
+    return 0 if body.get("error") else (body.get("nb_fan") or 0)
 
 
 async def _deezer_editorial(client: httpx.AsyncClient) -> list[dict]:
@@ -120,13 +153,24 @@ async def new_releases(
         return _cache["releases"][:limit]
 
     releases: list[dict] = []
-    async with httpx.AsyncClient(timeout=15) as client:
-        candidates = (await _listenbrainz_fresh(client))[:28]
-        # Resolve the newest candidates to Deezer albums concurrently.
-        resolved = await asyncio.gather(*[_deezer_resolve(client, c["title"], c["artist"]) for c in candidates])
-        for c, dz in zip(candidates, resolved):
-            if not dz:
-                continue
+    async with httpx.AsyncClient(timeout=20) as client:
+        sem = asyncio.Semaphore(10)  # keep Deezer calls under its rate limit
+        # Last 7 days of fresh albums; resolve a pool to Deezer, then rank by the
+        # releasing artist's total fan count (ListenBrainz has no popularity
+        # signal). Sample evenly across the whole window so earlier-in-the-week
+        # releases are represented, and keep the pool small enough that the
+        # search + artist-fan calls stay under Deezer's ~50-per-5s quota.
+        POOL = 24
+        allcands = await _listenbrainz_fresh(client, days=7)
+        if len(allcands) > POOL:
+            step = len(allcands) / POOL
+            candidates = [allcands[int(i * step)] for i in range(POOL)]
+        else:
+            candidates = allcands
+        resolved = await asyncio.gather(*[_deezer_resolve(client, sem, c["title"], c["artist"]) for c in candidates])
+        matched = [(c, dz) for c, dz in zip(candidates, resolved) if dz]
+        fans = await asyncio.gather(*[_artist_fans(client, sem, dz.get("artist_id")) for _, dz in matched])
+        for (c, dz), f in zip(matched, fans):
             releases.append({
                 "deezer_id": dz["deezer_id"],
                 "album_name": c["title"],
@@ -135,7 +179,11 @@ async def new_releases(
                 "year": _year(c["release_date"]),
                 "release_date": c["release_date"],
                 "nb_tracks": dz["nb_tracks"],
+                "_fans": f,
             })
+        releases.sort(key=lambda r: r["_fans"], reverse=True)
+        for r in releases:
+            r.pop("_fans", None)
 
         if not releases:  # ListenBrainz down or nothing resolved → Deezer's own feed
             releases = await _deezer_editorial(client)
