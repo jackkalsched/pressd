@@ -19,7 +19,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { Check, LogOut, Pencil, X } from 'lucide-react-native'
-import { fetchAlbums, fetchSummary } from '../../lib/api'
+import { fetchAlbums, fetchSummary, fetchScoreRange } from '../../lib/api'
 import { songScoreColor, type Album, type AlbumStatus } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import StatsView from '../../components/StatsView'
@@ -27,6 +27,18 @@ import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const GAP = 10
 const BIO_MAX = 240
+
+// Score-badge color relative to the user's own mean/sd, matching the desktop
+// AlbumCard: amber at the mean → dark green above (+2.5 SD), dark red below.
+function scoreBadgeColor(score: number, mu: number, sd: number): string {
+  const SD_RANGE = 2.5
+  if (score >= mu) {
+    const t = Math.min(1, (score - mu) / (SD_RANGE * sd))
+    return `hsl(${Math.round(30 + t * 108)}, 70%, 30%)`
+  }
+  const t = Math.min(1, (mu - score) / (SD_RANGE * sd))
+  return `hsl(${Math.round(30 - t * 30)}, 72%, 30%)`
+}
 
 type Tab = 'library' | 'stats' | 'ratings'
 const TABS: { key: Tab; label: string }[] = [
@@ -76,6 +88,16 @@ export default function Profile() {
     queryFn: () => fetchSummary(user!.id),
     enabled: !!user,
   })
+
+  // Mean/sd of the user's album scores, so the badge color is relative to them.
+  const { data: scoreRange } = useQuery({
+    queryKey: ['score-range', user?.id],
+    queryFn: () => fetchScoreRange(user!.id),
+    enabled: !!user,
+    staleTime: 5 * 60_000,
+  })
+  const badgeMu = scoreRange?.mu ?? 7.0
+  const badgeSd = scoreRange?.sd ?? 1.0
 
   const thisWeek = useMemo(() => {
     const weekAgo = Date.now() - 7 * 86_400_000
@@ -199,6 +221,8 @@ export default function Profile() {
           isGrid ? (
             <AlbumCell
               album={item}
+              mu={badgeMu}
+              sd={badgeSd}
               onPress={() =>
                 item.status === 'rated'
                   ? router.push({ pathname: '/album/[id]', params: { id: String(item.id) } })
@@ -247,8 +271,9 @@ function StatTile({ value, label }: { value: string; label: string }) {
   )
 }
 
-function AlbumCell({ album, onPress }: { album: Album; onPress: () => void }) {
+function AlbumCell({ album, mu, sd, onPress }: { album: Album; mu: number; sd: number; onPress: () => void }) {
   const showScore = album.status === 'rated' && album.score != null
+  const badge = showScore ? scoreBadgeColor(album.score!, mu, sd) : null
   return (
     <Pressable style={styles.cell} onPress={onPress}>
       <View style={styles.artWrap}>
@@ -259,15 +284,14 @@ function AlbumCell({ album, onPress }: { album: Album; onPress: () => void }) {
             <Text style={styles.artInitial}>{album.albumName[0]?.toUpperCase()}</Text>
           </View>
         )}
+        {/* Rated: desktop-style white pill, colored text + border (top-right) */}
         {showScore ? (
-          <View style={styles.scoreChip}>
-            <Text style={styles.scoreText}>{album.score!.toFixed(2)}</Text>
+          <View style={[styles.scoreBadge, { borderColor: badge! }]}>
+            <Text style={[styles.scoreBadgeText, { color: badge! }]}>{album.score!.toFixed(2)}</Text>
           </View>
         ) : album.status === 'to_listen' && album.predictedScore != null ? (
-          <View style={styles.predChip}>
-            <Text style={[styles.predText, { color: songScoreColor(album.predictedScore) }]}>
-              ~{album.predictedScore.toFixed(2)}
-            </Text>
+          <View style={styles.predBadge}>
+            <Text style={styles.predText}>~{album.predictedScore.toFixed(2)}</Text>
           </View>
         ) : null}
       </View>
@@ -440,26 +464,33 @@ const styles = StyleSheet.create({
   art: { width: '100%', height: '100%' },
   artFallback: { backgroundColor: colors.inset, alignItems: 'center', justifyContent: 'center' },
   artInitial: { fontFamily: fonts.display, fontSize: 28, color: colors.inkMuted },
-  scoreChip: {
+  // Desktop-style score widget: white pill, colored text + colored border.
+  scoreBadge: {
     position: 'absolute',
+    top: 6,
     right: 6,
-    bottom: 6,
-    backgroundColor: colors.scoreChipBg,
-    borderRadius: radii.sm,
-    paddingHorizontal: 6,
+    backgroundColor: '#ffffff',
+    borderRadius: radii.pill,
+    borderWidth: 1.5,
+    paddingHorizontal: 9,
+    paddingVertical: 2,
+    shadowColor: '#321e0a',
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  scoreBadgeText: { fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: -0.2 },
+  predBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: 'rgba(28,25,23,0.55)',
+    borderRadius: radii.pill,
+    paddingHorizontal: 9,
     paddingVertical: 2,
   },
-  scoreText: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.scoreChipText },
-  predChip: {
-    position: 'absolute',
-    right: 6,
-    bottom: 6,
-    backgroundColor: 'rgba(249,248,246,0.92)',
-    borderRadius: radii.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  predText: { fontFamily: fonts.bodyBold, fontSize: 11 },
+  predText: { fontFamily: fonts.bodyBold, fontSize: 12, color: 'rgba(255,255,255,0.85)', letterSpacing: -0.2 },
   albumName: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary, marginTop: 5 },
 
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
