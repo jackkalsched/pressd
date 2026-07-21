@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { ArrowRight, Check, ChevronDown, Heart, MessageCircle, Play, Plus, Star, ThumbsDown } from 'lucide-react-native'
+import { ArrowRight, Check, ChevronDown, Heart, MessageCircle, Play, Plus, Triangle } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchAlbums,
@@ -420,6 +420,25 @@ function ReviewCell({ review, first, onOpen, onLike }: { review: TopReview; firs
 
         <Text style={styles.reviewQuote}>“{review.review}”</Text>
 
+        {(review.top_song || review.bottom_song) && (
+          <View style={styles.songNotes}>
+            {review.top_song && (
+              <View style={styles.songNote}>
+                <Triangle size={11} color={colors.green} fill={colors.green} />
+                <Text style={styles.songNoteText} numberOfLines={1}>{review.top_song.title}</Text>
+                <Text style={[styles.songNoteScore, { color: songScoreColor(review.top_song.score) }]}>{review.top_song.score.toFixed(1)}</Text>
+              </View>
+            )}
+            {review.bottom_song && (
+              <View style={styles.songNote}>
+                <Triangle size={11} color="#c0392b" fill="#c0392b" style={{ transform: [{ rotate: '180deg' }] }} />
+                <Text style={styles.songNoteText} numberOfLines={1}>{review.bottom_song.title}</Text>
+                <Text style={[styles.songNoteScore, { color: songScoreColor(review.bottom_song.score) }]}>{review.bottom_song.score.toFixed(1)}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Album cover + name, smaller than the reviewer */}
         <View style={styles.reviewAlbumRow}>
           <Cover uri={review.album_art_url} seed={review.album_name} size={40} />
@@ -428,25 +447,6 @@ function ReviewCell({ review, first, onOpen, onLike }: { review: TopReview; firs
             <Text style={styles.reviewArtist} numberOfLines={1}>{review.artist}</Text>
           </View>
         </View>
-
-        {(review.top_song || review.bottom_song) && (
-          <View style={styles.songNotes}>
-            {review.top_song && (
-              <View style={styles.songNote}>
-                <Star size={12} color={songScoreColor(review.top_song.score)} fill={songScoreColor(review.top_song.score)} />
-                <Text style={styles.songNoteText} numberOfLines={1}>{review.top_song.title}</Text>
-                <Text style={[styles.songNoteScore, { color: songScoreColor(review.top_song.score) }]}>{review.top_song.score.toFixed(1)}</Text>
-              </View>
-            )}
-            {review.bottom_song && (
-              <View style={styles.songNote}>
-                <ThumbsDown size={12} color={songScoreColor(review.bottom_song.score)} />
-                <Text style={styles.songNoteText} numberOfLines={1}>{review.bottom_song.title}</Text>
-                <Text style={[styles.songNoteScore, { color: songScoreColor(review.bottom_song.score) }]}>{review.bottom_song.score.toFixed(1)}</Text>
-              </View>
-            )}
-          </View>
-        )}
       </Pressable>
 
       <View style={styles.reviewActions}>
