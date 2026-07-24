@@ -3,7 +3,11 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
+import { useQuery } from '@tanstack/react-query'
 import { ListMusic, Star, Users, CircleUser, Plus } from 'lucide-react-native'
+import { fetchFeed } from '../lib/api'
+import { useAuth } from '../lib/auth'
+import { useSocialSeen, latestFeedTime } from '../lib/socialSeen'
 import { colors, fonts, radii } from '../theme/tokens'
 
 // Minimal structural slice of react-navigation's BottomTabBarProps — the
@@ -27,6 +31,19 @@ const TAB_META: Record<string, { label: string; Icon: typeof ListMusic }> = {
 export default function TabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  const { user } = useAuth()
+
+  // Friend-activity signal for the Social tab dot: newest feed timestamp vs the
+  // last time the user opened Social. Shares the ['feed', id] cache with the
+  // Social screen, so this adds no extra fetch once that screen has loaded.
+  const { data: feed = [] } = useQuery({
+    queryKey: ['feed', user?.id],
+    queryFn: () => fetchFeed(user!.id),
+    enabled: !!user,
+  })
+  const seen = useSocialSeen()
+  const latest = latestFeedTime(feed)
+  const socialHasNew = latest > 0 && latest > seen
 
   const left = state.routes.slice(0, 2)
   const right = state.routes.slice(2)
@@ -37,6 +54,7 @@ export default function TabBar({ state, navigation }: TabBarProps) {
     const index = state.routes.findIndex((r) => r.key === route.key)
     const focused = state.index === index
     const color = focused ? colors.green : colors.inkMuted
+    const showDot = route.name === 'social' && socialHasNew && !focused
     return (
       <Pressable
         key={route.key}
@@ -46,7 +64,10 @@ export default function TabBar({ state, navigation }: TabBarProps) {
           if (!focused && !event.defaultPrevented) navigation.navigate(route.name)
         }}
       >
-        <meta.Icon size={22} color={color} strokeWidth={focused ? 2.4 : 2} />
+        <View>
+          <meta.Icon size={22} color={color} strokeWidth={focused ? 2.4 : 2} />
+          {showDot && <View style={styles.dot} />}
+        </View>
         <Text style={[styles.label, { color, fontFamily: focused ? fonts.bodyBold : fonts.bodyMedium }]}>
           {meta.label}
         </Text>
@@ -99,6 +120,17 @@ const styles = StyleSheet.create({
   fabGap: { width: 72 },
   tab: { flex: 1, alignItems: 'center', gap: 3, paddingVertical: 2 },
   label: { fontSize: 11 },
+  dot: {
+    position: 'absolute',
+    top: -2,
+    right: -5,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#e0492b',
+    borderWidth: 1.5,
+    borderColor: colors.raised,
+  },
   fab: {
     position: 'absolute',
     top: -26,

@@ -82,6 +82,16 @@ export function songScoreColor(score: number): string {
   return `hsl(${hue}, 65%, 32%)`
 }
 
+// Deterministic color for a user's default profile picture, derived from their
+// name so it's stable and distinct per person. Tuned for legible text and fills
+// on the light app background.
+export function avatarColor(seed: string): string {
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0
+  const hue = Math.abs(hash) % 360
+  return `hsl(${hue}, 55%, 42%)`
+}
+
 export function computeAScore(score: number): number {
   return (15 * score - 14) / 13
 }

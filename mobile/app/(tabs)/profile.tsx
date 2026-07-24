@@ -149,20 +149,19 @@ export default function Profile() {
               </Pressable>
             </View>
 
-            {/* Favorite genres / subgenres — subheaders under the name */}
+            {/* Taste line — favorite genres (green) then subgenres (muted) as one
+                typographic line rather than boxed pills. */}
             {(topGenres.length > 0 || topSubgenres.length > 0) && (
-              <View style={styles.genreRow}>
-                {topGenres.map((g) => (
-                  <View key={`g-${g}`} style={[styles.genrePill, styles.genrePillPrimary]}>
-                    <Text style={styles.genrePillPrimaryText}>{g}</Text>
-                  </View>
+              <Text style={styles.taste}>
+                {[
+                  ...topGenres.map((g) => ({ g, primary: true })),
+                  ...topSubgenres.map((g) => ({ g, primary: false })),
+                ].map((p, i, arr) => (
+                  <Text key={(p.primary ? 'g-' : 's-') + p.g} style={p.primary ? styles.tastePrimary : styles.tasteDim}>
+                    {p.g}{i < arr.length - 1 ? '   ·   ' : ''}
+                  </Text>
                 ))}
-                {topSubgenres.map((g) => (
-                  <View key={`s-${g}`} style={[styles.genrePill, styles.genrePillMuted]}>
-                    <Text style={styles.genrePillMutedText}>{g}</Text>
-                  </View>
-                ))}
-              </View>
+              </Text>
             )}
 
             {/* Bio + edit */}
@@ -173,25 +172,24 @@ export default function Profile() {
               <Pencil size={13} color={colors.inkMuted} />
             </Pressable>
 
-            {/* Stat tiles */}
-            <View style={styles.tiles}>
+            {/* Stats — open strip, no cards; hairline dividers keep it aligned. */}
+            <View style={styles.stats}>
               <StatTile
                 value={summary?.avg_album_score != null ? summary.avg_album_score.toFixed(2) : '—'}
                 label="Avg score"
               />
+              <View style={styles.statDivider} />
               <StatTile value={String(summary?.longest_streak ?? 0)} label="Day streak" />
+              <View style={styles.statDivider} />
               <StatTile value={String(thisWeek)} label="This week" />
             </View>
 
-            {/* Library / Stats / Ratings */}
+            {/* Library / Stats / Ratings — underline tabs, no segmented box. */}
             <View style={styles.tabBar}>
               {TABS.map(({ key, label }) => (
-                <Pressable
-                  key={key}
-                  style={[styles.tab, tab === key && styles.tabActive]}
-                  onPress={() => setTab(key)}
-                >
+                <Pressable key={key} style={styles.tab} onPress={() => setTab(key)}>
                   <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
+                  <View style={[styles.tabUnderline, tab === key && styles.tabUnderlineActive]} />
                 </Pressable>
               ))}
             </View>
@@ -264,9 +262,9 @@ export default function Profile() {
 
 function StatTile({ value, label }: { value: string; label: string }) {
   return (
-    <View style={styles.tile}>
-      <Text style={styles.tileValue}>{value}</Text>
-      <Text style={styles.tileLabel}>{label}</Text>
+    <View style={styles.statCol}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   )
 }
@@ -403,60 +401,38 @@ const styles = StyleSheet.create({
   name: { fontFamily: fonts.display, fontSize: 28, color: colors.ink, letterSpacing: 1 },
   count: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary, marginTop: 2 },
 
-  genreRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.md },
-  genrePill: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: radii.pill },
-  genrePillPrimary: { backgroundColor: colors.greenSoft },
-  genrePillPrimaryText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },
-  genrePillMuted: { backgroundColor: colors.inset },
-  genrePillMutedText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkTertiary },
+  taste: { marginTop: spacing.md, lineHeight: 20 },
+  tastePrimary: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
+  tasteDim: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkMuted },
 
   bioRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.md },
   bio: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.inkSecondary, lineHeight: 19 },
   bioEmpty: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.inkMuted, fontStyle: 'italic' },
 
-  tiles: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
-  tile: {
-    flex: 1,
-    backgroundColor: colors.raised,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-  },
-  tileValue: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.ink },
-  tileLabel: {
+  stats: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xl },
+  statCol: { flex: 1, alignItems: 'center' },
+  statDivider: { width: StyleSheet.hairlineWidth, height: 30, backgroundColor: colors.border },
+  statValue: { fontFamily: fonts.display, fontSize: 27, color: colors.ink, letterSpacing: 0.5 },
+  statLabel: {
     fontFamily: fonts.bodyMedium,
     fontSize: 10,
-    color: colors.inkTertiary,
+    color: colors.inkMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 2,
+    letterSpacing: 0.8,
+    marginTop: 4,
   },
 
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: colors.inset,
-    borderRadius: radii.md,
-    padding: 4,
-    marginTop: spacing.lg,
-  },
-  tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: radii.sm },
-  tabActive: { backgroundColor: colors.raised },
-  tabText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.inkTertiary },
+  tabBar: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.xl },
+  tab: { alignItems: 'center', gap: 6 },
+  tabText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.inkMuted },
   tabTextActive: { color: colors.ink },
+  tabUnderline: { height: 2, width: '100%', borderRadius: 1, backgroundColor: 'transparent' },
+  tabUnderlineActive: { backgroundColor: colors.green },
 
   statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
-  chip: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: radii.pill,
-    backgroundColor: colors.raised,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  chipActive: { backgroundColor: colors.green, borderColor: colors.green },
-  chipText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkSecondary },
+  chip: { paddingVertical: 6, paddingHorizontal: 14, borderRadius: radii.pill, backgroundColor: 'transparent' },
+  chipActive: { backgroundColor: colors.green },
+  chipText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary },
   chipTextActive: { color: '#ffffff' },
 
   cell: { flex: 1 / 3 },

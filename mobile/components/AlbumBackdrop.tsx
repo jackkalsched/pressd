@@ -1,15 +1,23 @@
 // Ambient album-art wash behind an album's pages, ported from the desktop
-// AlbumDetail: the cover bleeds from the top-right (blurred, faint) under a
-// gradient veil tinted by the album's own dominant hue, fading into the app
-// background so the page stays readable. The art coloring its own page.
+// AlbumDetail: the cover bleeds from the top-right (blurred, faint) and is
+// dissolved by a radial vignette so its rectangular edges melt into the page
+// while the center of the art stays faintly visible. A hue-tinted linear veil
+// on top fades the whole thing into the app background so the page reads.
 import { useMemo } from 'react'
 import { Dimensions, Image, StyleSheet, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAlbumColor } from '../lib/api'
 import { colors } from '../theme/tokens'
 
 const { width: W } = Dimensions.get('window')
+
+// Blurred cover bleed, slightly larger than before and centered up in the
+// top-right. Image and vignette share this frame so the radial fade lines up.
+const ART = W * 1.06
+const ART_TOP = -W * 0.16
+const ART_RIGHT = -W * 0.22
 
 function hueOf(hsl: string | null | undefined): number | null {
   const m = hsl?.match(/hsl\((\d+)/)
@@ -47,7 +55,26 @@ export default function AlbumBackdrop({
   return (
     <View style={styles.fill} pointerEvents="none">
       {albumArtUrl ? (
-        <Image source={{ uri: albumArtUrl }} style={styles.art} blurRadius={14} resizeMode="cover" />
+        <>
+          <Image
+            source={{ uri: albumArtUrl }}
+            style={[styles.artPos, styles.artImage]}
+            blurRadius={20}
+            resizeMode="cover"
+          />
+          {/* Radial fade: transparent over the art's center, ramping to solid
+              app-bg by the edges, so the square dissolves into the page. */}
+          <Svg width={ART} height={ART} style={styles.artPos}>
+            <Defs>
+              <RadialGradient id="albumFade" cx="50%" cy="50%" r="50%">
+                <Stop offset="0" stopColor={colors.bg} stopOpacity={0} />
+                <Stop offset="0.5" stopColor={colors.bg} stopOpacity={0.35} />
+                <Stop offset="1" stopColor={colors.bg} stopOpacity={1} />
+              </RadialGradient>
+            </Defs>
+            <Rect x={0} y={0} width={ART} height={ART} fill="url(#albumFade)" />
+          </Svg>
+        </>
       ) : null}
       <LinearGradient colors={veil} locations={[0, 0.32, 0.62, 1]} style={styles.fill} />
     </View>
@@ -56,12 +83,6 @@ export default function AlbumBackdrop({
 
 const styles = StyleSheet.create({
   fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  art: {
-    position: 'absolute',
-    top: -W * 0.1,
-    right: -W * 0.18,
-    width: W * 0.85,
-    height: W * 0.85,
-    opacity: 0.4,
-  },
+  artPos: { position: 'absolute', top: ART_TOP, right: ART_RIGHT, width: ART, height: ART },
+  artImage: { opacity: 0.45 },
 })

@@ -308,25 +308,29 @@ function ArtistsTab({ userId, onOpen }: { userId: number; onOpen: (name: string)
 
   return (
     <>
-      {/* Click-and-sort buttons. Tapping the active one flips asc <-> desc. */}
-      <FlatList
+      {/* Click-and-sort buttons. Tapping the active one flips asc <-> desc. A
+          horizontal ScrollView (not FlatList) so the pills size to their content
+          and the custom-font glyphs / arrows aren't vertically clipped. */}
+      <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.sortRow}
         contentContainerStyle={styles.sortRowContent}
-        data={ARTIST_COLS}
-        keyExtractor={(c) => c.key}
-        renderItem={({ item }) => {
+      >
+        {ARTIST_COLS.map((item) => {
           const on = sortKey === item.key
           return (
-            <Pressable style={[styles.sortChip, on && styles.sortChipActive]} onPress={() => sort(item.key)}>
-              <Text style={[styles.sortChipText, on && styles.sortChipTextActive]}>
+            <Pressable key={item.key} style={[styles.sortChip, on && styles.sortChipActive]} onPress={() => sort(item.key)}>
+              <Text style={[styles.sortChipText, on && styles.sortChipTextActive]} numberOfLines={1}>
                 {item.label}{on ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
               </Text>
             </Pressable>
           )
-        }}
-      />
+        })}
+      </ScrollView>
+      <Text style={styles.qualifyNote}>
+        Artists must have at least {QUALIFIED} rated songs to appear here.
+      </Text>
       <FlatList
         data={rows}
         keyExtractor={(r) => r.artist}
@@ -374,11 +378,12 @@ const styles = StyleSheet.create({
 
   // Artists — click-and-sort buttons (green active) + ranked list
   sortRow: { flexGrow: 0, marginTop: spacing.md },
-  sortRowContent: { paddingHorizontal: spacing.lg, gap: spacing.sm },
-  sortChip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.greenSoft },
+  sortRowContent: { paddingHorizontal: spacing.lg, gap: spacing.sm, alignItems: 'center', paddingVertical: 2 },
+  sortChip: { minHeight: 32, justifyContent: 'center', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 14, borderRadius: radii.pill, backgroundColor: colors.greenSoft },
   sortChipActive: { backgroundColor: colors.green },
-  sortChipText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.green },
+  sortChipText: { fontFamily: fonts.bodyMedium, fontSize: 13, lineHeight: 18, color: colors.green },
   sortChipTextActive: { color: '#fff', fontFamily: fonts.bodySemiBold },
+  qualifyNote: { fontFamily: fonts.body, fontSize: 11, color: colors.inkTertiary, paddingHorizontal: spacing.lg, marginTop: spacing.sm },
   list: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 140 },
   artistRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   metricVal: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.ink, minWidth: 56, textAlign: 'right' },

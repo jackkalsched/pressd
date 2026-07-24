@@ -84,6 +84,12 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
                 <Text style={styles.genrePillText}>{album.genre.toUpperCase()}</Text>
               </View>
             )}
+            {(() => {
+              const subs = [album.subGenre1, album.subGenre2, album.subGenre3].filter(Boolean)
+              return subs.length > 0 ? (
+                <Text style={styles.shareSubGenres}>{subs.join(' · ')}</Text>
+              ) : null
+            })()}
           </View>
 
           <Text style={[styles.bigScore, { color: scoreColor }]}>
@@ -194,6 +200,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   genrePillText: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.4, color: colors.green },
+  shareSubGenres: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkTertiary, marginTop: 6, textAlign: 'center' },
 
   bigScore: { fontFamily: fonts.display, fontSize: 88, lineHeight: 92, marginTop: spacing.lg },
   bigScoreLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.6, color: colors.inkMuted },

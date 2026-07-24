@@ -8,8 +8,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { ArrowLeft, Check, Pencil, Trash2 } from 'lucide-react-native'
-import { fetchAlbum, saveReview, deleteReview } from '../../lib/api'
-import { songScoreColor, EP_MAX_TRACKS, type Album } from '@pressd/shared/types'
+import { fetchAlbum, fetchFriends, saveReview, deleteReview } from '../../lib/api'
+import { songScoreColor, avatarColor, EP_MAX_TRACKS, type Album } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import CommentThread from '../../components/CommentThread'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
@@ -25,6 +25,13 @@ export default function AlbumDetail() {
   const { data: album, isLoading } = useQuery({
     queryKey: ['album', albumId],
     queryFn: () => fetchAlbum(albumId),
+  })
+
+  // Friends resolve the owner's name/color when viewing someone else's copy.
+  const { data: friends = [] } = useQuery({
+    queryKey: ['friends', user?.id],
+    queryFn: () => fetchFriends(user!.id),
+    enabled: !!user,
   })
 
   if (isLoading || !album) {
@@ -44,6 +51,8 @@ export default function AlbumDetail() {
   const cta =
     album.status === 'rated' ? 'Edit rating' : album.status === 'listening' ? 'Continue' : 'Rate this album'
   const isMine = user != null && album.userId === user.id
+  const owner = !isMine && album.userId != null ? friends.find((f) => f.id === album.userId) ?? null : null
+  const ownerColor = owner ? avatarColor(owner.name) : colors.green
 
   const factors: { label: string; value: number | null }[] = isEP
     ? []
@@ -63,6 +72,21 @@ export default function AlbumDetail() {
           <ArrowLeft size={18} color={colors.inkSecondary} />
           <Text style={styles.backText}>Back</Text>
         </Pressable>
+        {/* Whose rating this is — only when viewing a friend's copy. */}
+        {owner && (
+          <View style={styles.ownerTag}>
+            <View style={[styles.ownerPfp, { backgroundColor: ownerColor }]}>
+              {owner.avatarUrl ? (
+                <Image source={{ uri: owner.avatarUrl }} style={styles.ownerPfpImg} contentFit="cover" />
+              ) : (
+                <Text style={styles.ownerPfpInitial}>{owner.name[0]?.toUpperCase()}</Text>
+              )}
+            </View>
+            <Text style={[styles.ownerName, { color: ownerColor }]} numberOfLines={1}>
+              {owner.name}'s rating
+            </Text>
+          </View>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -79,6 +103,12 @@ export default function AlbumDetail() {
             {[album.artist, ...album.extraArtists].join(', ')}{album.year ? ` · ${album.year}` : ''}
           </Text>
           {album.genre && <Text style={styles.genre}>{album.genre}</Text>}
+          {(() => {
+            const subs = [album.subGenre1, album.subGenre2, album.subGenre3].filter(Boolean)
+            return subs.length > 0 ? (
+              <Text style={styles.subGenres}>{subs.join(' · ')}</Text>
+            ) : null
+          })()}
         </View>
 
         <View style={styles.scoreBlock}>
@@ -223,12 +253,31 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   screen: { flex: 1, backgroundColor: 'transparent' },
   center: { alignItems: 'center', justifyContent: 'center' },
-  topBar: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   backText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.inkSecondary },
+  ownerTag: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
+  ownerPfp: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  ownerPfpImg: { width: '100%', height: '100%' },
+  ownerPfpInitial: { fontFamily: fonts.bodyBold, fontSize: 11, color: '#ffffff' },
+  ownerName: { fontFamily: fonts.bodySemiBold, fontSize: 14, flexShrink: 1 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: 60 },
 
-  head: { alignItems: 'center', marginTop: spacing.sm },
+  head: { alignItems: 'center', marginTop: spacing.xxl },
   art: { width: 148, height: 148, borderRadius: radii.lg },
   artFallback: { backgroundColor: colors.inset, alignItems: 'center', justifyContent: 'center' },
   artInitial: { fontFamily: fonts.display, fontSize: 56, color: colors.inkMuted },
@@ -241,6 +290,13 @@ const styles = StyleSheet.create({
     color: colors.green,
     marginTop: spacing.sm,
     textTransform: 'uppercase',
+  },
+  subGenres: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+    color: colors.inkTertiary,
+    marginTop: 5,
+    textAlign: 'center',
   },
 
   scoreBlock: { alignItems: 'center', marginTop: spacing.xl },

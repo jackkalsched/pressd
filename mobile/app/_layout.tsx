@@ -17,9 +17,11 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans'
 import '../lib/api' // configure the shared client before anything fetches
 import { AuthProvider, useAuth } from '../lib/auth'
+import { loadSocialSeen } from '../lib/socialSeen'
 import { colors } from '../theme/tokens'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
+loadSocialSeen() // hydrate the Social "new activity" marker once at launch
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },

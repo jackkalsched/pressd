@@ -1,7 +1,7 @@
 // Social — friend activity (ratings & reviews with likes/comments), a Reviews
 // tab, and a Find Friends flow (search + incoming/outgoing requests). Mirrors
 // the website Social page.
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -31,6 +31,7 @@ import {
   type UserSearchResult,
 } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
+import { markSocialSeen, latestFeedTime } from '../../lib/socialSeen'
 import { songScoreColor } from '@pressd/shared/types'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
@@ -69,6 +70,11 @@ export default function Social() {
   })
 
   const incomingCount = requests?.incoming.length ?? 0
+
+  // Viewing the feed clears the tab-bar "new activity" dot up to the newest item.
+  useEffect(() => {
+    if (feed.length) markSocialSeen(latestFeedTime(feed))
+  }, [feed])
 
   async function like(albumId: number) {
     if (!user) return

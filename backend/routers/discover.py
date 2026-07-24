@@ -211,14 +211,19 @@ def trending(
       - all:  all-time, by number of distinct raters, then recency
       - top:  all-time, by average score
 
+    The displayed `avg_score` is always the album's all-time average across the
+    whole userbase; for the weekly view only the `rater_count` (and ranking) is
+    scoped to the last 7 days.
+
     Each row links to the current user's own copy when they have one, otherwise
     to the most recently rated copy.
     """
-    q = (
+    base = (
         select(Album)
         .where(Album.status == "rated")
         .where(Album.score.is_not(None))
     )
+    q = base
     if period == "week":
         q = q.where(Album.date_rated >= date.today() - timedelta(days=7))
     albums = session.exec(q).all()
@@ -246,6 +251,20 @@ def trending(
             g["rep_last"], g["rep_album_id"] = a.date_rated, a.id
         if a.user_id == user.id:
             g["own_album_id"] = a.id
+
+    # Weekly view: the score shown should be the album's all-time userbase
+    # average, not just this week's ratings. Re-aggregate scores over every
+    # rated copy (all time) for the albums that trended this week; rater_count
+    # stays scoped to the week.
+    if period == "week" and groups:
+        alltime: dict[tuple[str, str], list[float]] = {}
+        for a in session.exec(base).all():
+            key = (a.album_name.strip().lower(), a.artist.strip().lower())
+            if key in groups:
+                alltime.setdefault(key, []).append(a.score)
+        for key, g in groups.items():
+            if alltime.get(key):
+                g["scores"] = alltime[key]
 
     rows = [
         {

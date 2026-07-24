@@ -6,6 +6,7 @@ import { useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
+  Dimensions,
   Modal,
   Pressable,
   RefreshControl,
@@ -30,10 +31,13 @@ import {
   importAlbum,
   type NewRelease,
   type TopReview,
+  type TrendingAlbum,
 } from '../../lib/api'
 import { songScoreColor } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
+
+const WINDOW_H = Dimensions.get('window').height
 
 function greeting(): string {
   const h = new Date().getHours()
@@ -84,6 +88,7 @@ export default function ForYou() {
   const [refreshing, setRefreshing] = useState(false)
   const [trendMode, setTrendMode] = useState<'week' | 'top'>('week')
   const [trendPickerOpen, setTrendPickerOpen] = useState(false)
+  const [trendBlockY, setTrendBlockY] = useState(0)
 
   const { data: listening = [], refetch: refetchListening } = useQuery({
     queryKey: ['albums', 'listening', userId],
@@ -262,28 +267,23 @@ export default function ForYou() {
           </View>
         )}
 
-        {/* Press'd Trending */}
+        {/* Press'd Trending — bubbly cells that pop in as they scroll into view */}
         {trending.length > 0 && (
-          <View style={styles.block}>
+          <View style={styles.block} onLayout={(e) => setTrendBlockY(e.nativeEvent.layout.y)}>
             <SectionHead
               label="PRESS'D TRENDING"
               meta={trendMode === 'week' ? 'This week' : 'All time'}
               onMetaPress={() => setTrendPickerOpen(true)}
             />
             {trending.map((t, i) => (
-              <Pressable key={t.album_id} style={[styles.trendRow, i > 0 && styles.hairline]} onPress={() => openAlbum(t.album_id)}>
-                <Text style={styles.rank}>{i + 1}</Text>
-                <Cover uri={t.album_art_url} seed={t.album_name} size={46} />
-                <View style={styles.mediaText}>
-                  <Text style={styles.rowTitle} numberOfLines={1}>{t.album_name}</Text>
-                  <Text style={styles.rowSub} numberOfLines={1}>{t.artist}</Text>
-                </View>
-                {t.avg_score != null && (
-                  <View style={[styles.scorePill, { backgroundColor: scoreTint(t.avg_score) }]}>
-                    <Text style={[styles.scorePillText, { color: songScoreColor(t.avg_score) }]}>{t.avg_score.toFixed(2)}</Text>
-                  </View>
-                )}
-              </Pressable>
+              <TrendRow
+                key={t.album_id}
+                item={t}
+                rank={i + 1}
+                scrollY={scrollY}
+                baseY={trendBlockY}
+                onPress={() => openAlbum(t.album_id)}
+              />
             ))}
           </View>
         )}
@@ -465,6 +465,62 @@ function ReviewCell({ review, first, onOpen, onLike }: { review: TopReview; firs
   )
 }
 
+// A trending cell that fades, rises, and scales up as it scrolls into view.
+// `baseY` is the trending block's offset in the scroll content; combined with
+// the row's own offset within the block it gives an absolute content position
+// to interpolate the shared scrollY against. Native-driver friendly (opacity +
+// transform only), so it stays smooth alongside the masthead animation.
+function TrendRow({
+  item,
+  rank,
+  scrollY,
+  baseY,
+  onPress,
+}: {
+  item: TrendingAlbum
+  rank: number
+  scrollY: Animated.Value
+  baseY: number
+  onPress: () => void
+}) {
+  const [localY, setLocalY] = useState(0)
+  const absY = baseY + localY
+  // Begin the pop once the row is ~100px up from the bottom edge; finish over
+  // the next 120px of scroll.
+  const start = absY - WINDOW_H + 100
+  const progress = scrollY.interpolate({
+    inputRange: [start, start + 120],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  })
+  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [28, 0] })
+  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
+
+  return (
+    <Animated.View
+      onLayout={(e) => setLocalY(e.nativeEvent.layout.y)}
+      style={{ opacity: progress, transform: [{ translateY }, { scale }] }}
+    >
+      <Pressable
+        style={({ pressed }) => [styles.trendCell, pressed && styles.trendCellPressed]}
+        onPress={onPress}
+      >
+        <Text style={styles.rank}>{rank}</Text>
+        <Cover uri={item.album_art_url} seed={item.album_name} size={46} />
+        <View style={styles.mediaText}>
+          <Text style={styles.rowTitle} numberOfLines={1}>{item.album_name}</Text>
+          <Text style={styles.rowSub} numberOfLines={1}>{item.artist}</Text>
+        </View>
+        {item.avg_score != null && (
+          <View style={[styles.scorePill, { backgroundColor: scoreTint(item.avg_score) }]}>
+            <Text style={[styles.scorePillText, { color: songScoreColor(item.avg_score) }]}>{item.avg_score.toFixed(2)}</Text>
+          </View>
+        )}
+      </Pressable>
+    </Animated.View>
+  )
+}
+
 function Cover({ uri, seed, size, radius = radii.sm }: { uri?: string | null; seed: string; size: number; radius?: number }) {
   if (uri) {
     return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: radius }} contentFit="cover" />
@@ -539,7 +595,28 @@ const styles = StyleSheet.create({
   railName: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink, marginTop: 7 },
   railArtist: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
 
-  trendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  trendCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.raised,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    shadowColor: '#1c1917',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  trendCellPressed: {
+    transform: [{ scale: 0.97 }],
+    shadowOpacity: 0.12,
+    backgroundColor: colors.inset,
+  },
   rank: { fontFamily: fonts.display, fontSize: 16, color: colors.inkMuted, width: 20, textAlign: 'center' },
   scorePill: { borderRadius: radii.sm, paddingHorizontal: 8, paddingVertical: 4, minWidth: 46, alignItems: 'center' },
   scorePillText: { fontFamily: fonts.bodyBold, fontSize: 14 },
