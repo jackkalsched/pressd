@@ -184,8 +184,10 @@ export default function ForYou() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.green} />}
       >
         <Animated.View style={{ opacity: mastheadOpacity, transform: [{ translateY: mastheadShift }] }}>
-          <Text style={styles.date}>{today}</Text>
-          <Text style={styles.title}>For You</Text>
+          <View style={styles.masthead}>
+            <Text style={styles.title}>For You</Text>
+            <Text style={styles.date} numberOfLines={1}>{today}</Text>
+          </View>
           <Text style={styles.sub}>
             {greeting()}{firstName ? ` ${firstName},` : ''} here's what's moving this week.
           </Text>
@@ -280,6 +282,7 @@ export default function ForYou() {
                 key={t.album_id}
                 item={t}
                 rank={i + 1}
+                weekly={trendMode === 'week'}
                 scrollY={scrollY}
                 baseY={trendBlockY}
                 onPress={() => openAlbum(t.album_id)}
@@ -473,12 +476,14 @@ function ReviewCell({ review, first, onOpen, onLike }: { review: TopReview; firs
 function TrendRow({
   item,
   rank,
+  weekly,
   scrollY,
   baseY,
   onPress,
 }: {
   item: TrendingAlbum
   rank: number
+  weekly: boolean
   scrollY: Animated.Value
   baseY: number
   onPress: () => void
@@ -493,16 +498,15 @@ function TrendRow({
     outputRange: [0, 1],
     extrapolate: 'clamp',
   })
-  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [28, 0] })
-  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
+  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [18, 0] })
 
   return (
     <Animated.View
       onLayout={(e) => setLocalY(e.nativeEvent.layout.y)}
-      style={{ opacity: progress, transform: [{ translateY }, { scale }] }}
+      style={{ opacity: progress, transform: [{ translateY }] }}
     >
       <Pressable
-        style={({ pressed }) => [styles.trendCell, pressed && styles.trendCellPressed]}
+        style={({ pressed }) => [styles.trendRow, rank > 1 && styles.hairline, pressed && styles.trendRowPressed]}
         onPress={onPress}
       >
         <Text style={styles.rank}>{rank}</Text>
@@ -510,6 +514,9 @@ function TrendRow({
         <View style={styles.mediaText}>
           <Text style={styles.rowTitle} numberOfLines={1}>{item.album_name}</Text>
           <Text style={styles.rowSub} numberOfLines={1}>{item.artist}</Text>
+          <Text style={styles.trendCount} numberOfLines={1}>
+            {item.rater_count} {item.rater_count === 1 ? 'rating' : 'ratings'}{weekly ? ' this week' : ''}
+          </Text>
         </View>
         {item.avg_score != null && (
           <View style={[styles.scorePill, { backgroundColor: scoreTint(item.avg_score) }]}>
@@ -548,9 +555,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  compactTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.ink, letterSpacing: 0.5 },
-  date: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.2, color: colors.inkMuted, marginTop: spacing.lg },
-  title: { fontFamily: fonts.display, fontSize: 38, color: colors.ink, letterSpacing: 1, marginTop: 2 },
+  compactTitle: { fontFamily: fonts.displayBlack, fontSize: 20, color: colors.ink, letterSpacing: 0.5 },
+  masthead: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: spacing.md },
+  date: { fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: 1.4, color: colors.inkTertiary, marginBottom: 8, textAlign: 'right' },
+  title: { fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: 0.5 },
   sub: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkTertiary, marginTop: 4 },
 
   block: { marginTop: spacing.xxl },
@@ -595,28 +603,14 @@ const styles = StyleSheet.create({
   railName: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink, marginTop: 7 },
   railArtist: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
 
-  trendCell: {
+  trendRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.raised,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    shadowColor: '#1c1917',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
   },
-  trendCellPressed: {
-    transform: [{ scale: 0.97 }],
-    shadowOpacity: 0.12,
-    backgroundColor: colors.inset,
-  },
+  trendRowPressed: { opacity: 0.5 },
+  trendCount: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted, marginTop: 3 },
   rank: { fontFamily: fonts.display, fontSize: 16, color: colors.inkMuted, width: 20, textAlign: 'center' },
   scorePill: { borderRadius: radii.sm, paddingHorizontal: 8, paddingVertical: 4, minWidth: 46, alignItems: 'center' },
   scorePillText: { fontFamily: fonts.bodyBold, fontSize: 14 },

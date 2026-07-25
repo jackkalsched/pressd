@@ -300,6 +300,18 @@ export async function importAlbum(
   return { ...transformAlbum(raw), alreadyExisted: raw.already_existed ?? false }
 }
 
+// Add an existing album (a friend's copy from the feed) to the current user's
+// library as the exact same album — server clones its metadata + tracklist.
+export async function copyAlbumToLibrary(
+  albumId: number,
+  status: 'to_listen' | 'listening' = 'to_listen',
+): Promise<Album & { alreadyExisted: boolean }> {
+  const res = await apiFetch(`${BASE()}/albums/${albumId}/copy?status=${status}`, { method: 'POST' })
+  if (!res.ok) throw new Error('Failed to add album')
+  const raw = await res.json()
+  return { ...transformAlbum(raw), alreadyExisted: raw.already_existed ?? false }
+}
+
 export async function backfillCovers(): Promise<{ updated: number; skipped: number; failed: number }> {
   const res = await apiFetch(`${BASE()}/util/backfill-covers`, { method: 'POST' })
   if (!res.ok) throw new Error('Backfill failed')
@@ -366,6 +378,46 @@ export async function fetchTrending(
 ): Promise<TrendingAlbum[]> {
   const res = await apiFetch(`${BASE()}/discover/trending?period=${period}&limit=${limit}`)
   if (!res.ok) throw new Error('Failed to load trending')
+  return res.json()
+}
+
+// Userbase-wide album chart — aggregate ranking with day-over-day movement.
+export interface ChartItem {
+  rank: number
+  album_id: number
+  album_name: string
+  artist: string
+  year: number | null
+  album_art_url: string | null
+  avg_score: number | null
+  rater_count: number
+  movement: number | null // + up, − down, 0 no change, null = new entry
+}
+
+export interface ChartFacets {
+  genres: string[]
+  decades: number[]
+  years: number[]
+}
+
+export interface ChartsResponse {
+  items: ChartItem[]
+  facets: ChartFacets
+}
+
+export async function fetchCharts(params?: {
+  period?: 'week' | 'all'
+  genre?: string
+  decade?: number
+  year?: number
+}): Promise<ChartsResponse> {
+  const qs = new URLSearchParams()
+  if (params?.period) qs.set('period', params.period)
+  if (params?.genre) qs.set('genre', params.genre)
+  if (params?.decade) qs.set('decade', String(params.decade))
+  if (params?.year) qs.set('year', String(params.year))
+  const res = await apiFetch(`${BASE()}/discover/charts?${qs}`)
+  if (!res.ok) throw new Error('Failed to load charts')
   return res.json()
 }
 

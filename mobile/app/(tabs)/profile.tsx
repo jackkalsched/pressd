@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: spacing.lg, paddingBottom: 120, gap: GAP + 4 },
 
-  identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.lg },
+  identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.md },
   avatar: {
     width: 64,
     height: 64,
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
   },
   avatarImg: { width: '100%', height: '100%' },
   avatarInitial: { fontFamily: fonts.bodyBold, fontSize: 26, color: '#ffffff' },
-  name: { fontFamily: fonts.display, fontSize: 28, color: colors.ink, letterSpacing: 1 },
+  name: { fontFamily: fonts.displayBlack, fontSize: 28, color: colors.ink, letterSpacing: 0.5 },
   count: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary, marginTop: 2 },
 
   taste: { marginTop: spacing.md, lineHeight: 20 },

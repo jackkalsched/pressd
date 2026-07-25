@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
-import { ListMusic, Star, Users, CircleUser, Plus } from 'lucide-react-native'
+import { ListMusic, BarChart3, Users, CircleUser, Plus } from 'lucide-react-native'
 import { fetchFeed } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useSocialSeen, latestFeedTime } from '../lib/socialSeen'
@@ -23,7 +23,7 @@ interface TabBarProps {
 
 const TAB_META: Record<string, { label: string; Icon: typeof ListMusic }> = {
   index: { label: 'For You', Icon: ListMusic },
-  ratings: { label: 'Ratings', Icon: Star },
+  charts: { label: 'Charts', Icon: BarChart3 },
   social: { label: 'Social', Icon: Users },
   profile: { label: 'Profile', Icon: CircleUser },
 }

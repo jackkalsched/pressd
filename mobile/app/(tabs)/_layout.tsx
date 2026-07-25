@@ -31,7 +31,7 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" />
-      <Tabs.Screen name="ratings" />
+      <Tabs.Screen name="charts" />
       <Tabs.Screen name="social" />
       <Tabs.Screen name="profile" />
     </Tabs>

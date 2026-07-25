@@ -1,12 +1,16 @@
-// Social — friend activity (ratings & reviews with likes/comments), a Reviews
-// tab, and a Find Friends flow (search + incoming/outgoing requests). Mirrors
-// the website Social page.
-import { useEffect, useState } from 'react'
+// Social — three tabs under one masthead:
+//   Activity — a dense rating log grouped by day, no cards. Each row pairs the
+//     friend's avatar with the album cover, and shows the friend's score plus
+//     the gap against your own rating (only when you've rated it too).
+//   Reviews  — a feed of friends' written reviews.
+//   Friends  — your current friends.
+import { useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -16,10 +20,13 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { Heart, MessageCircle, Search, UserPlus, X } from 'lucide-react-native'
+import { Heart, Search, UserPlus, X } from 'lucide-react-native'
 import {
   fetchFeed,
   fetchFriendReviews,
+  fetchFriends,
+  fetchAlbums,
+  copyAlbumToLibrary,
   toggleLike,
   searchUsers,
   addFriend,
@@ -28,20 +35,88 @@ import {
   declineFriendRequest,
   type FeedItem,
   type FriendReview,
+  type UserInfo,
   type UserSearchResult,
 } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
-import { markSocialSeen, latestFeedTime } from '../../lib/socialSeen'
-import { songScoreColor } from '@pressd/shared/types'
+import { songScoreColor, avatarColor } from '@pressd/shared/types'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
-type Tab = 'feed' | 'reviews'
+const DOWN = '#c0392b'
+type Tab = 'activity' | 'reviews' | 'friends'
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'activity', label: 'Activity' },
+  { key: 'reviews', label: 'Reviews' },
+  { key: 'friends', label: 'Friends' },
+]
 
-function Avatar({ name, url, size = 36 }: { name: string; url?: string; size?: number }) {
-  if (url) return <Image source={{ uri: url }} style={{ width: size, height: size, borderRadius: size / 2 }} contentFit="cover" />
+const albumKey = (album: string, artist: string) => `${album.trim().toLowerCase()}||${artist.trim().toLowerCase()}`
+
+function timeOf(it: FeedItem): string | undefined {
+  return it.review_at ?? it.recommended_at ?? it.date_rated ?? undefined
+}
+
+function relativeTime(iso?: string): string {
+  if (!iso) return ''
+  const t = Date.parse(iso.length <= 10 ? `${iso}T00:00:00` : iso)
+  if (Number.isNaN(t)) return ''
+  const min = Math.floor((Date.now() - t) / 60_000)
+  if (min < 60) return `${Math.max(1, min)}m`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h`
+  return `${Math.floor(hr / 24)}d`
+}
+
+function dayLabelFor(key: string): string {
+  if (key === 'unknown') return ''
+  const d = new Date(`${key}T00:00:00`)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const diff = Math.round((today.getTime() - d.getTime()) / 86_400_000)
+  if (diff <= 0) return 'TODAY'
+  if (diff === 1) return 'YESTERDAY'
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()
+}
+
+function groupFeed(feed: FeedItem[]) {
+  const groups: { key: string; label: string; count: number; items: FeedItem[] }[] = []
+  for (const it of feed) {
+    const key = timeOf(it)?.slice(0, 10) ?? 'unknown'
+    let g = groups.find((x) => x.key === key)
+    if (!g) {
+      g = { key, label: dayLabelFor(key), count: 0, items: [] }
+      groups.push(g)
+    }
+    g.items.push(it)
+    g.count += 1
+  }
+  return groups
+}
+
+function Avatar({ name, url, size, style }: { name: string; url?: string | null; size: number; style?: object }) {
+  if (url) return <Image source={{ uri: url }} style={[{ width: size, height: size, borderRadius: size / 2 }, style]} contentFit="cover" />
   return (
-    <View style={[styles.avatarFallback, { width: size, height: size, borderRadius: size / 2 }]}>
-      <Text style={[styles.avatarInitial, { fontSize: size * 0.4 }]}>{name[0]?.toUpperCase()}</Text>
+    <View style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: avatarColor(name), alignItems: 'center', justifyContent: 'center' }, style]}>
+      <Text style={{ fontFamily: fonts.bodyBold, fontSize: size * 0.4, color: '#fff' }}>{name[0]?.toUpperCase()}</Text>
+    </View>
+  )
+}
+
+function AlbumTile({ name, url, size, style }: { name: string; url?: string | null; size: number; style?: object }) {
+  if (url) return <Image source={{ uri: url }} style={[{ width: size, height: size, borderRadius: radii.sm }, style]} contentFit="cover" />
+  return (
+    <View style={[{ width: size, height: size, borderRadius: radii.sm, backgroundColor: avatarColor(name), alignItems: 'center', justifyContent: 'center' }, style]}>
+      <Text style={{ fontFamily: fonts.display, fontSize: size * 0.42, color: 'rgba(255,255,255,0.92)' }}>{name[0]?.toUpperCase()}</Text>
+    </View>
+  )
+}
+
+/** The paired friend-avatar + album-cover cluster that leads every row. */
+function Cluster({ item }: { item: { friend: { name: string; avatar_url?: string }; album_name: string; album_art_url?: string } }) {
+  return (
+    <View style={styles.cluster}>
+      <AlbumTile name={item.album_name} url={item.album_art_url} size={40} style={styles.albumPos} />
+      <Avatar name={item.friend.name} url={item.friend.avatar_url} size={40} style={styles.avatarPos} />
     </View>
   )
 }
@@ -50,10 +125,11 @@ export default function Social() {
   const { user } = useAuth()
   const router = useRouter()
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState<Tab>('feed')
+  const [tab, setTab] = useState<Tab>('activity')
   const [findOpen, setFindOpen] = useState(false)
+  const [queued, setQueued] = useState<Set<number>>(new Set())
 
-  const { data: feed = [], isLoading: feedLoading, refetch: refetchFeed, isRefetching } = useQuery({
+  const { data: feed = [], isLoading: feedLoading } = useQuery({
     queryKey: ['feed', user?.id],
     queryFn: () => fetchFeed(user!.id),
     enabled: !!user,
@@ -63,6 +139,16 @@ export default function Social() {
     queryFn: () => fetchFriendReviews('recent'),
     enabled: tab === 'reviews',
   })
+  const { data: friends = [], isLoading: friendsLoading } = useQuery({
+    queryKey: ['friends', user?.id],
+    queryFn: () => fetchFriends(user!.id),
+    enabled: !!user,
+  })
+  const { data: myRated = [] } = useQuery({
+    queryKey: ['albums', 'rated', user?.id],
+    queryFn: () => fetchAlbums({ status: 'rated', userId: user!.id }),
+    enabled: !!user,
+  })
   const { data: requests } = useQuery({
     queryKey: ['friend-requests', user?.id],
     queryFn: () => fetchFriendRequests(user!.id),
@@ -70,18 +156,12 @@ export default function Social() {
   })
 
   const incomingCount = requests?.incoming.length ?? 0
-
-  // Viewing the feed clears the tab-bar "new activity" dot up to the newest item.
-  useEffect(() => {
-    if (feed.length) markSocialSeen(latestFeedTime(feed))
-  }, [feed])
-
-  async function like(albumId: number) {
-    if (!user) return
-    await toggleLike(user.id, albumId)
-    queryClient.invalidateQueries({ queryKey: ['feed', user.id] })
-    queryClient.invalidateQueries({ queryKey: ['reviews'] })
-  }
+  const groups = useMemo(() => groupFeed(feed), [feed])
+  const myScores = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const a of myRated) if (a.score != null) m.set(albumKey(a.albumName, a.artist), a.score)
+    return m
+  }, [myRated])
 
   function openAlbum(id: number) {
     router.push({ pathname: '/album/[id]', params: { id: String(id) } })
@@ -89,11 +169,32 @@ export default function Social() {
   function openFriend(id: number) {
     router.push({ pathname: '/friend/[id]', params: { id: String(id) } })
   }
+  async function like(albumId: number) {
+    if (!user) return
+    await toggleLike(user.id, albumId)
+    queryClient.invalidateQueries({ queryKey: ['feed', user.id] })
+    queryClient.invalidateQueries({ queryKey: ['reviews'] })
+  }
+  async function addToQueue(item: FeedItem) {
+    if (!user || queued.has(item.album_id)) return
+    setQueued((prev) => new Set(prev).add(item.album_id))
+    try {
+      // Clone the friend's exact album (metadata + tracklist) into your queue.
+      await copyAlbumToLibrary(item.album_id, 'to_listen')
+      queryClient.invalidateQueries({ queryKey: ['albums', 'to_listen', user.id] })
+    } catch {
+      setQueued((prev) => {
+        const next = new Set(prev)
+        next.delete(item.album_id)
+        return next
+      })
+    }
+  }
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Social</Text>
+        <Text style={styles.pageTitle}>Social</Text>
         <Pressable style={styles.findBtn} onPress={() => setFindOpen(true)}>
           <UserPlus size={17} color={colors.green} />
           <Text style={styles.findBtnText}>Find friends</Text>
@@ -105,51 +206,84 @@ export default function Social() {
         </Pressable>
       </View>
 
-      <View style={styles.segment}>
-        {(['feed', 'reviews'] as Tab[]).map((t) => (
-          <Pressable
-            key={t}
-            style={[styles.segmentTab, tab === t && styles.segmentActive]}
-            onPress={() => setTab(t)}
-          >
-            <Text style={[styles.segmentText, tab === t && styles.segmentTextActive]}>
-              {t === 'feed' ? 'Activity' : 'Reviews'}
-            </Text>
+      <View style={styles.tabs}>
+        {TABS.map(({ key, label }) => (
+          <Pressable key={key} style={styles.tab} onPress={() => setTab(key)}>
+            <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
+            <View style={[styles.tabUnderline, tab === key && styles.tabUnderlineActive]} />
           </Pressable>
         ))}
       </View>
 
-      {tab === 'feed' ? (
-        <FlatList
-          data={feed}
-          keyExtractor={(item, i) => `${item.type}-${item.album_id}-${item.friend.id}-${i}`}
-          contentContainerStyle={styles.list}
-          refreshing={isRefetching}
-          onRefresh={refetchFeed}
-          renderItem={({ item }) => (
-            <FeedCard item={item} onLike={() => like(item.album_id)} onAlbum={() => openAlbum(item.album_id)} onFriend={() => openFriend(item.friend.id)} />
-          )}
-          ListEmptyComponent={
-            feedLoading ? (
-              <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
-            ) : (
-              <Text style={styles.empty}>No friend activity yet. Add friends to see their ratings.</Text>
-            )
-          }
-        />
-      ) : (
+      {tab === 'activity' ? (
+        feedLoading && feed.length === 0 ? (
+          <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
+        ) : groups.length === 0 ? (
+          <Text style={styles.empty}>No friend activity yet. Add friends to see their ratings.</Text>
+        ) : (
+          <ScrollView style={styles.fill} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+            {groups.map((g) => (
+              <View key={g.key}>
+                <View style={styles.dayHead}>
+                  <Text style={styles.dayLabel}>{g.label}</Text>
+                  <View style={styles.dayRule} />
+                </View>
+                {g.items.map((item, i) => (
+                  <ActivityRow
+                    key={`${item.type}-${item.album_id}-${item.friend.id}-${i}`}
+                    item={item}
+                    first={i === 0}
+                    myScore={item.score != null ? myScores.get(albumKey(item.album_name, item.artist)) ?? null : null}
+                    queued={queued.has(item.album_id)}
+                    onOpenAlbum={openAlbum}
+                    onLike={() => like(item.album_id)}
+                    onRate={() => router.push({ pathname: '/rate/[id]', params: { id: String(item.album_id) } })}
+                    onAddQueue={() => addToQueue(item)}
+                  />
+                ))}
+              </View>
+            ))}
+          </ScrollView>
+        )
+      ) : tab === 'reviews' ? (
         <FlatList
           data={reviews}
           keyExtractor={(item, i) => `${item.album_id}-${item.friend.id}-${i}`}
+          style={styles.fill}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <ReviewCard item={item} onLike={() => like(item.album_id)} onAlbum={() => openAlbum(item.album_id)} onFriend={() => openFriend(item.friend.id)} />
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item, index }) => (
+            <ReviewRow item={item} first={index === 0} onOpenAlbum={openAlbum} onLike={() => like(item.album_id)} />
           )}
           ListEmptyComponent={
             reviewsLoading ? (
               <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
             ) : (
               <Text style={styles.empty}>No reviews from friends yet.</Text>
+            )
+          }
+        />
+      ) : (
+        <FlatList
+          data={friends}
+          keyExtractor={(f) => String(f.id)}
+          style={styles.fill}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item, index }) => (
+            <Pressable style={[styles.friendRow, index > 0 && styles.divider]} onPress={() => openFriend(item.id)}>
+              <Avatar name={item.name} url={item.avatarUrl} size={44} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.friendName} numberOfLines={1}>{item.name}</Text>
+                {item.bio ? <Text style={styles.friendBio} numberOfLines={1}>{item.bio}</Text> : null}
+              </View>
+            </Pressable>
+          )}
+          ListEmptyComponent={
+            friendsLoading ? (
+              <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
+            ) : (
+              <Text style={styles.empty}>No friends yet. Tap Find friends to add some.</Text>
             )
           }
         />
@@ -160,103 +294,127 @@ export default function Social() {
   )
 }
 
-function FeedCard({ item, onLike, onAlbum, onFriend }: { item: FeedItem; onLike: () => void; onAlbum: () => void; onFriend: () => void }) {
-  const verb = item.type === 'review' ? 'reviewed' : item.type === 'recommendation' ? 'recommended' : 'rated'
-  return (
-    <View style={styles.card}>
-      <View style={styles.cardHead}>
-        <Pressable onPress={onFriend}>
-          <Avatar name={item.friend.name} url={item.friend.avatar_url} />
-        </Pressable>
-        <Text style={styles.cardHeadText}>
-          <Text style={styles.friendName} onPress={onFriend}>{item.friend.name}</Text>
-          <Text style={styles.verb}> {verb}</Text>
-        </Text>
-      </View>
-      <Pressable style={styles.albumRow} onPress={onAlbum}>
-        {item.album_art_url ? (
-          <Image source={{ uri: item.album_art_url }} style={styles.albumArt} contentFit="cover" />
-        ) : (
-          <View style={[styles.albumArt, styles.artFallback]}>
-            <Text style={styles.artInitial}>{item.album_name[0]}</Text>
-          </View>
-        )}
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.albumName} numberOfLines={1}>{item.album_name}</Text>
-          <Text style={styles.albumArtist} numberOfLines={1}>{item.artist}</Text>
-          {item.review_excerpt ? <Text style={styles.excerpt} numberOfLines={2}>"{item.review_excerpt}"</Text> : null}
-        </View>
-        {item.score != null && (
-          <Text style={[styles.score, { color: songScoreColor(item.score) }]}>{item.score.toFixed(2)}</Text>
-        )}
-      </Pressable>
-      <SocialActions item={item} onLike={onLike} onAlbum={onAlbum} />
-    </View>
-  )
-}
-
-function ReviewCard({ item, onLike, onAlbum, onFriend }: { item: FriendReview; onLike: () => void; onAlbum: () => void; onFriend: () => void }) {
-  return (
-    <View style={styles.card}>
-      <View style={styles.cardHead}>
-        <Pressable onPress={onFriend}>
-          <Avatar name={item.friend.name} url={item.friend.avatar_url} />
-        </Pressable>
-        <Text style={styles.cardHeadText}>
-          <Text style={styles.friendName} onPress={onFriend}>{item.friend.name}</Text>
-          <Text style={styles.verb}> reviewed</Text>
-        </Text>
-      </View>
-      <Pressable style={styles.albumRow} onPress={onAlbum}>
-        {item.album_art_url ? (
-          <Image source={{ uri: item.album_art_url }} style={styles.albumArt} contentFit="cover" />
-        ) : (
-          <View style={[styles.albumArt, styles.artFallback]}>
-            <Text style={styles.artInitial}>{item.album_name[0]}</Text>
-          </View>
-        )}
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.albumName} numberOfLines={1}>{item.album_name}</Text>
-          <Text style={styles.albumArtist} numberOfLines={1}>{item.artist}</Text>
-        </View>
-        {item.score != null && (
-          <Text style={[styles.score, { color: songScoreColor(item.score) }]}>{item.score.toFixed(2)}</Text>
-        )}
-      </Pressable>
-      <Text style={styles.reviewBody}>{item.review}</Text>
-      <SocialActions
-        item={{ like_count: item.like_count, liked_by_me: item.liked_by_me, comment_count: item.comment_count }}
-        onLike={onLike}
-        onAlbum={onAlbum}
-      />
-    </View>
-  )
-}
-
-function SocialActions({
+function ActivityRow({
   item,
+  first,
+  myScore,
+  queued,
+  onOpenAlbum,
   onLike,
-  onAlbum,
+  onRate,
+  onAddQueue,
 }: {
-  item: { like_count?: number; liked_by_me?: boolean; comment_count?: number }
+  item: FeedItem
+  first: boolean
+  myScore: number | null
+  queued: boolean
+  onOpenAlbum: (id: number) => void
   onLike: () => void
-  onAlbum: () => void
+  onRate: () => void
+  onAddQueue: () => void
+}) {
+  const verb = item.type === 'review' ? 'reviewed' : item.type === 'recommendation' ? 'sent you' : 'rated'
+  const time = relativeTime(timeOf(item))
+  // Only compare when you've rated the same album — otherwise no subtext at all.
+  const gap = item.score != null && myScore != null ? item.score - myScore : null
+
+  return (
+    <Pressable style={[styles.row, !first && styles.divider]} onPress={() => onOpenAlbum(item.album_id)}>
+      <View style={styles.rowMain}>
+        <Cluster item={item} />
+        <View style={styles.rowText}>
+          <Text style={styles.line1}>
+            <Text style={styles.bold}>{item.friend.name}</Text>
+            <Text style={styles.reg}> {verb} </Text>
+            <Text style={styles.bold}>{item.album_name}</Text>
+          </Text>
+          <Text style={styles.line2} numberOfLines={1}>
+            {item.artist}
+            {item.type === 'recommendation' ? ' · in your queue' : ''}
+            {time ? ` · ${time}` : ''}
+          </Text>
+        </View>
+        <View style={styles.rowRight}>
+          {item.type === 'recommendation' ? (
+            <Pressable style={styles.rateBtn} onPress={onRate}>
+              <Text style={styles.rateBtnText}>Rate</Text>
+            </Pressable>
+          ) : item.score != null ? (
+            <>
+              <Text style={[styles.score, { color: songScoreColor(item.score) }]}>{item.score.toFixed(2)}</Text>
+              {gap != null && (
+                <Text style={[styles.gap, { color: gap >= 0 ? colors.green : DOWN }]}>
+                  {gap >= 0 ? '+' : '−'}{Math.abs(gap).toFixed(2)} vs you
+                </Text>
+              )}
+            </>
+          ) : null}
+        </View>
+      </View>
+
+      {item.type === 'review' && item.review_excerpt ? (
+        <View style={styles.reviewBlock}>
+          <Text style={styles.reviewQuote}>“{item.review_excerpt}”</Text>
+          <View style={styles.reviewActions}>
+            <Pressable style={styles.actionBtn} onPress={onLike} hitSlop={6}>
+              <Heart size={15} color={item.liked_by_me ? DOWN : colors.inkTertiary} fill={item.liked_by_me ? DOWN : 'transparent'} />
+              <Text style={styles.actionText}>{item.like_count ?? 0}</Text>
+            </Pressable>
+            <Pressable onPress={() => onOpenAlbum(item.album_id)} hitSlop={6}>
+              <Text style={styles.actionText}>{item.comment_count ?? 0} replies</Text>
+            </Pressable>
+            <Pressable onPress={onAddQueue} hitSlop={6} disabled={queued}>
+              <Text style={styles.addQueue}>{queued ? 'Added' : 'Add to queue'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+    </Pressable>
+  )
+}
+
+function ReviewRow({
+  item,
+  first,
+  onOpenAlbum,
+  onLike,
+}: {
+  item: FriendReview
+  first: boolean
+  onOpenAlbum: (id: number) => void
+  onLike: () => void
 }) {
   return (
-    <View style={styles.actions}>
-      <Pressable style={styles.actionBtn} onPress={onLike} hitSlop={8}>
-        <Heart
-          size={16}
-          color={item.liked_by_me ? '#c0392b' : colors.inkTertiary}
-          fill={item.liked_by_me ? '#c0392b' : 'transparent'}
-        />
-        <Text style={styles.actionText}>{item.like_count ?? 0}</Text>
-      </Pressable>
-      <Pressable style={styles.actionBtn} onPress={onAlbum} hitSlop={8}>
-        <MessageCircle size={16} color={colors.inkTertiary} />
-        <Text style={styles.actionText}>{item.comment_count ?? 0}</Text>
-      </Pressable>
-    </View>
+    <Pressable style={[styles.row, !first && styles.divider]} onPress={() => onOpenAlbum(item.album_id)}>
+      <View style={styles.rowMain}>
+        <Cluster item={item} />
+        <View style={styles.rowText}>
+          <Text style={styles.line1}>
+            <Text style={styles.bold}>{item.friend.name}</Text>
+            <Text style={styles.reg}> reviewed </Text>
+            <Text style={styles.bold}>{item.album_name}</Text>
+          </Text>
+          <Text style={styles.line2} numberOfLines={1}>{item.artist}</Text>
+        </View>
+        {item.score != null && (
+          <View style={styles.rowRight}>
+            <Text style={[styles.score, { color: songScoreColor(item.score) }]}>{item.score.toFixed(2)}</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.reviewBlock}>
+        <Text style={styles.reviewQuote}>“{item.review}”</Text>
+        <View style={styles.reviewActions}>
+          <Pressable style={styles.actionBtn} onPress={onLike} hitSlop={6}>
+            <Heart size={15} color={item.liked_by_me ? DOWN : colors.inkTertiary} fill={item.liked_by_me ? DOWN : 'transparent'} />
+            <Text style={styles.actionText}>{item.like_count}</Text>
+          </Pressable>
+          <Pressable onPress={() => onOpenAlbum(item.album_id)} hitSlop={6}>
+            <Text style={styles.actionText}>{item.comment_count} replies</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Pressable>
   )
 }
 
@@ -281,6 +439,7 @@ function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onC
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ['friend-requests', user?.id] })
     queryClient.invalidateQueries({ queryKey: ['user-search'] })
+    queryClient.invalidateQueries({ queryKey: ['friends', user?.id] })
     queryClient.invalidateQueries({ queryKey: ['feed'] })
   }
 
@@ -317,7 +476,7 @@ function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onC
             {incoming.map((u) => (
               <View key={u.id} style={styles.userRow}>
                 <Pressable style={styles.userInfo} onPress={() => onOpenFriend(u.id)}>
-                  <Avatar name={u.name} url={u.avatarUrl} />
+                  <Avatar name={u.name} url={u.avatarUrl} size={36} />
                   <Text style={styles.userName}>{u.name}</Text>
                 </Pressable>
                 <View style={styles.reqBtns}>
@@ -344,7 +503,7 @@ function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onC
           renderItem={({ item }) => (
             <View style={styles.userRow}>
               <Pressable style={styles.userInfo} onPress={() => onOpenFriend(item.id)}>
-                <Avatar name={item.name} url={item.avatar_url} />
+                <Avatar name={item.name} url={item.avatar_url} size={36} />
                 <Text style={styles.userName}>{item.name}</Text>
               </Pressable>
               <FriendAction u={item} onRequest={() => request(item.id)} onAccept={() => accept(item.id)} />
@@ -379,59 +538,65 @@ function FriendAction({ u, onRequest, onAccept }: { u: UserSearchResult; onReque
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
+  fill: { flex: 1 },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     marginTop: spacing.md,
   },
+  pageTitle: { fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: 0.5 },
   title: { fontFamily: fonts.display, fontSize: 34, color: colors.ink, letterSpacing: 1 },
   findBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.greenSoft, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radii.pill },
   findBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
-  badge: { backgroundColor: '#c0392b', borderRadius: 9, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  badge: { backgroundColor: DOWN, borderRadius: 9, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   badgeText: { fontFamily: fonts.bodyBold, fontSize: 11, color: '#fff' },
 
-  segment: {
-    flexDirection: 'row',
-    backgroundColor: colors.inset,
-    borderRadius: radii.md,
-    padding: 4,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-  },
-  segmentTab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: radii.sm },
-  segmentActive: { backgroundColor: colors.raised },
-  segmentText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.inkTertiary },
-  segmentTextActive: { color: colors.ink },
+  tabs: { flexDirection: 'row', gap: spacing.xl, paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  tab: { alignItems: 'center', gap: 6 },
+  tabText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.inkMuted },
+  tabTextActive: { color: colors.ink },
+  tabUnderline: { height: 2, width: '100%', borderRadius: 1, backgroundColor: 'transparent' },
+  tabUnderlineActive: { backgroundColor: colors.green },
 
-  list: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 120 },
-  card: {
-    backgroundColor: colors.raised,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  cardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
-  cardHeadText: { flex: 1 },
-  friendName: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.ink },
-  verb: { fontFamily: fonts.body, fontSize: 14, color: colors.inkTertiary },
-  albumRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  albumArt: { width: 56, height: 56, borderRadius: radii.sm },
-  artFallback: { backgroundColor: colors.inset, alignItems: 'center', justifyContent: 'center' },
-  artInitial: { fontFamily: fonts.display, fontSize: 22, color: colors.inkMuted },
-  albumName: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.ink },
-  albumArtist: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, marginTop: 1 },
-  excerpt: { fontFamily: fonts.body, fontSize: 12, color: colors.inkSecondary, marginTop: 4, fontStyle: 'italic' },
-  score: { fontFamily: fonts.bodyBold, fontSize: 20 },
-  reviewBody: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSecondary, lineHeight: 20, marginTop: spacing.md },
+  list: { paddingHorizontal: spacing.lg, paddingBottom: 130 },
+  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
 
-  actions: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  dayHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xl, marginBottom: spacing.sm },
+  dayLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.2, color: colors.inkMuted },
+  dayRule: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+
+  row: { paddingVertical: spacing.lg },
+  rowMain: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  cluster: { width: 66, height: 40 },
+  albumPos: { position: 'absolute', left: 26, top: 0 },
+  avatarPos: { position: 'absolute', left: 0, top: 0 },
+  rowText: { flex: 1, minWidth: 0 },
+  line1: { fontSize: 15, lineHeight: 21 },
+  bold: { fontFamily: fonts.bodyBold, color: colors.ink },
+  reg: { fontFamily: fonts.body, color: colors.inkSecondary },
+  line2: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 2 },
+  rowRight: { alignItems: 'flex-end', minWidth: 60 },
+  score: { fontFamily: fonts.bodyBold, fontSize: 22 },
+  gap: { fontFamily: fonts.bodyBold, fontSize: 11, marginTop: 1 },
+  rateBtn: { backgroundColor: colors.green, paddingHorizontal: 16, paddingVertical: 8, borderRadius: radii.sm },
+  rateBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: '#fff' },
+
+  reviewBlock: { marginLeft: 66 + spacing.md, marginTop: spacing.sm },
+  reviewQuote: { fontFamily: fonts.displayRegular, fontSize: 15, lineHeight: 22, color: colors.ink },
+  reviewActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xl, marginTop: spacing.sm },
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   actionText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary },
+  addQueue: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
 
+  friendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  friendName: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink },
+  friendBio: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, marginTop: 1 },
+
+  empty: { fontFamily: fonts.body, fontSize: 14, color: colors.inkTertiary, textAlign: 'center', marginTop: spacing.xxl, paddingHorizontal: spacing.lg },
+
+  // Find friends modal
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -473,8 +638,4 @@ const styles = StyleSheet.create({
   declineText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkSecondary },
   friendsTag: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary },
   pendingTag: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkMuted },
-
-  avatarFallback: { backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center' },
-  avatarInitial: { fontFamily: fonts.bodyBold, color: '#fff' },
-  empty: { fontFamily: fonts.body, fontSize: 14, color: colors.inkTertiary, textAlign: 'center', marginTop: spacing.xxl },
 })

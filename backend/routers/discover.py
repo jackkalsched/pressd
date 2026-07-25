@@ -287,6 +287,116 @@ def trending(
     return rows[:limit]
 
 
+@router.get("/charts")
+def charts(
+    period: str = Query("week", pattern="^(week|all)$"),
+    genre: str | None = Query(default=None),
+    decade: int | None = Query(default=None),   # e.g. 2020 for the 2020s
+    year: int | None = Query(default=None),
+    limit: int = Query(50, ge=1, le=50),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Userbase-wide album chart: rated albums grouped across every user's copy,
+    ranked by aggregate average score. `period` scopes which ratings count —
+    "week" only counts copies rated in the last 7 days, "all" counts everything.
+    Optional filters by genre, decade, and/or year. Each entry carries its
+    day-over-day rank movement (the ranking as it stood at the end of yesterday,
+    excluding copies first rated today), and the response includes the filter
+    facets available across the whole catalog.
+    """
+    # Columns only (no relationship access) — cheap over the whole rated set.
+    rows = session.exec(
+        select(
+            Album.id, Album.album_name, Album.artist, Album.year, Album.genre,
+            Album.score, Album.date_rated, Album.user_id, Album.album_art_url,
+        ).where(Album.status == "rated", Album.score.is_not(None))
+    ).all()
+
+    # Facets from the full catalog, independent of the active filter so the
+    # chip row stays stable as you switch filters.
+    genre_counts: dict[str, int] = {}
+    decades: set[int] = set()
+    years: set[int] = set()
+    for r in rows:
+        if r.genre:
+            genre_counts[r.genre] = genre_counts.get(r.genre, 0) + 1
+        if r.year:
+            decades.add((r.year // 10) * 10)
+            years.add(r.year)
+    facets = {
+        "genres": [g for g, _ in sorted(genre_counts.items(), key=lambda kv: kv[1], reverse=True)[:8]],
+        "decades": sorted(decades, reverse=True),
+        "years": sorted(years, reverse=True)[:15],
+    }
+
+    # Active filter (one dimension at a time).
+    def keep(r) -> bool:
+        if genre and (r.genre or "").lower() != genre.lower():
+            return False
+        if decade and (r.year is None or (r.year // 10) * 10 != decade):
+            return False
+        if year and r.year != year:
+            return False
+        return True
+
+    today = date.today()
+    pool = [r for r in rows if keep(r)]
+    if period == "week":
+        week_ago = today - timedelta(days=7)
+        pool = [r for r in pool if r.date_rated is not None and r.date_rated >= week_ago]
+
+    def build(subset):
+        """Group by (album, artist); return keys ranked by avg score desc."""
+        groups: dict[tuple[str, str], dict] = {}
+        for r in subset:
+            key = (r.album_name.strip().lower(), r.artist.strip().lower())
+            g = groups.get(key)
+            if g is None:
+                g = {"name": r.album_name, "artist": r.artist, "year": r.year,
+                     "art": r.album_art_url, "scores": [], "raters": set(),
+                     "rep_id": r.id, "rep_date": r.date_rated, "own_id": None}
+                groups[key] = g
+            g["scores"].append(r.score)
+            if r.user_id is not None:
+                g["raters"].add(r.user_id)
+            if r.album_art_url and not g["art"]:
+                g["art"] = r.album_art_url
+            if r.date_rated and (g["rep_date"] is None or r.date_rated > g["rep_date"]):
+                g["rep_date"], g["rep_id"] = r.date_rated, r.id
+            if r.user_id == user.id:
+                g["own_id"] = r.id
+        ranked = sorted(
+            groups.items(),
+            key=lambda kv: (sum(kv[1]["scores"]) / len(kv[1]["scores"]), len(kv[1]["raters"])),
+            reverse=True,
+        )
+        return ranked
+
+    today_ranked = build(pool)
+    # Yesterday's board: copies first rated today don't count yet.
+    yest_ranked = build([r for r in pool if r.date_rated is None or r.date_rated < today])
+    yest_rank = {key: i + 1 for i, (key, _) in enumerate(yest_ranked)}
+
+    items = []
+    for i, (key, g) in enumerate(today_ranked[:limit]):
+        rank = i + 1
+        yr = yest_rank.get(key)
+        items.append({
+            "rank": rank,
+            "album_id": g["own_id"] or g["rep_id"],
+            "album_name": g["name"],
+            "artist": g["artist"],
+            "year": g["year"],
+            "album_art_url": g["art"],
+            "avg_score": round(sum(g["scores"]) / len(g["scores"]), 2),
+            "rater_count": len(g["raters"]),
+            "movement": (yr - rank) if yr is not None else None,  # + up, − down, None = new
+        })
+
+    return {"items": items, "facets": facets}
+
+
 @router.get("/deezer/{deezer_id}")
 async def resolve_deezer_album(
     deezer_id: int,

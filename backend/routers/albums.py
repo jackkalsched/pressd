@@ -604,6 +604,43 @@ def album_report(
     }
 
 
+def _clone_album(session: Session, source: Album, target_user_id: int, status: str = "to_listen", **extra) -> Album:
+    """Clone an album and its songs into another user's library with fresh
+    scores. Reuses each song's track_id so shared audio features carry over,
+    and the copy is the exact same album (metadata + tracklist) as the source."""
+    new_album = Album(
+        album_name=source.album_name,
+        artist=source.artist,
+        year=source.year,
+        genre=source.genre,
+        sub_genre1=source.sub_genre1,
+        sub_genre2=source.sub_genre2,
+        sub_genre3=source.sub_genre3,
+        album_art_url=source.album_art_url,
+        spotify_id=source.spotify_id,
+        total_tracks=source.total_tracks,
+        extra_artists=source.extra_artists,
+        status=status,
+        user_id=target_user_id,
+        **extra,
+    )
+    session.add(new_album)
+    session.flush()
+    for s in source.songs:
+        session.add(Song(
+            title=s.title,
+            track_number=s.track_number,
+            duration_ms=s.duration_ms,
+            explicit=s.explicit,
+            spotify_id=s.spotify_id,
+            spotify_popularity=s.spotify_popularity,
+            artist=s.artist,
+            track_id=s.track_id,
+            album_id=new_album.id,
+        ))
+    return new_album
+
+
 @router.post("/{album_id}/recommend")
 def recommend_album(
     album_id: int,
@@ -636,27 +673,67 @@ def recommend_album(
         session.commit()
         return {"ok": True, "already_existed": True}
 
-    new_album = Album(
-        album_name=source.album_name,
-        artist=source.artist,
-        year=source.year,
-        genre=source.genre,
-        sub_genre1=source.sub_genre1,
-        sub_genre2=source.sub_genre2,
-        sub_genre3=source.sub_genre3,
-        album_art_url=source.album_art_url,
-        spotify_id=source.spotify_id,
-        total_tracks=source.total_tracks,
-        extra_artists=source.extra_artists,
-        status="to_listen",
-        user_id=friend_id,
+    new_album = _clone_album(
+        session, source, friend_id, status="to_listen",
         recommended_by=recommender_id,
         recommended_by_name=recommender.name,
         recommended_at=datetime.utcnow(),
     )
-    session.add(new_album)
     session.commit()
+    session.refresh(new_album)
+    _link_tracks(session, new_album.id)
+    _queue_predictions(new_album.id)
+    if not new_album.genre:
+        _queue_genre_tagging(new_album.id, new_album.artist, new_album.album_name, new_album.year)
     return {"ok": True, "already_existed": False}
+
+
+@router.post("/{album_id}/copy")
+def copy_album(
+    album_id: int,
+    status: str = Query("to_listen", pattern="^(to_listen|listening)$"),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Add an existing album (e.g. a friend's copy shown in the feed) to the
+    current user's library as the exact same album — metadata and tracklist —
+    through the same import pipeline as a fresh add (track linking, predictions,
+    genre tagging). Returns the user's existing copy if they already have it."""
+    source = session.exec(
+        select(Album).where(Album.id == album_id).options(selectinload(Album.songs))
+    ).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Album not found")
+
+    existing = None
+    if source.spotify_id:
+        existing = session.exec(
+            select(Album)
+            .where(Album.spotify_id == source.spotify_id, Album.user_id == user.id)
+            .options(selectinload(Album.songs))
+        ).first()
+    if not existing:
+        existing = session.exec(
+            select(Album)
+            .where(
+                Album.album_name == source.album_name,
+                Album.artist == source.artist,
+                Album.user_id == user.id,
+            )
+            .options(selectinload(Album.songs))
+        ).first()
+    if existing:
+        return {**existing.model_dump(), "songs": [s.model_dump() for s in existing.songs], "already_existed": True}
+
+    new_album = _clone_album(session, source, user.id, status=status)
+    session.commit()
+    session.refresh(new_album)
+    _link_tracks(session, new_album.id)
+    if new_album.status == "to_listen":
+        _queue_predictions(new_album.id)
+    if not new_album.genre:
+        _queue_genre_tagging(new_album.id, new_album.artist, new_album.album_name, new_album.year)
+    return {**new_album.model_dump(), "songs": [s.model_dump() for s in new_album.songs], "already_existed": False}
 
 
 MAX_REVIEW_LEN = 20000
