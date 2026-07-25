@@ -15,7 +15,7 @@ import {
   Text,
   View,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
@@ -83,6 +83,7 @@ function SectionHead({ label, meta, onMetaPress }: { label: string; meta?: strin
 export default function ForYou() {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const insets = useSafeAreaInsets()
   const { user } = useAuth()
   const userId = user?.id ?? 0
   const [refreshing, setRefreshing] = useState(false)
@@ -173,7 +174,12 @@ export default function ForYou() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <Animated.View style={[styles.compactHeader, { opacity: compactOpacity }]} pointerEvents="none">
+      {/* Absolute children ignore the SafeAreaView's inset padding, so push the
+          compact bar down below the status bar (clock) explicitly. */}
+      <Animated.View
+        style={[styles.compactHeader, { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
+        pointerEvents="none"
+      >
         <Text style={styles.compactTitle}>For You</Text>
       </Animated.View>
       <Animated.ScrollView

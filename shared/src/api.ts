@@ -1018,6 +1018,36 @@ export async function fetchTopReviews(limit = 8): Promise<TopReviewsResponse> {
   return res.json()
 }
 
+// Compare board — albums your community (you + friends) has rated, ≥2 raters.
+export interface CompareRater {
+  name: string
+  score: number
+  review: string | null
+  is_you: boolean
+}
+
+export interface CompareItem {
+  album_id: number
+  album_name: string
+  artist: string
+  year: number | null
+  album_art_url: string | null
+  friend_count: number
+  you_rated: boolean
+  spread: number
+  recent: boolean
+  has_reviews: boolean
+  highlight: 'disagreement' | 'friends' | 'teaser'
+  raters: CompareRater[]
+}
+
+export async function fetchCompare(): Promise<CompareItem[]> {
+  const res = await apiFetch(`${BASE()}/social/compare`)
+  if (!res.ok) throw new Error('Failed to load compare')
+  const data = await res.json()
+  return (data.items ?? []) as CompareItem[]
+}
+
 export async function toggleLike(userId: number, albumId: number): Promise<{ liked: boolean }> {
   const res = await apiFetch(`${BASE()}/social/like?user_id=${userId}&album_id=${albumId}`, {
     method: 'POST',

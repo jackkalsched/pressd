@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select, func
@@ -321,6 +321,109 @@ def get_top_reviews(
 
     items.sort(key=lambda it: (it["like_count"], it["review_at"] or ""), reverse=True)
     return {"day": target_day.isoformat(), "reviews": items[:limit]}
+
+
+@router.get("/compare")
+def get_compare(
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Compare board: albums your community (you + friends) has rated, where at
+    least two of you rated the same album. Each entry carries every rater's
+    score + review so the client can plot them on one scale and stack them.
+    Albums exactly one friend rated (and you haven't) come back as faded
+    'teaser' entries — one more rating away from a comparison."""
+    user_id = user.id
+    friendships = session.exec(
+        select(Friendship).where(
+            (Friendship.user_id_a == user_id) | (Friendship.user_id_b == user_id),
+            Friendship.status == "accepted",
+        )
+    ).all()
+    friend_ids = [f.user_id_b if f.user_id_a == user_id else f.user_id_a for f in friendships]
+    if not friend_ids:
+        return {"items": []}
+
+    community_ids = list({user_id, *friend_ids})
+    users = {u.id: u for u in session.exec(select(PressUser).where(PressUser.id.in_(community_ids))).all()}
+    albums = session.exec(
+        select(Album)
+        .where(Album.user_id.in_(community_ids))
+        .where(Album.status == "rated")
+        .where(Album.score.is_not(None))
+    ).all()
+
+    groups: dict[tuple[str, str], dict] = {}
+    for a in albums:
+        key = (a.album_name.strip().lower(), a.artist.strip().lower())
+        g = groups.get(key)
+        if g is None:
+            g = {"name": a.album_name, "artist": a.artist, "year": a.year, "art": a.album_art_url, "raters": {}}
+            groups[key] = g
+        if not g["art"] and a.album_art_url:
+            g["art"] = a.album_art_url
+        if g["year"] is None and a.year:
+            g["year"] = a.year
+        # One rating per user per album; prefer the copy that carries a review.
+        prev = g["raters"].get(a.user_id)
+        if prev is None or (a.review and not prev["review"]):
+            g["raters"][a.user_id] = {
+                "user_id": a.user_id,
+                "name": "You" if a.user_id == user_id else (users[a.user_id].name if a.user_id in users else "Friend"),
+                "is_you": a.user_id == user_id,
+                "score": a.score,
+                "album_id": a.id,
+                "review": _excerpt(a.review) if a.review else None,
+                "date_rated": a.date_rated,
+            }
+
+    today = date.today()
+    full: list[dict] = []
+    teasers: list[dict] = []
+    for g in groups.values():
+        raters = list(g["raters"].values())
+        friend_raters = [r for r in raters if not r["is_you"]]
+        base = {
+            "album_name": g["name"], "artist": g["artist"], "year": g["year"], "album_art_url": g["art"],
+        }
+        if len(raters) >= 2:
+            ordered = sorted(raters, key=lambda r: r["score"], reverse=True)
+            scores = [r["score"] for r in raters]
+            you = next((r for r in raters if r["is_you"]), None)
+            last = max((r["date_rated"] for r in raters if r["date_rated"]), default=date.min)
+            full.append({
+                **base,
+                "album_id": you["album_id"] if you else ordered[0]["album_id"],
+                "friend_count": len(friend_raters),
+                "you_rated": you is not None,
+                "spread": round(max(scores) - min(scores), 1),
+                "recent": any(r["date_rated"] and (today - r["date_rated"]).days <= 7 for r in friend_raters),
+                "has_reviews": any(r["review"] for r in raters),
+                "raters": [{"name": r["name"], "score": r["score"], "review": r["review"], "is_you": r["is_you"]} for r in ordered],
+                "_last": last,
+            })
+        elif len(raters) == 1 and len(friend_raters) == 1:
+            r = friend_raters[0]
+            teasers.append({
+                **base,
+                "album_id": r["album_id"],
+                "friend_count": 1, "you_rated": False, "spread": 0.0, "recent": False,
+                "has_reviews": False, "raters": [], "highlight": "teaser",
+                "_last": r["date_rated"] or date.min,
+            })
+
+    # One album gets the "widest disagreement" call-out — the biggest real spread.
+    if full:
+        most_split = max(full, key=lambda it: it["spread"])
+        for it in full:
+            it["highlight"] = "disagreement" if (it is most_split and it["spread"] >= 1.5) else "friends"
+    full.sort(key=lambda it: it["_last"], reverse=True)
+    teasers.sort(key=lambda it: it["_last"], reverse=True)
+
+    items = full + teasers[:5]
+    for it in items:
+        it.pop("_last", None)
+    return {"items": items[:60]}
 
 
 @router.post("/like")

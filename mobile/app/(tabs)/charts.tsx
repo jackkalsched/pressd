@@ -2,11 +2,11 @@
 // filters (period / genre / decade) plus a type-in year, a top-three podium
 // with the #1 raised, then the ranked list out to 50, each row showing its
 // day-over-day movement. Defaults to This Week with no other filters.
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
-  FlatList,
   Modal,
   Pressable,
   ScrollView,
@@ -15,7 +15,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
@@ -48,6 +48,7 @@ function weekLabel(): string {
 
 export default function Charts() {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const [period, setPeriod] = useState<'week' | 'all'>('week')
   const [genre, setGenre] = useState<string | null>(null)
   const [decade, setDecade] = useState<number | null>(null)
@@ -75,22 +76,42 @@ export default function Charts() {
     router.push({ pathname: '/album/[id]', params: { id: String(id) } })
   }
 
+  // Scroll-reactive masthead, matching For You / Social: the big title lifts +
+  // fades as you scroll and a compact title bar fades in below the status bar.
+  const scrollY = useRef(new Animated.Value(0)).current
+  const mastheadOpacity = scrollY.interpolate({ inputRange: [0, 70], outputRange: [1, 0], extrapolate: 'clamp' })
+  const mastheadShift = scrollY.interpolate({ inputRange: [0, 70], outputRange: [0, -14], extrapolate: 'clamp' })
+  const compactOpacity = scrollY.interpolate({ inputRange: [36, 82], outputRange: [0, 1], extrapolate: 'clamp' })
+  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <FlatList
+      {/* Absolute children ignore the SafeAreaView's inset padding, so push the
+          compact bar down below the status bar (clock) explicitly. */}
+      <Animated.View
+        style={[styles.compactHeader, { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
+        pointerEvents="none"
+      >
+        <Text style={styles.compactTitle}>Charts</Text>
+      </Animated.View>
+      <Animated.FlatList
         data={rest}
         keyExtractor={(it) => String(it.album_id)}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         ListHeaderComponent={
           <View>
             {/* Masthead */}
-            <View style={styles.masthead}>
-              <Text style={styles.title}>Charts</Text>
-              <Text style={styles.week}>{period === 'week' ? weekLabel() : 'ALL TIME'}</Text>
-            </View>
-            <View style={styles.rule} />
+            <Animated.View style={{ opacity: mastheadOpacity, transform: [{ translateY: mastheadShift }] }}>
+              <View style={styles.masthead}>
+                <Text style={styles.title}>Charts</Text>
+                <Text style={styles.week}>{period === 'week' ? weekLabel() : 'ALL TIME'}</Text>
+              </View>
+              <View style={styles.rule} />
+            </Animated.View>
 
             {/* Filters — dropdowns + a type-in year */}
             <ScrollView
@@ -289,6 +310,20 @@ function ChartRow({ item, onOpen }: { item: ChartItem; onOpen: (id: number) => v
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: spacing.lg, paddingBottom: 130 },
+
+  compactHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    backgroundColor: colors.bg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: colors.ink, letterSpacing: 0.5 },
 
   masthead: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: spacing.md },
   title: { fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: 0.5 },

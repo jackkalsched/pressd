@@ -2,10 +2,10 @@
 // Library / Stats / Ratings switcher. Library (the score-badged art grid with a
 // Rated / Listening / To Listen filter) is built out here; Stats and Ratings are
 // placeholders until their phases land.
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
-  FlatList,
+  Animated,
   Modal,
   Pressable,
   RefreshControl,
@@ -14,19 +14,19 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { Check, LogOut, Pencil, X } from 'lucide-react-native'
-import { fetchAlbums, fetchSummary, fetchScoreRange } from '../../lib/api'
-import { songScoreColor, type Album, type AlbumStatus } from '@pressd/shared/types'
+import Svg, { Circle } from 'react-native-svg'
+import { Check, ChevronDown, LogOut, Search, X } from 'lucide-react-native'
+import { fetchAlbums, fetchSummary, fetchScoreRange, fetchFriends, fetchArtistStats } from '../../lib/api'
+import { songScoreColor, type Album, type AlbumStatus, type ArtistStats } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import StatsView from '../../components/StatsView'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const GAP = 10
-const BIO_MAX = 240
 
 // Score-badge color relative to the user's own mean/sd, matching the desktop
 // AlbumCard: amber at the mean → dark green above (+2.5 SD), dark red below.
@@ -53,6 +53,38 @@ const STATUSES: { key: AlbumStatus; label: string }[] = [
   { key: 'to_listen', label: 'To Listen' },
 ]
 
+// ── Rankings sub-tab: sortable album/artist leaderboards ──
+const QUALIFIED = 15 // artists need ≥15 rated songs to rank
+
+type RankMode = 'albums' | 'artists'
+interface Metric<T> {
+  key: string
+  label: string
+  get: (x: T) => number | string | null
+}
+const ALBUM_METRICS: Metric<Album>[] = [
+  { key: 'score', label: 'Score', get: (a) => a.score },
+  { key: 'year', label: 'Year', get: (a) => a.year },
+  { key: 'dateRated', label: 'Date Rated', get: (a) => a.dateRated },
+  { key: 'name', label: 'Name', get: (a) => a.albumName.toLowerCase() },
+]
+const ARTIST_METRICS: Metric<ArtistStats>[] = [
+  { key: 'avg', label: 'Avg Song', get: (s) => s.avgSongScore },
+  { key: 'songs', label: 'Songs', get: (s) => s.count },
+  { key: 'bang', label: 'Bang %', get: (s) => s.bangPct },
+  { key: 'skip', label: 'Skip %', get: (s) => s.skipPct },
+  { key: 'sar', label: 'SAR', get: (s) => s.sar },
+]
+
+/** null-safe comparator: nulls sink to the end regardless of direction */
+function cmpVals(a: number | string | null, b: number | string | null, dir: 'asc' | 'desc'): number {
+  if (a == null && b == null) return 0
+  if (a == null) return 1
+  if (b == null) return -1
+  const c = typeof a === 'string' || typeof b === 'string' ? String(a).localeCompare(String(b)) : (a as number) - (b as number)
+  return dir === 'desc' ? -c : c
+}
+
 /** Top-N values by frequency across a list of (possibly null) tags. */
 function topTags(tags: (string | null)[], n: number): string[] {
   const counts = new Map<string, number>()
@@ -65,9 +97,20 @@ function topTags(tags: (string | null)[], n: number): string[] {
 export default function Profile() {
   const { user, signOut } = useAuth()
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const [tab, setTab] = useState<Tab>('library')
   const [libStatus, setLibStatus] = useState<AlbumStatus>('rated')
-  const [editing, setEditing] = useState(false)
+  const [rankMode, setRankMode] = useState<RankMode>('albums')
+  const [rankMetric, setRankMetric] = useState('score')
+  const [rankDir, setRankDir] = useState<'asc' | 'desc'>('desc')
+  const [rankSearch, setRankSearch] = useState('')
+  const [metricOpen, setMetricOpen] = useState(false)
+
+  function switchRankMode(m: RankMode) {
+    setRankMode(m)
+    setRankMetric(m === 'albums' ? 'score' : 'avg')
+    setRankDir('desc')
+  }
 
   // Rated set drives the header count + "this week"; shares its key with the
   // grid query when the Rated filter is active, so React Query serves one fetch.
@@ -99,90 +142,143 @@ export default function Profile() {
   const badgeMu = scoreRange?.mu ?? 7.0
   const badgeSd = scoreRange?.sd ?? 1.0
 
-  const thisWeek = useMemo(() => {
-    const weekAgo = Date.now() - 7 * 86_400_000
-    return rated.filter((a) => a.dateRated && new Date(a.dateRated).getTime() >= weekAgo).length
-  }, [rated])
+  const { data: friends = [] } = useQuery({
+    queryKey: ['friends', user?.id],
+    queryFn: () => fetchFriends(user!.id),
+    enabled: !!user,
+  })
 
-  // Favorite genres / subgenres: most common tags across the rated library.
-  const topGenres = useMemo(() => topTags(rated.map((a) => a.genre), 3), [rated])
+  // Artist leaderboard data for Rankings (same cache key as the Stats sub-tab).
+  const { data: artistStats = [] } = useQuery({
+    queryKey: ['artist-stats', user?.id],
+    queryFn: () => fetchArtistStats(user!.id),
+    enabled: !!user && tab === 'ratings',
+  })
+
+  // Favorite tags: top two genres + top two subgenres, one line of chips.
+  const topGenres = useMemo(() => topTags(rated.map((a) => a.genre), 2), [rated])
   const topSubgenres = useMemo(
-    () => topTags(rated.flatMap((a) => [a.subGenre1, a.subGenre2, a.subGenre3]), 3),
+    () => topTags(rated.flatMap((a) => [a.subGenre1, a.subGenre2, a.subGenre3]), 2),
     [rated],
   )
+
+  // "Pressing since" — the month of the earliest album in the library.
+  const since = useMemo(() => {
+    const dates = rated.map((a) => a.dateAdded ?? a.dateRated).filter(Boolean) as string[]
+    if (dates.length === 0) return null
+    const min = dates.reduce((a, b) => (a < b ? a : b))
+    const d = new Date(min.length <= 10 ? `${min}T00:00:00` : min)
+    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  }, [rated])
+
+  // Scroll header: the banner scrolls away and a compact green bar keeping just
+  // the profile name fades in, matching the other tabs' treatment.
+  const scrollY = useRef(new Animated.Value(0)).current
+  const compactOpacity = scrollY.interpolate({ inputRange: [70, 130], outputRange: [0, 1], extrapolate: 'clamp' })
+  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })
 
   if (!user) return null
 
   const isGrid = tab === 'library'
-  const ratingsSorted = tab === 'ratings' ? [...rated].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)) : []
-  const listData = isGrid ? grid : tab === 'ratings' ? ratingsSorted : []
+  const rankMetrics = rankMode === 'albums' ? ALBUM_METRICS : ARTIST_METRICS
+  const currentMetric = rankMetrics.find((m) => m.key === rankMetric) ?? rankMetrics[0]
+  const q = rankSearch.trim().toLowerCase()
+
+  const rankedAlbums = useMemo(() => {
+    if (tab !== 'ratings' || rankMode !== 'albums') return []
+    const metric = ALBUM_METRICS.find((m) => m.key === rankMetric) ?? ALBUM_METRICS[0]
+    return rated
+      .filter((a) => !q || a.albumName.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q))
+      .sort((a, b) => cmpVals(metric.get(a), metric.get(b), rankDir))
+  }, [tab, rankMode, rated, rankMetric, rankDir, q])
+
+  const rankedArtists = useMemo(() => {
+    if (tab !== 'ratings' || rankMode !== 'artists') return []
+    const metric = ARTIST_METRICS.find((m) => m.key === rankMetric) ?? ARTIST_METRICS[0]
+    return artistStats
+      .filter((s) => s.count >= QUALIFIED && (!q || s.artist.toLowerCase().includes(q)))
+      .sort((a, b) => cmpVals(metric.get(a), metric.get(b), rankDir))
+  }, [tab, rankMode, artistStats, rankMetric, rankDir, q])
+
+  const listData: (Album | ArtistStats)[] = isGrid
+    ? grid
+    : tab === 'ratings'
+    ? rankMode === 'albums'
+      ? rankedAlbums
+      : rankedArtists
+    : []
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
-      <FlatList
+    <View style={styles.screen}>
+      {/* Compact bar: only the profile name remains once the banner scrolls off. */}
+      <Animated.View
+        style={[styles.compactHeader, { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
+        pointerEvents="none"
+      >
+        <Text style={styles.compactTitle} numberOfLines={1}>{user.name}</Text>
+      </Animated.View>
+      <Animated.FlatList
         key={isGrid ? 'grid' : 'list'}
-        data={listData}
-        keyExtractor={(a) => String(a.id)}
+        data={listData as Album[]}
+        keyExtractor={(item: Album | ArtistStats) => ('id' in item ? String(item.id) : item.artist)}
         numColumns={isGrid ? 3 : 1}
         columnWrapperStyle={isGrid ? { gap: GAP } : undefined}
         contentContainerStyle={styles.content}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.green} />
         }
         ListHeaderComponent={
           <View>
-            {/* Identity */}
-            <View style={styles.identity}>
-              <View style={styles.avatar}>
-                {user.avatarUrl ? (
-                  <Image source={{ uri: user.avatarUrl }} style={styles.avatarImg} contentFit="cover" />
-                ) : (
-                  <Text style={styles.avatarInitial}>{user.name[0]?.toUpperCase()}</Text>
-                )}
+            {/* Green banner: identity, avg ring, stat row, genre chips. */}
+            <View style={[styles.banner, { paddingTop: insets.top + spacing.sm }]}>
+              <View style={styles.bannerTop}>
+                <View style={styles.bAvatar}>
+                  {user.avatarUrl ? (
+                    <Image source={{ uri: user.avatarUrl }} style={styles.bAvatarImg} contentFit="cover" />
+                  ) : (
+                    <Text style={styles.bAvatarInitial}>{user.name[0]?.toUpperCase()}</Text>
+                  )}
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.bName} numberOfLines={1}>{user.name}</Text>
+                  {since && <Text style={styles.bSince} numberOfLines={1}>Pressing since {since}</Text>}
+                </View>
+                <AvgRing value={summary?.avg_album_score ?? null} />
+                <Pressable onPress={signOut} hitSlop={12} accessibilityLabel="Sign out">
+                  <LogOut size={17} color="rgba(255,255,255,0.75)" />
+                </Pressable>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{user.name}</Text>
-                <Text style={styles.count}>{rated.length} albums rated</Text>
+
+              <View style={styles.bStats}>
+                <BannerStat value={String(rated.length)} label="ALBUMS" />
+                <BannerStat value={summary?.total_songs_rated != null ? summary.total_songs_rated.toLocaleString() : '—'} label="SONGS" />
+                <BannerStat
+                  value={summary?.avg_release_year != null ? String(Math.round(summary.avg_release_year)) : '—'}
+                  label="TASTE CENTER"
+                />
+                <BannerStat value={String(friends.length)} label="FRIENDS" />
               </View>
-              <Pressable onPress={signOut} hitSlop={12} accessibilityLabel="Sign out">
-                <LogOut size={20} color={colors.inkMuted} />
-              </Pressable>
+
             </View>
 
-            {/* Taste line — favorite genres (green) then subgenres (muted) as one
-                typographic line rather than boxed pills. */}
+            {/* Taste chips straddling the banner's bottom edge: favorite genres
+                (green outline) then subgenres (gray outline), centered. */}
             {(topGenres.length > 0 || topSubgenres.length > 0) && (
-              <Text style={styles.taste}>
-                {[
-                  ...topGenres.map((g) => ({ g, primary: true })),
-                  ...topSubgenres.map((g) => ({ g, primary: false })),
-                ].map((p, i, arr) => (
-                  <Text key={(p.primary ? 'g-' : 's-') + p.g} style={p.primary ? styles.tastePrimary : styles.tasteDim}>
-                    {p.g}{i < arr.length - 1 ? '   ·   ' : ''}
-                  </Text>
+              <View style={styles.chipsOverlap}>
+                {topGenres.map((g) => (
+                  <View key={`g-${g}`} style={[styles.bChip, styles.bChipGenre]}>
+                    <Text style={styles.bChipText} numberOfLines={1}>{g}</Text>
+                  </View>
                 ))}
-              </Text>
+                {topSubgenres.map((g) => (
+                  <View key={`s-${g}`} style={[styles.bChip, styles.bChipSub]}>
+                    <Text style={styles.bChipSubText} numberOfLines={1}>{g}</Text>
+                  </View>
+                ))}
+              </View>
             )}
-
-            {/* Bio + edit */}
-            <Pressable style={styles.bioRow} onPress={() => setEditing(true)}>
-              <Text style={user.bio ? styles.bio : styles.bioEmpty} numberOfLines={4}>
-                {user.bio || 'Add a bio'}
-              </Text>
-              <Pencil size={13} color={colors.inkMuted} />
-            </Pressable>
-
-            {/* Stats — open strip, no cards; hairline dividers keep it aligned. */}
-            <View style={styles.stats}>
-              <StatTile
-                value={summary?.avg_album_score != null ? summary.avg_album_score.toFixed(2) : '—'}
-                label="Avg score"
-              />
-              <View style={styles.statDivider} />
-              <StatTile value={String(summary?.longest_streak ?? 0)} label="Day streak" />
-              <View style={styles.statDivider} />
-              <StatTile value={String(thisWeek)} label="This week" />
-            </View>
 
             {/* Library / Stats / Ratings — underline tabs, no segmented box. */}
             <View style={styles.tabBar}>
@@ -211,26 +307,79 @@ export default function Profile() {
               </View>
             )}
 
+            {/* Rankings filters: Albums/Artists pills + metric dropdown + search */}
+            {tab === 'ratings' && (
+              <>
+                <View style={styles.rankFilters}>
+                  <View style={styles.rankPills}>
+                    {(['albums', 'artists'] as RankMode[]).map((m) => (
+                      <Pressable
+                        key={m}
+                        style={[styles.rankPill, rankMode === m && styles.rankPillOn]}
+                        onPress={() => switchRankMode(m)}
+                      >
+                        <Text style={[styles.rankPillText, rankMode === m && styles.rankPillTextOn]}>
+                          {m === 'albums' ? 'Albums' : 'Artists'}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Pressable style={styles.metricBtn} onPress={() => setMetricOpen(true)}>
+                    <Text style={styles.metricBtnText}>
+                      {currentMetric.label} {rankDir === 'desc' ? '↓' : '↑'}
+                    </Text>
+                    <ChevronDown size={13} color={colors.inkSecondary} />
+                  </Pressable>
+                </View>
+                <View style={styles.rankSearch}>
+                  <Search size={15} color={colors.inkMuted} />
+                  <TextInput
+                    style={styles.rankSearchInput}
+                    value={rankSearch}
+                    onChangeText={setRankSearch}
+                    placeholder="Search your library"
+                    placeholderTextColor={colors.inkMuted}
+                    autoCorrect={false}
+                  />
+                  {rankSearch.length > 0 && (
+                    <Pressable onPress={() => setRankSearch('')} hitSlop={8}>
+                      <X size={14} color={colors.inkMuted} />
+                    </Pressable>
+                  )}
+                </View>
+              </>
+            )}
+
             {/* Stats sub-tab renders in the header so it scrolls as one page */}
-            {tab === 'stats' && <StatsView userId={user.id} summary={summary} />}
+            {tab === 'stats' && <StatsView userId={user.id} />}
           </View>
         }
-        renderItem={({ item }) =>
+        renderItem={({ item, index }: { item: Album | ArtistStats; index: number }) =>
           isGrid ? (
             <AlbumCell
-              album={item}
+              album={item as Album}
               mu={badgeMu}
               sd={badgeSd}
               onPress={() =>
-                item.status === 'rated'
-                  ? router.push({ pathname: '/album/[id]', params: { id: String(item.id) } })
-                  : router.push({ pathname: '/rate/[id]', params: { id: String(item.id) } })
+                (item as Album).status === 'rated'
+                  ? router.push({ pathname: '/album/[id]', params: { id: String((item as Album).id) } })
+                  : router.push({ pathname: '/rate/[id]', params: { id: String((item as Album).id) } })
+              }
+            />
+          ) : rankMode === 'artists' ? (
+            <ArtistRankRow
+              stat={item as ArtistStats}
+              rank={index + 1}
+              metricKey={rankMetric}
+              onPress={() =>
+                router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent((item as ArtistStats).artist) } })
               }
             />
           ) : (
             <RatingRow
-              album={item}
-              onPress={() => router.push({ pathname: '/album/[id]', params: { id: String(item.id) } })}
+              album={item as Album}
+              rank={index + 1}
+              onPress={() => router.push({ pathname: '/album/[id]', params: { id: String((item as Album).id) } })}
             />
           )
         }
@@ -245,26 +394,90 @@ export default function Profile() {
                 ? 'Nothing in progress.'
                 : 'Your to-listen queue is empty.'}
             </Text>
+          ) : rankMode === 'artists' ? (
+            <Text style={styles.emptyText}>No artists with at least {QUALIFIED} rated songs{q ? ' match your search' : ' yet'}.</Text>
           ) : (
-            <Text style={styles.emptyText}>No rated albums yet.</Text>
+            <Text style={styles.emptyText}>{q ? 'No albums match your search.' : 'No rated albums yet.'}</Text>
           )
         }
       />
 
-      <EditBioModal
-        visible={editing}
-        initial={user.bio ?? ''}
-        onClose={() => setEditing(false)}
-      />
-    </SafeAreaView>
+      {/* Metric picker: tap a new metric to sort by it (descending), tap the
+          selected one again to flip the order. */}
+      <Modal visible={metricOpen} transparent animationType="slide" onRequestClose={() => setMetricOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setMetricOpen(false)}>
+          <Pressable style={styles.sheet}>
+            <Text style={styles.sheetTitle}>Sort by</Text>
+            {rankMetrics.map((m) => {
+              const on = m.key === currentMetric.key
+              return (
+                <Pressable
+                  key={m.key}
+                  style={styles.optionRow}
+                  onPress={() => {
+                    if (on) setRankDir((d) => (d === 'desc' ? 'asc' : 'desc'))
+                    else {
+                      setRankMetric(m.key)
+                      setRankDir('desc')
+                    }
+                    setMetricOpen(false)
+                  }}
+                >
+                  <Text style={styles.optionText}>
+                    {m.label}
+                    {on ? `  ${rankDir === 'desc' ? '↓' : '↑'}` : ''}
+                  </Text>
+                  {on && <Check size={18} color={colors.green} />}
+                </Pressable>
+              )
+            })}
+            <Text style={styles.sheetHint}>Tap the selected metric again to flip the order.</Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
   )
 }
 
-function StatTile({ value, label }: { value: string; label: string }) {
+function BannerStat({ value, label }: { value: string; label: string }) {
   return (
-    <View style={styles.statCol}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+    <View style={styles.bStatCol}>
+      <Text style={styles.bStatValue}>{value}</Text>
+      <Text style={styles.bStatLabel}>{label}</Text>
+    </View>
+  )
+}
+
+// Average-score gauge: a ring filled to score/10 in light green, value centered.
+function AvgRing({ value }: { value: number | null }) {
+  const R = 24
+  const SW = 4.5
+  const SIZE = (R + SW) * 2 + 2
+  const C = 2 * Math.PI * R
+  const frac = value != null ? Math.max(0, Math.min(1, value / 10)) : 0
+  const mid = SIZE / 2
+  return (
+    <View style={{ width: SIZE, height: SIZE }}>
+      <Svg width={SIZE} height={SIZE}>
+        <Circle cx={mid} cy={mid} r={R} stroke="rgba(255,255,255,0.18)" strokeWidth={SW} fill="none" />
+        {value != null && (
+          <Circle
+            cx={mid}
+            cy={mid}
+            r={R}
+            stroke="#a9d5b4"
+            strokeWidth={SW}
+            fill="none"
+            strokeDasharray={`${C * frac} ${C}`}
+            strokeLinecap="round"
+            transform={`rotate(-90 ${mid} ${mid})`}
+          />
+        )}
+      </Svg>
+      <View style={styles.ringCenter}>
+        <Text style={styles.ringValue}>{value != null ? value.toFixed(2) : '—'}</Text>
+        <Text style={styles.ringLabel}>AVG</Text>
+      </View>
     </View>
   )
 }
@@ -298,9 +511,10 @@ function AlbumCell({ album, mu, sd, onPress }: { album: Album; mu: number; sd: n
   )
 }
 
-function RatingRow({ album, onPress }: { album: Album; onPress: () => void }) {
+function RatingRow({ album, rank, onPress }: { album: Album; rank: number; onPress: () => void }) {
   return (
     <Pressable style={styles.ratingRow} onPress={onPress}>
+      <Text style={styles.rankNum}>{rank}</Text>
       {album.albumArtUrl ? (
         <Image source={{ uri: album.albumArtUrl }} style={styles.ratingArt} contentFit="cover" />
       ) : (
@@ -310,7 +524,9 @@ function RatingRow({ album, onPress }: { album: Album; onPress: () => void }) {
       )}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.ratingName} numberOfLines={1}>{album.albumName}</Text>
-        <Text style={styles.ratingArtist} numberOfLines={1}>{album.artist}</Text>
+        <Text style={styles.ratingArtist} numberOfLines={1}>
+          {album.artist}{album.year ? ` · ${album.year}` : ''}
+        </Text>
       </View>
       {album.score != null && (
         <Text style={[styles.ratingScore, { color: songScoreColor(album.score) }]}>
@@ -321,106 +537,124 @@ function RatingRow({ album, onPress }: { album: Album; onPress: () => void }) {
   )
 }
 
-function EditBioModal({
-  visible,
-  initial,
-  onClose,
+function ArtistRankRow({
+  stat,
+  rank,
+  metricKey,
+  onPress,
 }: {
-  visible: boolean
-  initial: string
-  onClose: () => void
+  stat: ArtistStats
+  rank: number
+  metricKey: string
+  onPress: () => void
 }) {
-  const [text, setText] = useState(initial)
-  const [saving, setSaving] = useState(false)
-  const { updateProfile } = useAuth()
-
-  // Reset the field whenever the modal reopens on a fresh bio.
-  useEffect(() => {
-    if (visible) setText(initial)
-  }, [visible, initial])
-
-  async function save() {
-    setSaving(true)
-    try {
-      await updateProfile({ bio: text.trim() })
-      onClose()
-    } finally {
-      setSaving(false)
+  const value = (() => {
+    switch (metricKey) {
+      case 'songs':
+        return { text: String(stat.count) }
+      case 'bang':
+        return { text: `${Math.round(stat.bangPct * 100)}%` }
+      case 'skip':
+        return { text: `${Math.round(stat.skipPct * 100)}%` }
+      case 'sar':
+        return { text: stat.sar.toFixed(1) }
+      default:
+        return { text: stat.avgSongScore.toFixed(2), color: songScoreColor(stat.avgSongScore) }
     }
-  }
-
+  })()
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.modalCard}>
-          <View style={styles.modalHead}>
-            <Pressable onPress={onClose} hitSlop={10}>
-              <X size={22} color={colors.inkTertiary} />
-            </Pressable>
-            <Text style={styles.modalTitle}>Edit bio</Text>
-            <Pressable onPress={save} hitSlop={10} disabled={saving}>
-              {saving ? (
-                <ActivityIndicator color={colors.green} />
-              ) : (
-                <Check size={22} color={colors.green} />
-              )}
-            </Pressable>
-          </View>
-          <TextInput
-            style={styles.bioInput}
-            value={text}
-            onChangeText={(t) => setText(t.slice(0, BIO_MAX))}
-            placeholder="Say something about your taste…"
-            placeholderTextColor={colors.inkMuted}
-            multiline
-            autoFocus
-          />
-          <Text style={styles.counter}>{text.length}/{BIO_MAX}</Text>
-        </View>
+    <Pressable style={styles.ratingRow} onPress={onPress}>
+      <Text style={styles.rankNum}>{rank}</Text>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.ratingName} numberOfLines={1}>{stat.artist}</Text>
+        <Text style={styles.ratingArtist} numberOfLines={1}>
+          {stat.count} songs · avg {stat.avgSongScore.toFixed(2)}
+        </Text>
       </View>
-    </Modal>
+      <Text style={[styles.ratingScore, value.color ? { color: value.color } : { color: colors.ink }]}>
+        {value.text}
+      </Text>
+    </Pressable>
   )
 }
+
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: spacing.lg, paddingBottom: 120, gap: GAP + 4 },
 
-  identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.md },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  compactHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
     backgroundColor: colors.green,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: '#ffffff', letterSpacing: 0.5 },
+
+  // Green banner header
+  banner: {
+    backgroundColor: colors.green,
+    marginHorizontal: -spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg + 10,
+  },
+  bannerTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.sm },
+  bAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  avatarImg: { width: '100%', height: '100%' },
-  avatarInitial: { fontFamily: fonts.bodyBold, fontSize: 26, color: '#ffffff' },
-  name: { fontFamily: fonts.displayBlack, fontSize: 28, color: colors.ink, letterSpacing: 0.5 },
-  count: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary, marginTop: 2 },
+  bAvatarImg: { width: '100%', height: '100%' },
+  bAvatarInitial: { fontFamily: fonts.display, fontSize: 24, color: colors.green },
+  bName: { fontFamily: fonts.displayBlack, fontSize: 25, color: '#ffffff', letterSpacing: 0.3 },
+  bSince: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
 
-  taste: { marginTop: spacing.md, lineHeight: 20 },
-  tastePrimary: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
-  tasteDim: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkMuted },
+  ringCenter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+  ringValue: { fontFamily: fonts.display, fontSize: 13.5, color: '#ffffff' },
+  ringLabel: { fontFamily: fonts.bodyBold, fontSize: 7, letterSpacing: 1, color: 'rgba(255,255,255,0.65)' },
 
-  bioRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.md },
-  bio: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.inkSecondary, lineHeight: 19 },
-  bioEmpty: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.inkMuted, fontStyle: 'italic' },
-
-  stats: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xl },
-  statCol: { flex: 1, alignItems: 'center' },
-  statDivider: { width: StyleSheet.hairlineWidth, height: 30, backgroundColor: colors.border },
-  statValue: { fontFamily: fonts.display, fontSize: 27, color: colors.ink, letterSpacing: 0.5 },
-  statLabel: {
+  bStats: { flexDirection: 'row', marginTop: spacing.lg },
+  bStatCol: { flex: 1, alignItems: 'flex-start' },
+  bStatValue: { fontFamily: fonts.display, fontSize: 22, color: '#ffffff' },
+  bStatLabel: {
     fontFamily: fonts.bodyMedium,
-    fontSize: 10,
-    color: colors.inkMuted,
+    fontSize: 9.5,
+    color: 'rgba(255,255,255,0.6)',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    marginTop: 4,
+    marginTop: 2,
   },
+
+  // Chips ride the banner boundary: pulled up by half their height so their
+  // centerline sits exactly on the green/cream edge.
+  chipsOverlap: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    justifyContent: 'flex-start',
+    gap: spacing.sm,
+    marginTop: -14,
+    zIndex: 2,
+  },
+  bChip: {
+    backgroundColor: '#ffffff',
+    borderRadius: radii.pill,
+    borderWidth: 1.5,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    flexShrink: 1,
+  },
+  bChipGenre: { borderColor: colors.green },
+  bChipText: { fontFamily: fonts.bodySemiBold, fontSize: 12.5, color: colors.green },
+  bChipSub: { borderColor: '#c9c2b8' },
+  bChipSubText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.inkTertiary },
 
   tabBar: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.xl },
   tab: { alignItems: 'center', gap: 6 },
@@ -469,6 +703,59 @@ const styles = StyleSheet.create({
   predText: { fontFamily: fonts.bodyBold, fontSize: 12, color: 'rgba(255,255,255,0.85)', letterSpacing: -0.2 },
   albumName: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary, marginTop: 5 },
 
+  // Rankings filters
+  rankFilters: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg },
+  rankPills: { flexDirection: 'row', gap: spacing.sm },
+  rankPill: { paddingVertical: 7, paddingHorizontal: 16, borderRadius: radii.pill, backgroundColor: colors.inset },
+  rankPillOn: { backgroundColor: colors.green },
+  rankPillText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.inkSecondary },
+  rankPillTextOn: { color: '#ffffff' },
+  metricBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    backgroundColor: colors.inset,
+  },
+  metricBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.inkSecondary },
+  rankSearch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    height: 42,
+    backgroundColor: colors.raised,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  rankSearchInput: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: colors.ink },
+  rankNum: { fontFamily: fonts.display, fontSize: 15, color: colors.inkMuted, width: 22, textAlign: 'center' },
+
+  backdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.4)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: colors.bg,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  sheetTitle: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink, marginBottom: spacing.sm },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  optionText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.ink },
+  sheetHint: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted, marginTop: spacing.md },
+
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
   ratingArt: { width: 48, height: 48, borderRadius: radii.sm },
   ratingName: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.ink },
@@ -486,34 +773,4 @@ const styles = StyleSheet.create({
   placeholderTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   placeholderBody: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary },
 
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.4)', justifyContent: 'flex-end' },
-  modalCard: {
-    backgroundColor: colors.bg,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
-  },
-  modalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  modalTitle: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink },
-  bioInput: {
-    marginTop: spacing.lg,
-    minHeight: 96,
-    backgroundColor: colors.raised,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    fontFamily: fonts.body,
-    fontSize: 14,
-    color: colors.ink,
-    textAlignVertical: 'top',
-  },
-  counter: {
-    fontFamily: fonts.body,
-    fontSize: 11,
-    color: colors.inkMuted,
-    textAlign: 'right',
-    marginTop: spacing.xs,
-  },
 })

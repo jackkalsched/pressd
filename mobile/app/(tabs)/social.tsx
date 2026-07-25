@@ -4,9 +4,11 @@
 //     the gap against your own rating (only when you've rated it too).
 //   Reviews  — a feed of friends' written reviews.
 //   Friends  — your current friends.
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Animated,
+  Dimensions,
   FlatList,
   Modal,
   Pressable,
@@ -16,9 +18,10 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
+import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
 import { Heart, Search, UserPlus, X } from 'lucide-react-native'
 import {
@@ -26,6 +29,7 @@ import {
   fetchFriendReviews,
   fetchFriends,
   fetchAlbums,
+  fetchCompare,
   copyAlbumToLibrary,
   toggleLike,
   searchUsers,
@@ -35,6 +39,7 @@ import {
   declineFriendRequest,
   type FeedItem,
   type FriendReview,
+  type CompareItem,
   type UserInfo,
   type UserSearchResult,
 } from '../../lib/api'
@@ -43,9 +48,13 @@ import { songScoreColor, avatarColor } from '@pressd/shared/types'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const DOWN = '#c0392b'
-type Tab = 'activity' | 'reviews' | 'friends'
+const CONTENT_W = Dimensions.get('window').width - spacing.lg * 2
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+
+type Tab = 'activity' | 'compare' | 'reviews' | 'friends'
 const TABS: { key: Tab; label: string }[] = [
   { key: 'activity', label: 'Activity' },
+  { key: 'compare', label: 'Compare' },
   { key: 'reviews', label: 'Reviews' },
   { key: 'friends', label: 'Friends' },
 ]
@@ -124,6 +133,7 @@ function Cluster({ item }: { item: { friend: { name: string; avatar_url?: string
 export default function Social() {
   const { user } = useAuth()
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const queryClient = useQueryClient()
   const [tab, setTab] = useState<Tab>('activity')
   const [findOpen, setFindOpen] = useState(false)
@@ -144,6 +154,11 @@ export default function Social() {
     queryFn: () => fetchFriends(user!.id),
     enabled: !!user,
   })
+  const { data: compare = [], isLoading: compareLoading } = useQuery({
+    queryKey: ['compare', user?.id],
+    queryFn: fetchCompare,
+    enabled: !!user && tab === 'compare',
+  })
   const { data: myRated = [] } = useQuery({
     queryKey: ['albums', 'rated', user?.id],
     queryFn: () => fetchAlbums({ status: 'rated', userId: user!.id }),
@@ -156,6 +171,20 @@ export default function Social() {
   })
 
   const incomingCount = requests?.incoming.length ?? 0
+
+  // Scroll-reactive masthead, matching For You: the big title lifts + fades as
+  // the active tab scrolls, and a compact title bar fades in at the top. One
+  // shared scrollY (only the active tab scrolls); reset it when switching tabs.
+  const scrollY = useRef(new Animated.Value(0)).current
+  const mastheadOpacity = scrollY.interpolate({ inputRange: [0, 70], outputRange: [1, 0], extrapolate: 'clamp' })
+  const mastheadShift = scrollY.interpolate({ inputRange: [0, 70], outputRange: [0, -14], extrapolate: 'clamp' })
+  const compactOpacity = scrollY.interpolate({ inputRange: [36, 82], outputRange: [0, 1], extrapolate: 'clamp' })
+  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })
+  function selectTab(t: Tab) {
+    scrollY.setValue(0)
+    setTab(t)
+  }
+
   const groups = useMemo(() => groupFeed(feed), [feed])
   const myScores = useMemo(() => {
     const m = new Map<string, number>()
@@ -193,27 +222,43 @@ export default function Social() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.pageTitle}>Social</Text>
-        <Pressable style={styles.findBtn} onPress={() => setFindOpen(true)}>
-          <UserPlus size={17} color={colors.green} />
-          <Text style={styles.findBtnText}>Find friends</Text>
-          {incomingCount > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{incomingCount}</Text>
-            </View>
-          )}
-        </Pressable>
-      </View>
+      {/* Absolute children ignore the SafeAreaView's inset padding, so push the
+          compact bar down below the status bar (clock) explicitly. */}
+      <Animated.View
+        style={[styles.compactHeader, { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
+        pointerEvents="none"
+      >
+        <Text style={styles.compactTitle}>Social</Text>
+      </Animated.View>
 
-      <View style={styles.tabs}>
+      <Animated.View style={{ opacity: mastheadOpacity, transform: [{ translateY: mastheadShift }] }}>
+        <View style={styles.header}>
+          <Text style={styles.pageTitle}>Social</Text>
+          <Pressable style={styles.findBtn} onPress={() => setFindOpen(true)}>
+            <UserPlus size={17} color={colors.green} />
+            <Text style={styles.findBtnText}>Find friends</Text>
+            {incomingCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{incomingCount}</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
+      </Animated.View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.tabsScroll}
+        contentContainerStyle={styles.tabs}
+      >
         {TABS.map(({ key, label }) => (
-          <Pressable key={key} style={styles.tab} onPress={() => setTab(key)}>
+          <Pressable key={key} style={styles.tab} onPress={() => selectTab(key)}>
             <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
             <View style={[styles.tabUnderline, tab === key && styles.tabUnderlineActive]} />
           </Pressable>
         ))}
-      </View>
+      </ScrollView>
 
       {tab === 'activity' ? (
         feedLoading && feed.length === 0 ? (
@@ -221,7 +266,13 @@ export default function Social() {
         ) : groups.length === 0 ? (
           <Text style={styles.empty}>No friend activity yet. Add friends to see their ratings.</Text>
         ) : (
-          <ScrollView style={styles.fill} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+          <Animated.ScrollView
+            style={styles.fill}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+          >
             {groups.map((g) => (
               <View key={g.key}>
                 <View style={styles.dayHead}>
@@ -243,15 +294,41 @@ export default function Social() {
                 ))}
               </View>
             ))}
-          </ScrollView>
+          </Animated.ScrollView>
         )
+      ) : tab === 'compare' ? (
+        <Animated.FlatList
+          data={compare}
+          keyExtractor={(item, i) => `${item.album_id}-${i}`}
+          style={styles.fill}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          renderItem={({ item, index }) => (
+            <View style={index > 0 ? styles.divider : undefined}>
+              <CompareCard item={item} onOpen={openAlbum} />
+            </View>
+          )}
+          ListEmptyComponent={
+            compareLoading ? (
+              <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
+            ) : (
+              <Text style={styles.empty}>
+                Nothing to compare yet. When you and a friend both rate an album, it shows up here.
+              </Text>
+            )
+          }
+        />
       ) : tab === 'reviews' ? (
-        <FlatList
+        <Animated.FlatList
           data={reviews}
           keyExtractor={(item, i) => `${item.album_id}-${item.friend.id}-${i}`}
           style={styles.fill}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           renderItem={({ item, index }) => (
             <ReviewRow item={item} first={index === 0} onOpenAlbum={openAlbum} onLike={() => like(item.album_id)} />
           )}
@@ -264,12 +341,14 @@ export default function Social() {
           }
         />
       ) : (
-        <FlatList
+        <Animated.FlatList
           data={friends}
           keyExtractor={(f) => String(f.id)}
           style={styles.fill}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           renderItem={({ item, index }) => (
             <Pressable style={[styles.friendRow, index > 0 && styles.divider]} onPress={() => openFriend(item.id)}>
               <Avatar name={item.name} url={item.avatarUrl} size={44} />
@@ -522,6 +601,114 @@ function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onC
   )
 }
 
+// The 5–10 scale line: friends as colored bubbles at their score, you as a dark
+// tick. No numbers under it — the stack below carries the exact scores.
+function NumberLine({ raters }: { raters: CompareItem['raters'] }) {
+  const pos = (score: number) => ((clamp(score, 5, 10) - 5) / 5) * CONTENT_W
+  return (
+    <View style={styles.line}>
+      <LinearGradient
+        colors={['#d9a6a2', '#d8c99c', '#8fbb8c']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.lineTrack}
+      />
+      {raters.map((r, i) => {
+        const x = pos(r.score)
+        if (r.is_you) {
+          // Same bubble as friends, set apart by a soft glow ring.
+          return (
+            <View key={i} pointerEvents="none">
+              <View style={[styles.lineTick, { left: x - 1.5, backgroundColor: colors.ink }]} />
+              <View style={[styles.youGlow, { left: clamp(x - 15, 0, CONTENT_W - 30) }]}>
+                <View style={styles.youBubble}>
+                  <Text style={styles.bubbleText}>{r.name[0]?.toUpperCase()}</Text>
+                </View>
+              </View>
+            </View>
+          )
+        }
+        const color = avatarColor(r.name)
+        return (
+          <View key={i} pointerEvents="none">
+            <View style={[styles.lineTick, { left: x - 1.5, backgroundColor: color }]} />
+            <View style={[styles.bubble, { left: clamp(x - 13, 0, CONTENT_W - 26), backgroundColor: color }]}>
+              <Text style={styles.bubbleText}>{r.name[0]?.toUpperCase()}</Text>
+            </View>
+          </View>
+        )
+      })}
+      <View style={styles.axis}>
+        {[5, 6, 7, 8, 9, 10].map((n) => (
+          <Text key={n} style={styles.axisLabel}>{n}</Text>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+function CompareCard({ item, onOpen }: { item: CompareItem; onOpen: (id: number) => void }) {
+  const week = item.recent ? ' this week' : ''
+  const subtitle =
+    item.highlight === 'disagreement'
+      ? `Widest disagreement${week} · ${item.spread.toFixed(1)} spread`
+      : `${item.friend_count} ${item.friend_count === 1 ? 'friend' : 'friends'} rated${week}`
+  const subColor = item.highlight === 'disagreement' ? DOWN : colors.green
+
+  if (item.highlight === 'teaser') {
+    return (
+      <View style={[styles.compareCard, styles.teaser]}>
+        <View style={styles.compareHead}>
+          <AlbumTile name={item.album_name} url={item.album_art_url} size={72} />
+          <View style={styles.compareHeadText}>
+            <Text style={styles.compareName} numberOfLines={1}>{item.album_name}</Text>
+            <Text style={styles.compareMeta} numberOfLines={1}>
+              {item.artist}{item.year ? ` · ${item.year}` : ''}
+            </Text>
+            <Text style={styles.compareTeaserSub}>{item.friend_count} {item.friend_count === 1 ? 'friend' : 'friends'}</Text>
+          </View>
+        </View>
+      </View>
+    )
+  }
+
+  return (
+    <View style={styles.compareCard}>
+      <View style={styles.compareHead}>
+        <AlbumTile name={item.album_name} url={item.album_art_url} size={72} />
+        <View style={styles.compareHeadText}>
+          <Text style={styles.compareName} numberOfLines={1}>{item.album_name}</Text>
+          <Text style={styles.compareMeta} numberOfLines={1}>
+            {item.artist}{item.year ? ` · ${item.year}` : ''}
+          </Text>
+          <Text style={[styles.compareSub, { color: subColor }]}>{subtitle}</Text>
+        </View>
+      </View>
+
+      <NumberLine raters={item.raters} />
+
+      <View style={styles.stack}>
+        {item.raters.map((r, i) => (
+          <View key={i} style={styles.stackRow}>
+            <Avatar name={r.name} size={28} style={r.is_you ? { backgroundColor: colors.ink } : undefined} />
+            <Text style={styles.stackName}>{r.is_you ? 'You' : r.name}</Text>
+            {r.review ? (
+              <Text style={styles.stackReview} numberOfLines={1}>“{r.review}”</Text>
+            ) : (
+              <View style={{ flex: 1 }} />
+            )}
+            <Text style={[styles.stackScore, { color: songScoreColor(r.score) }]}>{r.score.toFixed(2)}</Text>
+          </View>
+        ))}
+      </View>
+
+      <Pressable style={styles.viewAlbum} onPress={() => onOpen(item.album_id)} hitSlop={6}>
+        <Text style={styles.viewAlbumText}>View album</Text>
+      </Pressable>
+    </View>
+  )
+}
+
 function FriendAction({ u, onRequest, onAccept }: { u: UserSearchResult; onRequest: () => void; onAccept: () => void }) {
   if (u.already_friends) return <Text style={styles.friendsTag}>Friends</Text>
   if (u.request_received) return (
@@ -547,13 +734,28 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   pageTitle: { fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: 0.5 },
+  compactHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    backgroundColor: colors.bg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: colors.ink, letterSpacing: 0.5 },
   title: { fontFamily: fonts.display, fontSize: 34, color: colors.ink, letterSpacing: 1 },
   findBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.greenSoft, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radii.pill },
   findBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
   badge: { backgroundColor: DOWN, borderRadius: 9, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   badgeText: { fontFamily: fonts.bodyBold, fontSize: 11, color: '#fff' },
 
-  tabs: { flexDirection: 'row', gap: spacing.xl, paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  tabsScroll: { flexGrow: 0, marginTop: spacing.lg },
+  tabs: { flexDirection: 'row', gap: spacing.xl, paddingHorizontal: spacing.lg, paddingRight: spacing.xl },
   tab: { alignItems: 'center', gap: 6 },
   tabText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.inkMuted },
   tabTextActive: { color: colors.ink },
@@ -593,6 +795,67 @@ const styles = StyleSheet.create({
   friendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
   friendName: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink },
   friendBio: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, marginTop: 1 },
+
+  // Compare
+  compareCard: { paddingVertical: spacing.lg },
+  teaser: { opacity: 0.5 },
+  compareHead: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
+  compareHeadText: { flex: 1, minWidth: 0, paddingTop: 2 },
+  compareName: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.ink },
+  compareMeta: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, marginTop: 2 },
+  compareSub: { fontFamily: fonts.bodySemiBold, fontSize: 13, marginTop: 6 },
+  compareTeaserSub: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary, marginTop: 6 },
+
+  line: { height: 66, marginTop: spacing.lg },
+  lineTrack: { position: 'absolute', left: 0, right: 0, top: 38, height: 5, borderRadius: 3 },
+  bubble: {
+    position: 'absolute',
+    top: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.bg,
+  },
+  bubbleText: { fontFamily: fonts.bodyBold, fontSize: 11, color: '#fff' },
+  lineTick: { position: 'absolute', top: 32, width: 3, height: 11, borderRadius: 1.5 },
+  youGlow: {
+    position: 'absolute',
+    top: 4,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(45,106,79,0.30)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  youBubble: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.ink,
+    borderWidth: 2,
+    borderColor: colors.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.green,
+    shadowOpacity: 0.9,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
+  axis: { position: 'absolute', left: 0, right: 0, top: 50, flexDirection: 'row', justifyContent: 'space-between' },
+  axisLabel: { fontFamily: fonts.body, fontSize: 11, color: colors.inkMuted },
+
+  stack: { marginTop: spacing.md },
+  stackRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6 },
+  stackName: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
+  stackReview: { flex: 1, fontFamily: fonts.displayRegular, fontSize: 14, color: colors.inkSecondary },
+  stackScore: { fontFamily: fonts.bodyBold, fontSize: 18 },
+  viewAlbum: { marginTop: spacing.md, alignSelf: 'flex-start' },
+  viewAlbumText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
 
   empty: { fontFamily: fonts.body, fontSize: 14, color: colors.inkTertiary, textAlign: 'center', marginTop: spacing.xxl, paddingHorizontal: spacing.lg },
 
