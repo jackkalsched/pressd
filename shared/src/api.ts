@@ -620,6 +620,10 @@ export interface ArtistDetail {
   song_score_rank_of: number
   external_rank: number | null
   external_rank_of: number
+  song_plus_rank: number | null
+  song_plus_rank_of: number
+  w_song_plus_rank: number | null
+  w_song_plus_rank_of: number
   percentiles: {
     avg_song_score: number | null
     song_plus: number | null
@@ -654,6 +658,7 @@ export interface ScatterPoint {
   avg_external: number | null
   genre: string | null
   song_count: number
+  song_plus: number | null
   w_song_plus: number | null
   consistency_plus: number | null
 }

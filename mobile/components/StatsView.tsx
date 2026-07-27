@@ -9,10 +9,10 @@ import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { fetchArtistStats, fetchGenreStats, fetchSongs } from '../lib/api'
 import { songScoreColor, BANG_THRESHOLD, SKIP_THRESHOLD } from '@pressd/shared/types'
+import ScoreHistogram from './ScoreHistogram'
 import { colors, fonts, spacing } from '../theme/tokens'
 
 const RED = '#c0392b'
-const CHART_H = 120
 
 export default function StatsView({ userId }: { userId: number }) {
   const router = useRouter()
@@ -39,12 +39,6 @@ export default function StatsView({ userId }: { userId: number }) {
   const skips = scored.filter((s) => s < SKIP_THRESHOLD).length
   const bangPct = scored.length ? (bangs / scored.length) * 100 : null
   const skipPct = scored.length ? (skips / scored.length) * 100 : null
-
-  // Histogram: ten bins at the integers, scores rounded to the nearest.
-  const bins = Array.from({ length: 10 }, (_, i) => i + 1).map(
-    (n) => scored.filter((s) => Math.max(1, Math.min(10, Math.round(s))) === n).length,
-  )
-  const maxBin = Math.max(1, ...bins)
 
   const topGenres = [...genres].sort((a, b) => b.count - a.count).slice(0, 4)
   const maxGenre = Math.max(1, ...topGenres.map((g) => g.count))
@@ -84,24 +78,7 @@ export default function StatsView({ userId }: { userId: number }) {
 
       {/* Score distribution */}
       <Text style={styles.sectionLabel}>SCORE DISTRIBUTION</Text>
-      <View style={styles.chart}>
-        {bins.map((count, i) => (
-          <View key={i} style={styles.chartCol}>
-            <View
-              style={[
-                styles.bar,
-                { height: Math.max(count > 0 ? 6 : 2, (count / maxBin) * CHART_H), backgroundColor: songScoreColor(i + 1) },
-              ]}
-            />
-          </View>
-        ))}
-      </View>
-      {/* One label per bin, centered under its bar (bin n = scores rounding to n). */}
-      <View style={styles.chartAxis}>
-        {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-          <Text key={n} style={styles.axisLabel}>{n}</Text>
-        ))}
-      </View>
+      <ScoreHistogram scores={scored} />
 
       {/* Genres */}
       {topGenres.length > 0 && (
@@ -168,11 +145,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
 
-  chart: { flexDirection: 'row', alignItems: 'flex-end', height: CHART_H, gap: 4 },
-  chartCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
-  bar: { width: '100%', borderRadius: 3, opacity: 0.9 },
-  chartAxis: { flexDirection: 'row', gap: 4, marginTop: 4 },
-  axisLabel: { flex: 1, textAlign: 'center', fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted },
 
   genreRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 7 },
   genreName: { width: 88, fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.ink },

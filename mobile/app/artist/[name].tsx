@@ -1,7 +1,7 @@
 // Artist page — per-artist stats scoped to a user: headline metrics (wSong+,
 // avg song score, bang/skip), the song-score histogram + KDE, and the artist's
 // albums. Mirrors the website ArtistPage.
-import { ActivityIndicator, Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
@@ -10,10 +10,8 @@ import { ArrowLeft } from 'lucide-react-native'
 import { fetchArtistDetail, type ArtistDetail } from '../../lib/api'
 import { songScoreColor } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
-import ArtistChart from '../../components/ArtistChart'
+import ScoreHistogram from '../../components/ScoreHistogram'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
-
-const CHART_W = Dimensions.get('window').width - spacing.lg * 2 - spacing.lg * 2
 
 export default function ArtistPage() {
   const { name } = useLocalSearchParams<{ name: string }>()
@@ -42,6 +40,7 @@ export default function ArtistPage() {
   const albums = [...data.albums].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
   const p = data.percentiles
 
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.topBar}>
@@ -60,11 +59,14 @@ export default function ArtistPage() {
               {data.song_count} songs · {data.album_count} album{data.album_count === 1 ? '' : 's'}
               {data.small_sample ? ' · small sample' : ''}
             </Text>
-            {data.song_score_rank != null && (
-              <Text style={styles.rank}>
-                #{data.song_score_rank} of {data.song_score_rank_of} by avg song score
-              </Text>
-            )}
+            <Text style={styles.rank}>
+              {[
+                data.song_plus_rank != null && `Song+ #${data.song_plus_rank}/${data.song_plus_rank_of}`,
+                data.w_song_plus_rank != null && `wSong+ #${data.w_song_plus_rank}/${data.w_song_plus_rank_of}`,
+              ]
+                .filter(Boolean)
+                .join('   ·   ')}
+            </Text>
           </View>
           <ArtStrip
             albums={data.albums}
@@ -91,11 +93,12 @@ export default function ArtistPage() {
         <PercentileBar label="Skip%"        value={pctv(data.skip_pct)}         percentile={p.skip_pct}         smallSample={data.small_sample} invert />
         <PercentileBar label="Consistency+" value={plus(data.consistency_plus)} percentile={p.consistency_plus} smallSample={data.small_sample} />
 
-        {/* Distribution */}
+        {/* Distribution — same histogram as Profile → Stats */}
         {data.song_scores.length > 0 && (
-          <View style={styles.chartCard}>
-            <ArtistChart scores={data.song_scores} width={CHART_W} />
-          </View>
+          <>
+            <Text style={styles.sectionLabel}>SCORE DISTRIBUTION</Text>
+            <ScoreHistogram scores={data.song_scores} />
+          </>
         )}
 
         {/* Albums */}
@@ -252,15 +255,6 @@ const styles = StyleSheet.create({
   pctDash: { textAlign: 'center', color: colors.inkMuted, fontSize: 10 },
   pctValue: { width: 46, textAlign: 'right', fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.ink },
   pctValueSmall: { color: colors.inkMuted },
-
-  chartCard: {
-    marginTop: spacing.lg,
-    backgroundColor: colors.raised,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-  },
 
   sectionLabel: {
     fontFamily: fonts.bodyBold,

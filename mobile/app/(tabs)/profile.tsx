@@ -18,12 +18,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import Svg, { Circle } from 'react-native-svg'
 import { Check, ChevronDown, LogOut, Search, X } from 'lucide-react-native'
-import { fetchAlbums, fetchSummary, fetchScoreRange, fetchFriends, fetchArtistStats } from '../../lib/api'
-import { songScoreColor, type Album, type AlbumStatus, type ArtistStats } from '@pressd/shared/types'
+import {
+  fetchAlbums,
+  fetchSummary,
+  fetchScoreRange,
+  fetchFriends,
+  fetchArtistStats,
+  fetchScatterData,
+} from '../../lib/api'
+import { songScoreColor, type Album, type AlbumStatus } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import StatsView from '../../components/StatsView'
+import ProfileBanner from '../../components/ProfileBanner'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const GAP = 10
@@ -68,12 +75,25 @@ const ALBUM_METRICS: Metric<Album>[] = [
   { key: 'dateRated', label: 'Date Rated', get: (a) => a.dateRated },
   { key: 'name', label: 'Name', get: (a) => a.albumName.toLowerCase() },
 ]
-const ARTIST_METRICS: Metric<ArtistStats>[] = [
-  { key: 'avg', label: 'Avg Song', get: (s) => s.avgSongScore },
-  { key: 'songs', label: 'Songs', get: (s) => s.count },
+/** One artist row for the Rankings leaderboard: the +-metrics come from the
+ *  scatter endpoint (league-indexed), bang/skip from the artist-stats one. */
+interface ArtistRank {
+  artist: string
+  songs: number
+  avgSongScore: number
+  songPlus: number | null
+  wSongPlus: number | null
+  consistencyPlus: number | null
+  bangPct: number | null
+  skipPct: number | null
+}
+const ARTIST_METRICS: Metric<ArtistRank>[] = [
+  { key: 'songPlus', label: 'Song+', get: (s) => s.songPlus },
+  { key: 'wSongPlus', label: 'wSong+', get: (s) => s.wSongPlus },
+  { key: 'consPlus', label: 'Cons+', get: (s) => s.consistencyPlus },
   { key: 'bang', label: 'Bang %', get: (s) => s.bangPct },
   { key: 'skip', label: 'Skip %', get: (s) => s.skipPct },
-  { key: 'sar', label: 'SAR', get: (s) => s.sar },
+  { key: 'avg', label: 'Avg Song', get: (s) => s.avgSongScore },
 ]
 
 /** null-safe comparator: nulls sink to the end regardless of direction */
@@ -148,17 +168,25 @@ export default function Profile() {
     enabled: !!user,
   })
 
-  // Artist leaderboard data for Rankings (same cache key as the Stats sub-tab).
+  // Artist leaderboard data for Rankings (same cache keys as the Stats sub-tab
+  // and the artist pages). Scatter carries the league-indexed + metrics;
+  // artist-stats carries bang/skip.
   const { data: artistStats = [] } = useQuery({
     queryKey: ['artist-stats', user?.id],
     queryFn: () => fetchArtistStats(user!.id),
     enabled: !!user && tab === 'ratings',
   })
+  const { data: scatter } = useQuery({
+    queryKey: ['stats', 'scatter', user?.id],
+    queryFn: () => fetchScatterData(user!.id),
+    enabled: !!user && tab === 'ratings',
+    staleTime: 5 * 60_000,
+  })
 
-  // Favorite tags: top two genres + top two subgenres, one line of chips.
-  const topGenres = useMemo(() => topTags(rated.map((a) => a.genre), 2), [rated])
+  // Favorite tags: top three genres + top three subgenres, one scrolling line.
+  const topGenres = useMemo(() => topTags(rated.map((a) => a.genre), 3), [rated])
   const topSubgenres = useMemo(
-    () => topTags(rated.flatMap((a) => [a.subGenre1, a.subGenre2, a.subGenre3]), 2),
+    () => topTags(rated.flatMap((a) => [a.subGenre1, a.subGenre2, a.subGenre3]), 3),
     [rated],
   )
 
@@ -192,15 +220,29 @@ export default function Profile() {
       .sort((a, b) => cmpVals(metric.get(a), metric.get(b), rankDir))
   }, [tab, rankMode, rated, rankMetric, rankDir, q])
 
-  const rankedArtists = useMemo(() => {
+  const rankedArtists = useMemo<ArtistRank[]>(() => {
     if (tab !== 'ratings' || rankMode !== 'artists') return []
     const metric = ARTIST_METRICS.find((m) => m.key === rankMetric) ?? ARTIST_METRICS[0]
-    return artistStats
-      .filter((s) => s.count >= QUALIFIED && (!q || s.artist.toLowerCase().includes(q)))
+    const statBy = new Map(artistStats.map((s) => [s.artist, s]))
+    return (scatter?.points ?? [])
+      .filter((p) => p.song_count >= QUALIFIED && (!q || p.artist.toLowerCase().includes(q)))
+      .map((p): ArtistRank => {
+        const st = statBy.get(p.artist)
+        return {
+          artist: p.artist,
+          songs: p.song_count,
+          avgSongScore: p.avg_song_score,
+          songPlus: p.song_plus,
+          wSongPlus: p.w_song_plus,
+          consistencyPlus: p.consistency_plus,
+          bangPct: st?.bangPct ?? null,
+          skipPct: st?.skipPct ?? null,
+        }
+      })
       .sort((a, b) => cmpVals(metric.get(a), metric.get(b), rankDir))
-  }, [tab, rankMode, artistStats, rankMetric, rankDir, q])
+  }, [tab, rankMode, scatter, artistStats, rankMetric, rankDir, q])
 
-  const listData: (Album | ArtistStats)[] = isGrid
+  const listData: (Album | ArtistRank)[] = isGrid
     ? grid
     : tab === 'ratings'
     ? rankMode === 'albums'
@@ -220,7 +262,7 @@ export default function Profile() {
       <Animated.FlatList
         key={isGrid ? 'grid' : 'list'}
         data={listData as Album[]}
-        keyExtractor={(item: Album | ArtistStats) => ('id' in item ? String(item.id) : item.artist)}
+        keyExtractor={(item: Album | ArtistRank) => ('id' in item ? String(item.id) : item.artist)}
         numColumns={isGrid ? 3 : 1}
         columnWrapperStyle={isGrid ? { gap: GAP } : undefined}
         contentContainerStyle={styles.content}
@@ -231,54 +273,32 @@ export default function Profile() {
         }
         ListHeaderComponent={
           <View>
-            {/* Green banner: identity, avg ring, stat row, genre chips. */}
-            <View style={[styles.banner, { paddingTop: insets.top + spacing.sm }]}>
-              <View style={styles.bannerTop}>
-                <View style={styles.bAvatar}>
-                  {user.avatarUrl ? (
-                    <Image source={{ uri: user.avatarUrl }} style={styles.bAvatarImg} contentFit="cover" />
-                  ) : (
-                    <Text style={styles.bAvatarInitial}>{user.name[0]?.toUpperCase()}</Text>
-                  )}
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.bName} numberOfLines={1}>{user.name}</Text>
-                  {since && <Text style={styles.bSince} numberOfLines={1}>Pressing since {since}</Text>}
-                </View>
-                <AvgRing value={summary?.avg_album_score ?? null} />
+            <ProfileBanner
+              name={user.name}
+              avatarUrl={user.avatarUrl}
+              since={since}
+              avg={summary?.avg_album_score ?? null}
+              stats={[
+                { value: String(rated.length), label: 'ALBUMS' },
+                {
+                  value: summary?.total_songs_rated != null ? summary.total_songs_rated.toLocaleString() : '—',
+                  label: 'SONGS',
+                },
+                {
+                  value: summary?.avg_release_year != null ? String(Math.round(summary.avg_release_year)) : '—',
+                  label: 'TASTE CENTER',
+                },
+                { value: String(friends.length), label: 'FRIENDS' },
+              ]}
+              genres={topGenres}
+              subgenres={topSubgenres}
+              topInset={insets.top}
+              action={
                 <Pressable onPress={signOut} hitSlop={12} accessibilityLabel="Sign out">
                   <LogOut size={17} color="rgba(255,255,255,0.75)" />
                 </Pressable>
-              </View>
-
-              <View style={styles.bStats}>
-                <BannerStat value={String(rated.length)} label="ALBUMS" />
-                <BannerStat value={summary?.total_songs_rated != null ? summary.total_songs_rated.toLocaleString() : '—'} label="SONGS" />
-                <BannerStat
-                  value={summary?.avg_release_year != null ? String(Math.round(summary.avg_release_year)) : '—'}
-                  label="TASTE CENTER"
-                />
-                <BannerStat value={String(friends.length)} label="FRIENDS" />
-              </View>
-
-            </View>
-
-            {/* Taste chips straddling the banner's bottom edge: favorite genres
-                (green outline) then subgenres (gray outline), centered. */}
-            {(topGenres.length > 0 || topSubgenres.length > 0) && (
-              <View style={styles.chipsOverlap}>
-                {topGenres.map((g) => (
-                  <View key={`g-${g}`} style={[styles.bChip, styles.bChipGenre]}>
-                    <Text style={styles.bChipText} numberOfLines={1}>{g}</Text>
-                  </View>
-                ))}
-                {topSubgenres.map((g) => (
-                  <View key={`s-${g}`} style={[styles.bChip, styles.bChipSub]}>
-                    <Text style={styles.bChipSubText} numberOfLines={1}>{g}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+              }
+            />
 
             {/* Library / Stats / Ratings — underline tabs, no segmented box. */}
             <View style={styles.tabBar}>
@@ -354,7 +374,7 @@ export default function Profile() {
             {tab === 'stats' && <StatsView userId={user.id} />}
           </View>
         }
-        renderItem={({ item, index }: { item: Album | ArtistStats; index: number }) =>
+        renderItem={({ item, index }: { item: Album | ArtistRank; index: number }) =>
           isGrid ? (
             <AlbumCell
               album={item as Album}
@@ -368,11 +388,11 @@ export default function Profile() {
             />
           ) : rankMode === 'artists' ? (
             <ArtistRankRow
-              stat={item as ArtistStats}
+              stat={item as ArtistRank}
               rank={index + 1}
               metricKey={rankMetric}
               onPress={() =>
-                router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent((item as ArtistStats).artist) } })
+                router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent((item as ArtistRank).artist) } })
               }
             />
           ) : (
@@ -439,49 +459,6 @@ export default function Profile() {
   )
 }
 
-function BannerStat({ value, label }: { value: string; label: string }) {
-  return (
-    <View style={styles.bStatCol}>
-      <Text style={styles.bStatValue}>{value}</Text>
-      <Text style={styles.bStatLabel}>{label}</Text>
-    </View>
-  )
-}
-
-// Average-score gauge: a ring filled to score/10 in light green, value centered.
-function AvgRing({ value }: { value: number | null }) {
-  const R = 24
-  const SW = 4.5
-  const SIZE = (R + SW) * 2 + 2
-  const C = 2 * Math.PI * R
-  const frac = value != null ? Math.max(0, Math.min(1, value / 10)) : 0
-  const mid = SIZE / 2
-  return (
-    <View style={{ width: SIZE, height: SIZE }}>
-      <Svg width={SIZE} height={SIZE}>
-        <Circle cx={mid} cy={mid} r={R} stroke="rgba(255,255,255,0.18)" strokeWidth={SW} fill="none" />
-        {value != null && (
-          <Circle
-            cx={mid}
-            cy={mid}
-            r={R}
-            stroke="#a9d5b4"
-            strokeWidth={SW}
-            fill="none"
-            strokeDasharray={`${C * frac} ${C}`}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${mid} ${mid})`}
-          />
-        )}
-      </Svg>
-      <View style={styles.ringCenter}>
-        <Text style={styles.ringValue}>{value != null ? value.toFixed(2) : '—'}</Text>
-        <Text style={styles.ringLabel}>AVG</Text>
-      </View>
-    </View>
-  )
-}
-
 function AlbumCell({ album, mu, sd, onPress }: { album: Album; mu: number; sd: number; onPress: () => void }) {
   const showScore = album.status === 'rated' && album.score != null
   const badge = showScore ? scoreBadgeColor(album.score!, mu, sd) : null
@@ -543,21 +520,25 @@ function ArtistRankRow({
   metricKey,
   onPress,
 }: {
-  stat: ArtistStats
+  stat: ArtistRank
   rank: number
   metricKey: string
   onPress: () => void
 }) {
+  const pct = (v: number | null) => (v != null ? `${Math.round(v * 100)}%` : '—')
+  const plus = (v: number | null) => (v != null ? v.toFixed(0) : '—')
   const value = (() => {
     switch (metricKey) {
-      case 'songs':
-        return { text: String(stat.count) }
+      case 'songPlus':
+        return { text: plus(stat.songPlus) }
+      case 'wSongPlus':
+        return { text: plus(stat.wSongPlus) }
+      case 'consPlus':
+        return { text: plus(stat.consistencyPlus) }
       case 'bang':
-        return { text: `${Math.round(stat.bangPct * 100)}%` }
+        return { text: pct(stat.bangPct) }
       case 'skip':
-        return { text: `${Math.round(stat.skipPct * 100)}%` }
-      case 'sar':
-        return { text: stat.sar.toFixed(1) }
+        return { text: pct(stat.skipPct) }
       default:
         return { text: stat.avgSongScore.toFixed(2), color: songScoreColor(stat.avgSongScore) }
     }
@@ -568,7 +549,7 @@ function ArtistRankRow({
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.ratingName} numberOfLines={1}>{stat.artist}</Text>
         <Text style={styles.ratingArtist} numberOfLines={1}>
-          {stat.count} songs · avg {stat.avgSongScore.toFixed(2)}
+          {stat.songs} songs · avg {stat.avgSongScore.toFixed(2)}
         </Text>
       </View>
       <Text style={[styles.ratingScore, value.color ? { color: value.color } : { color: colors.ink }]}>
@@ -594,67 +575,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: '#ffffff', letterSpacing: 0.5 },
-
-  // Green banner header
-  banner: {
-    backgroundColor: colors.green,
-    marginHorizontal: -spacing.lg,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg + 10,
-  },
-  bannerTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.sm },
-  bAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  bAvatarImg: { width: '100%', height: '100%' },
-  bAvatarInitial: { fontFamily: fonts.display, fontSize: 24, color: colors.green },
-  bName: { fontFamily: fonts.displayBlack, fontSize: 25, color: '#ffffff', letterSpacing: 0.3 },
-  bSince: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
-
-  ringCenter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  ringValue: { fontFamily: fonts.display, fontSize: 13.5, color: '#ffffff' },
-  ringLabel: { fontFamily: fonts.bodyBold, fontSize: 7, letterSpacing: 1, color: 'rgba(255,255,255,0.65)' },
-
-  bStats: { flexDirection: 'row', marginTop: spacing.lg },
-  bStatCol: { flex: 1, alignItems: 'flex-start' },
-  bStatValue: { fontFamily: fonts.display, fontSize: 22, color: '#ffffff' },
-  bStatLabel: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 9.5,
-    color: 'rgba(255,255,255,0.6)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginTop: 2,
-  },
-
-  // Chips ride the banner boundary: pulled up by half their height so their
-  // centerline sits exactly on the green/cream edge.
-  chipsOverlap: {
-    flexDirection: 'row',
-    flexWrap: 'nowrap',
-    justifyContent: 'flex-start',
-    gap: spacing.sm,
-    marginTop: -14,
-    zIndex: 2,
-  },
-  bChip: {
-    backgroundColor: '#ffffff',
-    borderRadius: radii.pill,
-    borderWidth: 1.5,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    flexShrink: 1,
-  },
-  bChipGenre: { borderColor: colors.green },
-  bChipText: { fontFamily: fonts.bodySemiBold, fontSize: 12.5, color: colors.green },
-  bChipSub: { borderColor: '#c9c2b8' },
-  bChipSubText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.inkTertiary },
 
   tabBar: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.xl },
   tab: { alignItems: 'center', gap: 6 },

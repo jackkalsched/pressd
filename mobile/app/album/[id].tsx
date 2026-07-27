@@ -1,26 +1,64 @@
 // Album detail — read view for any album, and the entry into the rating screen:
 // "Rate" (to-listen), "Continue" (listening), or "Edit rating" (rated). Shows
 // the final or predicted score, factor breakdown, and per-track scores.
-import { useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { useRef, useState } from 'react'
+import {
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
-import { ArrowLeft, Check, Pencil, Trash2 } from 'lucide-react-native'
-import { fetchAlbum, fetchFriends, saveReview, deleteReview } from '../../lib/api'
-import { songScoreColor, avatarColor, EP_MAX_TRACKS, type Album } from '@pressd/shared/types'
+import * as Haptics from 'expo-haptics'
+import { ArrowLeft, Check, Heart, Pencil, Trash2 } from 'lucide-react-native'
+import { fetchAlbum, fetchAlbums, fetchFriends, saveReview, deleteReview, toggleLike } from '../../lib/api'
+import { songScoreColor, avatarColor, EP_MAX_TRACKS, type Album, type Song } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import CommentThread from '../../components/CommentThread'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
 import BangSkip from '../../components/BangSkip'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
+const WINDOW_H = Dimensions.get('window').height
+
 export default function AlbumDetail() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const albumId = Number(id)
   const router = useRouter()
   const { user } = useAuth()
+
+  // Tracklist reveal: rows fade + rise as they cross into view, and each new
+  // one that crosses ticks the Taptic engine — the list feels like it's being
+  // dealt out rather than simply scrolled past. Measured row offsets drive
+  // both, so the haptic lands exactly when a row appears.
+  const scrollY = useRef(new Animated.Value(0)).current
+  const rowYs = useRef<Map<number, number>>(new Map())
+  const crossedCount = useRef(-1)
+  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+    useNativeDriver: true,
+    listener: (e: { nativeEvent: { contentOffset: { y: number } } }) => {
+      const line = e.nativeEvent.contentOffset.y + WINDOW_H * 0.82
+      let crossed = 0
+      rowYs.current.forEach((y) => {
+        if (y < line) crossed += 1
+      })
+      // First event just calibrates — rows already on screen shouldn't buzz.
+      if (crossedCount.current < 0) {
+        crossedCount.current = crossed
+        return
+      }
+      if (crossed > crossedCount.current) Haptics.selectionAsync().catch(() => {})
+      crossedCount.current = crossed
+    },
+  })
 
   const { data: album, isLoading } = useQuery({
     queryKey: ['album', albumId],
@@ -32,6 +70,23 @@ export default function AlbumDetail() {
     queryKey: ['friends', user?.id],
     queryFn: () => fetchFriends(user!.id),
     enabled: !!user,
+  })
+
+  // Viewing someone else's copy: look up your own rating of the same album so
+  // the two can be shown side by side. The list endpoint omits songs, so the
+  // match is resolved to a full album fetch for per-track scores.
+  const notMine = !!user && !!album && album.userId !== user.id
+  const { data: myMatches = [] } = useQuery({
+    queryKey: ['albums', 'rated', user?.id, album?.albumName, album?.artist],
+    queryFn: () =>
+      fetchAlbums({ status: 'rated', albumName: album!.albumName, artist: album!.artist, userId: user!.id }),
+    enabled: notMine,
+  })
+  const myCopyId = myMatches[0]?.id
+  const { data: myAlbum } = useQuery({
+    queryKey: ['album', myCopyId],
+    queryFn: () => fetchAlbum(myCopyId!),
+    enabled: !!myCopyId,
   })
 
   if (isLoading || !album) {
@@ -53,6 +108,25 @@ export default function AlbumDetail() {
   const isMine = user != null && album.userId === user.id
   const owner = !isMine && album.userId != null ? friends.find((f) => f.id === album.userId) ?? null : null
   const ownerColor = owner ? avatarColor(owner.name) : colors.green
+
+  const openArtist = (name: string) =>
+    router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent(name) } })
+
+  // Both of you finished this album → the side-by-side comparison view.
+  if (owner && myAlbum && album.status === 'rated' && myAlbum.status === 'rated' &&
+      album.score != null && myAlbum.score != null) {
+    return (
+      <FriendCompare
+        theirs={album}
+        mine={myAlbum}
+        owner={owner}
+        color={ownerColor}
+        onBack={() => router.back()}
+        onOpenMine={() => router.push({ pathname: '/album/[id]', params: { id: String(myAlbum.id) } })}
+        onOpenArtist={openArtist}
+      />
+    )
+  }
 
   const factors: { label: string; value: number | null }[] = isEP
     ? []
@@ -89,7 +163,12 @@ export default function AlbumDetail() {
         )}
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <Animated.ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+      >
         <View style={styles.head}>
           {album.albumArtUrl ? (
             <Image source={{ uri: album.albumArtUrl }} style={styles.art} contentFit="cover" />
@@ -100,7 +179,13 @@ export default function AlbumDetail() {
           )}
           <Text style={styles.albumName} numberOfLines={2}>{album.albumName}</Text>
           <Text style={styles.artist} numberOfLines={1}>
-            {[album.artist, ...album.extraArtists].join(', ')}{album.year ? ` · ${album.year}` : ''}
+            {[album.artist, ...album.extraArtists].map((n, i) => (
+              <Text key={n}>
+                {i > 0 ? ', ' : ''}
+                <Text style={styles.artistLink} onPress={() => openArtist(n)}>{n}</Text>
+              </Text>
+            ))}
+            {album.year ? ` · ${album.year}` : ''}
           </Text>
           {album.genre && <Text style={styles.genre}>{album.genre}</Text>}
           {(() => {
@@ -140,24 +225,274 @@ export default function AlbumDetail() {
 
         <Text style={styles.sectionLabel}>TRACKS</Text>
         {sorted.map((s) => (
-          <View key={s.id} style={styles.trackRow}>
-            <Text style={styles.trackNum}>{s.trackNumber}</Text>
-            <Text style={styles.trackTitle} numberOfLines={1}>{s.title}</Text>
-            <BangSkip score={s.score} />
-            {s.score != null ? (
-              <Text style={[styles.trackScore, { color: songScoreColor(s.score) }]}>
-                {s.score.toFixed(1)}
-              </Text>
-            ) : (
-              <Text style={styles.trackScoreEmpty}>—</Text>
-            )}
-          </View>
+          <TrackRow
+            key={s.id}
+            song={s}
+            scrollY={scrollY}
+            onMeasure={(y) => rowYs.current.set(s.id, y)}
+          />
         ))}
 
         <ReviewSection album={album} editable={isMine} />
 
         <CommentThread albumId={albumId} />
-      </ScrollView>
+      </Animated.ScrollView>
+      </SafeAreaView>
+    </View>
+  )
+}
+
+/**
+ * One track, revealed as it scrolls into view. Rows render visible until they
+ * report their offset, so nothing flashes on mount — by the time a row knows
+ * it sits below the fold, it's already off screen and can fade in cleanly.
+ */
+function TrackRow({
+  song,
+  scrollY,
+  onMeasure,
+}: {
+  song: Song
+  scrollY: Animated.Value
+  onMeasure: (y: number) => void
+}) {
+  const [y, setY] = useState<number | null>(null)
+  const start = (y ?? 0) - WINDOW_H + 90
+  const progress = scrollY.interpolate({
+    inputRange: [start, start + 130],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  })
+  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [14, 0] })
+
+  return (
+    <Animated.View
+      onLayout={(e) => {
+        const next = e.nativeEvent.layout.y
+        setY(next)
+        onMeasure(next)
+      }}
+      style={[
+        styles.trackRow,
+        y == null ? null : { opacity: progress, transform: [{ translateY }] },
+      ]}
+    >
+      <Text style={styles.trackNum}>{song.trackNumber}</Text>
+      <Text style={styles.trackTitle} numberOfLines={1}>{song.title}</Text>
+      <BangSkip score={song.score} />
+      {song.score != null ? (
+        <Text style={[styles.trackScore, { color: songScoreColor(song.score) }]}>
+          {song.score.toFixed(1)}
+        </Text>
+      ) : (
+        <Text style={styles.trackScoreEmpty}>—</Text>
+      )}
+    </Animated.View>
+  )
+}
+
+/** hsl(...) → hsla(..., a), so a friend's avatar color can tint a surface. */
+function tint(hsl: string, alpha: number): string {
+  return hsl.replace('hsl(', 'hsla(').replace(')', `, ${alpha})`)
+}
+
+const normTitle = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '')
+
+/** Clip a display name so long usernames can't blow out a column header. */
+const shortName = (name: string, max: number) =>
+  name.length > max ? `${name.slice(0, max - 1).trimEnd()}…` : name
+
+/**
+ * Side-by-side view shown when you and a friend have both finished rating the
+ * same album: their score against yours, their review, and every track scored
+ * by each of you.
+ */
+function FriendCompare({
+  theirs,
+  mine,
+  owner,
+  color,
+  onBack,
+  onOpenMine,
+  onOpenArtist,
+}: {
+  theirs: Album
+  mine: Album
+  owner: { id: number; name: string; avatarUrl?: string }
+  color: string
+  onBack: () => void
+  onOpenMine: () => void
+  onOpenArtist: (name: string) => void
+}) {
+  const { user } = useAuth()
+  const [liked, setLiked] = useState(false)
+
+  const theirScore = theirs.score!
+  const myScore = mine.score!
+  const diff = theirScore - myScore
+
+  // Pair tracks on normalized title so re-imports with punctuation differences
+  // still line up; fall back to no comparison for anything unmatched.
+  const mineByTitle = new Map(mine.songs.map((s) => [normTitle(s.title), s.score]))
+  const tracks = [...theirs.songs]
+    .sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
+    .map((song: Song) => ({ song, myScore: mineByTitle.get(normTitle(song.title)) ?? null }))
+
+  let widest: { title: string; gap: number } | null = null
+  for (const t of tracks) {
+    if (t.song.score == null || t.myScore == null) continue
+    const gap = Math.abs(t.song.score - t.myScore)
+    if (!widest || gap > widest.gap) widest = { title: t.song.title, gap }
+  }
+
+  // Both scores on one 5–10 rail, matching the Compare tab's scale.
+  const pos = (v: number) => ((Math.max(5, Math.min(10, v)) - 5) / 5) * 100
+
+  // Lower score sits on the left so the pair reads ascending; the track columns
+  // follow the same order so nothing swaps places mid-page.
+  const youLeft = myScore <= theirScore
+  const left = youLeft
+    ? { label: 'YOU', score: myScore, color: colors.inkSecondary, head: colors.inkMuted }
+    : { label: shortName(owner.name, 10).toUpperCase(), score: theirScore, color, head: color }
+  const right = youLeft
+    ? { label: owner.name.toUpperCase(), score: theirScore, color, head: color }
+    : { label: 'YOU', score: myScore, color: colors.inkSecondary, head: colors.inkMuted }
+
+  const verdict =
+    Math.abs(diff) < 0.005
+      ? `You and ${owner.name} landed on exactly the same score.`
+      : `${owner.name} rated this ${Math.abs(diff).toFixed(2)} ${diff > 0 ? 'higher' : 'lower'} than you` +
+        (widest ? ` — biggest gap on “${widest.title}”.` : '.')
+
+  async function like() {
+    if (!user) return
+    setLiked((v) => !v)
+    try {
+      await toggleLike(user.id, theirs.id)
+    } catch {
+      setLiked((v) => !v)
+    }
+  }
+
+  return (
+    <View style={styles.root}>
+      <AlbumBackdrop albumArtUrl={theirs.albumArtUrl} album={theirs.albumName} artist={theirs.artist} subtle />
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <View style={styles.topBar}>
+          <Pressable onPress={onBack} hitSlop={10} style={styles.backBtn}>
+            <ArrowLeft size={18} color={colors.inkSecondary} />
+            <Text style={styles.backText}>Back</Text>
+          </Pressable>
+          <View style={[styles.ownerTag, { backgroundColor: tint(color, 0.1), paddingHorizontal: 10, paddingVertical: 5, borderRadius: radii.pill }]}>
+            <View style={[styles.ownerPfp, { backgroundColor: color }]}>
+              {owner.avatarUrl ? (
+                <Image source={{ uri: owner.avatarUrl }} style={styles.ownerPfpImg} contentFit="cover" />
+              ) : (
+                <Text style={styles.ownerPfpInitial}>{owner.name[0]?.toUpperCase()}</Text>
+              )}
+            </View>
+            <Text style={[styles.ownerName, { color }]} numberOfLines={1}>{owner.name}'s rating</Text>
+          </View>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Album identity: cover left, details right, accent rule in their color */}
+          <View style={styles.cmpHead}>
+            <View style={[styles.cmpAccent, { backgroundColor: color }]} />
+            {theirs.albumArtUrl ? (
+              <Image source={{ uri: theirs.albumArtUrl }} style={styles.cmpArt} contentFit="cover" />
+            ) : (
+              <View style={[styles.cmpArt, styles.artFallback]}>
+                <Text style={styles.artInitial}>{theirs.albumName[0]}</Text>
+              </View>
+            )}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.cmpAlbumName} numberOfLines={2}>{theirs.albumName}</Text>
+              <Text style={styles.cmpArtist} numberOfLines={1}>
+                <Text style={styles.artistLink} onPress={() => onOpenArtist(theirs.artist)}>{theirs.artist}</Text>
+                {theirs.year ? ` · ${theirs.year}` : ''}
+              </Text>
+              {theirs.genre && <Text style={styles.cmpGenre}>{theirs.genre}</Text>}
+              {(() => {
+                const subs = [theirs.subGenre1, theirs.subGenre2, theirs.subGenre3].filter(Boolean)
+                return subs.length > 0 ? (
+                  <Text style={styles.cmpSubGenres}>{subs.join(' · ')}</Text>
+                ) : null
+              })()}
+            </View>
+          </View>
+
+          {/* Score comparison */}
+          <View style={[styles.cmpCard, { backgroundColor: tint(color, 0.07), borderColor: tint(color, 0.18) }]}>
+            <View style={styles.cmpScores}>
+              <View style={styles.cmpScoreCol}>
+                <Text style={[styles.cmpWho, { color: left.head }]} numberOfLines={1}>{left.label}</Text>
+                <Text style={[styles.cmpScore, { color: left.color }]}>{left.score.toFixed(2)}</Text>
+              </View>
+              <View style={[styles.cmpDivider, { backgroundColor: tint(color, 0.25) }]} />
+              <View style={styles.cmpScoreCol}>
+                <Text style={[styles.cmpWho, { color: right.head }]} numberOfLines={1}>{right.label}</Text>
+                <Text style={[styles.cmpScore, { color: right.color }]}>{right.score.toFixed(2)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.railWrap}>
+              <View style={styles.rail} />
+              <View style={[styles.railFill, { width: `${Math.max(pos(theirScore), pos(myScore))}%`, backgroundColor: tint(color, 0.45) }]} />
+              <View style={[styles.railTick, { left: `${pos(theirScore)}%`, backgroundColor: color }]} />
+              <View style={[styles.railTick, { left: `${pos(myScore)}%`, backgroundColor: colors.ink }]} />
+            </View>
+            <View style={styles.railAxis}>
+              {[5, 6, 7, 8, 9, 10].map((n) => (
+                <Text key={n} style={styles.railAxisLabel}>{n}</Text>
+              ))}
+            </View>
+
+            <Text style={styles.cmpVerdict}>{verdict}</Text>
+          </View>
+
+          {/* Their review */}
+          {theirs.review ? (
+            <View style={styles.cmpReview}>
+              <Text style={[styles.cmpSection, { color }]} numberOfLines={1}>
+                {shortName(owner.name, 16).toUpperCase()}'S REVIEW
+              </Text>
+              <Text style={styles.cmpQuote}>“{theirs.review}”</Text>
+              <Pressable style={styles.cmpLike} onPress={like} hitSlop={8}>
+                <Heart size={16} color={liked ? '#c0392b' : colors.inkTertiary} fill={liked ? '#c0392b' : 'transparent'} />
+                <Text style={styles.cmpLikeText}>{liked ? 'Liked' : 'Like'}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {/* Track-by-track */}
+          <View style={styles.cmpTracksHead}>
+            <Text style={styles.cmpTracksLabel}>TRACKS</Text>
+            <Text style={styles.cmpColHead} numberOfLines={1}>
+              <Text style={{ color: left.head }}>{left.label}</Text>
+              <Text style={styles.cmpColSlash}> / </Text>
+              <Text style={{ color: right.head }}>{right.label}</Text>
+            </Text>
+          </View>
+          {tracks.map(({ song, myScore: ms }, i) => (
+            <View key={song.id} style={[styles.cmpTrackRow, i > 0 && styles.cmpTrackDivider]}>
+              <Text style={styles.cmpTrackNum}>{song.trackNumber}</Text>
+              <Text style={styles.cmpTrackTitle} numberOfLines={1}>{song.title}</Text>
+              <Text style={[styles.cmpTrackScore, { color: left.head }]}>
+                {(youLeft ? ms : song.score) != null ? (youLeft ? ms! : song.score!).toFixed(1) : '—'}
+              </Text>
+              <Text style={[styles.cmpTrackScore, { color: right.head }]}>
+                {(youLeft ? song.score : ms) != null ? (youLeft ? song.score! : ms!).toFixed(1) : '—'}
+              </Text>
+            </View>
+          ))}
+
+          <Pressable style={styles.cmpOpenMine} onPress={onOpenMine}>
+            <Text style={styles.cmpOpenMineText}>Open your rating</Text>
+          </Pressable>
+
+          <CommentThread albumId={theirs.id} />
+        </ScrollView>
       </SafeAreaView>
     </View>
   )
@@ -277,12 +612,87 @@ const styles = StyleSheet.create({
   ownerName: { fontFamily: fonts.bodySemiBold, fontSize: 14, flexShrink: 1 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: 60 },
 
+  // ── Friend comparison view ──
+  cmpHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.lg },
+  cmpAccent: { width: 3, alignSelf: 'stretch', borderRadius: 2, marginVertical: 6 },
+  cmpArt: { width: 92, height: 92, borderRadius: radii.lg },
+  cmpAlbumName: { fontFamily: fonts.display, fontSize: 26, color: colors.ink },
+  cmpArtist: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary, marginTop: 3 },
+  cmpGenre: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.green,
+    marginTop: 6,
+    textTransform: 'uppercase',
+  },
+  // Same treatment as the album detail page, left-aligned for this header.
+  cmpSubGenres: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkTertiary, marginTop: 4 },
+
+  cmpCard: {
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    padding: spacing.lg,
+    marginTop: spacing.xl,
+  },
+  cmpScores: { flexDirection: 'row', alignItems: 'center' },
+  cmpScoreCol: { flex: 1 },
+  cmpDivider: { width: 1, alignSelf: 'stretch', marginHorizontal: spacing.md },
+  cmpWho: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.4 },
+  cmpScore: { fontFamily: fonts.display, fontSize: 42, lineHeight: 48 },
+
+  railWrap: { height: 14, justifyContent: 'center', marginTop: spacing.md },
+  rail: { position: 'absolute', left: 0, right: 0, height: 5, borderRadius: 3, backgroundColor: colors.inset },
+  railFill: { position: 'absolute', left: 0, height: 5, borderRadius: 3 },
+  railTick: { position: 'absolute', width: 3, height: 14, borderRadius: 1.5, marginLeft: -1.5 },
+  // Scale labels sit under the rail; first/last hug the ends so the 5–10 span
+  // the ticks are positioned against is legible.
+  railAxis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
+  railAxisLabel: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted },
+  cmpVerdict: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.inkSecondary, marginTop: spacing.md },
+
+  cmpReview: { marginTop: spacing.xl },
+  cmpSection: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.2 },
+  cmpQuote: { fontFamily: fonts.displayRegular, fontSize: 16, lineHeight: 25, color: colors.ink, marginTop: spacing.sm },
+  cmpLike: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md },
+  cmpLikeText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary },
+
+  cmpTracksHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.xl,
+    marginBottom: 2,
+  },
+  // Own label style (not the shared sectionLabel) so the header row isn't
+  // double-margined and the column head can sit tight above the first track.
+  cmpTracksLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.2, color: colors.inkTertiary },
+  cmpColHead: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1 },
+  cmpColSlash: { color: colors.inkTertiary },
+  cmpTrackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  // Separators sit between tracks only — none against the header, none trailing.
+  cmpTrackDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  cmpTrackNum: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, width: 18 },
+  cmpTrackTitle: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.ink },
+  cmpTrackScore: { fontFamily: fonts.bodyBold, fontSize: 15, width: 40, textAlign: 'right' },
+
+  cmpOpenMine: { alignSelf: 'flex-start', marginTop: spacing.lg },
+  cmpOpenMineText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
+
   head: { alignItems: 'center', marginTop: spacing.xxl },
   art: { width: 148, height: 148, borderRadius: radii.lg },
   artFallback: { backgroundColor: colors.inset, alignItems: 'center', justifyContent: 'center' },
   artInitial: { fontFamily: fonts.display, fontSize: 56, color: colors.inkMuted },
   albumName: { fontFamily: fonts.display, fontSize: 26, color: colors.ink, textAlign: 'center', marginTop: spacing.lg },
-  artist: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkTertiary, marginTop: 6, textAlign: 'center' },
+  artist: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary, marginTop: 6, textAlign: 'center' },
+  // Artist names route to the artist page — weighted darker so they read as
+  // the tappable part of the line.
+  artistLink: { fontFamily: fonts.bodySemiBold, color: colors.ink },
   genre: {
     fontFamily: fonts.bodyBold,
     fontSize: 11,
@@ -294,19 +704,19 @@ const styles = StyleSheet.create({
   subGenres: {
     fontFamily: fonts.bodyMedium,
     fontSize: 12,
-    color: colors.inkTertiary,
+    color: colors.inkSecondary,
     marginTop: 5,
     textAlign: 'center',
   },
 
   scoreBlock: { alignItems: 'center', marginTop: spacing.xl },
   bigScore: { fontFamily: fonts.display, fontSize: 64, lineHeight: 68 },
-  scoreLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.4, color: colors.inkMuted },
+  scoreLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.4, color: colors.inkSecondary },
 
   factorRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xl },
   factorCell: { alignItems: 'center', flex: 1 },
   factorValue: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.ink },
-  factorLabel: { fontFamily: fonts.bodyMedium, fontSize: 10, color: colors.inkTertiary, marginTop: 2 },
+  factorLabel: { fontFamily: fonts.bodyMedium, fontSize: 10, color: colors.inkSecondary, marginTop: 2 },
 
   cta: {
     backgroundColor: colors.green,
@@ -321,7 +731,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodyBold,
     fontSize: 11,
     letterSpacing: 1.2,
-    color: colors.inkMuted,
+    color: colors.inkTertiary,
     marginTop: spacing.xl,
     marginBottom: spacing.sm,
   },
@@ -333,10 +743,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  trackNum: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted, width: 20 },
+  trackNum: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, width: 20 },
   trackTitle: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.ink },
   trackScore: { fontFamily: fonts.bodyBold, fontSize: 15 },
-  trackScoreEmpty: { fontFamily: fonts.body, fontSize: 15, color: colors.inkMuted },
+  trackScoreEmpty: { fontFamily: fonts.body, fontSize: 15, color: colors.inkTertiary },
 
   reviewBody: { fontFamily: fonts.body, fontSize: 15, color: colors.inkSecondary, lineHeight: 22 },
   reviewInput: {

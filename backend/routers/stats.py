@@ -281,9 +281,19 @@ def scatter_data(user_id: int = Depends(viewable_user_id), before_date: Optional
             "genre": primary_genre,
             "song_count": len(s),
             "consistency_idx": round(100 * statistics.stdev(s), 2) if len(s) > 1 else None,
+            "song_plus": None,
             "w_song_plus": None,
             "consistency_plus": None,
         })
+
+    # Song+ — avg song score indexed against the league (100 = average)
+    lg_song = [r["avg_song_score"] for r in rows]
+    if len(lg_song) > 1:
+        lg_avg_song = statistics.mean(lg_song)
+        lg_std_song = statistics.stdev(lg_song)
+        if lg_std_song:
+            for r in rows:
+                r["song_plus"] = round(100 + 10 * (r["avg_song_score"] - lg_avg_song) / lg_std_song, 1)
 
     # wSong+ — needs both axes
     rows_w = [r for r in rows if r["avg_external"] is not None]
@@ -311,6 +321,7 @@ def scatter_data(user_id: int = Depends(viewable_user_id), before_date: Optional
             "avg_external": round(r["avg_external"], 4) if r["avg_external"] is not None else None,
             "genre": r["genre"],
             "song_count": r["song_count"],
+            "song_plus": r["song_plus"],
             "w_song_plus": r["w_song_plus"],
             "consistency_plus": r["consistency_plus"],
         }
@@ -500,6 +511,23 @@ def artist_detail(artist_name: str, user_id: int = Depends(viewable_user_id), se
         (i + 1 for i, r in enumerate(ranked_ext) if r["artist"] == artist_name), None
     )
 
+    # Placements on the two + metrics, ranked off the values already computed
+    # above for every artist (same qualifying cut as the other leaderboards).
+    ranked_sp = sorted(
+        [r for r in scatter_rows if r.get("song_plus") is not None and r["n"] >= SMALL_SAMPLE],
+        key=lambda r: r["song_plus"], reverse=True,
+    )
+    ranked_wsp = sorted(
+        [r for r in scatter_rows if r.get("w_song_plus") is not None and r["n"] >= SMALL_SAMPLE],
+        key=lambda r: r["w_song_plus"], reverse=True,
+    )
+    song_plus_rank = next(
+        (i + 1 for i, r in enumerate(ranked_sp) if r["artist"] == artist_name), None
+    )
+    w_song_plus_rank = next(
+        (i + 1 for i, r in enumerate(ranked_wsp) if r["artist"] == artist_name), None
+    )
+
     for r in scatter_rows:
         r["avg_song_score"] = round(r["avg_song_score"], 4)
         if r["avg_external"] is not None:
@@ -522,6 +550,10 @@ def artist_detail(artist_name: str, user_id: int = Depends(viewable_user_id), se
         "song_score_rank_of": len(ranked_song),
         "external_rank": external_rank,
         "external_rank_of": len(ranked_ext),
+        "song_plus_rank": song_plus_rank,
+        "song_plus_rank_of": len(ranked_sp),
+        "w_song_plus_rank": w_song_plus_rank,
+        "w_song_plus_rank_of": len(ranked_wsp),
         "percentiles": percentiles,
         "song_scores": song_scores,
         "albums": [
