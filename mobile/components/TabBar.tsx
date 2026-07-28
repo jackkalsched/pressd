@@ -25,7 +25,7 @@ const TAB_META: Record<string, { label: string; Icon: typeof ListMusic }> = {
   index: { label: 'For You', Icon: ListMusic },
   charts: { label: 'Charts', Icon: BarChart3 },
   social: { label: 'Social', Icon: Users },
-  profile: { label: 'Profile', Icon: CircleUser },
+  profile: { label: 'Crate', Icon: CircleUser },
 }
 
 export default function TabBar({ state, navigation }: TabBarProps) {

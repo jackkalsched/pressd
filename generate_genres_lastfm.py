@@ -184,6 +184,8 @@ def _fetch_artist_tags(artist: str) -> list[str]:
     """Fetch top tags for an artist from Last.fm."""
     try:
         from theme_predictor.corpus import LASTFM_KEY
+        if not LASTFM_KEY:  # env-only; without it there are no artist tags
+            return []
         import pylast
         network = pylast.LastFMNetwork(api_key=LASTFM_KEY)
         tags = [t.item.name for t in (network.get_artist(artist).get_top_tags(limit=10) or [])]

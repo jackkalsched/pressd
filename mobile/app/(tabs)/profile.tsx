@@ -380,11 +380,21 @@ export default function Profile() {
               album={item as Album}
               mu={badgeMu}
               sd={badgeSd}
-              onPress={() =>
-                (item as Album).status === 'rated'
-                  ? router.push({ pathname: '/album/[id]', params: { id: String((item as Album).id) } })
-                  : router.push({ pathname: '/rate/[id]', params: { id: String((item as Album).id) } })
-              }
+              onPress={() => {
+                const a = item as Album
+                if (a.status === 'listening') {
+                  // Mid-listen: pick the rating flow back up where you left it.
+                  router.push({ pathname: '/rate/[id]', params: { id: String(a.id) } })
+                } else {
+                  // Rated or not started — either way the detail page is the
+                  // right landing spot; unrated ones open the userbase view
+                  // with your prediction and a Rate now button.
+                  router.push({
+                    pathname: '/album/[id]',
+                    params: { id: String(a.id), ...(a.status === 'to_listen' ? { community: '1' } : {}) },
+                  })
+                }
+              }}
             />
           ) : rankMode === 'artists' ? (
             <ArtistRankRow

@@ -2,9 +2,10 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { X, Loader2, Search, Music, ArrowLeft } from 'lucide-react'
-import { importAlbum, createAlbum } from '../api'
-import type { SpotifyAlbumResult } from '../api'
+import { importAlbum, createAlbum, resolveAlbum } from '../api'
+import type { AlbumSearchResult } from '../api'
 import { useAlbumSearch } from '../hooks/useAlbumSearch'
+import TracklistLoader from './TracklistLoader'
 
 export default function AddAlbumModal({ onClose, userId }: { onClose: () => void; userId: number }) {
   const [query, setQuery] = useState('')
@@ -12,7 +13,7 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
   const [albumName, setAlbumName] = useState('')
   const [artist, setArtist] = useState('')
   const [status, setStatus] = useState<'listening' | 'to_listen'>('listening')
-  const [selected, setSelected] = useState<SpotifyAlbumResult | null>(null)
+  const [selected, setSelected] = useState<AlbumSearchResult | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -20,7 +21,7 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
   const queryClient = useQueryClient()
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // 4-source fan-out with late MusicBrainz merge — shared with Onboarding
+  // Ranked 3-source fan-out with late MusicBrainz merge — shared with Onboarding
   const { results, searching, mbPending, noResults } = useAlbumSearch(query)
 
   // Keep the dropdown open even with zero fast results — the pending row
@@ -39,7 +40,7 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  function selectResult(r: SpotifyAlbumResult) {
+  function selectResult(r: AlbumSearchResult) {
     setSelected(r)
     setQuery(`${r.album_name} — ${r.artist}`)
     setShowDropdown(false)
@@ -50,7 +51,10 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
     setLoading(true)
     setError(null)
     try {
-      const album = await importAlbum(selected, status, userId)
+      // Search results carry identity only; the tracklist is fetched here, for
+      // the one album the user actually picked.
+      const full = await resolveAlbum(selected)
+      const album = await importAlbum(full, status, userId)
       queryClient.invalidateQueries({ queryKey: ['albums'] })
       if (status === 'listening') navigate(`/rate/${album.id}`)
       else onClose()
@@ -98,7 +102,13 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
           </button>
         </div>
 
-        {manualMode ? (
+        {loading && selected ? (
+          <TracklistLoader
+            albumName={selected.album_name}
+            artist={selected.artist}
+            coverUrl={selected.cover_url}
+          />
+        ) : manualMode ? (
           <form onSubmit={handleManualSubmit} className="flex flex-col gap-3">
             <input autoFocus type="text" placeholder="Album name" value={albumName}
               onChange={(e) => setAlbumName(e.target.value)} className={inputCls} />
@@ -130,9 +140,9 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
               />
               {showDropdown && (
                 <div className="absolute z-10 top-full mt-1 left-0 right-0 bg-white border border-[#e2e2e2] rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto">
-                  {results.map((r, i) => (
+                  {results.map((r) => (
                     <button
-                      key={i}
+                      key={`${r.source}:${r.source_id}`}
                       type="button"
                       onMouseDown={(e) => { e.preventDefault(); selectResult(r) }}
                       className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[#f5f5f5] transition-colors text-left border-b border-[#f0f0f0] last:border-0"
@@ -155,7 +165,13 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
                         </p>
                         <p className="text-[#aaa] text-xs truncate">
                           {r.artist}
-                          {r.upcoming && r.release_date ? ` · ${r.release_date}` : r.year ? ` · ${r.year}` : ''}
+                          {r.upcoming && r.release_date
+                            ? ` · ${r.release_date}`
+                            : r.year
+                              ? ` · ${r.year}`
+                              : r.total_tracks
+                                ? ` · ${r.total_tracks} tracks`
+                                : ''}
                         </p>
                       </div>
                     </button>
@@ -191,7 +207,9 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
                 <div className="min-w-0">
                   <p className="text-[#111] text-sm font-semibold truncate">{selected.album_name}</p>
                   <p className="text-[#aaa] text-xs truncate">
-                    {selected.artist}{selected.year ? ` · ${selected.year}` : ''} · {selected.total_tracks} tracks
+                    {selected.artist}
+                    {selected.year ? ` · ${selected.year}` : ''}
+                    {selected.total_tracks ? ` · ${selected.total_tracks} tracks` : ''}
                     {selected.upcoming ? ` · out ${selected.release_date ?? 'soon'}` : ''}
                   </p>
                 </div>

@@ -15,7 +15,10 @@ CACHE_DIR = Path(__file__).parent.parent / "corpus"
 CACHE_DIR.mkdir(exist_ok=True)
 
 LLM_MODEL = os.environ.get("THEME_LLM_MODEL", "claude-haiku-4-5-20251001")
-LASTFM_KEY = os.environ.get("LASTFM_API_KEY", "b8ffd9dd0b8ecab355b4dd4ed7b57987")
+# Env-only, no literal fallback. Callers already degrade when it's unset
+# (`fetch_lastfm` returns empty tags), so a missing key costs enrichment rather
+# than breaking a run.
+LASTFM_KEY = os.environ.get("LASTFM_API_KEY")
 GENIUS_TOKEN = os.environ.get("GENIUS_ACCESS_TOKEN", "CtIqNw8ogjNwFn8QOGXvt2FotAlKUtgtacCZEofFjDNQdtnFLx4IxxPmi_FQdVTx")
 
 

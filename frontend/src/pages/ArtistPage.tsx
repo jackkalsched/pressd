@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Loader2, RefreshCw, Plus, Check } from 'lucide-react'
-import { fetchArtistDetail, fetchAotyAlbums, refreshAotyArtist, searchSpotify, importAlbum, createAlbum } from '../api'
+import { fetchArtistDetail, fetchAotyAlbums, refreshAotyArtist, importAlbum, createAlbum, resolveAlbum } from '../api'
+import { searchAlbumsRanked, normalizeTitle } from '@pressd/shared/albumSearch'
 import { useUser } from '../context/UserContext'
 import type { AotyAlbum, ArtistDetail } from '../api'
 import {
@@ -196,13 +197,27 @@ function DiscoverRow({ album, artistName }: { album: AotyAlbum; artistName: stri
   const busy = toListenState === 'loading' || rateNowState === 'loading'
   const used = toListenState === 'done'
 
+  /** Best catalog match for this discography entry, or null when nothing
+   *  credibly matches. The previous version imported the first search hit
+   *  blind, which happily added a different artist's album of the same name. */
+  async function findMatch() {
+    const results = await searchAlbumsRanked(`${album.title} ${artistName}`, 8)
+    const wantArtist = normalizeTitle(artistName)
+    const wantTitle = normalizeTitle(album.title)
+    const match = results.find(
+      (r) => normalizeTitle(r.artist) === wantArtist && normalizeTitle(r.album_name) === wantTitle,
+    ) ?? results.find((r) => normalizeTitle(r.artist) === wantArtist)
+    return match ? await resolveAlbum(match) : null
+  }
+
   async function handleToListen() {
     setToListenState('loading')
     try {
-      const results = await searchSpotify(`album:${album.title} artist:${artistName}`)
-      if (results.length) {
-        await importAlbum(results[0], 'to_listen')
+      const match = await findMatch()
+      if (match) {
+        await importAlbum(match, 'to_listen')
       } else {
+        // Nothing matched the artist — add the shell rather than the wrong album.
         await createAlbum({
           albumName: album.title,
           artist: artistName,
@@ -220,9 +235,9 @@ function DiscoverRow({ album, artistName }: { album: AotyAlbum; artistName: stri
   async function handleRateNow() {
     setRateNowState('loading')
     try {
-      const results = await searchSpotify(`album:${album.title} artist:${artistName}`)
-      if (!results.length) { setRateNowState('error'); return }
-      const imported = await importAlbum(results[0], 'listening')
+      const match = await findMatch()
+      if (!match) { setRateNowState('error'); return }
+      const imported = await importAlbum(match, 'listening')
       queryClient.invalidateQueries({ queryKey: ['albums'] })
       navigate(`/rate/${imported.id}`)
     } catch {

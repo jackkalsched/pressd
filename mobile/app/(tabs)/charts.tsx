@@ -72,8 +72,10 @@ export default function Charts() {
   const rest = items.slice(3)
   const facets = data?.facets
 
+  // The chart ranks albums across the whole userbase, so entries open the
+  // averaged view rather than one person's copy.
   function openAlbum(id: number) {
-    router.push({ pathname: '/album/[id]', params: { id: String(id) } })
+    router.push({ pathname: '/album/[id]', params: { id: String(id), community: '1' } })
   }
 
   // Scroll-reactive masthead, matching For You / Social: the big title lifts +

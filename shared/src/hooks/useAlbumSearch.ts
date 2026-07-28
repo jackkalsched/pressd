@@ -1,38 +1,22 @@
 import { useState, useEffect } from 'react'
-import { searchSpotify, searchMusicBrainz, searchItunes, searchDeezer } from '../api'
-import type { SpotifyAlbumResult } from '../api'
-
-function normalizeKey(name: string, artist: string): string {
-  return `${name}|||${artist}`.toLowerCase().replace(/[^a-z0-9|]/g, '')
-}
-
-function mergeResults(
-  itunes: SpotifyAlbumResult[],
-  spotify: SpotifyAlbumResult[],
-  deezer: SpotifyAlbumResult[],
-  mb: SpotifyAlbumResult[],
-): SpotifyAlbumResult[] {
-  const seen = new Map<string, SpotifyAlbumResult>()
-  for (const r of [...itunes, ...spotify, ...deezer, ...mb]) {
-    const key = normalizeKey(r.album_name, r.artist)
-    const existing = seen.get(key)
-    if (!existing) {
-      seen.set(key, r)
-    } else if (!existing.cover_url && r.cover_url) {
-      seen.set(key, r)
-    }
-  }
-  return [...seen.values()].slice(0, 12)
-}
+import { searchItunes, searchDeezer, searchMusicBrainz } from '../api'
+import type { AlbumSearchResult } from '../api'
+import { mergeAndRankWithPopularity } from '../albumSearch'
 
 /**
- * Debounced album search fanning out to all 4 sources simultaneously.
- * The three fast sources (iTunes, Spotify, Deezer) populate results
- * immediately; MusicBrainz — slow (global ~1 req/s limit) but the only
- * source with announced/unreleased albums — is merged in when it arrives.
+ * Debounced album search across iTunes, Deezer, and MusicBrainz.
+ *
+ * The two fast sources render first; MusicBrainz — slower, but the only source
+ * carrying announced/unreleased albums — is merged in when it arrives. Both
+ * passes rank the full merged set by relevance (including a Last.fm popularity
+ * prior) rather than appending each source's list, so the top of the dropdown
+ * is the best match and not whichever source happened to be listed first.
+ *
+ * Results carry identity only. The tracklist is fetched by `resolveAlbum` once
+ * the user picks one.
  */
 export function useAlbumSearch(query: string) {
-  const [results, setResults] = useState<SpotifyAlbumResult[]>([])
+  const [results, setResults] = useState<AlbumSearchResult[]>([])
   const [searching, setSearching] = useState(false)
   const [mbPending, setMbPending] = useState(false)
   const [noResults, setNoResults] = useState(false)
@@ -49,26 +33,27 @@ export function useAlbumSearch(query: string) {
     setMbPending(false)
     setNoResults(false)
     let cancelled = false
+    const empty = () => [] as AlbumSearchResult[]
+
     const timer = setTimeout(async () => {
       const q = query.trim()
-      const mbPromise = searchMusicBrainz(q).catch(() => [] as SpotifyAlbumResult[])
+      const mbPromise = searchMusicBrainz(q).catch(empty)
       try {
-        const [itunesRes, spotifyRes, deezerRes] = await Promise.allSettled([
-          searchItunes(q),
-          searchSpotify(`album:${q}`),
-          searchDeezer(q),
+        const [itunes, deezer] = await Promise.all([
+          searchItunes(q).catch(empty),
+          searchDeezer(q).catch(empty),
         ])
         if (cancelled) return
-        const itunes  = itunesRes.status  === 'fulfilled' ? itunesRes.value  : []
-        const spotify = spotifyRes.status === 'fulfilled' ? spotifyRes.value : []
-        const deezer  = deezerRes.status  === 'fulfilled' ? deezerRes.value  : []
-        setResults(mergeResults(itunes, spotify, deezer, []))
         setMbPending(true)
+        const fast = await mergeAndRankWithPopularity(q, [itunes, deezer])
+        if (cancelled) return
+        setResults(fast)
 
         const mb = await mbPromise
         if (cancelled) return
         setMbPending(false)
-        const merged = mergeResults(itunes, spotify, deezer, mb)
+        const merged = await mergeAndRankWithPopularity(q, [itunes, deezer, mb])
+        if (cancelled) return
         setResults(merged)
         setNoResults(merged.length === 0)
       } catch {
@@ -80,6 +65,7 @@ export function useAlbumSearch(query: string) {
         if (!cancelled) setSearching(false)
       }
     }, 380)
+
     return () => { cancelled = true; clearTimeout(timer) }
   }, [query])
 

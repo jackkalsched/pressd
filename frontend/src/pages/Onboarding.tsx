@@ -2,9 +2,10 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Search, Loader2, Music, Play } from 'lucide-react'
-import { fetchArtStrip, fetchAlbums, importAlbum } from '../api'
-import type { SpotifyAlbumResult } from '../api'
+import { fetchArtStrip, fetchAlbums, importAlbum, resolveAlbum } from '../api'
+import type { AlbumSearchResult } from '../api'
 import { useAlbumSearch } from '../hooks/useAlbumSearch'
+import TracklistLoader from '../components/TracklistLoader'
 import { useUser } from '../context/UserContext'
 
 export const ONBOARDING_SKIP_KEY = 'pressd-onboarding-skipped'
@@ -38,7 +39,7 @@ export default function Onboarding() {
   const queryClient = useQueryClient()
   const { activeUser } = useUser()
   const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState<SpotifyAlbumResult | null>(null)
+  const [selected, setSelected] = useState<AlbumSearchResult | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -82,7 +83,7 @@ export default function Onboarding() {
       ? artUrls.filter((_, i) => i % 2 === offset)
       : Array(12).fill('')
 
-  function selectResult(r: SpotifyAlbumResult) {
+  function selectResult(r: AlbumSearchResult) {
     setSelected(r)
     setQuery(`${r.album_name} — ${r.artist}`)
     setShowDropdown(false)
@@ -93,7 +94,10 @@ export default function Onboarding() {
     setImporting(true)
     setError(null)
     try {
-      const album = await importAlbum(selected, 'listening', activeUser.id)
+      // Search results carry identity only; the tracklist is fetched here, for
+      // the one album the user actually picked.
+      const full = await resolveAlbum(selected)
+      const album = await importAlbum(full, 'listening', activeUser.id)
       queryClient.invalidateQueries({ queryKey: ['albums'] })
       navigate(`/rate/${album.id}`)
     } catch (e) {
@@ -149,9 +153,9 @@ export default function Onboarding() {
             />
             {showDropdown && (
               <div className="absolute z-10 top-full mt-1.5 left-0 right-0 bg-white border border-[#e8e2d9] rounded-xl shadow-lg overflow-hidden max-h-72 overflow-y-auto">
-                {results.map((r, i) => (
+                {results.map((r) => (
                   <button
-                    key={i}
+                    key={`${r.source}:${r.source_id}`}
                     type="button"
                     onMouseDown={(e) => { e.preventDefault(); selectResult(r) }}
                     className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[#f7f3ee] transition-colors text-left border-b border-[#f0ebe3] last:border-0"
@@ -166,7 +170,8 @@ export default function Onboarding() {
                     <div className="min-w-0">
                       <p className="text-[#111] text-sm font-medium truncate leading-snug">{r.album_name}</p>
                       <p className="text-[#aaa] text-xs truncate">
-                        {r.artist}{r.year ? ` · ${r.year}` : ''}
+                        {r.artist}
+                        {r.year ? ` · ${r.year}` : r.total_tracks ? ` · ${r.total_tracks} tracks` : ''}
                       </p>
                     </div>
                   </button>
@@ -187,8 +192,18 @@ export default function Onboarding() {
             </p>
           )}
 
-          {/* Selected album preview */}
-          {selected && (
+          {/* Selected album preview — becomes the tracklist loader on start */}
+          {selected && importing && (
+            <div className="bg-white rounded-xl px-3.5 border border-[#2d6a4f]/25 shadow-sm mt-4">
+              <TracklistLoader
+                albumName={selected.album_name}
+                artist={selected.artist}
+                coverUrl={selected.cover_url}
+                compact
+              />
+            </div>
+          )}
+          {selected && !importing && (
             <div className="flex items-center gap-3 bg-white rounded-xl px-3.5 py-3 border border-[#2d6a4f]/25 shadow-sm mt-4">
               {selected.cover_url ? (
                 <img src={selected.cover_url} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
@@ -198,7 +213,9 @@ export default function Onboarding() {
               <div className="min-w-0">
                 <p className="text-[#111] text-sm font-semibold truncate">{selected.album_name}</p>
                 <p className="text-[#aaa] text-xs truncate">
-                  {selected.artist}{selected.year ? ` · ${selected.year}` : ''} · {selected.total_tracks} tracks
+                  {selected.artist}
+                  {selected.year ? ` · ${selected.year}` : ''}
+                  {selected.total_tracks ? ` · ${selected.total_tracks} tracks` : ''}
                 </p>
               </div>
             </div>

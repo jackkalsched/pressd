@@ -688,6 +688,147 @@ def recommend_album(
     return {"ok": True, "already_existed": False}
 
 
+def _community_payload(session: Session, user: PressUser, album_name: str, artist: str, source: Album | None):
+    """The userbase's view of an album, averaged across everyone who rated it.
+
+    Entry points that aren't tied to a person — trending, charts, new releases
+    — land here instead of on some individual's copy, which would otherwise
+    403 whenever the copy belonged to a stranger. Returns averaged album score,
+    factors and per-track scores, plus the caller's own numbers so the client
+    can offer a comparison without a second round trip. An album nobody has
+    rated yet comes back with null averages and a zero rater count rather than
+    a 404 — that's a valid state for a fresh release.
+    """
+    copies = session.exec(
+        select(Album)
+        .where(
+            func.lower(func.trim(Album.album_name)) == album_name.strip().lower(),
+            func.lower(func.trim(Album.artist)) == artist.strip().lower(),
+            Album.status == "rated",
+            Album.score.is_not(None),
+        )
+        .options(selectinload(Album.songs))
+    ).all()
+
+    def avg(vals):
+        vals = [v for v in vals if v is not None]
+        return round(sum(vals) / len(vals), 2) if vals else None
+
+    def norm(t: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", (t or "").lower())
+
+    # Seed the tracklist from the most complete copy so unrated tracks still
+    # show, then fold every copy's scores into it.
+    base = max(copies, key=lambda c: len(c.songs)) if copies else source
+    buckets: dict[str, dict] = {}
+    for s in sorted(base.songs, key=lambda s: s.track_number or 0) if base else []:
+        buckets[norm(s.title)] = {
+            "title": s.title, "track_number": s.track_number, "scores": [], "your_score": None,
+        }
+    for c in copies:
+        for s in c.songs:
+            if s.score is None:
+                continue
+            key = norm(s.title)
+            b = buckets.get(key)
+            if b is None:
+                b = buckets.setdefault(key, {
+                    "title": s.title, "track_number": s.track_number, "scores": [], "your_score": None,
+                })
+            b["scores"].append(s.score)
+            if c.user_id == user.id:
+                b["your_score"] = s.score
+
+    tracks = [
+        {
+            "title": b["title"],
+            "track_number": b["track_number"],
+            "avg_score": avg(b["scores"]),
+            "rater_count": len(b["scores"]),
+            "your_score": b["your_score"],
+        }
+        for b in sorted(buckets.values(), key=lambda b: (b["track_number"] or 999, b["title"]))
+    ]
+
+    mine = next((c for c in copies if c.user_id == user.id), None)
+    # Your copy at any status — an unrated one still supplies the id to rate
+    # and the per-user prediction, neither of which live on the averages.
+    mine_any = mine or session.exec(
+        select(Album).where(
+            func.lower(func.trim(Album.album_name)) == album_name.strip().lower(),
+            func.lower(func.trim(Album.artist)) == artist.strip().lower(),
+            Album.user_id == user.id,
+        )
+    ).first()
+    ref = source or mine_any or (copies[0] if copies else None)
+    pick = lambda attr: next(
+        (getattr(c, attr) for c in copies if getattr(c, attr)),
+        getattr(ref, attr) if ref else None,
+    )
+
+    return {
+        "album_id": ref.id if ref else None,
+        "album_name": ref.album_name if ref else album_name,
+        "artist": ref.artist if ref else artist,
+        "year": pick("year"),
+        "album_art_url": pick("album_art_url"),
+        "genre": pick("genre"),
+        "sub_genre1": pick("sub_genre1"),
+        "sub_genre2": pick("sub_genre2"),
+        "sub_genre3": pick("sub_genre3"),
+        "rater_count": len({c.user_id for c in copies if c.user_id is not None}),
+        "avg_score": avg([c.score for c in copies]),
+        "avg_theme": avg([c.theme for c in copies]),
+        "avg_replay_value": avg([c.replay_value for c in copies]),
+        "avg_production": avg([c.production for c in copies]),
+        "avg_distinctness": avg([c.distinctness for c in copies]),
+        "tracks": tracks,
+        "your_album_id": mine_any.id if mine_any else None,
+        "your_status": mine_any.status if mine_any else None,
+        "predicted_score": mine_any.predicted_score if mine_any else None,
+        "you": None if mine is None else {
+            "album_id": mine.id,
+            "score": mine.score,
+            "theme": mine.theme,
+            "replay_value": mine.replay_value,
+            "production": mine.production,
+            "distinctness": mine.distinctness,
+        },
+    }
+
+
+@router.get("/community-by-name")
+def community_album_by_name(
+    album_name: str = Query(...),
+    artist: str = Query(...),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Community view for an album identified by name + artist rather than by a
+    copy's id — how new releases arrive, since they may not be in Press'd yet."""
+    source = session.exec(
+        select(Album)
+        .where(
+            func.lower(func.trim(Album.album_name)) == album_name.strip().lower(),
+            func.lower(func.trim(Album.artist)) == artist.strip().lower(),
+        )
+        .options(selectinload(Album.songs))
+    ).first()
+    return _community_payload(session, user, album_name, artist, source)
+
+
+@router.get("/{album_id}/community")
+def community_album(
+    album_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    source = session.get(Album, album_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Album not found")
+    return _community_payload(session, user, source.album_name, source.artist, source)
+
+
 @router.post("/{album_id}/copy")
 def copy_album(
     album_id: int,

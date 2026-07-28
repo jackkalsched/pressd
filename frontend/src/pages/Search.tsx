@@ -2,21 +2,20 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Search as SearchIcon, Plus, Play, Loader2, Check, Image } from 'lucide-react'
-import { searchSpotify, searchMusicBrainz, importAlbum, backfillCovers } from '../api'
-import type { SpotifyAlbumResult } from '../api'
+import { importAlbum, resolveAlbum, backfillCovers } from '../api'
+import { searchAlbumsRanked } from '@pressd/shared/albumSearch'
+import type { AlbumSearchResult } from '../api'
 
 type ActionState = 'idle' | 'loading' | 'done'
-type Source = 'spotify' | 'mb'
 
-function resultKey(r: SpotifyAlbumResult) {
-  return r.spotify_id ?? r.mb_id ?? `${r.album_name}::${r.artist}`
+function resultKey(r: AlbumSearchResult) {
+  return `${r.source}:${r.source_id}`
 }
 
 export default function Search() {
   const [query, setQuery] = useState('')
-  const [source, setSource] = useState<Source>('spotify')
   const [searching, setSearching] = useState(false)
-  const [results, setResults] = useState<SpotifyAlbumResult[]>([])
+  const [results, setResults] = useState<AlbumSearchResult[]>([])
   const [error, setError] = useState<string | null>(null)
   const [actions, setActions] = useState<Record<string, { add: ActionState; rate: ActionState }>>({})
   const [backfillState, setBackfillState] = useState<'idle' | 'loading' | 'done'>('idle')
@@ -45,7 +44,7 @@ export default function Search() {
     setResults([])
     setActions({})
     try {
-      const data = source === 'mb' ? await searchMusicBrainz(q) : await searchSpotify(q)
+      const data = await searchAlbumsRanked(q)
       setResults(data)
       if (data.length === 0) setError('No results found.')
     } catch (e) {
@@ -62,11 +61,11 @@ export default function Search() {
     }))
   }
 
-  async function handleAdd(result: SpotifyAlbumResult) {
+  async function handleAdd(result: AlbumSearchResult) {
     const key = resultKey(result)
     setAction(key, 'add', 'loading')
     try {
-      await importAlbum(result, 'to_listen')
+      await importAlbum(await resolveAlbum(result), 'to_listen')
       queryClient.invalidateQueries({ queryKey: ['albums'] })
       setAction(key, 'add', 'done')
     } catch {
@@ -74,11 +73,11 @@ export default function Search() {
     }
   }
 
-  async function handleRate(result: SpotifyAlbumResult) {
+  async function handleRate(result: AlbumSearchResult) {
     const key = resultKey(result)
     setAction(key, 'rate', 'loading')
     try {
-      const album = await importAlbum(result, 'listening')
+      const album = await importAlbum(await resolveAlbum(result), 'listening')
       queryClient.invalidateQueries({ queryKey: ['albums'] })
       navigate(`/rate/${album.id}`)
     } catch {
@@ -102,29 +101,12 @@ export default function Search() {
         </button>
       </div>
 
-      {/* Source toggle */}
-      <div className="flex gap-1 mb-4 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg p-1 w-fit">
-        {(['spotify', 'mb'] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => { setSource(s); setResults([]); setError(null) }}
-            className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
-              source === s
-                ? 'bg-[#c8a84b] text-black'
-                : 'text-[#888] hover:text-[#e8e8e8]'
-            }`}
-          >
-            {s === 'spotify' ? 'Spotify' : 'MusicBrainz'}
-          </button>
-        ))}
-      </div>
-
       <div className="flex gap-3 mb-8">
         <div className="flex-1 relative">
           <SearchIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
           <input
             type="text"
-            placeholder={source === 'mb' ? 'Album name or artist…' : 'Album name or Spotify URL…'}
+            placeholder="Album name or artist…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -144,20 +126,14 @@ export default function Search() {
         <div className="flex flex-col items-center gap-1.5 text-[#888] text-sm py-8">
           <div className="flex items-center gap-2">
             <Loader2 size={16} className="animate-spin" />
-            Fetching metadata…
+            Searching iTunes, Deezer & MusicBrainz…
           </div>
-          {source === 'mb' && (
-            <p className="text-[#555] text-xs">MusicBrainz may take a few seconds</p>
-          )}
         </div>
       )}
 
       {error && !searching && (
         <div className="text-center py-12">
           <p className="text-[#888] text-sm">{error}</p>
-          {error.includes('rate limit') && (
-            <p className="text-[#555] text-xs mt-2">Spotify rate limit hit — paste a Spotify album URL to bypass the search API, or try again later.</p>
-          )}
         </div>
       )}
 
@@ -181,7 +157,9 @@ export default function Search() {
                 <div className="flex-1 min-w-0">
                   <p className="text-[#e8e8e8] text-sm font-medium truncate">{result.album_name}</p>
                   <p className="text-[#888] text-xs mt-0.5">{result.artist}{result.year ? ` · ${result.year}` : ''}</p>
-                  <p className="text-[#555] text-xs mt-0.5">{result.total_tracks} tracks</p>
+                  <p className="text-[#555] text-xs mt-0.5">
+                    {result.total_tracks ? `${result.total_tracks} tracks` : result.source}
+                  </p>
                 </div>
                 <div className="flex gap-2 shrink-0">
                   {state.add === 'done' ? (

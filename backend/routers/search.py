@@ -1,189 +1,70 @@
-import json
-import base64
+"""Album search and resolution.
+
+Search is deliberately split in two phases:
+
+  1. `/search/{itunes,deezer,mb}` return *identity only* — name, artist, year,
+     cover, track count. One HTTP call per source, no per-album detail fetches.
+     These back the autocomplete, so they have to be fast on every keystroke.
+  2. `/search/resolve` fetches the full tracklist for the single album the user
+     actually picked.
+
+Before the split, each source fetched a tracklist for every one of its 5–8
+results during search (~7 sequential calls per source per keystroke), which is
+what made Deezer ~2s and MusicBrainz 10–18s in production.
+
+Spotify was removed: the client-credentials app has been returning
+429 QUOTA_EXCEEDED with `Retry-After: 86400` on every endpoint, and zero of the
+819 albums in the database ever carried a Spotify id. The dead source's results
+were silently falling back to an iTunes search on the literal string
+"album:<query>", which is where the unrelated top-chart results came from.
+"""
 import asyncio
 import os
 import time
 from datetime import date
-from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query
 
 router = APIRouter(prefix="/search", tags=["search"])
 
-CONFIG_PATH = Path.home() / ".spotdl" / "config.json"
-
 # ── Result cache ──────────────────────────────────────────────────────────────
-# In-process TTL cache keyed by (source, normalized query). Repeat searches are
+# In-process TTL cache keyed by (kind, normalized key). Repeat searches are
 # instant and the outbound APIs are protected — MusicBrainz in particular is
 # globally rate-limited to ~1 req/s, so cache misses must be the exception.
 _CACHE_TTL = 600  # seconds
 _CACHE_MAX = 500
-_cache: dict[str, tuple[float, list]] = {}
+_cache: dict[str, tuple[float, object]] = {}
 
 
-def _cache_get(source: str, q: str) -> list | None:
-    entry = _cache.get(f"{source}:{q.strip().lower()}")
+def _cache_get(kind: str, key: str):
+    entry = _cache.get(f"{kind}:{key.strip().lower()}")
     if entry and entry[0] > time.monotonic():
         return entry[1]
     return None
 
 
-def _cache_set(source: str, q: str, data: list) -> None:
+def _cache_set(kind: str, key: str, data) -> None:
     if len(_cache) >= _CACHE_MAX:
-        for key, _ in sorted(_cache.items(), key=lambda kv: kv[1][0])[: _CACHE_MAX // 2]:
-            _cache.pop(key, None)
-    _cache[f"{source}:{q.strip().lower()}"] = (time.monotonic() + _CACHE_TTL, data)
+        for k, _ in sorted(_cache.items(), key=lambda kv: kv[1][0])[: _CACHE_MAX // 2]:
+            _cache.pop(k, None)
+    _cache[f"{kind}:{key.strip().lower()}"] = (time.monotonic() + _CACHE_TTL, data)
 
 
-# ── Spotify ───────────────────────────────────────────────────────────────────
-# Client-credentials token is cached until shortly before expiry instead of
-# being re-fetched on every search.
-_spotify_token: dict = {"token": None, "expires_at": 0.0}
-_token_lock = asyncio.Lock()
-
-
-async def _get_token(client: httpx.AsyncClient) -> str:
-    if _spotify_token["token"] and _spotify_token["expires_at"] > time.monotonic() + 60:
-        return _spotify_token["token"]
-    async with _token_lock:
-        if _spotify_token["token"] and _spotify_token["expires_at"] > time.monotonic() + 60:
-            return _spotify_token["token"]
-        client_id = os.getenv("SPOTIFY_CLIENT_ID")
-        client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
-        if not (client_id and client_secret):
-            with open(CONFIG_PATH) as f:
-                cfg = json.load(f)
-            client_id = cfg["client_id"]
-            client_secret = cfg["client_secret"]
-        credentials = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
-        resp = await client.post(
-            "https://accounts.spotify.com/api/token",
-            headers={"Authorization": f"Basic {credentials}"},
-            data={"grant_type": "client_credentials"},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        _spotify_token["token"] = data["access_token"]
-        _spotify_token["expires_at"] = time.monotonic() + data.get("expires_in", 3600)
-        return _spotify_token["token"]
-
-
-async def _sp_get(client: httpx.AsyncClient, url: str, headers: dict, params: dict | None = None) -> dict:
-    resp = await client.get(url, headers=headers, params=params, timeout=10)
-    if resp.status_code == 429:
-        wait = int(resp.headers.get("Retry-After", "5"))
-        raise HTTPException(
-            status_code=429,
-            detail=f"Spotify rate limit hit. Try again in {wait}s.",
-        )
-    resp.raise_for_status()
-    return resp.json()
-
-
-@router.get("/")
-async def search_albums(q: str = Query(..., min_length=1)):
-    cached = _cache_get("spotify", q)
-    if cached is not None:
-        return cached
+def _year(release_date: str | None) -> int | None:
+    if not release_date or len(release_date) < 4:
+        return None
     try:
-        results = await _search_spotify(q)
-    except HTTPException as e:
-        if e.status_code in (429, 503):
-            print(f"[search] Spotify unavailable ({e.status_code}), falling back to iTunes")
-            return await search_itunes(q)
-        raise
-    _cache_set("spotify", q, results)
-    return results
+        return int(release_date[:4])
+    except ValueError:
+        return None
 
 
-async def _search_spotify(q: str) -> list:
-    async with httpx.AsyncClient() as client:
-        try:
-            token = await _get_token(client)
-        except Exception as e:
-            raise HTTPException(status_code=503, detail=f"Spotify auth failed: {e}")
+MB_HEADERS = {"User-Agent": "Pressd/1.0 (music-rating-app)"}
+CAA_BASE = "https://coverartarchive.org"
 
-        headers = {"Authorization": f"Bearer {token}"}
 
-        # Detect Spotify album URL/URI → extract ID
-        spotify_id = None
-        if "spotify.com/album/" in q:
-            spotify_id = q.split("spotify.com/album/")[1].split("?")[0].split("/")[0]
-        elif q.startswith("spotify:album:"):
-            spotify_id = q.split("spotify:album:")[1]
-
-        if spotify_id:
-            album_ids = [spotify_id]
-        else:
-            data = await _sp_get(
-                client,
-                "https://api.spotify.com/v1/search",
-                headers=headers,
-                params={"q": f'album:"{q}"', "type": "album", "limit": 10},
-            )
-            q_norm = q.strip().lower()
-            album_ids = [
-                a["id"] for a in data.get("albums", {}).get("items", [])
-                if a.get("album_type") != "single"
-                and a.get("name", "").strip().lower() == q_norm
-            ]
-
-        results = []
-        for aid in album_ids:
-            try:
-                album = await _sp_get(client, f"https://api.spotify.com/v1/albums/{aid}", headers=headers)
-            except HTTPException:
-                continue
-
-            if album.get("album_type") == "single":
-                continue
-
-            release_date = album.get("release_date", "")
-            year = int(release_date[:4]) if release_date else None
-            images = album.get("images", [])
-            cover_url = images[0]["url"] if images else None
-            artists = album.get("artists", [])
-            artist = artists[0]["name"] if artists else ""
-
-            tracks_raw = album.get("tracks", {}).get("items", [])
-            next_url = album.get("tracks", {}).get("next")
-            while next_url:
-                try:
-                    page = await _sp_get(client, next_url, headers=headers)
-                    tracks_raw.extend(page.get("items", []))
-                    next_url = page.get("next")
-                except HTTPException:
-                    break
-
-            tracks = [
-                {
-                    "title": t["name"],
-                    "track_number": t["track_number"],
-                    "duration_ms": t["duration_ms"],
-                    "explicit": t.get("explicit", False),
-                    "spotify_id": t["id"],
-                    "artist": t["artists"][0]["name"] if t.get("artists") else artist,
-                }
-                for t in tracks_raw
-                if t  # filter null entries (local tracks)
-            ]
-
-            results.append(
-                {
-                    "spotify_id": aid,
-                    "album_name": album["name"],
-                    "artist": artist,
-                    "year": year,
-                    "cover_url": cover_url,
-                    "total_tracks": album.get("total_tracks", len(tracks)),
-                    "tracks": tracks,
-                }
-            )
-
-        return results
-
+# ── Search: identity only ─────────────────────────────────────────────────────
 
 @router.get("/itunes")
 async def search_itunes(q: str = Query(..., min_length=1)):
@@ -191,61 +72,64 @@ async def search_itunes(q: str = Query(..., min_length=1)):
     if cached is not None:
         return cached
     async with httpx.AsyncClient(timeout=10) as client:
-        search_resp = await client.get(
+        resp = await client.get(
             "https://itunes.apple.com/search",
-            params={"term": q, "entity": "album", "limit": 5},
+            params={"term": q, "entity": "album", "limit": 8},
         )
-        if not search_resp.is_success:
+        if not resp.is_success:
             raise HTTPException(status_code=502, detail="iTunes search failed")
 
-        albums = search_resp.json().get("results", [])
-        if not albums:
-            return []
-
         results = []
-        for album in albums:
-            collection_id = album.get("collectionId")
+        for a in resp.json().get("results", []):
+            collection_id = a.get("collectionId")
             if not collection_id:
                 continue
-
-            lookup_resp = await client.get(
-                "https://itunes.apple.com/lookup",
-                params={"id": collection_id, "entity": "song"},
-            )
-            if not lookup_resp.is_success:
-                continue
-
-            items = lookup_resp.json().get("results", [])
-            tracks = [
-                {
-                    "title": t["trackName"],
-                    "track_number": t.get("trackNumber"),
-                    "duration_ms": t.get("trackTimeMillis"),
-                    "explicit": t.get("trackExplicitness") == "explicit",
-                    "spotify_id": None,
-                    "artist": t.get("artistName", album.get("artistName", "")),
-                }
-                for t in items
-                if t.get("wrapperType") == "track" and t.get("kind") == "song"
-            ]
-
-            cover_url = album.get("artworkUrl100", "").replace("100x100bb", "1000x1000bb") or None
-            release_date = album.get("releaseDate", "")
-            year = int(release_date[:4]) if release_date else None
-
+            cover = a.get("artworkUrl100", "").replace("100x100bb", "1000x1000bb") or None
             results.append({
+                "source": "itunes",
+                "source_id": str(collection_id),
                 "spotify_id": None,
-                "album_name": album.get("collectionName", ""),
-                "artist": album.get("artistName", ""),
-                "year": year,
-                "cover_url": cover_url,
-                "total_tracks": album.get("trackCount", len(tracks)),
-                "tracks": tracks,
-                "genre": album.get("primaryGenreName"),
+                "album_name": a.get("collectionName", ""),
+                "artist": a.get("artistName", ""),
+                "year": _year(a.get("releaseDate")),
+                "cover_url": cover,
+                "total_tracks": a.get("trackCount"),
+                "genre": a.get("primaryGenreName"),
             })
 
-        _cache_set("itunes", q, results)
-        return results
+    _cache_set("itunes", q, results)
+    return results
+
+
+async def _deezer_fill_dates(client: httpx.AsyncClient, results: list[dict]) -> None:
+    """Fill release dates on Deezer search results.
+
+    Deezer's `/search/album` payload has no release date at all — every row came
+    back yearless, which left the dropdown unable to tell two same-titled albums
+    apart. The dates live on the album records, so they're fetched one request
+    per result, concurrently (~300ms for a full page) and memoized per album id
+    so overlapping results across keystrokes cost nothing.
+    """
+    async def one(r: dict) -> None:
+        aid = r["source_id"]
+        cached = _cache_get("dz_date", aid)
+        if cached is not None:
+            r["release_date"], r["year"] = cached or None, _year(cached)
+            return
+        try:
+            resp = await client.get(f"https://api.deezer.com/album/{aid}", timeout=8)
+            if not resp.is_success:
+                return
+            body = resp.json()
+            if body.get("error"):  # Deezer answers 200 + error body when throttled
+                return
+            date = body.get("release_date") or ""
+        except Exception:
+            return  # a missing year is recoverable; a failed search is not
+        _cache_set("dz_date", aid, date)
+        r["release_date"], r["year"] = date or None, _year(date)
+
+    await asyncio.gather(*[one(r) for r in results])
 
 
 @router.get("/deezer")
@@ -254,64 +138,35 @@ async def search_deezer(q: str = Query(..., min_length=1)):
     if cached is not None:
         return cached
     async with httpx.AsyncClient(timeout=12) as client:
-        search_resp = await client.get(
+        resp = await client.get(
             "https://api.deezer.com/search/album",
             params={"q": q, "limit": 8},
         )
-        if not search_resp.is_success:
+        if not resp.is_success:
             raise HTTPException(status_code=502, detail="Deezer search failed")
 
-        albums = search_resp.json().get("data", [])[:6]
-        if not albums:
-            return []
-
         results = []
-        for album in albums:
-            album_id = album.get("id")
+        for a in resp.json().get("data", []):
+            album_id = a.get("id")
             if not album_id:
                 continue
-
-            tracks_resp = await client.get(
-                f"https://api.deezer.com/album/{album_id}/tracks",
-                params={"limit": 100},
-            )
-            tracks = []
-            if tracks_resp.is_success:
-                for i, t in enumerate(tracks_resp.json().get("data", [])):
-                    tracks.append({
-                        "title": t.get("title", ""),
-                        "track_number": t.get("track_position") or i + 1,
-                        "duration_ms": (t.get("duration") or 0) * 1000,
-                        "explicit": t.get("explicit_lyrics", False),
-                        "spotify_id": None,
-                        "artist": t.get("artist", {}).get("name", "")
-                            or album.get("artist", {}).get("name", ""),
-                    })
-
-            release_date = album.get("release_date", "")
-            year = int(release_date[:4]) if release_date and len(release_date) >= 4 else None
-            cover_url = (
-                album.get("cover_xl")
-                or album.get("cover_big")
-                or album.get("cover_medium")
-                or None
-            )
-
+            cover = a.get("cover_xl") or a.get("cover_big") or a.get("cover_medium") or None
             results.append({
+                "source": "deezer",
+                "source_id": str(album_id),
                 "spotify_id": None,
-                "album_name": album.get("title", ""),
-                "artist": album.get("artist", {}).get("name", ""),
-                "year": year,
-                "cover_url": cover_url,
-                "total_tracks": album.get("nb_tracks") or len(tracks),
-                "tracks": tracks,
+                "album_name": a.get("title", ""),
+                "artist": (a.get("artist") or {}).get("name", ""),
+                "year": None,
+                "release_date": None,
+                "cover_url": cover,
+                "total_tracks": a.get("nb_tracks"),
             })
 
-        _cache_set("deezer", q, results)
-        return results
+        await _deezer_fill_dates(client, results)
 
-
-MB_HEADERS = {"User-Agent": "Pressd/1.0 (music-rating-app)"}
+    _cache_set("deezer", q, results)
+    return results
 
 
 @router.get("/mb")
@@ -322,13 +177,17 @@ async def search_mb(q: str = Query(..., min_length=1)):
     one per edition) and carry first-release-date — which can be in the
     future, so announced-but-unreleased albums are findable here before any
     streaming service has them. Those are flagged `upcoming` for the UI.
+
+    Cover lookups run concurrently against the Cover Art Archive (a separate
+    host from the MB API, so MB's ~1 req/s courtesy limit doesn't apply); the
+    tracklist is left to `/search/resolve`.
     """
     cached = _cache_get("mb", q)
     if cached is not None:
         return cached
     async with httpx.AsyncClient(timeout=10, headers=MB_HEADERS) as client:
         escaped = q.replace('"', '\\"')
-        search_resp = await client.get(
+        resp = await client.get(
             "https://musicbrainz.org/ws/2/release-group/",
             params={
                 "query": f'releasegroup:"{escaped}" OR artist:"{escaped}"',
@@ -336,85 +195,296 @@ async def search_mb(q: str = Query(..., min_length=1)):
                 "limit": 8,
             },
         )
-        if not search_resp.is_success:
+        if not resp.is_success:
             raise HTTPException(status_code=502, detail="MusicBrainz search failed")
 
+        # Undated release groups are dropped. MusicBrainz genuinely has no date
+        # for these (the detail endpoint returns an empty first-release-date
+        # too), and a yearless result is unusable here: the year drives the
+        # dropdown's disambiguation and every year-based stat downstream. It
+        # also can't be the announced/unreleased album MB is carried for —
+        # `upcoming` is derived from that very date.
         groups = [
-            g for g in search_resp.json().get("release-groups", [])
-            if g.get("primary-type") != "Single"
-        ][:5]
+            g for g in resp.json().get("release-groups", [])
+            if g.get("primary-type") != "Single" and (g.get("first-release-date") or "")
+        ][:6]
         if not groups:
             _cache_set("mb", q, [])
             return []
 
-        today = date.today().isoformat()
-        results = []
-        for rg in groups:
-            credits = rg.get("artist-credit", [])
-            artist = credits[0].get("name", "") if credits else ""
-
-            frd = rg.get("first-release-date", "") or ""
-            year = int(frd[:4]) if len(frd) >= 4 else None
-            # Pad partial dates ("2026", "2026-09") to a comparable YYYY-MM-DD
-            padded = (frd + "-01-01")[:10] if frd else ""
-            upcoming = bool(padded and padded > today)
-
-            # Tracklist from a representative release (prefer Official).
-            # Announced albums may have a release with a tracklist long before
-            # streaming services list them; some have no tracks yet — still
-            # returned, since manual/partial import is better than not found.
-            tracks = []
-            releases = rg.get("releases") or []
-            rel_id = next(
-                (r["id"] for r in releases if (r.get("status") or "") == "Official"),
-                releases[0]["id"] if releases else None,
-            )
-            if rel_id:
-                await asyncio.sleep(0.25)  # stay under MB's ~1 req/s limit
-                detail_resp = await client.get(
-                    f"https://musicbrainz.org/ws/2/release/{rel_id}",
-                    params={"inc": "recordings", "fmt": "json"},
-                )
-                if detail_resp.is_success:
-                    global_pos = 0
-                    for medium in detail_resp.json().get("media", []):
-                        for t in medium.get("tracks", []):
-                            global_pos += 1
-                            tracks.append({
-                                "title": t.get("title", ""),
-                                "track_number": t.get("position") or global_pos,
-                                "duration_ms": t.get("length"),
-                                "explicit": False,
-                                "spotify_id": None,
-                                "artist": artist,
-                            })
-
-            # Cover art at the release-group level (HEAD avoids the download)
-            cover_url = None
+        async def cover(rg_id: str) -> str | None:
             try:
-                await asyncio.sleep(0.1)
-                caa = await client.head(
-                    f"https://coverartarchive.org/release-group/{rg['id']}/front-250",
+                r = await client.head(
+                    f"{CAA_BASE}/release-group/{rg_id}/front-250",
                     follow_redirects=True,
                     timeout=4,
                 )
-                if caa.status_code == 200:
-                    cover_url = str(caa.url)
+                return str(r.url) if r.status_code == 200 else None
             except Exception:
-                pass
+                return None
 
+        covers = await asyncio.gather(*[cover(g["id"]) for g in groups])
+
+        today = date.today().isoformat()
+        results = []
+        for rg, cover_url in zip(groups, covers):
+            credits = rg.get("artist-credit", [])
+            frd = rg.get("first-release-date", "") or ""
+            # Pad partial dates ("2026", "2026-09") to a comparable YYYY-MM-DD
+            padded = (frd + "-01-01")[:10] if frd else ""
             results.append({
+                "source": "mb",
+                "source_id": rg["id"],
                 "spotify_id": None,
                 "mb_id": rg["id"],
                 "album_name": rg.get("title", ""),
-                "artist": artist,
-                "year": year,
+                "artist": credits[0].get("name", "") if credits else "",
+                "year": _year(frd),
                 "release_date": frd or None,
-                "upcoming": upcoming,
+                "upcoming": bool(padded and padded > today),
                 "cover_url": cover_url,
-                "total_tracks": len(tracks),
-                "tracks": tracks,
+                "total_tracks": None,
             })
 
-        _cache_set("mb", q, results)
-        return results
+    _cache_set("mb", q, results)
+    return results
+
+
+# ── Resolve: the picked album's full tracklist ────────────────────────────────
+
+async def _resolve_itunes(client: httpx.AsyncClient, collection_id: str) -> dict:
+    resp = await client.get(
+        "https://itunes.apple.com/lookup",
+        params={"id": collection_id, "entity": "song"},
+    )
+    if not resp.is_success:
+        raise HTTPException(status_code=502, detail="iTunes lookup failed")
+    items = resp.json().get("results", [])
+    album = next((i for i in items if i.get("wrapperType") == "collection"), None)
+    if not album:
+        raise HTTPException(status_code=404, detail="Album not found on iTunes")
+
+    artist = album.get("artistName", "")
+    tracks = [
+        {
+            "title": t["trackName"],
+            "track_number": t.get("trackNumber"),
+            "duration_ms": t.get("trackTimeMillis"),
+            "explicit": t.get("trackExplicitness") == "explicit",
+            "spotify_id": None,
+            "artist": t.get("artistName", artist),
+        }
+        for t in items
+        if t.get("wrapperType") == "track" and t.get("kind") == "song" and t.get("trackName")
+    ]
+    return {
+        "spotify_id": None,
+        "album_name": album.get("collectionName", ""),
+        "artist": artist,
+        "year": _year(album.get("releaseDate")),
+        "cover_url": album.get("artworkUrl100", "").replace("100x100bb", "1000x1000bb") or None,
+        "total_tracks": album.get("trackCount", len(tracks)),
+        "genre": album.get("primaryGenreName"),
+        "tracks": tracks,
+    }
+
+
+async def _resolve_deezer(client: httpx.AsyncClient, album_id: str) -> dict:
+    resp = await client.get(f"https://api.deezer.com/album/{album_id}")
+    if not resp.is_success:
+        raise HTTPException(status_code=404, detail="Album not found on Deezer")
+    album = resp.json()
+
+    tracks_data = (album.get("tracks") or {}).get("data")
+    if tracks_data is None:
+        tr = await client.get(
+            f"https://api.deezer.com/album/{album_id}/tracks", params={"limit": 100}
+        )
+        tracks_data = tr.json().get("data", []) if tr.is_success else []
+
+    artist = (album.get("artist") or {}).get("name", "")
+    tracks = [
+        {
+            "title": t.get("title", ""),
+            "track_number": t.get("track_position") or i + 1,
+            "duration_ms": (t.get("duration") or 0) * 1000,
+            "explicit": t.get("explicit_lyrics", False),
+            "spotify_id": None,
+            "artist": (t.get("artist") or {}).get("name", "") or artist,
+        }
+        for i, t in enumerate(tracks_data)
+    ]
+    return {
+        "spotify_id": None,
+        "album_name": album.get("title", ""),
+        "artist": artist,
+        "year": _year(album.get("release_date")),
+        "cover_url": album.get("cover_xl") or album.get("cover_big") or album.get("cover_medium"),
+        "total_tracks": album.get("nb_tracks") or len(tracks),
+        "genre": ((album.get("genres") or {}).get("data") or [{}])[0].get("name"),
+        "tracks": tracks,
+    }
+
+
+async def _resolve_mb(client: httpx.AsyncClient, rg_id: str) -> dict:
+    """Tracklist from a representative release of the group (prefer Official).
+
+    Announced albums may have a release with a tracklist long before streaming
+    services list them; some have none yet — still returned, since a manual or
+    partial import beats "not found".
+    """
+    resp = await client.get(
+        f"https://musicbrainz.org/ws/2/release-group/{rg_id}",
+        params={"inc": "releases+artist-credits", "fmt": "json"},
+    )
+    if not resp.is_success:
+        raise HTTPException(status_code=404, detail="Release group not found on MusicBrainz")
+    rg = resp.json()
+
+    credits = rg.get("artist-credit", [])
+    artist = credits[0].get("name", "") if credits else ""
+    frd = rg.get("first-release-date", "") or ""
+
+    releases = rg.get("releases") or []
+    rel_id = next(
+        (r["id"] for r in releases if (r.get("status") or "") == "Official"),
+        releases[0]["id"] if releases else None,
+    )
+
+    tracks = []
+    if rel_id:
+        await asyncio.sleep(0.25)  # stay under MB's ~1 req/s limit
+        detail = await client.get(
+            f"https://musicbrainz.org/ws/2/release/{rel_id}",
+            params={"inc": "recordings", "fmt": "json"},
+        )
+        if detail.is_success:
+            pos = 0
+            for medium in detail.json().get("media", []):
+                for t in medium.get("tracks", []):
+                    pos += 1
+                    tracks.append({
+                        "title": t.get("title", ""),
+                        "track_number": t.get("position") or pos,
+                        "duration_ms": t.get("length"),
+                        "explicit": False,
+                        "spotify_id": None,
+                        "artist": artist,
+                    })
+
+    cover_url = None
+    try:
+        caa = await client.head(
+            f"{CAA_BASE}/release-group/{rg_id}/front-250", follow_redirects=True, timeout=4
+        )
+        if caa.status_code == 200:
+            cover_url = str(caa.url)
+    except Exception:
+        pass
+
+    today = date.today().isoformat()
+    padded = (frd + "-01-01")[:10] if frd else ""
+    return {
+        "spotify_id": None,
+        "mb_id": rg_id,
+        "album_name": rg.get("title", ""),
+        "artist": artist,
+        "year": _year(frd),
+        "release_date": frd or None,
+        "upcoming": bool(padded and padded > today),
+        "cover_url": cover_url,
+        "total_tracks": len(tracks),
+        "tracks": tracks,
+    }
+
+
+# ── Popularity ────────────────────────────────────────────────────────────────
+
+LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/"
+MAX_POPULARITY_ITEMS = 12
+
+
+def _lastfm_key() -> str | None:
+    """Env-only, no literal fallback, and read at call time rather than import
+    time — `.env` is loaded by `backend.database`, which isn't guaranteed to
+    have been imported first when a script pulls in this router directly.
+
+    Unset means the popularity prior is unavailable and the ranker falls back to
+    text similarity; search still works.
+    """
+    return os.environ.get("LASTFM_API_KEY")
+
+
+@router.post("/popularity")
+async def album_popularity(items: list[dict] = Body(...)):
+    """Last.fm listener counts for a batch of albums, aligned to input order.
+
+    Text similarity can't separate a famous album from an obscure one sharing
+    its name — the band "Rumours" matches the query *Rumours* on both title and
+    artist, beating Fleetwood Mac's. Listener counts separate those by four
+    orders of magnitude, so the ranker uses them as a popularity prior.
+
+    Runs server-side to keep the API key off the client. Unknown albums come
+    back as 0, which the ranker treats as "no signal" rather than "unpopular".
+    """
+    items = items[:MAX_POPULARITY_ITEMS]
+    if not items:
+        return []
+    api_key = _lastfm_key()
+    if not api_key:
+        return [0] * len(items)  # no key configured → no popularity signal
+
+    async with httpx.AsyncClient(timeout=8) as client:
+        async def one(it: dict) -> int:
+            album = (it.get("album_name") or "").strip()
+            artist = (it.get("artist") or "").strip()
+            if not (album and artist):
+                return 0
+            cache_key = f"{album}|||{artist}".lower()
+            cached = _cache_get("lastfm", cache_key)
+            if cached is not None:
+                return cached
+            try:
+                resp = await client.get(LASTFM_BASE, params={
+                    "method": "album.getinfo", "api_key": api_key,
+                    "artist": artist, "album": album,
+                    "format": "json", "autocorrect": "1",
+                })
+                if resp.status_code != 200:
+                    return 0
+                body = resp.json()
+                if "error" in body:  # 6 = "album not found", the common case
+                    _cache_set("lastfm", cache_key, 0)
+                    return 0
+                count = int((body.get("album") or {}).get("listeners") or 0)
+            except Exception:
+                return 0  # popularity is a ranking hint, never a hard failure
+            _cache_set("lastfm", cache_key, count)
+            return count
+
+        return await asyncio.gather(*[one(i) for i in items])
+
+
+@router.get("/resolve")
+async def resolve_album(
+    source: str = Query(..., pattern="^(itunes|deezer|mb)$"),
+    id: str = Query(..., min_length=1),
+):
+    """Full album + tracklist for one search result, in the shape
+    `/albums/import` consumes. Called when the user picks a result, not while
+    they type."""
+    cached = _cache_get("resolve", f"{source}:{id}")
+    if cached is not None:
+        return cached
+
+    headers = MB_HEADERS if source == "mb" else {}
+    async with httpx.AsyncClient(timeout=15, headers=headers) as client:
+        if source == "itunes":
+            data = await _resolve_itunes(client, id)
+        elif source == "deezer":
+            data = await _resolve_deezer(client, id)
+        else:
+            data = await _resolve_mb(client, id)
+
+    _cache_set("resolve", f"{source}:{id}", data)
+    return data

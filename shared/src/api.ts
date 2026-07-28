@@ -231,6 +231,7 @@ export interface SpotifyTrack {
   artist: string
 }
 
+/** A full album with its tracklist — what `/albums/import` consumes. */
 export interface SpotifyAlbumResult {
   spotify_id: string | null
   mb_id?: string | null
@@ -245,38 +246,75 @@ export interface SpotifyAlbumResult {
   upcoming?: boolean
 }
 
-export async function searchSpotify(q: string): Promise<SpotifyAlbumResult[]> {
-  const res = await apiFetch(`${BASE()}/search/?q=${encodeURIComponent(q)}`)
+export type AlbumSource = 'itunes' | 'deezer' | 'mb'
+
+/**
+ * One search hit — identity only, no tracklist. Search fetches these (one HTTP
+ * call per source); `resolveAlbum` fetches the tracklist for the one the user
+ * picks. Fetching tracklists for every hit is what made search slow.
+ */
+export interface AlbumSearchResult {
+  source: AlbumSource
+  source_id: string
+  spotify_id: string | null
+  mb_id?: string | null
+  album_name: string
+  artist: string
+  year: number | null
+  cover_url: string | null
+  total_tracks: number | null
+  genre?: string | null
+  release_date?: string | null
+  upcoming?: boolean
+  /** Last.fm listener count, attached by `fetchPopularity` for ranking. */
+  listeners?: number | null
+}
+
+async function searchSource(path: string, q: string, label: string): Promise<AlbumSearchResult[]> {
+  const res = await apiFetch(`${BASE()}/search/${path}?q=${encodeURIComponent(q)}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error((err as { detail?: string }).detail ?? 'Search failed')
+    throw new Error((err as { detail?: string }).detail ?? `${label} search failed`)
   }
   return res.json()
 }
 
-export async function searchMusicBrainz(q: string): Promise<SpotifyAlbumResult[]> {
-  const res = await apiFetch(`${BASE()}/search/mb?q=${encodeURIComponent(q)}`)
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error((err as { detail?: string }).detail ?? 'MusicBrainz search failed')
-  }
+export function searchMusicBrainz(q: string): Promise<AlbumSearchResult[]> {
+  return searchSource('mb', q, 'MusicBrainz')
+}
+
+export function searchItunes(q: string): Promise<AlbumSearchResult[]> {
+  return searchSource('itunes', q, 'iTunes')
+}
+
+export function searchDeezer(q: string): Promise<AlbumSearchResult[]> {
+  return searchSource('deezer', q, 'Deezer')
+}
+
+/**
+ * Last.fm listener counts for a batch of albums, aligned to input order.
+ * Zeros mean "no signal" — the ranker treats them as neutral, not unpopular.
+ */
+export async function fetchPopularity(
+  items: { album_name: string; artist: string }[],
+): Promise<number[]> {
+  const res = await apiFetch(`${BASE()}/search/popularity`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(items),
+  })
+  if (!res.ok) throw new Error('Popularity lookup failed')
   return res.json()
 }
 
-export async function searchItunes(q: string): Promise<SpotifyAlbumResult[]> {
-  const res = await apiFetch(`${BASE()}/search/itunes?q=${encodeURIComponent(q)}`)
+/** Fetch the picked album's full tracklist, ready for `importAlbum`. */
+export async function resolveAlbum(r: AlbumSearchResult): Promise<SpotifyAlbumResult> {
+  const res = await apiFetch(
+    `${BASE()}/search/resolve?source=${r.source}&id=${encodeURIComponent(r.source_id)}`,
+  )
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error((err as { detail?: string }).detail ?? 'iTunes search failed')
-  }
-  return res.json()
-}
-
-export async function searchDeezer(q: string): Promise<SpotifyAlbumResult[]> {
-  const res = await apiFetch(`${BASE()}/search/deezer?q=${encodeURIComponent(q)}`)
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error((err as { detail?: string }).detail ?? 'Deezer search failed')
+    throw new Error((err as { detail?: string }).detail ?? 'Could not load the tracklist')
   }
   return res.json()
 }
@@ -298,6 +336,62 @@ export async function importAlbum(
   if (!res.ok) throw new Error('Import failed')
   const raw = await res.json()
   return { ...transformAlbum(raw), alreadyExisted: raw.already_existed ?? false }
+}
+
+// The userbase's averaged view of an album — what generic entry points
+// (trending, charts) open, since those aren't tied to any one person's copy.
+export interface CommunityTrack {
+  title: string
+  track_number: number | null
+  avg_score: number | null
+  rater_count: number
+  your_score: number | null
+}
+
+export interface CommunityAlbum {
+  /** null when nobody in Press'd has this album yet (a fresh release). */
+  album_id: number | null
+  album_name: string
+  artist: string
+  year: number | null
+  album_art_url: string | null
+  genre: string | null
+  sub_genre1: string | null
+  sub_genre2: string | null
+  sub_genre3: string | null
+  rater_count: number
+  avg_score: number | null
+  avg_theme: number | null
+  avg_replay_value: number | null
+  avg_production: number | null
+  avg_distinctness: number | null
+  tracks: CommunityTrack[]
+  /** Your copy at any status, so an unrated album can still be opened to rate. */
+  your_album_id: number | null
+  your_status: 'to_listen' | 'listening' | 'rated' | null
+  predicted_score: number | null
+  you: {
+    album_id: number
+    score: number | null
+    theme: number | null
+    replay_value: number | null
+    production: number | null
+    distinctness: number | null
+  } | null
+}
+
+export async function fetchCommunityAlbum(albumId: number): Promise<CommunityAlbum> {
+  const res = await apiFetch(`${BASE()}/albums/${albumId}/community`)
+  if (!res.ok) throw new Error('Could not load this album')
+  return res.json()
+}
+
+/** Community view by name + artist — for albums that may not be in Press'd yet. */
+export async function fetchCommunityAlbumByName(albumName: string, artist: string): Promise<CommunityAlbum> {
+  const qs = new URLSearchParams({ album_name: albumName, artist })
+  const res = await apiFetch(`${BASE()}/albums/community-by-name?${qs}`)
+  if (!res.ok) throw new Error('Could not load this album')
+  return res.json()
 }
 
 // Add an existing album (a friend's copy from the feed) to the current user's

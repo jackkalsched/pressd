@@ -19,7 +19,20 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as Haptics from 'expo-haptics'
 import { ArrowLeft, Check, Heart, Pencil, Trash2 } from 'lucide-react-native'
-import { fetchAlbum, fetchAlbums, fetchFriends, saveReview, deleteReview, toggleLike } from '../../lib/api'
+import {
+  fetchAlbum,
+  fetchAlbums,
+  fetchFriends,
+  fetchCommunityAlbum,
+  fetchCommunityAlbumByName,
+  resolveDeezerAlbum,
+  importAlbum,
+  copyAlbumToLibrary,
+  saveReview,
+  deleteReview,
+  toggleLike,
+  type CommunityAlbum as CommunityAlbumData,
+} from '../../lib/api'
 import { songScoreColor, avatarColor, EP_MAX_TRACKS, type Album, type Song } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import CommentThread from '../../components/CommentThread'
@@ -30,9 +43,21 @@ import { colors, fonts, radii, spacing } from '../../theme/tokens'
 const WINDOW_H = Dimensions.get('window').height
 
 export default function AlbumDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>()
+  const { id, community, name, artist, deezer } = useLocalSearchParams<{
+    id: string
+    community?: string
+    name?: string
+    artist?: string
+    deezer?: string
+  }>()
   const albumId = Number(id)
+  // New releases arrive by name+artist (they may not exist in Press'd yet);
+  // everything else arrives with a copy's id.
+  const byName = !!name && !!artist
+  const isCommunity = community === '1' || byName
+  const deezerId = deezer ? Number(deezer) : null
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { user } = useAuth()
 
   // Tracklist reveal: rows fade + rise as they cross into view, and each new
@@ -60,9 +85,32 @@ export default function AlbumDetail() {
     },
   })
 
-  const { data: album, isLoading } = useQuery({
+  const { data: album, isLoading, isError } = useQuery({
     queryKey: ['album', albumId],
     queryFn: () => fetchAlbum(albumId),
+    enabled: !isCommunity,
+  })
+
+  // Generic entry points (trending, charts) open the userbase's averaged view
+  // — one request, and it can't 403 the way a stranger's personal copy does.
+  const {
+    data: communityData,
+    isLoading: communityLoading,
+    isError: communityError,
+  } = useQuery({
+    queryKey: byName ? ['community-by-name', name, artist] : ['album', albumId, 'community'],
+    queryFn: () => (byName ? fetchCommunityAlbumByName(name!, artist!) : fetchCommunityAlbum(albumId)),
+    enabled: isCommunity,
+  })
+
+  // A release nobody has added yet has no Press'd tracklist; pull it from
+  // Deezer so the page still shows the record, and so Rate now can import it.
+  const needsDeezer = !!deezerId && communityData != null && communityData.tracks.length === 0
+  const { data: deezerAlbum } = useQuery({
+    queryKey: ['deezer-album', deezerId],
+    queryFn: () => resolveDeezerAlbum(deezerId!),
+    enabled: needsDeezer,
+    staleTime: 60 * 60_000,
   })
 
   // Friends resolve the owner's name/color when viewing someone else's copy.
@@ -89,12 +137,57 @@ export default function AlbumDetail() {
     enabled: !!myCopyId,
   })
 
-  if (isLoading || !album) {
+  if (isCommunity) {
+    if (communityLoading) {
+      return (
+        <SafeAreaView style={[styles.screen, styles.center]}>
+          <ActivityIndicator color={colors.green} />
+        </SafeAreaView>
+      )
+    }
+    if (communityError || !communityData) {
+      return <LoadFailed onBack={() => router.back()} />
+    }
+    // Fill in from Deezer when Press'd has no copy of this release yet.
+    const shown: CommunityAlbumData = deezerAlbum
+      ? {
+          ...communityData,
+          year: communityData.year ?? deezerAlbum.year,
+          album_art_url: communityData.album_art_url ?? deezerAlbum.cover_url,
+          tracks: deezerAlbum.tracks.map((t) => ({
+            title: t.title,
+            track_number: t.track_number,
+            avg_score: null,
+            rater_count: 0,
+            your_score: null,
+          })),
+        }
+      : communityData
+
+    return (
+      <CommunityAlbum
+        data={shown}
+        onBack={() => router.back()}
+        onOpenArtist={(n) =>
+          router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent(n) } })
+        }
+        onRate={() => startRating(shown)}
+        onQueue={() => queueAlbum(shown)}
+      />
+    )
+  }
+
+  if (isLoading) {
     return (
       <SafeAreaView style={[styles.screen, styles.center]}>
         <ActivityIndicator color={colors.green} />
       </SafeAreaView>
     )
+  }
+  // Personal copies are friends-only; without this an unauthorized album left
+  // the screen spinning forever.
+  if (isError || !album) {
+    return <LoadFailed onBack={() => router.back()} />
   }
 
   const sorted = [...album.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
@@ -111,6 +204,34 @@ export default function AlbumDetail() {
 
   const openArtist = (name: string) =>
     router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent(name) } })
+
+  /** Get this album into your library at `status`, returning your copy's id.
+   *  Three routes in: you already have it; Press'd has someone else's copy to
+   *  clone; or it's new to Press'd entirely and comes from Deezer. */
+  async function ensureInLibrary(data: CommunityAlbumData, status: 'to_listen' | 'listening'): Promise<number> {
+    if (data.your_album_id != null) return data.your_album_id
+    if (data.album_id != null) {
+      const copy = await copyAlbumToLibrary(data.album_id, status)
+      queryClient.invalidateQueries({ queryKey: ['albums'] })
+      return copy.id
+    }
+    if (deezerId == null) throw new Error('Nothing to import')
+    const full = await resolveDeezerAlbum(deezerId)
+    const imported = await importAlbum(full, status, user?.id ?? 1)
+    queryClient.invalidateQueries({ queryKey: ['albums'] })
+    return imported.id
+  }
+
+  async function startRating(data: CommunityAlbumData) {
+    const target = await ensureInLibrary(data, 'listening')
+    router.push({ pathname: '/rate/[id]', params: { id: String(target) } })
+  }
+
+  async function queueAlbum(data: CommunityAlbumData) {
+    await ensureInLibrary(data, 'to_listen')
+    queryClient.invalidateQueries({ queryKey: ['album', albumId, 'community'] })
+    queryClient.invalidateQueries({ queryKey: ['community-by-name', name, artist] })
+  }
 
   // Both of you finished this album → the side-by-side comparison view.
   if (owner && myAlbum && album.status === 'rated' && myAlbum.status === 'rated' &&
@@ -237,6 +358,300 @@ export default function AlbumDetail() {
 
         <CommentThread albumId={albumId} />
       </Animated.ScrollView>
+      </SafeAreaView>
+    </View>
+  )
+}
+
+function LoadFailed({ onBack }: { onBack: () => void }) {
+  return (
+    <SafeAreaView style={[styles.screen, styles.center]}>
+      <Text style={styles.failTitle}>This album didn't load</Text>
+      <Text style={styles.failBody}>It may have been removed, or it belongs to someone you don't follow.</Text>
+      <Pressable style={styles.failBtn} onPress={onBack}>
+        <Text style={styles.failBtnText}>Go back</Text>
+      </Pressable>
+    </SafeAreaView>
+  )
+}
+
+/**
+ * The userbase's view of an album: averaged score, factors and track scores in
+ * the standard layout. When you've rated it too, a Compare control swaps in a
+ * you-versus-everyone breakdown built from the same styles as the friend view.
+ */
+function CommunityAlbum({
+  data,
+  onBack,
+  onOpenArtist,
+  onRate,
+  onQueue,
+}: {
+  data: CommunityAlbumData
+  onBack: () => void
+  onOpenArtist: (name: string) => void
+  onRate: () => void
+  onQueue: () => Promise<void>
+}) {
+  const [comparing, setComparing] = useState(false)
+  const [rating, setRating] = useState(false)
+  const [queuing, setQueuing] = useState(false)
+  const [queued, setQueued] = useState(false)
+  const notRated = data.your_status !== 'rated'
+  const inLibrary = data.your_album_id != null
+  const canCompare = data.you?.score != null && data.avg_score != null
+  const subs = [data.sub_genre1, data.sub_genre2, data.sub_genre3].filter(Boolean) as string[]
+  const raters = `${data.rater_count} ${data.rater_count === 1 ? 'rater' : 'raters'}`
+
+  const factors: { label: string; value: number | null }[] = [
+    { label: 'Theme', value: data.avg_theme },
+    { label: 'Replay', value: data.avg_replay_value },
+    { label: 'Production', value: data.avg_production },
+    { label: 'Distinct', value: data.avg_distinctness },
+  ]
+
+  const header = (
+    <View style={styles.topBar}>
+      <Pressable onPress={onBack} hitSlop={10} style={styles.backBtn}>
+        <ArrowLeft size={18} color={colors.inkSecondary} />
+        <Text style={styles.backText}>Back</Text>
+      </Pressable>
+      {canCompare ? (
+        <Pressable style={styles.compareBtn} onPress={() => setComparing((v) => !v)} hitSlop={8}>
+          <Text style={styles.compareBtnText}>{comparing ? 'Average' : 'Compare'}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  )
+
+  if (comparing && data.you) {
+    const you = data.you
+    const pos = (v: number) => ((Math.max(5, Math.min(10, v)) - 5) / 5) * 100
+    const avgScore = data.avg_score!
+    const yourScore = you.score!
+    const diff = yourScore - avgScore
+    const youLeft = yourScore <= avgScore
+
+    const rated = data.tracks.filter((t) => t.avg_score != null && t.your_score != null)
+    let widest: { title: string; gap: number } | null = null
+    for (const t of rated) {
+      const gap = Math.abs(t.your_score! - t.avg_score!)
+      if (!widest || gap > widest.gap) widest = { title: t.title, gap }
+    }
+    const verdict =
+      Math.abs(diff) < 0.005
+        ? `You landed exactly on the Press'd average.`
+        : `You rated this ${Math.abs(diff).toFixed(2)} ${diff > 0 ? 'above' : 'below'} the Press'd average` +
+          (widest ? ` — biggest gap on “${widest.title}”.` : '.')
+
+    const left = youLeft
+      ? { label: 'YOU', score: yourScore, color: colors.inkSecondary, head: colors.inkMuted }
+      : { label: "PRESS'D USERS", score: avgScore, color: colors.green, head: colors.green }
+    const right = youLeft
+      ? { label: "PRESS'D USERS", score: avgScore, color: colors.green, head: colors.green }
+      : { label: 'YOU', score: yourScore, color: colors.inkSecondary, head: colors.inkMuted }
+
+    return (
+      <View style={styles.root}>
+        <AlbumBackdrop albumArtUrl={data.album_art_url} album={data.album_name} artist={data.artist} subtle />
+        <SafeAreaView style={styles.screen} edges={['top']}>
+          {header}
+          <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            <View style={styles.cmpHead}>
+              <View style={[styles.cmpAccent, { backgroundColor: colors.green }]} />
+              {data.album_art_url ? (
+                <Image source={{ uri: data.album_art_url }} style={styles.cmpArt} contentFit="cover" />
+              ) : (
+                <View style={[styles.cmpArt, styles.artFallback]}>
+                  <Text style={styles.artInitial}>{data.album_name[0]}</Text>
+                </View>
+              )}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.cmpAlbumName} numberOfLines={2}>{data.album_name}</Text>
+                <Text style={styles.cmpArtist} numberOfLines={1}>
+                  <Text style={styles.artistLink} onPress={() => onOpenArtist(data.artist)}>{data.artist}</Text>
+                  {data.year ? ` · ${data.year}` : ''}
+                </Text>
+                {data.genre && <Text style={styles.cmpGenre}>{data.genre}</Text>}
+                {subs.length > 0 && <Text style={styles.cmpSubGenres}>{subs.join(' · ')}</Text>}
+              </View>
+            </View>
+
+            <View style={[styles.cmpCard, { backgroundColor: colors.greenSoft, borderColor: 'rgba(45,106,79,0.18)' }]}>
+              <View style={styles.cmpScores}>
+                <View style={styles.cmpScoreCol}>
+                  <Text style={[styles.cmpWho, { color: left.head }]} numberOfLines={1}>{left.label}</Text>
+                  <Text style={[styles.cmpScore, { color: left.color }]}>{left.score.toFixed(2)}</Text>
+                </View>
+                <View style={[styles.cmpDivider, { backgroundColor: 'rgba(45,106,79,0.25)' }]} />
+                <View style={styles.cmpScoreCol}>
+                  <Text style={[styles.cmpWho, { color: right.head }]} numberOfLines={1}>{right.label}</Text>
+                  <Text style={[styles.cmpScore, { color: right.color }]}>{right.score.toFixed(2)}</Text>
+                </View>
+              </View>
+
+              <View style={styles.railWrap}>
+                <View style={styles.rail} />
+                <View style={[styles.railFill, { width: `${Math.max(pos(avgScore), pos(yourScore))}%`, backgroundColor: 'rgba(45,106,79,0.45)' }]} />
+                <View style={[styles.railTick, { left: `${pos(avgScore)}%`, backgroundColor: colors.green }]} />
+                <View style={[styles.railTick, { left: `${pos(yourScore)}%`, backgroundColor: colors.ink }]} />
+              </View>
+              <View style={styles.railAxis}>
+                {[5, 6, 7, 8, 9, 10].map((n) => (
+                  <Text key={n} style={styles.railAxisLabel}>{n}</Text>
+                ))}
+              </View>
+
+              <Text style={styles.cmpVerdict}>{verdict}</Text>
+              <Text style={styles.cmpRaters}>Averaged across {raters}</Text>
+            </View>
+
+            <View style={styles.cmpTracksHead}>
+              <Text style={styles.cmpTracksLabel}>TRACKS</Text>
+              <Text style={styles.cmpColHead} numberOfLines={1}>
+                <Text style={{ color: left.head }}>{left.label}</Text>
+                <Text style={styles.cmpColSlash}> / </Text>
+                <Text style={{ color: right.head }}>{right.label}</Text>
+              </Text>
+            </View>
+            {data.tracks.map((t, i) => {
+              const leftVal = youLeft ? t.your_score : t.avg_score
+              const rightVal = youLeft ? t.avg_score : t.your_score
+              return (
+                <View key={`${t.title}-${i}`} style={[styles.cmpTrackRow, i > 0 && styles.cmpTrackDivider]}>
+                  <Text style={styles.cmpTrackNum}>{t.track_number}</Text>
+                  <Text style={styles.cmpTrackTitle} numberOfLines={1}>{t.title}</Text>
+                  <Text style={[styles.cmpTrackScore, { color: left.head }]}>
+                    {leftVal != null ? leftVal.toFixed(1) : '—'}
+                  </Text>
+                  <Text style={[styles.cmpTrackScore, { color: right.head }]}>
+                    {rightVal != null ? rightVal.toFixed(1) : '—'}
+                  </Text>
+                </View>
+              )
+            })}
+          </ScrollView>
+        </SafeAreaView>
+      </View>
+    )
+  }
+
+  // Classic layout, showing what everyone averaged.
+  return (
+    <View style={styles.root}>
+      <AlbumBackdrop albumArtUrl={data.album_art_url} album={data.album_name} artist={data.artist} />
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        {header}
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.head}>
+            {data.album_art_url ? (
+              <Image source={{ uri: data.album_art_url }} style={styles.art} contentFit="cover" />
+            ) : (
+              <View style={[styles.art, styles.artFallback]}>
+                <Text style={styles.artInitial}>{data.album_name[0]}</Text>
+              </View>
+            )}
+            <Text style={styles.albumName} numberOfLines={2}>{data.album_name}</Text>
+            <Text style={styles.artist} numberOfLines={1}>
+              <Text style={styles.artistLink} onPress={() => onOpenArtist(data.artist)}>{data.artist}</Text>
+              {data.year ? ` · ${data.year}` : ''}
+            </Text>
+            {data.genre && <Text style={styles.genre}>{data.genre}</Text>}
+            {subs.length > 0 && <Text style={styles.subGenres}>{subs.join(' · ')}</Text>}
+          </View>
+
+          <View style={styles.scoreBlock}>
+            <Text style={[styles.bigScore, { color: data.avg_score != null ? colors.green : colors.inkMuted }]}>
+              {data.avg_score != null ? data.avg_score.toFixed(2) : '—'}
+            </Text>
+            <Text style={styles.scoreLabel}>PRESS'D AVERAGE</Text>
+            <Text style={styles.raterLine}>{raters}</Text>
+          </View>
+
+          {factors.some((f) => f.value != null) && (
+            <View style={styles.factorRow}>
+              {factors.map((f) => (
+                <View key={f.label} style={styles.factorCell}>
+                  <Text style={styles.factorValue}>{f.value != null ? f.value.toFixed(1) : '—'}</Text>
+                  <Text style={styles.factorLabel}>{f.label}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Your own prediction, when the model has one and you haven't rated
+              it yet — the reason to reach for Rate now. */}
+          {notRated && data.predicted_score != null && (
+            <View style={styles.predictRow}>
+              <Text style={styles.predictLabel}>PREDICTED FOR YOU</Text>
+              <Text style={[styles.predictValue, { color: songScoreColor(data.predicted_score) }]}>
+                {data.predicted_score.toFixed(2)}
+              </Text>
+            </View>
+          )}
+
+          {notRated && (
+            <Pressable
+              style={({ pressed }) => [styles.cta, pressed && { backgroundColor: colors.greenPressed }]}
+              onPress={async () => {
+                if (rating) return
+                setRating(true)
+                try {
+                  await onRate()
+                } finally {
+                  setRating(false)
+                }
+              }}
+              disabled={rating}
+            >
+              {rating ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.ctaText}>
+                  {data.your_status === 'listening' ? 'Continue rating' : 'Rate now'}
+                </Text>
+              )}
+            </Pressable>
+          )}
+
+          {/* Queueing only means anything for albums you don't already hold. */}
+          {!inLibrary && (
+            <Pressable
+              style={styles.queueBtn}
+              onPress={async () => {
+                if (queuing || queued) return
+                setQueuing(true)
+                try {
+                  await onQueue()
+                  setQueued(true)
+                } finally {
+                  setQueuing(false)
+                }
+              }}
+              disabled={queuing || queued}
+            >
+              <Text style={styles.queueBtnText}>
+                {queued ? 'Added to To Listen' : queuing ? 'Adding…' : 'Add to To Listen'}
+              </Text>
+            </Pressable>
+          )}
+
+          <Text style={styles.sectionLabel}>TRACKS</Text>
+          {data.tracks.map((t, i) => (
+            <View key={`${t.title}-${i}`} style={styles.trackRow}>
+              <Text style={styles.trackNum}>{t.track_number}</Text>
+              <Text style={styles.trackTitle} numberOfLines={1}>{t.title}</Text>
+              <BangSkip score={t.avg_score} />
+              {t.avg_score != null ? (
+                <Text style={[styles.trackScore, { color: songScoreColor(t.avg_score) }]}>
+                  {t.avg_score.toFixed(1)}
+                </Text>
+              ) : (
+                <Text style={styles.trackScoreEmpty}>—</Text>
+              )}
+            </View>
+          ))}
+        </ScrollView>
       </SafeAreaView>
     </View>
   )
@@ -709,6 +1124,47 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  compareBtn: {
+    backgroundColor: colors.greenSoft,
+    borderRadius: radii.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  compareBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
+  raterLine: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 4 },
+  predictRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.greenSoft,
+    borderRadius: radii.md,
+    paddingVertical: 10,
+    marginTop: spacing.xl,
+  },
+  predictLabel: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.2, color: colors.inkTertiary },
+  predictValue: { fontFamily: fonts.display, fontSize: 20 },
+  cmpRaters: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 4 },
+
+  failTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.ink, textAlign: 'center' },
+  failBody: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.inkTertiary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xl,
+  },
+  failBtn: {
+    backgroundColor: colors.green,
+    borderRadius: radii.md,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    marginTop: spacing.lg,
+  },
+  failBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: '#fff' },
+
   scoreBlock: { alignItems: 'center', marginTop: spacing.xl },
   bigScore: { fontFamily: fonts.display, fontSize: 64, lineHeight: 68 },
   scoreLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.4, color: colors.inkSecondary },
@@ -726,6 +1182,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
   },
   ctaText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: '#fff' },
+  queueBtn: { alignSelf: 'center', paddingVertical: spacing.md },
+  queueBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
 
   sectionLabel: {
     fontFamily: fonts.bodyBold,

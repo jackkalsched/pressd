@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./types": "./src/types.ts",
     "./api": "./src/api.ts",
+    "./albumSearch": "./src/albumSearch.ts",
     "./hooks/useAlbumSearch": "./src/hooks/useAlbumSearch.ts"
   },
   "peerDependencies": {

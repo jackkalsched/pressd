@@ -19,7 +19,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { ArrowRight, Check, ChevronDown, Heart, MessageCircle, Play, Plus, Triangle } from 'lucide-react-native'
+import { ArrowRight, Check, ChevronDown, Heart, MessageCircle, Triangle } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchAlbums,
@@ -27,8 +27,6 @@ import {
   fetchTrending,
   fetchTopReviews,
   toggleLike,
-  resolveDeezerAlbum,
-  importAlbum,
   type NewRelease,
   type TopReview,
   type TrendingAlbum,
@@ -148,6 +146,24 @@ export default function ForYou() {
   function openAlbum(id: number) {
     router.push({ pathname: '/album/[id]', params: { id: String(id) } })
   }
+  // Trending isn't tied to a person, so it opens the userbase's averaged view
+  // rather than whichever copy happened to be ranked.
+  function openCommunityAlbum(id: number) {
+    router.push({ pathname: '/album/[id]', params: { id: String(id), community: '1' } })
+  }
+  // A new release may not be in Press'd at all, so it's looked up by name and
+  // carries its Deezer id for the tracklist and for importing on Rate now.
+  function openRelease(r: NewRelease) {
+    router.push({
+      pathname: '/album/[id]',
+      params: {
+        id: String(r.deezerId),
+        name: r.albumName,
+        artist: r.artist,
+        deezer: String(r.deezerId),
+      },
+    })
+  }
   function openRate(id: number) {
     router.push({ pathname: '/rate/[id]', params: { id: String(id) } })
   }
@@ -263,13 +279,7 @@ export default function ForYou() {
             <SectionHead label="NEW & POPULAR" />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rail}>
               {newReleases.map((r) => (
-                <NewReleaseCard
-                  key={r.deezerId}
-                  release={r}
-                  userId={user.id}
-                  onRate={openRate}
-                  onAdded={() => queryClient.invalidateQueries({ queryKey: ['albums', 'to_listen', userId] })}
-                />
+                <NewReleaseCard key={r.deezerId} release={r} onOpen={() => openRelease(r)} />
               ))}
             </ScrollView>
           </View>
@@ -291,7 +301,7 @@ export default function ForYou() {
                 weekly={trendMode === 'week'}
                 scrollY={scrollY}
                 baseY={trendBlockY}
-                onPress={() => openAlbum(t.album_id)}
+                onPress={() => openCommunityAlbum(t.album_id)}
               />
             ))}
           </View>
@@ -352,62 +362,15 @@ export default function ForYou() {
   )
 }
 
-function NewReleaseCard({
-  release,
-  userId,
-  onRate,
-  onAdded,
-}: {
-  release: NewRelease
-  userId: number
-  onRate: (id: number) => void
-  onAdded: () => void
-}) {
-  const [revealed, setRevealed] = useState(false)
-  const [pending, setPending] = useState<'rate' | 'listen' | null>(null)
-  const [added, setAdded] = useState(false)
-
-  async function act(kind: 'rate' | 'listen') {
-    if (pending || added) return
-    setPending(kind)
-    try {
-      const full = await resolveDeezerAlbum(release.deezerId)
-      const album = await importAlbum(full, kind === 'rate' ? 'listening' : 'to_listen', userId)
-      if (kind === 'rate') { onRate(album.id); return }
-      setAdded(true)
-      onAdded()
-    } catch {
-      /* leave the card in place */
-    } finally {
-      if (kind !== 'rate') setPending(null)
-    }
-  }
-
+/** A fresh release. Tapping opens the album page, where the Press'd average,
+ *  your prediction, and the rate / queue actions all live. */
+function NewReleaseCard({ release, onOpen }: { release: NewRelease; onOpen: () => void }) {
   return (
-    <View style={styles.railItem}>
-      <Pressable onPress={() => setRevealed((v) => !v)}>
-        <Cover uri={release.coverUrl} seed={release.albumName} size={128} radius={radii.md} />
-        {added ? (
-          <View style={styles.railOverlay}>
-            <Check size={18} color="#fff" />
-            <Text style={styles.railOverlayText}>In your library</Text>
-          </View>
-        ) : revealed ? (
-          <View style={styles.railOverlay}>
-            <Pressable style={styles.railBtn} onPress={() => act('rate')} disabled={!!pending}>
-              {pending === 'rate' ? <ActivityIndicator size="small" color="#fff" /> : <Play size={13} color="#fff" fill="#fff" />}
-              <Text style={styles.railBtnText}>Rate now</Text>
-            </Pressable>
-            <Pressable style={[styles.railBtn, styles.railBtnAlt]} onPress={() => act('listen')} disabled={!!pending}>
-              {pending === 'listen' ? <ActivityIndicator size="small" color={colors.ink} /> : <Plus size={14} color={colors.ink} />}
-              <Text style={styles.railBtnAltText}>To listen</Text>
-            </Pressable>
-          </View>
-        ) : null}
-      </Pressable>
+    <Pressable style={styles.railItem} onPress={onOpen}>
+      <Cover uri={release.coverUrl} seed={release.albumName} size={128} radius={radii.md} />
       <Text style={styles.railName} numberOfLines={1}>{release.albumName}</Text>
       <Text style={styles.railArtist} numberOfLines={1}>{release.artist}</Text>
-    </View>
+    </Pressable>
   )
 }
 
@@ -596,16 +559,6 @@ const styles = StyleSheet.create({
 
   rail: { marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg },
   railItem: { width: 128, marginRight: spacing.md },
-  railOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(28,25,23,0.6)', borderRadius: radii.md,
-    alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.sm,
-  },
-  railOverlayText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: '#fff' },
-  railBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: colors.green, borderRadius: radii.sm, paddingVertical: 7, width: 104 },
-  railBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: '#fff' },
-  railBtnAlt: { backgroundColor: 'rgba(255,255,255,0.92)' },
-  railBtnAltText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.ink },
   railName: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink, marginTop: 7 },
   railArtist: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
 

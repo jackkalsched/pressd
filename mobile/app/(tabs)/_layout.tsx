@@ -30,10 +30,12 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: colors.bg },
       }}
     >
+      {/* Declaration order drives the pill: the first two sit left of the
+          add button, the last two right of it. */}
       <Tabs.Screen name="index" />
-      <Tabs.Screen name="charts" />
-      <Tabs.Screen name="social" />
       <Tabs.Screen name="profile" />
+      <Tabs.Screen name="social" />
+      <Tabs.Screen name="charts" />
     </Tabs>
   )
 }

@@ -1,6 +1,6 @@
-// The "+" sheet: search across iTunes / Spotify / Deezer / MusicBrainz (shared
-// 4-source fan-out), then import the picked album as "listening" and jump
-// straight into rating it — the app's core loop start.
+// The "+" sheet: search across iTunes / Deezer / MusicBrainz (shared, ranked
+// fan-out), then resolve the picked album's tracklist, import it as
+// "listening", and jump straight into rating it — the app's core loop start.
 import { useState } from 'react'
 import {
   ActivityIndicator,
@@ -14,36 +14,60 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Image } from 'expo-image'
-import { Check, Plus, Search, X } from 'lucide-react-native'
+import { Plus, Search, X } from 'lucide-react-native'
 import { useAlbumSearch } from '@pressd/shared/hooks/useAlbumSearch'
-import type { SpotifyAlbumResult } from '@pressd/shared/api'
-import { importAlbum } from '../lib/api'
+import type { AlbumSearchResult } from '@pressd/shared/api'
+import { importAlbum, resolveAlbum } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import TracklistLoader from '../components/TracklistLoader'
 import { colors, fonts, radii, spacing } from '../theme/tokens'
+
+/** "· 2016" when the year is known, "· 12 tracks" when it isn't (Deezer's
+ *  search payload carries no release date), and nothing when neither is. */
+function meta(r: AlbumSearchResult): string {
+  if (r.year) return ` · ${r.year}`
+  if (r.total_tracks) return ` · ${r.total_tracks} tracks`
+  return ''
+}
 
 export default function AddAlbum() {
   const router = useRouter()
   const { user } = useAuth()
   const [query, setQuery] = useState('')
   const { results, searching, mbPending, noResults } = useAlbumSearch(query)
-  const [importingKey, setImportingKey] = useState<string | null>(null)
+  const [picked, setPicked] = useState<AlbumSearchResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  function keyFor(r: SpotifyAlbumResult): string {
-    return `${r.album_name}|||${r.artist}`
+  function keyFor(r: AlbumSearchResult): string {
+    return `${r.source}:${r.source_id}`
   }
 
-  async function pick(r: SpotifyAlbumResult) {
-    if (importingKey || !user) return
-    setImportingKey(keyFor(r))
+  async function pick(r: AlbumSearchResult) {
+    if (picked || !user) return
+    setPicked(r)
     setError(null)
     try {
-      const album = await importAlbum(r, 'listening', user.id)
+      const full = await resolveAlbum(r)
+      const album = await importAlbum(full, 'listening', user.id)
       router.replace({ pathname: '/rate/[id]', params: { id: String(album.id) } })
     } catch {
-      setError('Could not import that album. Try another result.')
-      setImportingKey(null)
+      setError('Could not load that album. Try another result.')
+      setPicked(null)
     }
+  }
+
+  // The tracklist fetch owns the whole sheet — there's nothing useful to do on
+  // the results list while it runs, and the pick is already committed.
+  if (picked) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <TracklistLoader
+          albumName={picked.album_name}
+          artist={picked.artist}
+          coverUrl={picked.cover_url}
+        />
+      </SafeAreaView>
+    )
   }
 
   return (
@@ -97,39 +121,31 @@ export default function AddAlbum() {
             <Text style={styles.hint}>Start typing to search across every source.</Text>
           ) : null
         }
-        renderItem={({ item }) => {
-          const busy = importingKey === keyFor(item)
-          return (
-            <Pressable
-              style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.inset }]}
-              onPress={() => pick(item)}
-              disabled={!!importingKey}
-            >
-              {item.cover_url ? (
-                <Image source={{ uri: item.cover_url }} style={styles.cover} contentFit="cover" />
-              ) : (
-                <View style={[styles.cover, styles.coverFallback]}>
-                  <Text style={styles.coverInitial}>{item.album_name[0]?.toUpperCase()}</Text>
-                </View>
-              )}
-              <View style={styles.rowText}>
-                <Text style={styles.albumName} numberOfLines={1}>{item.album_name}</Text>
-                <Text style={styles.meta} numberOfLines={1}>
-                  {item.artist}
-                  {item.year ? ` · ${item.year}` : ''}
-                  {item.upcoming ? ' · upcoming' : ''}
-                </Text>
+        renderItem={({ item }) => (
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.inset }]}
+            onPress={() => pick(item)}
+          >
+            {item.cover_url ? (
+              <Image source={{ uri: item.cover_url }} style={styles.cover} contentFit="cover" />
+            ) : (
+              <View style={[styles.cover, styles.coverFallback]}>
+                <Text style={styles.coverInitial}>{item.album_name[0]?.toUpperCase()}</Text>
               </View>
-              <View style={styles.addBtn}>
-                {busy ? (
-                  <ActivityIndicator size="small" color={colors.green} />
-                ) : (
-                  <Plus size={18} color={colors.green} strokeWidth={2.5} />
-                )}
-              </View>
-            </Pressable>
-          )
-        }}
+            )}
+            <View style={styles.rowText}>
+              <Text style={styles.albumName} numberOfLines={1}>{item.album_name}</Text>
+              <Text style={styles.meta} numberOfLines={1}>
+                {item.artist}
+                {meta(item)}
+                {item.upcoming ? ' · upcoming' : ''}
+              </Text>
+            </View>
+            <View style={styles.addBtn}>
+              <Plus size={18} color={colors.green} strokeWidth={2.5} />
+            </View>
+          </Pressable>
+        )}
       />
     </SafeAreaView>
   )

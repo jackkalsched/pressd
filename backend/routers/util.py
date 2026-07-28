@@ -16,6 +16,7 @@ from sqlmodel import Session, select
 
 from ..database import engine, get_session
 from ..models import Album, Song, SongAudioFeatures
+from ..trackkeys import same_album
 
 router = APIRouter(prefix="/util", tags=["util"])
 
@@ -56,8 +57,19 @@ def _extract_two_colors(image_bytes: bytes) -> tuple[str | None, str | None]:
     return color1, color2
 
 
+def _mb_credit(release: dict) -> str:
+    credits = release.get("artist-credit") or []
+    return credits[0].get("name", "") if credits else ""
+
+
 async def _fetch_cover_url(client: httpx.AsyncClient, album: str, artist: str) -> str | None:
-    """Return a Cover Art Archive URL for the best-matching MB release, or None."""
+    """Return a Cover Art Archive URL for the matching MB release, or None.
+
+    MusicBrainz scores `release:"…" AND artist:"…"` rather than filtering on it,
+    so a poor match still comes back ranked first. Every hit is verified against
+    the album that was asked for — hanging the wrong cover on an album is worse
+    than leaving it blank.
+    """
     mb_resp = await client.get(
         "https://musicbrainz.org/ws/2/release/",
         params={
@@ -68,7 +80,10 @@ async def _fetch_cover_url(client: httpx.AsyncClient, album: str, artist: str) -
     )
     if not mb_resp.is_success:
         return None
-    releases = mb_resp.json().get("releases", [])
+    releases = [
+        r for r in mb_resp.json().get("releases", [])
+        if same_album(album, artist, r.get("title") or "", _mb_credit(r))
+    ]
     if not releases:
         return None
 
@@ -150,7 +165,12 @@ async def backfill_genres(
 
 
 async def _fetch_mb_genre(client: httpx.AsyncClient, album: str, artist: str) -> str | None:
-    """Return the top genre tag from MusicBrainz release-group, or None."""
+    """Return the top genre tag from MusicBrainz release-group, or None.
+
+    As with cover art, the query is scored rather than filtered, so the hit is
+    verified before its genre is trusted — mis-tagging an album's genre skews
+    every genre stat and recommendation downstream.
+    """
     mb_resp = await client.get(
         "https://musicbrainz.org/ws/2/release/",
         params={
@@ -161,7 +181,10 @@ async def _fetch_mb_genre(client: httpx.AsyncClient, album: str, artist: str) ->
     )
     if not mb_resp.is_success:
         return None
-    releases = mb_resp.json().get("releases", [])
+    releases = [
+        r for r in mb_resp.json().get("releases", [])
+        if same_album(album, artist, r.get("title") or "", _mb_credit(r))
+    ]
     if not releases:
         return None
 

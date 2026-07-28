@@ -643,7 +643,9 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodyBold,
     fontSize: 11,
     letterSpacing: 1.6,
-    color: colors.inkMuted,
+    // inkMuted sat at ~2.5:1 on the app background — too faint for an 11px
+    // label that carries the only positional context on the screen.
+    color: colors.inkSecondary,
     textAlign: 'center',
     marginTop: spacing.xl,
   },

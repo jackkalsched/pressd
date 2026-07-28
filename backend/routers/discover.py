@@ -18,6 +18,7 @@ from sqlmodel import Session, select
 from ..database import get_session
 from ..deps import current_user
 from ..models import Album, PressUser
+from ..trackkeys import same_album
 
 router = APIRouter(prefix="/discover", tags=["discover"])
 
@@ -85,13 +86,12 @@ async def _deezer_resolve(client: httpx.AsyncClient, sem: asyncio.Semaphore, tit
     if not data or not data[0].get("id"):
         return None
     a = data[0]
-    # Guard against a wrong high-fan match (e.g. a different album of the same
-    # title): require some artist-name token overlap with the release.
+    # Guard against a wrong match: the hit has to be the same record, not just
+    # something Deezer ranked first for the query. Title and artist must both
+    # line up — a different album by the right artist is as wrong as a
+    # same-titled album by someone else.
     dz_artist_obj = a.get("artist") or {}
-    dz_artist = (dz_artist_obj.get("name") or "").lower()
-    want = {t for t in artist.lower().replace("&", " ").split() if len(t) > 1}
-    have = set(dz_artist.split())
-    if want and have and not (want & have):
+    if not same_album(title, artist, a.get("title") or "", dz_artist_obj.get("name") or ""):
         return None
     return {
         "deezer_id": a["id"],

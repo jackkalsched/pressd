@@ -20,10 +20,11 @@ import { Image } from 'expo-image'
 import { Plus, Search, X } from 'lucide-react-native'
 import { useQuery } from '@tanstack/react-query'
 import { useAlbumSearch } from '@pressd/shared/hooks/useAlbumSearch'
-import type { SpotifyAlbumResult } from '@pressd/shared/api'
-import { fetchArtStrip, importAlbum } from '../lib/api'
+import type { AlbumSearchResult } from '@pressd/shared/api'
+import { fetchArtStrip, importAlbum, resolveAlbum } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { skipOnboarding } from '../lib/onboarding'
+import TracklistLoader from '../components/TracklistLoader'
 import { colors, fonts, radii, spacing } from '../theme/tokens'
 
 const TILE = 84
@@ -70,7 +71,7 @@ export default function Welcome() {
   const { user } = useAuth()
   const [query, setQuery] = useState('')
   const { results, searching, mbPending, noResults } = useAlbumSearch(query)
-  const [importingKey, setImportingKey] = useState<string | null>(null)
+  const [picked, setPicked] = useState<AlbumSearchResult | null>(null)
 
   const { data: art = [] } = useQuery({ queryKey: ['art-strip'], queryFn: fetchArtStrip })
 
@@ -78,24 +79,37 @@ export default function Welcome() {
   const topArt = art.slice(0, half)
   const bottomArt = art.slice(half)
 
-  function keyFor(r: SpotifyAlbumResult) {
-    return `${r.album_name}|||${r.artist}`
+  function keyFor(r: AlbumSearchResult) {
+    return `${r.source}:${r.source_id}`
   }
 
-  async function pick(r: SpotifyAlbumResult) {
-    if (importingKey || !user) return
-    setImportingKey(keyFor(r))
+  async function pick(r: AlbumSearchResult) {
+    if (picked || !user) return
+    setPicked(r)
     try {
-      const album = await importAlbum(r, 'listening', user.id)
+      const full = await resolveAlbum(r)
+      const album = await importAlbum(full, 'listening', user.id)
       router.replace({ pathname: '/rate/[id]', params: { id: String(album.id) } })
     } catch {
-      setImportingKey(null)
+      setPicked(null)
     }
   }
 
   function explore() {
     skipOnboarding()
     router.replace('/(tabs)')
+  }
+
+  if (picked) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <TracklistLoader
+          albumName={picked.album_name}
+          artist={picked.artist}
+          coverUrl={picked.cover_url}
+        />
+      </SafeAreaView>
+    )
   }
 
   return (
@@ -143,33 +157,30 @@ export default function Welcome() {
           ListEmptyComponent={
             noResults && !searching ? <Text style={styles.hint}>No albums found.</Text> : null
           }
-          renderItem={({ item }) => {
-            const busy = importingKey === keyFor(item)
-            return (
-              <Pressable
-                style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.inset }]}
-                onPress={() => pick(item)}
-                disabled={!!importingKey}
-              >
-                {item.cover_url ? (
-                  <Image source={{ uri: item.cover_url }} style={styles.cover} contentFit="cover" />
-                ) : (
-                  <View style={[styles.cover, styles.coverFallback]}>
-                    <Text style={styles.coverInitial}>{item.album_name[0]?.toUpperCase()}</Text>
-                  </View>
-                )}
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.albumName} numberOfLines={1}>{item.album_name}</Text>
-                  <Text style={styles.meta} numberOfLines={1}>
-                    {item.artist}{item.year ? ` · ${item.year}` : ''}
-                  </Text>
+          renderItem={({ item }) => (
+            <Pressable
+              style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.inset }]}
+              onPress={() => pick(item)}
+            >
+              {item.cover_url ? (
+                <Image source={{ uri: item.cover_url }} style={styles.cover} contentFit="cover" />
+              ) : (
+                <View style={[styles.cover, styles.coverFallback]}>
+                  <Text style={styles.coverInitial}>{item.album_name[0]?.toUpperCase()}</Text>
                 </View>
-                <View style={styles.addBtn}>
-                  {busy ? <ActivityIndicator size="small" color={colors.green} /> : <Plus size={18} color={colors.green} strokeWidth={2.5} />}
-                </View>
-              </Pressable>
-            )
-          }}
+              )}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.albumName} numberOfLines={1}>{item.album_name}</Text>
+                <Text style={styles.meta} numberOfLines={1}>
+                  {item.artist}
+                  {item.year ? ` · ${item.year}` : item.total_tracks ? ` · ${item.total_tracks} tracks` : ''}
+                </Text>
+              </View>
+              <View style={styles.addBtn}>
+                <Plus size={18} color={colors.green} strokeWidth={2.5} />
+              </View>
+            </Pressable>
+          )}
         />
 
         <Pressable onPress={explore} style={styles.explore}>
