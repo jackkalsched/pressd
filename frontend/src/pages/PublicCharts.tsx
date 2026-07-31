@@ -100,7 +100,9 @@ export default function PublicCharts() {
         /* ── Podium ── */
         .podium { display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 26px; align-items: end; margin-bottom: 46px; }
         .pod { text-align: center; }
-        .pod .cover { border-radius: 12px; object-fit: cover; box-shadow: 0 18px 40px -10px rgba(0,0,0,0.5); }
+        /* Tailwind's preflight makes images display:block, so text-align can't
+           centre them — they pin to the left edge of the column without this. */
+        .pod .cover { border-radius: 12px; object-fit: cover; margin: 0 auto; box-shadow: 0 18px 40px -10px rgba(0,0,0,0.5); }
         .pod-rank {
           font-family: 'Clash Display', 'Plus Jakarta Sans', system-ui, sans-serif;
           font-size: 34px; font-weight: 700; line-height: 1;
@@ -132,7 +134,7 @@ export default function PublicCharts() {
           font-size: 19px; color: rgba(244,242,236,0.58);
           font-variant-numeric: tabular-nums; text-align: center;
         }
-        .row .cover { border-radius: 7px; object-fit: cover; }
+        .row .cover { border-radius: 7px; object-fit: cover; justify-self: center; }
         .cover.placeholder { background: rgba(244,242,236,0.14); border-radius: 7px; }
         .row-name { font-size: 14.5px; font-weight: 600; line-height: 1.25; }
         .row-artist { font-size: 12.5px; color: rgba(244,242,236,0.62); margin-top: 2px; }
