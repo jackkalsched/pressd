@@ -328,11 +328,10 @@ def get_compare(
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
-    """Compare board: albums your community (you + friends) has rated, where at
-    least two of you rated the same album. Each entry carries every rater's
-    score + review so the client can plot them on one scale and stack them.
-    Albums exactly one friend rated (and you haven't) come back as faded
-    'teaser' entries — one more rating away from a comparison."""
+    """Compare board: albums both you and at least one friend have rated. Each
+    entry carries every rater's score + review so the client can plot them on
+    one scale and stack them. Albums only you have rated, or only friends have,
+    are excluded — there's nothing to compare."""
     user_id = user.id
     friendships = session.exec(
         select(Friendship).where(
@@ -378,49 +377,37 @@ def get_compare(
             }
 
     today = date.today()
-    full: list[dict] = []
-    teasers: list[dict] = []
+    items: list[dict] = []
     for g in groups.values():
         raters = list(g["raters"].values())
+        you = next((r for r in raters if r["is_you"]), None)
         friend_raters = [r for r in raters if not r["is_you"]]
-        base = {
+        # A comparison needs both sides: your rating and at least one friend's.
+        # An album only they have rated, or only other friends have, is nothing
+        # to compare against.
+        if you is None or not friend_raters:
+            continue
+
+        ordered = sorted(raters, key=lambda r: r["score"], reverse=True)
+        scores = [r["score"] for r in raters]
+        items.append({
             "album_name": g["name"], "artist": g["artist"], "year": g["year"], "album_art_url": g["art"],
-        }
-        if len(raters) >= 2:
-            ordered = sorted(raters, key=lambda r: r["score"], reverse=True)
-            scores = [r["score"] for r in raters]
-            you = next((r for r in raters if r["is_you"]), None)
-            last = max((r["date_rated"] for r in raters if r["date_rated"]), default=date.min)
-            full.append({
-                **base,
-                "album_id": you["album_id"] if you else ordered[0]["album_id"],
-                "friend_count": len(friend_raters),
-                "you_rated": you is not None,
-                "spread": round(max(scores) - min(scores), 1),
-                "recent": any(r["date_rated"] and (today - r["date_rated"]).days <= 7 for r in friend_raters),
-                "has_reviews": any(r["review"] for r in raters),
-                "raters": [{"name": r["name"], "score": r["score"], "review": r["review"], "is_you": r["is_you"]} for r in ordered],
-                "_last": last,
-            })
-        elif len(raters) == 1 and len(friend_raters) == 1:
-            r = friend_raters[0]
-            teasers.append({
-                **base,
-                "album_id": r["album_id"],
-                "friend_count": 1, "you_rated": False, "spread": 0.0, "recent": False,
-                "has_reviews": False, "raters": [], "highlight": "teaser",
-                "_last": r["date_rated"] or date.min,
-            })
+            "album_id": you["album_id"],
+            "friend_count": len(friend_raters),
+            "you_rated": True,
+            "spread": round(max(scores) - min(scores), 1),
+            "recent": any(r["date_rated"] and (today - r["date_rated"]).days <= 7 for r in friend_raters),
+            "has_reviews": any(r["review"] for r in raters),
+            "raters": [{"name": r["name"], "score": r["score"], "review": r["review"], "is_you": r["is_you"]} for r in ordered],
+            "_last": max((r["date_rated"] for r in raters if r["date_rated"]), default=date.min),
+        })
 
     # One album gets the "widest disagreement" call-out — the biggest real spread.
-    if full:
-        most_split = max(full, key=lambda it: it["spread"])
-        for it in full:
+    if items:
+        most_split = max(items, key=lambda it: it["spread"])
+        for it in items:
             it["highlight"] = "disagreement" if (it is most_split and it["spread"] >= 1.5) else "friends"
-    full.sort(key=lambda it: it["_last"], reverse=True)
-    teasers.sort(key=lambda it: it["_last"], reverse=True)
-
-    items = full + teasers[:5]
+    items.sort(key=lambda it: it["_last"], reverse=True)
     for it in items:
         it.pop("_last", None)
     return {"items": items[:60]}

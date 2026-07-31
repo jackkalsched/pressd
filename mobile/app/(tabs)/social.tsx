@@ -4,7 +4,7 @@
 //     the gap against your own rating (only when you've rated it too).
 //   Reviews  — a feed of friends' written reviews.
 //   Friends  — your current friends.
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
@@ -22,7 +22,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { Heart, Search, UserPlus, X } from 'lucide-react-native'
 import {
   fetchFeed,
@@ -44,6 +44,7 @@ import {
   type UserSearchResult,
 } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
+import { markSocialSeen, latestFeedTime } from '../../lib/socialSeen'
 import { songScoreColor, avatarColor } from '@pressd/shared/types'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
@@ -144,6 +145,16 @@ export default function Social() {
     queryFn: () => fetchFeed(user!.id),
     enabled: !!user,
   })
+  // Opening Social clears the tab bar's "new activity" dot. Keyed on the newest
+  // feed timestamp, so activity that lands while you're already on this screen
+  // is marked seen too rather than leaving the dot behind when you navigate off.
+  const latestActivity = latestFeedTime(feed)
+  useFocusEffect(
+    useCallback(() => {
+      if (latestActivity > 0) markSocialSeen(latestActivity)
+    }, [latestActivity]),
+  )
+
   const { data: reviews = [], isLoading: reviewsLoading } = useQuery({
     queryKey: ['reviews', 'recent'],
     queryFn: () => fetchFriendReviews('recent'),
@@ -655,23 +666,6 @@ function CompareCard({ item, onOpen }: { item: CompareItem; onOpen: (id: number)
       : `${item.friend_count} ${item.friend_count === 1 ? 'friend' : 'friends'} rated${week}`
   const subColor = item.highlight === 'disagreement' ? DOWN : colors.green
 
-  if (item.highlight === 'teaser') {
-    return (
-      <View style={[styles.compareCard, styles.teaser]}>
-        <View style={styles.compareHead}>
-          <AlbumTile name={item.album_name} url={item.album_art_url} size={72} />
-          <View style={styles.compareHeadText}>
-            <Text style={styles.compareName} numberOfLines={1}>{item.album_name}</Text>
-            <Text style={styles.compareMeta} numberOfLines={1}>
-              {item.artist}{item.year ? ` · ${item.year}` : ''}
-            </Text>
-            <Text style={styles.compareTeaserSub}>{item.friend_count} {item.friend_count === 1 ? 'friend' : 'friends'}</Text>
-          </View>
-        </View>
-      </View>
-    )
-  }
-
   return (
     <View style={styles.compareCard}>
       <View style={styles.compareHead}>
@@ -798,13 +792,11 @@ const styles = StyleSheet.create({
 
   // Compare
   compareCard: { paddingVertical: spacing.lg },
-  teaser: { opacity: 0.5 },
   compareHead: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
   compareHeadText: { flex: 1, minWidth: 0, paddingTop: 2 },
   compareName: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.ink },
   compareMeta: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, marginTop: 2 },
   compareSub: { fontFamily: fonts.bodySemiBold, fontSize: 13, marginTop: 6 },
-  compareTeaserSub: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary, marginTop: 6 },
 
   line: { height: 66, marginTop: spacing.lg },
   lineTrack: { position: 'absolute', left: 0, right: 0, top: 38, height: 5, borderRadius: 3 },

@@ -72,10 +72,17 @@ async def _listenbrainz_fresh(client: httpx.AsyncClient, days: int = 7) -> list[
 
 
 async def _deezer_resolve(client: httpx.AsyncClient, sem: asyncio.Semaphore, title: str, artist: str) -> dict | None:
-    """Match a release to a Deezer album for the importable id + cover."""
+    """Match a release to a Deezer album for the importable id + cover.
+
+    Scans a page of hits rather than only the first: Deezer frequently ranks a
+    single or a lead track above the album itself, so the record we want is
+    often the second or third result.
+    """
     try:
         async with sem:
-            resp = await client.get(f"{DEEZER_BASE}/search/album", params={"q": f"{artist} {title}", "limit": 1})
+            resp = await client.get(
+                f"{DEEZER_BASE}/search/album", params={"q": f"{artist} {title}", "limit": 10}
+            )
     except httpx.HTTPError:
         return None
     if not resp.is_success:
@@ -83,23 +90,23 @@ async def _deezer_resolve(client: httpx.AsyncClient, sem: asyncio.Semaphore, tit
     body = resp.json()
     if body.get("error"):  # Deezer returns HTTP 200 + an error body when rate-limited
         return None
-    data = body.get("data", [])
-    if not data or not data[0].get("id"):
-        return None
-    a = data[0]
-    # Guard against a wrong match: the hit has to be the same record, not just
-    # something Deezer ranked first for the query. Title and artist must both
-    # line up — a different album by the right artist is as wrong as a
-    # same-titled album by someone else.
-    dz_artist_obj = a.get("artist") or {}
-    if not same_album(title, artist, a.get("title") or "", dz_artist_obj.get("name") or ""):
-        return None
-    return {
-        "deezer_id": a["id"],
-        "artist_id": dz_artist_obj.get("id"),
-        "cover_url": _cover(a),
-        "nb_tracks": a.get("nb_tracks"),
-    }
+    for a in body.get("data", []):
+        if not a.get("id"):
+            continue
+        # Guard against a wrong match: the hit has to be the same record, not
+        # just something Deezer ranked highly for the query. Title and artist
+        # must both line up — a different album by the right artist is as wrong
+        # as a same-titled album by someone else.
+        dz_artist_obj = a.get("artist") or {}
+        if not same_album(title, artist, a.get("title") or "", dz_artist_obj.get("name") or ""):
+            continue
+        return {
+            "deezer_id": a["id"],
+            "artist_id": dz_artist_obj.get("id"),
+            "cover_url": _cover(a),
+            "nb_tracks": a.get("nb_tracks"),
+        }
+    return None
 
 
 async def _aoty_this_week(client: httpx.AsyncClient) -> list[dict]:
@@ -179,21 +186,25 @@ async def new_releases(
         # to resolve an importable album id for the top slice.
         aoty = await _aoty_this_week(client)
         if aoty:
-            top = aoty[:limit + 6]  # a few spare in case some don't resolve
+            # Generous spares: anything that won't resolve is dropped below, and
+            # AOTY lists plenty of small releases that aren't on Deezer at all.
+            top = aoty[:limit + 12]
             resolved = await asyncio.gather(
                 *[_deezer_resolve(client, sem, r["album_name"], r["artist"]) for r in top]
             )
             for r, dz in zip(top, resolved):
+                # A release we can't resolve has no tracklist and nothing to
+                # rate, so it's left out rather than shown as a dead end.
+                if not dz:
+                    continue
                 releases.append({
-                    # Without a Deezer match the album still displays; the client
-                    # falls back to searching when you choose to rate it.
-                    "deezer_id": dz["deezer_id"] if dz else None,
+                    "deezer_id": dz["deezer_id"],
                     "album_name": r["album_name"],
                     "artist": r["artist"],
-                    "cover_url": r["cover_url"] or (dz["cover_url"] if dz else None),
+                    "cover_url": r["cover_url"] or dz["cover_url"],
                     "year": None,
                     "release_date": None,
-                    "nb_tracks": dz["nb_tracks"] if dz else None,
+                    "nb_tracks": dz["nb_tracks"],
                     "rater_count": r["user_count"],
                     "user_score": r["user_score"],
                     "critic_score": r["critic_score"],
