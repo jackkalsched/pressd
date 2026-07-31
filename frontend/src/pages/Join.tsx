@@ -93,7 +93,7 @@ export default function Join() {
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-2 mb-8 justify-center">
           <Music size={22} className="text-[#2d6a4f]" />
-          <span className="text-[#111] font-semibold tracking-wide text-xl">Press'd</span>
+          <span className="text-[#111] font-wordmark text-xl">Pressd</span>
         </div>
 
         {loadingInvite ? (

@@ -329,7 +329,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:flex w-56 shrink-0 border-r border-[#e2e2e2] flex-col py-6 px-4 sticky top-0 h-screen bg-[#f9f8f6] overflow-y-auto">
         <div className="flex items-center gap-2.5 mb-8 px-2">
           <img src="/logo.png" alt="Press'd logo" className="h-8 w-auto shrink-0" />
-          <span className="font-display text-[#111] tracking-tight text-xl" style={{ fontWeight: 800 }}>Press'd</span>
+          <span className="font-wordmark text-[#111] text-xl">Pressd</span>
         </div>
 
         <nav className="flex flex-col gap-1">

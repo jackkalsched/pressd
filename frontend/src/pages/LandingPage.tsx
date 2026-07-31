@@ -153,11 +153,11 @@ export default function LandingPage() {
         .nav-logo img { height: 34px; width: auto; display: block; }
 
         .logo-text {
-          font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-          font-size: 18px;
-          font-weight: 800;
+          font-family: 'Clash Display', 'Plus Jakarta Sans', system-ui, sans-serif;
+          font-size: 19px;
+          font-weight: 700;
           color: #1c1917;
-          letter-spacing: -0.5px;
+          letter-spacing: -0.4px;
         }
 
         .btn-signin {
@@ -518,7 +518,7 @@ export default function LandingPage() {
         <nav className="landing-nav">
           <a href="/" className="nav-logo">
             <img src="/logo.png" alt="Press'd logo" />
-            <span className="logo-text">Press'd</span>
+            <span className="logo-text">Pressd</span>
           </a>
 
           <button onClick={handleSignIn} disabled={authLoading} className="btn-signin">

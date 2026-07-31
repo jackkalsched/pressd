@@ -5,6 +5,9 @@ import type { AlbumReportData, ArtistStatsSnapshot } from '../api'
 import { songScoreColor } from '../types'
 
 const FONT = "'DM Sans', system-ui, sans-serif"
+// The wordmark on the exported card. html2canvas rasterizes whatever the
+// browser has already loaded, so this relies on the @font-face in index.css.
+const WORDMARK_FONT = "'Clash Display', 'Plus Jakarta Sans', system-ui, sans-serif"
 
 function ordinal(n: number): string {
   if (n >= 11 && n <= 13) return `${n}th`
@@ -271,8 +274,8 @@ function ReportCard({ data, cardRef }: { data: AlbumReportData; cardRef: React.R
     >
       {/* Header */}
       <div style={{ background: '#1a3d2b', padding: '11px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ color: '#86efac', fontSize: 11, fontWeight: 800, letterSpacing: '0.18em', textTransform: 'uppercase', fontFamily: FONT }}>
-          Press'd
+        <span style={{ color: '#86efac', fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em', fontFamily: WORDMARK_FONT }}>
+          Pressd
         </span>
         <span style={{ color: '#6b7280', fontSize: 10, fontFamily: FONT }}>{today}</span>
       </div>

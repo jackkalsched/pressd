@@ -65,6 +65,25 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Clash Display isn't on Google Fonts, so it's self-hosted from /public/fonts
+   (Fontshare EULA permits web use — see fonts/ClashDisplay-LICENSE.txt).
+   Reserved for the Press'd wordmark; headings stay Playfair via .font-metric. */
+@font-face {
+  font-family: 'Clash Display';
+  src: url('/fonts/ClashDisplay-Bold.woff2') format('woff2'),
+       url('/fonts/ClashDisplay-Bold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* The brand wordmark itself. Not a general-purpose face. */
+.font-wordmark {
+  font-family: 'Clash Display', 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
 .font-display {
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 }

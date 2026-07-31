@@ -124,7 +124,7 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
             </View>
           )}
 
-          <Text style={styles.wordmark}>Press'd</Text>
+          <Text style={styles.wordmark}>Pressd</Text>
         </View>
       </View>
 
@@ -245,10 +245,10 @@ const styles = StyleSheet.create({
   topTrackScore: { fontFamily: fonts.bodyBold, fontSize: 15 },
 
   wordmark: {
-    fontFamily: fonts.display,
-    fontSize: 18,
+    fontFamily: fonts.wordmark,
+    fontSize: 19,
     color: colors.inkMuted,
-    letterSpacing: 1,
+    letterSpacing: -0.3,
     marginTop: spacing.xl,
   },
 

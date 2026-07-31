@@ -43,10 +43,10 @@ export default function Privacy() {
         .legal-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
         .legal-logo img { height: 26px; width: auto; }
         .legal-logo span {
-          font-family: 'Playfair Display', Georgia, serif;
-          font-weight: 900;
-          font-size: 19px;
-          letter-spacing: 0.2px;
+          font-family: 'Clash Display', 'Plus Jakarta Sans', system-ui, sans-serif;
+          font-weight: 700;
+          font-size: 20px;
+          letter-spacing: -0.4px;
         }
         .legal-back {
           font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
@@ -126,7 +126,7 @@ export default function Privacy() {
       <nav className="legal-nav">
         <Link to="/" className="legal-logo">
           <img src="/logo.png" alt="" />
-          <span>Press'd</span>
+          <span>Pressd</span>
         </Link>
         <Link to="/" className="legal-back">Back to Press'd</Link>
       </nav>
@@ -220,14 +220,35 @@ export default function Privacy() {
 
         <h2>Data retention and deletion</h2>
         <p>
-          Your data is kept until you ask us to remove it. To delete your account and everything
-          associated with it — ratings, reviews, comments, friend connections, and profile —
-          email <a href={`mailto:${CONTACT}`}>{CONTACT}</a> from the address on your account.
-          Requests are honored within 30 days. Deletion is permanent and cannot be undone.
+          Your data is kept until you delete it. You can erase your account yourself, at any time,
+          without asking us:
+        </p>
+        <div className="callout">
+          <p>
+            <strong>In the iOS app:</strong> Library tab → the gear icon (top right) →
+            <strong> Delete my account</strong>. You'll be asked to confirm, and then it happens
+            immediately.
+          </p>
+        </div>
+        <p>
+          Deleting removes your account together with your ratings, song scores, reviews, comments,
+          likes, friend connections, invitations, display name, bio, and profile photo. It takes
+          effect straight away rather than after a waiting period, and it is <strong>permanent —
+          there is no recovery and no way to get the data back</strong>.
         </p>
         <p>
-          You can edit or delete individual ratings, reviews, and comments yourself at any time
-          from within the app.
+          Album and artist reference information — track listings, artwork, and the album analyses
+          used to generate predictions — is not personal to you, is shared across everyone using
+          Press'd, and is kept.
+        </p>
+        <p>
+          If you would rather not use the in-app control, or you can no longer sign in, email{' '}
+          <a href={`mailto:${CONTACT}`}>{CONTACT}</a> from the address on your account and we will
+          delete it for you within 30 days.
+        </p>
+        <p>
+          You can also edit or delete individual ratings, reviews, and comments at any time without
+          removing your account.
         </p>
 
         <h2>Security</h2>
