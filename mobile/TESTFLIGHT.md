@@ -1,4 +1,4 @@
-# Shipping Press'd to TestFlight (Xcode path)
+# Shipping Pressd to TestFlight (Xcode path)
 
 The app is built with Expo but uses a **bare native iOS project** (`mobile/ios/`),
 so archiving and uploading happens in Xcode rather than EAS. This is the checklist
@@ -43,7 +43,7 @@ Required before a build can go to **external** testers (internal testers on your
 team are exempt). pressdmusic.com has no privacy page yet — needs a `/privacy` route
 in `frontend/src/App.tsx` and a public URL to paste into App Store Connect.
 
-The questionnaire needs honest answers about what Press'd collects. Currently that is:
+The questionnaire needs honest answers about what Pressd collects. Currently that is:
 name and email (via Sign in with Apple), user-generated content (ratings, reviews,
 comments), and the social graph. No analytics SDK, no ads, no tracking across apps.
 
@@ -58,7 +58,7 @@ Once enrollment clears:
 1. Xcode → Settings → Accounts → add the Apple ID, confirm the paid team appears.
 2. App Store Connect → Apps → **+** → New App. Platform iOS, bundle ID
    `com.pressd.app` (it appears in the dropdown once Xcode has registered it),
-   SKU anything (e.g. `pressd-ios`), name "Press'd".
+   SKU anything (e.g. `pressd-ios`), name "Pressd".
    - If the name is taken, the App Store name can differ from the on-device name.
 
 ### Configure signing

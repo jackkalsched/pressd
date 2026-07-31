@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Press'd",
+    "name": "Pressd",
     "slug": "pressd",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,7 +10,13 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.pressd.app",
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
     },
     "android": {
       "package": "com.pressd.app",

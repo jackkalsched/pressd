@@ -1,7 +1,7 @@
 """
 Repair: link songs from the Excel Song Ratings sheet to rated albums that have 0 songs.
 
-Run from the Press'd directory:
+Run from the Pressd directory:
     python -m backend.repair_missing_songs
 """
 

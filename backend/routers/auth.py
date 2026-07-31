@@ -42,7 +42,7 @@ def _link_provider(
     if owner and owner.id != caller.id:
         raise HTTPException(
             status_code=409,
-            detail="That account is already linked to a different Press'd user",
+            detail="That account is already linked to a different Pressd user",
         )
 
     setattr(caller, field, sub)
@@ -96,7 +96,7 @@ def sign_in_with_google(
     google_email: str | None = payload.get("email")
     google_name: str | None = payload.get("name")
     # Auto-matching on an unverified address would let anyone who can set that
-    # address on a throwaway Google account take over the Press'd account.
+    # address on a throwaway Google account take over the Pressd account.
     google_email_verified: bool = bool(payload.get("email_verified"))
 
     # 1. Linking to the signed-in account, at the user's explicit request

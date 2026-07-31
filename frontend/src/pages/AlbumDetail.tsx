@@ -13,7 +13,7 @@ import ShareCardModal from '../components/ShareCard'
 function shareRatingViaIMessage(albumName: string, artist: string, score: number | null, viewingName?: string) {
   const who = viewingName ? `${viewingName} rated` : 'I rated'
   const scoreStr = score != null ? `${score}/10` : 'unscored'
-  const msg = `${who} "${albumName}" by ${artist} — ${scoreStr} on Press'd 🎵`
+  const msg = `${who} "${albumName}" by ${artist} — ${scoreStr} on Pressd 🎵`
   window.location.href = `sms:?body=${encodeURIComponent(msg)}`
 }
 

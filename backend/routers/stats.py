@@ -673,7 +673,7 @@ def analysis(user_id: int = Depends(viewable_user_id), session: Session = Depend
         messages=[{
             "role": "user",
             "content": (
-                "You are analyzing a music fan's listening data from the Press'd app "
+                "You are analyzing a music fan's listening data from the Pressd app "
                 "(a personal music rating tracker where 1–10 scores are given to songs and albums).\n\n"
                 f"Here is their data:\n\n{context}\n\n"
                 "Find exactly 3 interesting, specific, and surprising patterns or facts. "

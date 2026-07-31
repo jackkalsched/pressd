@@ -1,5 +1,5 @@
 // For You — the home feed as one fluid editorial column: resume, a daily "rate
-// this next" pick, new releases (with add actions), Press'd Trending, and "what
+// this next" pick, new releases (with add actions), Pressd Trending, and "what
 // are pressers talking about" (userbase-wide top reviews for the day). No boxed
 // cards — sections are separated by whitespace and hairline rules.
 import { useMemo, useRef, useState } from 'react'
@@ -151,7 +151,7 @@ export default function ForYou() {
   function openCommunityAlbum(id: number) {
     router.push({ pathname: '/album/[id]', params: { id: String(id), community: '1' } })
   }
-  // A new release may not be in Press'd at all, so it's looked up by name and
+  // A new release may not be in Pressd at all, so it's looked up by name and
   // carries its Deezer id for the tracklist and for importing on Rate now.
   function openRelease(r: NewRelease) {
     router.push({
@@ -293,11 +293,11 @@ export default function ForYou() {
           </View>
         )}
 
-        {/* Press'd Trending — bubbly cells that pop in as they scroll into view */}
+        {/* Pressd Trending — bubbly cells that pop in as they scroll into view */}
         {trending.length > 0 && (
           <View style={styles.block} onLayout={(e) => setTrendBlockY(e.nativeEvent.layout.y)}>
             <SectionHead
-              label="PRESS'D TRENDING"
+              label="PRESSD TRENDING"
               meta={trendMode === 'week' ? 'This week' : 'All time'}
               onMetaPress={() => setTrendPickerOpen(true)}
             />
@@ -348,11 +348,11 @@ export default function ForYou() {
         )}
       </Animated.ScrollView>
 
-      {/* Press'd Trending range dropdown */}
+      {/* Pressd Trending range dropdown */}
       <Modal visible={trendPickerOpen} transparent animationType="slide" onRequestClose={() => setTrendPickerOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setTrendPickerOpen(false)}>
           <Pressable style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Press'd Trending</Text>
+            <Text style={styles.sheetTitle}>Pressd Trending</Text>
             {([['week', 'This week'], ['top', 'All time']] as const).map(([key, label]) => (
               <Pressable
                 key={key}
@@ -370,7 +370,7 @@ export default function ForYou() {
   )
 }
 
-/** A fresh release. Tapping opens the album page, where the Press'd average,
+/** A fresh release. Tapping opens the album page, where the Pressd average,
  *  your prediction, and the rate / queue actions all live. */
 function NewReleaseCard({ release, onOpen }: { release: NewRelease; onOpen: () => void }) {
   return (

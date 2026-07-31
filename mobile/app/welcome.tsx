@@ -121,7 +121,7 @@ export default function Welcome() {
       </View>
 
       <View style={styles.body}>
-        <Text style={styles.title}>Welcome to Press'd</Text>
+        <Text style={styles.title}>Welcome to Pressd</Text>
         <Text style={styles.sub}>Rate your first album to start building your taste.</Text>
 
         <View style={styles.searchBar}>

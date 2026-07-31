@@ -3,9 +3,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db
-from .routers import albums, songs, stats, search, aoty, util, audio, users, auth, social, comments, discover
+from .routers import albums, songs, stats, search, aoty, util, audio, users, auth, social, comments, discover, public
 
-app = FastAPI(title="Press'd API")
+app = FastAPI(title="Pressd API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,6 +36,7 @@ app.include_router(auth.router)
 app.include_router(social.router)
 app.include_router(comments.router)
 app.include_router(discover.router)
+app.include_router(public.router)  # unauthenticated: marketing-site charts
 
 
 @app.get("/health")

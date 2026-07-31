@@ -412,7 +412,7 @@ export default function RatingReport({ data, onClose }: { data: AlbumReportData;
     try {
       const blob = await captureCard()
       if (!blob) return
-      const fileName = `${data.album.album_name} - Press'd.png`
+      const fileName = `${data.album.album_name} - Pressd.png`
       const file = new File([blob], fileName, { type: 'image/png' })
       if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: fileName })
@@ -436,7 +436,7 @@ export default function RatingReport({ data, onClose }: { data: AlbumReportData;
       if (!blob) return
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url; a.download = `${data.album.album_name} - Press'd.png`; a.click()
+      a.href = url; a.download = `${data.album.album_name} - Pressd.png`; a.click()
       URL.revokeObjectURL(url)
     } finally {
       setCapturing(false)
@@ -469,7 +469,7 @@ export default function RatingReport({ data, onClose }: { data: AlbumReportData;
                 const score = data.album.score != null ? `${data.album.score.toFixed(1)}/10` : 'unscored'
                 const bang = Math.round(data.bang_pct * 100)
                 const skip = Math.round(data.skip_pct * 100)
-                const msg = `I just rated "${data.album.album_name}" by ${data.album.artist} — ${score} on Press'd 🎵 (Bang: ${bang}% | Skip: ${skip}%)`
+                const msg = `I just rated "${data.album.album_name}" by ${data.album.artist} — ${score} on Pressd 🎵 (Bang: ${bang}% | Skip: ${skip}%)`
                 window.location.href = `sms:?body=${encodeURIComponent(msg)}`
               }}
               style={{ ...btnBase, background: '#f5f5f5', color: '#374151', border: '1px solid #e5e7eb' }}

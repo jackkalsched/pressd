@@ -128,7 +128,7 @@ export default function Privacy() {
           <img src="/logo.png" alt="" />
           <span>Pressd</span>
         </Link>
-        <Link to="/" className="legal-back">Back to Press'd</Link>
+        <Link to="/" className="legal-back">Back to Pressd</Link>
       </nav>
 
       <main className="legal-body">
@@ -136,7 +136,7 @@ export default function Privacy() {
         <p className="updated">Last updated {UPDATED}</p>
 
         <p className="lede">
-          Press'd is a small, independently run app for rating albums and tracking your taste.
+          Pressd is a small, independently run app for rating albums and tracking your taste.
           This policy describes exactly what it stores, who else can see it, and how to get rid
           of it. There is no advertising, no analytics or tracking SDK, and nothing about you is
           sold or shared for marketing.
@@ -146,7 +146,7 @@ export default function Privacy() {
 
         <h3>Account information</h3>
         <p>
-          You sign in with Google or Apple. Press'd never sees or stores your password. From the
+          You sign in with Google or Apple. Pressd never sees or stores your password. From the
           provider we receive and store:
         </p>
         <ul>
@@ -169,20 +169,20 @@ export default function Privacy() {
           <li>No advertising or tracking identifiers, and no cross-app or cross-site tracking.</li>
           <li>No analytics SDK, behavioral profiling, or location data.</li>
           <li>No contacts, photos, microphone, or camera access beyond a profile photo you deliberately choose.</li>
-          <li>No payment information — Press'd is free and does not process payments.</li>
+          <li>No payment information — Pressd is free and does not process payments.</li>
         </ul>
 
         <h2>How your information is used</h2>
         <p>
           Your information is used to operate the app and nothing else: to sign you in, to store
           and display your library and ratings, to show your activity to people you are connected
-          with, and to generate the predicted scores and statistics that are the point of Press'd.
+          with, and to generate the predicted scores and statistics that are the point of Pressd.
           We do not sell your personal information or share it with advertisers.
         </p>
 
         <h2>What other people can see</h2>
         <p>
-          Press'd is partly social, so some information is visible to other users by design:
+          Pressd is partly social, so some information is visible to other users by design:
         </p>
         <ul>
           <li>Your <strong>display name, profile photo, and bio</strong> are visible to other users, including in search.</li>
@@ -191,14 +191,14 @@ export default function Privacy() {
         </ul>
         <div className="callout">
           <p>
-            Press'd does not currently offer a private-account mode. Treat anything you rate or
+            Pressd does not currently offer a private-account mode. Treat anything you rate or
             write as visible to other people using the app.
           </p>
         </div>
 
         <h2>Service providers</h2>
         <p>
-          Press'd relies on a small number of third parties to run. They process data on our
+          Pressd relies on a small number of third parties to run. They process data on our
           behalf and are not permitted to use it for their own purposes.
         </p>
         <ul>
@@ -239,7 +239,7 @@ export default function Privacy() {
         <p>
           Album and artist reference information — track listings, artwork, and the album analyses
           used to generate predictions — is not personal to you, is shared across everyone using
-          Press'd, and is kept.
+          Pressd, and is kept.
         </p>
         <p>
           If you would rather not use the in-app control, or you can no longer sign in, email{' '}
@@ -255,13 +255,13 @@ export default function Privacy() {
         <p>
           Traffic is encrypted in transit over HTTPS, and sessions use signed tokens stored in the
           iOS Keychain on your device. No method of storage or transmission is perfectly secure,
-          and Press'd is a small independent project rather than a company with a dedicated
+          and Pressd is a small independent project rather than a company with a dedicated
           security team — please keep that in mind when deciding what to write in a review.
         </p>
 
         <h2>Children</h2>
         <p>
-          Press'd is not directed at children under 13, and we do not knowingly collect their
+          Pressd is not directed at children under 13, and we do not knowingly collect their
           information. If you believe a child has created an account, contact us and we will
           remove it.
         </p>

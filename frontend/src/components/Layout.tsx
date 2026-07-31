@@ -79,7 +79,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
 
   function handleiMessage() {
     if (!link) return
-    const msg = `Join me on Press'd, a music rating app! Sign up here: ${link}`
+    const msg = `Join me on Pressd, a music rating app! Sign up here: ${link}`
     window.location.href = `sms:?body=${encodeURIComponent(msg)}`
   }
 
@@ -328,7 +328,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Sidebar — desktop only */}
       <aside className="hidden md:flex w-56 shrink-0 border-r border-[#e2e2e2] flex-col py-6 px-4 sticky top-0 h-screen bg-[#f9f8f6] overflow-y-auto">
         <div className="flex items-center gap-2.5 mb-8 px-2">
-          <img src="/logo.png" alt="Press'd logo" className="h-8 w-auto shrink-0" />
+          <img src="/logo.png" alt="Pressd logo" className="h-8 w-auto shrink-0" />
           <span className="font-wordmark text-[#111] text-xl">Pressd</span>
         </div>
 

@@ -1,6 +1,6 @@
 """
 Backfill album_art_url for all albums in the DB using Spotify search.
-Run from the Press'd directory:
+Run from the Pressd directory:
     python3 -m backend.backfill_art
 """
 

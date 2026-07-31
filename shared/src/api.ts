@@ -524,6 +524,24 @@ export async function fetchCharts(params?: {
   return res.json()
 }
 
+/** Same board as `fetchCharts`, but served to logged-out visitors from the
+ *  public router. Aggregates only — no "your copy", no per-user fields. */
+export async function fetchPublicCharts(params?: {
+  period?: 'week' | 'all'
+  genre?: string
+  decade?: number
+  year?: number
+}): Promise<ChartsResponse> {
+  const qs = new URLSearchParams()
+  if (params?.period) qs.set('period', params.period)
+  if (params?.genre) qs.set('genre', params.genre)
+  if (params?.decade) qs.set('decade', String(params.decade))
+  if (params?.year) qs.set('year', String(params.year))
+  const res = await apiFetch(`${BASE()}/public/charts?${qs}`)
+  if (!res.ok) throw new Error('Failed to load charts')
+  return res.json()
+}
+
 // Resolve a Deezer release to the full album+tracks shape importAlbum consumes
 export async function resolveDeezerAlbum(deezerId: number): Promise<SpotifyAlbumResult> {
   const res = await apiFetch(`${BASE()}/discover/deezer/${deezerId}`)

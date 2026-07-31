@@ -67,7 +67,7 @@ body {
 
 /* Clash Display isn't on Google Fonts, so it's self-hosted from /public/fonts
    (Fontshare EULA permits web use — see fonts/ClashDisplay-LICENSE.txt).
-   Reserved for the Press'd wordmark; headings stay Playfair via .font-metric. */
+   Reserved for the Pressd wordmark; headings stay Playfair via .font-metric. */
 @font-face {
   font-family: 'Clash Display';
   src: url('/fonts/ClashDisplay-Bold.woff2') format('woff2'),

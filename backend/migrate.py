@@ -1,7 +1,7 @@
 """
 One-time migration: Jack Kalsched Album Rankings.xlsx → pressd.db
 
-Run from the Press'd directory:
+Run from the Pressd directory:
     python -m backend.migrate
 """
 
@@ -13,7 +13,7 @@ from pathlib import Path
 import pandas as pd
 from sqlmodel import Session, select
 
-# Allow running as a script from the Press'd root
+# Allow running as a script from the Pressd root
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from backend.database import engine, init_db

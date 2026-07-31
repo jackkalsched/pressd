@@ -18,6 +18,8 @@ import ArtistPage from './pages/ArtistPage'
 import Join from './pages/Join'
 import LandingPage from './pages/LandingPage'
 import Privacy from './pages/Privacy'
+import PublicCharts from './pages/PublicCharts'
+import HowItWorks from './pages/HowItWorks'
 
 function PublicHome() {
   const { activeUser } = useUser()
@@ -78,6 +80,10 @@ export default function App() {
               reviewers can open while signed out. Must stay above the catch-all,
               which sends everything else through ProtectedRoutes. */}
           <Route path="/privacy" element={<Privacy />} />
+          {/* Reachable from the landing page without an account. Must stay
+              above the catch-all, or ProtectedRoutes bounces visitors home. */}
+          <Route path="/charts" element={<PublicCharts />} />
+          <Route path="/how-it-works" element={<HowItWorks />} />
           <Route path="/*" element={<ProtectedRoutes />} />
         </Routes>
       </BrowserRouter>

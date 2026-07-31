@@ -126,14 +126,14 @@ export default function Onboarding() {
       <div className="flex-1 flex flex-col items-center px-4 pt-10 md:pt-14 pb-10">
         <div className="w-full max-w-md">
           <p className="text-[#2d6a4f] text-[11px] font-bold uppercase tracking-[0.18em] text-center">
-            Welcome to Press'd
+            Welcome to Pressd
           </p>
           <h1 className="font-display text-[#1c1917] text-3xl md:text-4xl font-bold text-center leading-tight mt-2">
             Start with an album you know by heart.
           </h1>
           <p className="text-[#78716c] text-sm text-center mt-3 leading-relaxed">
             Your first rating starts your library — and starts teaching
-            Press'd your taste. Search any album, then score it track by track.
+            Pressd your taste. Search any album, then score it track by track.
           </p>
 
           {/* Search */}

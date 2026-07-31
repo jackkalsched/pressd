@@ -45,12 +45,12 @@ def _send_invite_email(to_email: str, inviter_name: str, token: str):
         return
     link = f"{APP_URL}/join?token={token}"
     body = (
-        f"{inviter_name} has invited you to join Press'd, a personal music rating app.\n\n"
+        f"{inviter_name} has invited you to join Pressd, a personal music rating app.\n\n"
         f"Click the link below to create your account:\n{link}\n\n"
         f"This invite is single-use."
     )
     msg = MIMEText(body)
-    msg["Subject"] = f"{inviter_name} invited you to Press'd"
+    msg["Subject"] = f"{inviter_name} invited you to Pressd"
     msg["From"] = SMTP_USER
     msg["To"] = to_email
     try:

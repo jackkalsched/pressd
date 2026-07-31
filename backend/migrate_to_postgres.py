@@ -3,7 +3,7 @@ Migrate data from local pressd.db (SQLite) → Supabase PostgreSQL.
 
 Usage:
     1. Fill in DATABASE_URL in .env with your Supabase connection string.
-    2. cd Press'd
+    2. cd Pressd
     3. python backend/migrate_to_postgres.py
 
 Safe to re-run: checks row counts before inserting and skips tables that

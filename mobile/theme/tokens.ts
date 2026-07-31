@@ -1,4 +1,4 @@
-// Press'd design tokens — mirrors the website's palette (frontend/src/index.css
+// Pressd design tokens — mirrors the website's palette (frontend/src/index.css
 // + Tailwind classes) so the two surfaces read as one brand.
 
 export const colors = {
@@ -28,7 +28,7 @@ export const fonts = {
   display: 'PlayfairDisplay_700Bold',
   displayRegular: 'PlayfairDisplay_400Regular',
   displayBlack: 'PlayfairDisplay_900Black',
-  // The Press'd wordmark itself — Clash Display, per the brand mark. Not a
+  // The Pressd wordmark itself — Clash Display, per the brand mark. Not a
   // general-purpose face: use display/body for everything else.
   wordmark: 'ClashDisplay_700Bold',
   wordmarkSemiBold: 'ClashDisplay_600SemiBold',
