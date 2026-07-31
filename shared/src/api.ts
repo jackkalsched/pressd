@@ -549,6 +549,51 @@ export async function resolveDeezerAlbum(deezerId: number): Promise<SpotifyAlbum
   return res.json()
 }
 
+/**
+ * Loose title/artist match — the releases feed and the search sources spell
+ * things differently (punctuation, "EP"/"Deluxe" suffixes, feature credits).
+ *
+ * Containment only counts when the shorter side is long enough to be
+ * distinctive: short strings are substrings of half the catalogue, which is how
+ * you end up importing an unrelated record that happens to share a word.
+ */
+function looseMatch(a: string, b: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '')
+  const [x, y] = [norm(a), norm(b)]
+  if (!x || !y) return false
+  if (x === y) return true
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x]
+  return short.length >= 5 && long.includes(short)
+}
+
+/**
+ * Resolve a release that carries no Deezer id to a full album+tracks shape, by
+ * searching for it. The new-releases feed is ranked from AOTY, whose most-rated
+ * records regularly fail to match Deezer — without this they'd open a page with
+ * no tracklist and nothing to rate. Deezer first (the catalogue the feed matches
+ * against), then iTunes as a backstop.
+ */
+export async function resolveReleaseByName(
+  albumName: string,
+  artist: string,
+): Promise<SpotifyAlbumResult> {
+  const q = `${albumName} ${artist}`
+  for (const search of [searchDeezer, searchItunes]) {
+    let hits: AlbumSearchResult[]
+    try {
+      hits = await search(q)
+    } catch {
+      continue // one source being down shouldn't stop the other from trying
+    }
+    // Both title and artist must match. Falling back to "any album by this
+    // artist" silently imports the wrong record, which is worse than telling
+    // the user we couldn't find it.
+    const hit = hits.find((r) => looseMatch(r.artist, artist) && looseMatch(r.album_name, albumName))
+    if (hit) return resolveAlbum(hit)
+  }
+  throw new Error('No match for this release')
+}
+
 export interface AlbumReportSong {
   title: string
   track_number: number | null

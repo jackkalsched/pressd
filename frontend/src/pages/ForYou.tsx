@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Loader2 } from 'lucide-react'
-import { fetchAlbums, fetchFeed, fetchFriendReviews, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveAlbum, searchDeezer, searchItunes, importAlbum } from '../api'
-import type { AlbumSearchResult, FriendReview, NewRelease, SpotifyAlbumResult } from '../api'
+import { fetchAlbums, fetchFeed, fetchFriendReviews, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum } from '../api'
+import type { FriendReview, NewRelease } from '../api'
 import { songScoreColor } from '../types'
 import { useUser } from '../context/UserContext'
 
@@ -513,32 +513,6 @@ export default function ForYou() {
 
 // ── new release card ──────────────────────────────────────────────────────────
 
-/** Loose title/artist match — the releases feed and the search sources spell
- *  things differently (punctuation, "EP"/"Deluxe" suffixes, feature credits). */
-function looseMatch(a: string, b: string): boolean {
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '')
-  const [x, y] = [norm(a), norm(b)]
-  return x === y || x.includes(y) || y.includes(x)
-}
-
-/** Resolve a release that carried no Deezer id, by searching for it. Deezer
- *  first (same catalogue the feed matches against), then iTunes as a backstop. */
-async function resolveByName(release: NewRelease): Promise<SpotifyAlbumResult> {
-  const q = `${release.albumName} ${release.artist}`
-  for (const search of [searchDeezer, searchItunes]) {
-    let hits: AlbumSearchResult[]
-    try {
-      hits = await search(q)
-    } catch {
-      continue // one source being down shouldn't stop the other from trying
-    }
-    const hit =
-      hits.find((r) => looseMatch(r.artist, release.artist) && looseMatch(r.album_name, release.albumName)) ??
-      hits.find((r) => looseMatch(r.artist, release.artist))
-    if (hit) return resolveAlbum(hit)
-  }
-  throw new Error('No match for this release')
-}
 
 function NewReleaseCard({
   release, userId, onRate, onAdded,
@@ -563,7 +537,7 @@ function NewReleaseCard({
       // back to searching by name + artist so the card still imports.
       const full = release.deezerId != null
         ? await resolveDeezerAlbum(release.deezerId)
-        : await resolveByName(release)
+        : await resolveReleaseByName(release.albumName, release.artist)
       const album = await importAlbum(full, kind === 'listen' ? 'to_listen' : 'listening', userId)
       if (kind === 'rate') {
         onRate(album.id)

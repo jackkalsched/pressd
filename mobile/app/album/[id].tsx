@@ -26,6 +26,7 @@ import {
   fetchCommunityAlbum,
   fetchCommunityAlbumByName,
   resolveDeezerAlbum,
+  resolveReleaseByName,
   importAlbum,
   copyAlbumToLibrary,
   saveReview,
@@ -38,6 +39,7 @@ import { useAuth } from '../../lib/auth'
 import CommentThread from '../../components/CommentThread'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
 import BangSkip from '../../components/BangSkip'
+import ScoreDial from '../../components/ScoreDial'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const WINDOW_H = Dimensions.get('window').height
@@ -51,7 +53,7 @@ export default function AlbumDetail() {
     deezer?: string
   }>()
   const albumId = Number(id)
-  // New releases arrive by name+artist (they may not exist in Press'd yet);
+  // New releases arrive by name+artist (they may not exist in Pressd yet);
   // everything else arrives with a copy's id.
   const byName = !!name && !!artist
   const isCommunity = community === '1' || byName
@@ -103,13 +105,17 @@ export default function AlbumDetail() {
     enabled: isCommunity,
   })
 
-  // A release nobody has added yet has no Press'd tracklist; pull it from
-  // Deezer so the page still shows the record, and so Rate now can import it.
-  const needsDeezer = !!deezerId && communityData != null && communityData.tracks.length === 0
-  const { data: deezerAlbum } = useQuery({
-    queryKey: ['deezer-album', deezerId],
-    queryFn: () => resolveDeezerAlbum(deezerId!),
-    enabled: needsDeezer,
+  // A release nobody has added yet has no Pressd tracklist; resolve one so the
+  // page still shows the record, and so Rate now can import it. Releases that
+  // never matched Deezer (common for AOTY's most-rated new records) carry no id
+  // at all — those are resolved by searching name + artist instead.
+  const needsResolve =
+    byName && communityData != null && communityData.tracks.length === 0
+  const { data: resolvedAlbum } = useQuery({
+    queryKey: ['resolved-release', deezerId ?? `${name}::${artist}`],
+    queryFn: () =>
+      deezerId != null ? resolveDeezerAlbum(deezerId) : resolveReleaseByName(name!, artist!),
+    enabled: needsResolve,
     staleTime: 60 * 60_000,
   })
 
@@ -148,13 +154,13 @@ export default function AlbumDetail() {
     if (communityError || !communityData) {
       return <LoadFailed onBack={() => router.back()} />
     }
-    // Fill in from Deezer when Press'd has no copy of this release yet.
-    const shown: CommunityAlbumData = deezerAlbum
+    // Fill in from the resolved release when Pressd has no copy of it yet.
+    const shown: CommunityAlbumData = resolvedAlbum
       ? {
           ...communityData,
-          year: communityData.year ?? deezerAlbum.year,
-          album_art_url: communityData.album_art_url ?? deezerAlbum.cover_url,
-          tracks: deezerAlbum.tracks.map((t) => ({
+          year: communityData.year ?? resolvedAlbum.year,
+          album_art_url: communityData.album_art_url ?? resolvedAlbum.cover_url,
+          tracks: resolvedAlbum.tracks.map((t) => ({
             title: t.title,
             track_number: t.track_number,
             avg_score: null,
@@ -206,8 +212,8 @@ export default function AlbumDetail() {
     router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent(name) } })
 
   /** Get this album into your library at `status`, returning your copy's id.
-   *  Three routes in: you already have it; Press'd has someone else's copy to
-   *  clone; or it's new to Press'd entirely and comes from Deezer. */
+   *  Three routes in: you already have it; Pressd has someone else's copy to
+   *  clone; or it's new to Pressd entirely and comes from Deezer. */
   async function ensureInLibrary(data: CommunityAlbumData, status: 'to_listen' | 'listening'): Promise<number> {
     if (data.your_album_id != null) return data.your_album_id
     if (data.album_id != null) {
@@ -215,8 +221,16 @@ export default function AlbumDetail() {
       queryClient.invalidateQueries({ queryKey: ['albums'] })
       return copy.id
     }
-    if (deezerId == null) throw new Error('Nothing to import')
-    const full = await resolveDeezerAlbum(deezerId)
+    // Reuse the tracklist the page already resolved; only re-fetch if the user
+    // hit Rate now before that query settled.
+    const full =
+      resolvedAlbum ??
+      (deezerId != null
+        ? await resolveDeezerAlbum(deezerId)
+        : byName
+          ? await resolveReleaseByName(name!, artist!)
+          : null)
+    if (!full) throw new Error('Nothing to import')
     const imported = await importAlbum(full, status, user?.id ?? 1)
     queryClient.invalidateQueries({ queryKey: ['albums'] })
     return imported.id
@@ -318,9 +332,19 @@ export default function AlbumDetail() {
         </View>
 
         <View style={styles.scoreBlock}>
-          <Text style={[styles.bigScore, { color: showScore != null ? colors.green : colors.inkMuted }]}>
-            {showScore != null ? showScore.toFixed(2) : '—'}
-          </Text>
+          {/* A prediction reads as a dial, a settled score as the numeral —
+              so the two are never mistaken for each other. */}
+          {scoreIsPredicted && showScore != null ? (
+            // The numeral's line-height supplies its own breathing room; the
+            // dial needs the gap added back before the label.
+            <View style={{ marginBottom: 6 }}>
+              <ScoreDial value={showScore} size={104} />
+            </View>
+          ) : (
+            <Text style={[styles.bigScore, { color: showScore != null ? colors.green : colors.inkMuted }]}>
+              {showScore != null ? showScore.toFixed(2) : '—'}
+            </Text>
+          )}
           <Text style={styles.scoreLabel}>
             {isRated ? 'FINAL SCORE' : scoreIsPredicted ? 'PREDICTED' : 'NOT YET RATED'}
           </Text>
@@ -440,15 +464,15 @@ function CommunityAlbum({
     }
     const verdict =
       Math.abs(diff) < 0.005
-        ? `You landed exactly on the Press'd average.`
-        : `You rated this ${Math.abs(diff).toFixed(2)} ${diff > 0 ? 'above' : 'below'} the Press'd average` +
+        ? `You landed exactly on the Pressd average.`
+        : `You rated this ${Math.abs(diff).toFixed(2)} ${diff > 0 ? 'above' : 'below'} the Pressd average` +
           (widest ? ` — biggest gap on “${widest.title}”.` : '.')
 
     const left = youLeft
       ? { label: 'YOU', score: yourScore, color: colors.inkSecondary, head: colors.inkMuted }
-      : { label: "PRESS'D USERS", score: avgScore, color: colors.green, head: colors.green }
+      : { label: "PRESSD USERS", score: avgScore, color: colors.green, head: colors.green }
     const right = youLeft
-      ? { label: "PRESS'D USERS", score: avgScore, color: colors.green, head: colors.green }
+      ? { label: "PRESSD USERS", score: avgScore, color: colors.green, head: colors.green }
       : { label: 'YOU', score: yourScore, color: colors.inkSecondary, head: colors.inkMuted }
 
     return (
@@ -560,12 +584,23 @@ function CommunityAlbum({
             {subs.length > 0 && <Text style={styles.subGenres}>{subs.join(' · ')}</Text>}
           </View>
 
-          <View style={styles.scoreBlock}>
-            <Text style={[styles.bigScore, { color: data.avg_score != null ? colors.green : colors.inkMuted }]}>
-              {data.avg_score != null ? data.avg_score.toFixed(2) : '—'}
-            </Text>
-            <Text style={styles.scoreLabel}>PRESS'D AVERAGE</Text>
-            <Text style={styles.raterLine}>{raters}</Text>
+          {/* Pressd average and — when the model has a read on it and you
+              haven't rated it — your predicted score, side by side. Paired in
+              one row so the dial doesn't interrupt the vertical flow. */}
+          <View style={styles.scoreRow}>
+            <View style={styles.scoreCol}>
+              <Text style={[styles.bigScore, { color: data.avg_score != null ? colors.green : colors.inkMuted }]}>
+                {data.avg_score != null ? data.avg_score.toFixed(2) : '—'}
+              </Text>
+              <Text style={styles.scoreLabel}>PRESSD AVERAGE</Text>
+              <Text style={styles.raterLine}>{raters}</Text>
+            </View>
+            {notRated && data.predicted_score != null && (
+              <View style={styles.dialCol}>
+                <ScoreDial value={data.predicted_score} size={78} />
+                <Text style={styles.dialLabel}>PREDICTED</Text>
+              </View>
+            )}
           </View>
 
           {factors.some((f) => f.value != null) && (
@@ -576,17 +611,6 @@ function CommunityAlbum({
                   <Text style={styles.factorLabel}>{f.label}</Text>
                 </View>
               ))}
-            </View>
-          )}
-
-          {/* Your own prediction, when the model has one and you haven't rated
-              it yet — the reason to reach for Rate now. */}
-          {notRated && data.predicted_score != null && (
-            <View style={styles.predictRow}>
-              <Text style={styles.predictLabel}>PREDICTED FOR YOU</Text>
-              <Text style={[styles.predictValue, { color: songScoreColor(data.predicted_score) }]}>
-                {data.predicted_score.toFixed(2)}
-              </Text>
             </View>
           )}
 
@@ -1132,18 +1156,19 @@ const styles = StyleSheet.create({
   },
   compareBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
   raterLine: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 4 },
-  predictRow: {
+
+  // Average and prediction sit on one line; the column centres itself when
+  // there's no prediction to show.
+  scoreRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.greenSoft,
-    borderRadius: radii.md,
-    paddingVertical: 10,
+    gap: spacing.xxl,
     marginTop: spacing.xl,
   },
-  predictLabel: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.2, color: colors.inkTertiary },
-  predictValue: { fontFamily: fonts.display, fontSize: 20 },
+  scoreCol: { alignItems: 'center' },
+  dialCol: { alignItems: 'center', gap: 6 },
+  dialLabel: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.2, color: colors.inkTertiary },
   cmpRaters: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 4 },
 
   failTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.ink, textAlign: 'center' },
