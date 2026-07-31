@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Loader2 } from 'lucide-react'
-import { fetchAlbums, fetchFeed, fetchFriendReviews, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, importAlbum } from '../api'
-import type { FriendReview, NewRelease } from '../api'
+import { fetchAlbums, fetchFeed, fetchFriendReviews, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveAlbum, searchDeezer, searchItunes, importAlbum } from '../api'
+import type { AlbumSearchResult, FriendReview, NewRelease, SpotifyAlbumResult } from '../api'
 import { songScoreColor } from '../types'
 import { useUser } from '../context/UserContext'
 
@@ -140,10 +140,12 @@ export default function ForYou() {
     queryFn: () => fetchFriendReviews('recent'),
     enabled: userId > 0,
   })
+  // Same call the mobile New & Popular rail makes. No client staleTime: the
+  // endpoint is already cached server-side, and holding a stale hour here made
+  // web show an older list than mobile for the same account.
   const { data: newReleases = [] } = useQuery({
     queryKey: ['new-releases'],
     queryFn: () => fetchNewReleases(12),
-    staleTime: 60 * 60 * 1000,
     enabled: userId > 0,
   })
 
@@ -163,7 +165,7 @@ export default function ForYou() {
     return { album: a, done, total, pct: total > 0 ? Math.round((done / total) * 100) : 0 }
   }, [listening])
 
-  // Trending on Press'd this week: popular albums across the whole userbase
+  // Trending on Pressd this week: popular albums across the whole userbase
   const { data: trending = [] } = useQuery({
     queryKey: ['trending', 'week'],
     queryFn: () => fetchTrending('week', 8),
@@ -285,7 +287,7 @@ export default function ForYou() {
           {newReleases.length > 0 && (
             <section className="mb-9">
               <div className="flex items-baseline justify-between mb-4">
-                <h2 className={SECTION_LABEL}>Trending Releases</h2>
+                <h2 className={SECTION_LABEL}>New &amp; Popular</h2>
               </div>
               <div className="flex gap-4 overflow-x-auto pb-3.5 pt-1" style={{ scrollSnapType: 'x mandatory' }}>
                 {newReleases.map((r) => (
@@ -511,6 +513,33 @@ export default function ForYou() {
 
 // ── new release card ──────────────────────────────────────────────────────────
 
+/** Loose title/artist match — the releases feed and the search sources spell
+ *  things differently (punctuation, "EP"/"Deluxe" suffixes, feature credits). */
+function looseMatch(a: string, b: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '')
+  const [x, y] = [norm(a), norm(b)]
+  return x === y || x.includes(y) || y.includes(x)
+}
+
+/** Resolve a release that carried no Deezer id, by searching for it. Deezer
+ *  first (same catalogue the feed matches against), then iTunes as a backstop. */
+async function resolveByName(release: NewRelease): Promise<SpotifyAlbumResult> {
+  const q = `${release.albumName} ${release.artist}`
+  for (const search of [searchDeezer, searchItunes]) {
+    let hits: AlbumSearchResult[]
+    try {
+      hits = await search(q)
+    } catch {
+      continue // one source being down shouldn't stop the other from trying
+    }
+    const hit =
+      hits.find((r) => looseMatch(r.artist, release.artist) && looseMatch(r.album_name, release.albumName)) ??
+      hits.find((r) => looseMatch(r.artist, release.artist))
+    if (hit) return resolveAlbum(hit)
+  }
+  throw new Error('No match for this release')
+}
+
 function NewReleaseCard({
   release, userId, onRate, onAdded,
 }: {
@@ -529,7 +558,12 @@ function NewReleaseCard({
     setPending(kind)
     setError(false)
     try {
-      const full = await resolveDeezerAlbum(release.deezerId)
+      // The releases feed carries a Deezer id only when the AOTY listing matched
+      // one; without it (often the case for the newest, most-rated records) fall
+      // back to searching by name + artist so the card still imports.
+      const full = release.deezerId != null
+        ? await resolveDeezerAlbum(release.deezerId)
+        : await resolveByName(release)
       const album = await importAlbum(full, kind === 'listen' ? 'to_listen' : 'listening', userId)
       if (kind === 'rate') {
         onRate(album.id)

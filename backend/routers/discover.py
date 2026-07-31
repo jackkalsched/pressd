@@ -19,6 +19,7 @@ from ..database import get_session
 from ..deps import current_user
 from ..models import Album, PressUser
 from ..trackkeys import same_album
+from ..aoty_releases import AOTY_THIS_WEEK, AOTY_UA, parse_releases
 
 router = APIRouter(prefix="/discover", tags=["discover"])
 
@@ -101,6 +102,22 @@ async def _deezer_resolve(client: httpx.AsyncClient, sem: asyncio.Semaphore, tit
     }
 
 
+async def _aoty_this_week(client: httpx.AsyncClient) -> list[dict]:
+    """This week's releases from albumoftheyear.org, most-rated first. One page
+    fetch; returns [] on any failure so the caller falls back."""
+    try:
+        resp = await client.get(AOTY_THIS_WEEK, headers={"User-Agent": AOTY_UA})
+    except httpx.HTTPError:
+        return []
+    if not resp.is_success:
+        return []
+    try:
+        return parse_releases(resp.text)
+    except Exception as e:  # markup drifted — degrade instead of 500ing
+        print(f"[new-releases] AOTY parse failed: {e}")
+        return []
+
+
 async def _artist_fans(client: httpx.AsyncClient, sem: asyncio.Semaphore, artist_id: int | None) -> int:
     """Total Deezer fan count of the releasing artist — the popularity signal we
     rank by, so a fresh album by a well-known artist floats to the top."""
@@ -153,39 +170,67 @@ async def new_releases(
         return _cache["releases"][:limit]
 
     releases: list[dict] = []
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
         sem = asyncio.Semaphore(10)  # keep Deezer calls under its rate limit
-        # Last 7 days of fresh albums; resolve a pool to Deezer, then rank by the
-        # releasing artist's total fan count (ListenBrainz has no popularity
-        # signal). Sample evenly across the whole window so earlier-in-the-week
-        # releases are represented, and keep the pool small enough that the
-        # search + artist-fan calls stay under Deezer's ~50-per-5s quota.
-        POOL = 24
-        allcands = await _listenbrainz_fresh(client, days=7)
-        if len(allcands) > POOL:
-            step = len(allcands) / POOL
-            candidates = [allcands[int(i * step)] for i in range(POOL)]
-        else:
-            candidates = allcands
-        resolved = await asyncio.gather(*[_deezer_resolve(client, sem, c["title"], c["artist"]) for c in candidates])
-        matched = [(c, dz) for c, dz in zip(candidates, resolved) if dz]
-        fans = await asyncio.gather(*[_artist_fans(client, sem, dz.get("artist_id")) for _, dz in matched])
-        for (c, dz), f in zip(matched, fans):
-            releases.append({
-                "deezer_id": dz["deezer_id"],
-                "album_name": c["title"],
-                "artist": c["artist"],
-                "cover_url": dz["cover_url"] or c["caa"],
-                "year": _year(c["release_date"]),
-                "release_date": c["release_date"],
-                "nb_tracks": dz["nb_tracks"],
-                "_fans": f,
-            })
-        releases.sort(key=lambda r: r["_fans"], reverse=True)
-        for r in releases:
-            r.pop("_fans", None)
 
-        if not releases:  # ListenBrainz down or nothing resolved → Deezer's own feed
+        # Primary: AOTY's this-week listing, already ordered by how many people
+        # have rated each release — a per-record popularity signal neither
+        # ListenBrainz nor Deezer provides. Deezer is still consulted, but only
+        # to resolve an importable album id for the top slice.
+        aoty = await _aoty_this_week(client)
+        if aoty:
+            top = aoty[:limit + 6]  # a few spare in case some don't resolve
+            resolved = await asyncio.gather(
+                *[_deezer_resolve(client, sem, r["album_name"], r["artist"]) for r in top]
+            )
+            for r, dz in zip(top, resolved):
+                releases.append({
+                    # Without a Deezer match the album still displays; the client
+                    # falls back to searching when you choose to rate it.
+                    "deezer_id": dz["deezer_id"] if dz else None,
+                    "album_name": r["album_name"],
+                    "artist": r["artist"],
+                    "cover_url": r["cover_url"] or (dz["cover_url"] if dz else None),
+                    "year": None,
+                    "release_date": None,
+                    "nb_tracks": dz["nb_tracks"] if dz else None,
+                    "rater_count": r["user_count"],
+                    "user_score": r["user_score"],
+                    "critic_score": r["critic_score"],
+                })
+
+        if not releases:
+            # Fallback: ListenBrainz's fresh feed, ranked by the releasing
+            # artist's total Deezer fan count — the best available proxy when
+            # there's no per-release signal. Sample evenly across the week so
+            # earlier releases are represented, and keep the pool under
+            # Deezer's ~50-per-5s quota.
+            POOL = 24
+            allcands = await _listenbrainz_fresh(client, days=7)
+            if len(allcands) > POOL:
+                step = len(allcands) / POOL
+                candidates = [allcands[int(i * step)] for i in range(POOL)]
+            else:
+                candidates = allcands
+            resolved = await asyncio.gather(*[_deezer_resolve(client, sem, c["title"], c["artist"]) for c in candidates])
+            matched = [(c, dz) for c, dz in zip(candidates, resolved) if dz]
+            fans = await asyncio.gather(*[_artist_fans(client, sem, dz.get("artist_id")) for _, dz in matched])
+            for (c, dz), f in zip(matched, fans):
+                releases.append({
+                    "deezer_id": dz["deezer_id"],
+                    "album_name": c["title"],
+                    "artist": c["artist"],
+                    "cover_url": dz["cover_url"] or c["caa"],
+                    "year": _year(c["release_date"]),
+                    "release_date": c["release_date"],
+                    "nb_tracks": dz["nb_tracks"],
+                    "_fans": f,
+                })
+            releases.sort(key=lambda r: r["_fans"], reverse=True)
+            for r in releases:
+                r.pop("_fans", None)
+
+        if not releases:  # both feeds down → Deezer's own editorial list
             releases = await _deezer_editorial(client)
             if not releases:
                 raise HTTPException(status_code=502, detail="Could not load new releases")
