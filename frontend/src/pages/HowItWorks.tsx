@@ -6,53 +6,54 @@
 // weights, EP handling, the prediction model), this page has to change too —
 // see backend/scoring.py and song_score_model.py.
 import { Link } from 'react-router-dom'
-import { ListMusic, Sliders, Sparkles, Users, BarChart3, Smartphone } from 'lucide-react'
+import { ListMusic, Sliders, Sparkles, Users, BarChart3 } from 'lucide-react'
 import PublicShell from '../components/PublicShell'
+import AppleLogo from '../components/AppleLogo'
 
 const STEPS = [
   {
     icon: ListMusic,
     title: 'Add an album',
-    body: 'Search any record — Pressd looks across iTunes, Spotify, Deezer and MusicBrainz at once, so obscure pressings and brand-new releases both turn up. Pick one and the full tracklist comes with it.',
+    body: 'Search for any record across time. You will find niche favorites and new releases. Pick one and the full tracklist comes with it.',
   },
   {
     icon: Sliders,
     title: 'Score it track by track',
-    body: 'Rate every song from 1 to 10. That is the part most rating sites skip, and it is what makes the rest work: a record with two classics and eight filler tracks stops looking like a 7.',
+    body: 'Rate every song from 1 to 10. Skip the interludes and intros, but the more you score, the better Pressd gets at predicting your taste.',
   },
   {
     icon: Sparkles,
     title: 'Add the things a track average misses',
-    body: 'Then score the album on theme, replay value, production and distinctness. Those combine with your song scores into one number. Short releases skip the extras — an EP is judged on its songs.',
+    body: 'Then score the album on theme, replay value, production and distinctness. Those combine with your song scores into one number. You can adjust how much each factor matters to you, and Pressd will learn from your choices!',
   },
   {
     icon: BarChart3,
     title: 'Watch your taste take shape',
-    body: 'Once you have rated enough, Pressd builds a model of how you score and starts predicting what you will make of records you have not heard yet. Your stats show your era, your genres, and which artists you rate far above everyone else.',
+    body: 'Once you have rated enough, Pressd builds a model of how you score and starts predicting what you will make of records you have not heard yet. Check out deeper, advanced stats in your Profile too!',
   },
   {
     icon: Users,
     title: 'Compare with friends',
-    body: 'Follow people, see what they are rating, and compare scores album by album. Reviews and comments sit alongside the numbers so a 6.2 can come with a reason.',
+    body: 'Follow people, see what they are rating, and compare scores album by album.',
   },
 ]
 
 const FAQS = [
   {
     q: 'Do I have to rate every song?',
-    a: 'Yes — the song scores are what the album score is built from. Most albums take a few minutes once you have listened.',
+    a: 'Yes!!! Pressd is meant to encourage users to rate the WHOLE record, not just their favorites. The song scores are what the album score is built from.',
   },
   {
     q: 'What makes a good score?',
-    a: 'Scores are relative to you, not to a global average. Pressd shows where each album sits against your own distribution, so a 7 from someone generous and a 7 from someone harsh are read differently.',
+    a: 'Scores are relative to you as well as a global average. Pressd shows where each album sits against your own distribution, so a 7 from someone generous and a 7 from someone harsh are read differently.',
   },
   {
     q: 'Can other people see my ratings?',
-    a: 'Yes. Ratings, reviews and comments appear on your profile and in the social feed. Your email address is never shown. There is no private mode yet.',
+    a: 'Yes! Find friends and see their ratings too. Ratings, reviews and comments appear on your profile and in the social feed. Do not fret though, your information is safe :)',
   },
   {
     q: 'Is it free?',
-    a: 'Yes, and there are no ads, no analytics trackers, and nothing about you is sold.',
+    a: 'Yes! You will not find ads on Pressd, either.',
   },
 ]
 
@@ -179,7 +180,7 @@ export default function HowItWorks() {
               Rate something you know well — the model needs a few before it can predict anything.
             </p>
             <p className="ios-line">
-              <Smartphone size={15} />
+              <AppleLogo size={14} />
               Pressd is coming to iPhone — iOS beta starting soon.
             </p>
           </div>

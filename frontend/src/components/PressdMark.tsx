@@ -49,12 +49,8 @@ export default function PressdMark({
           transform-origin: ${DISC_CX}px ${DISC_CY}px;
           animation: pressd-spin 3.4s linear infinite;
         }
-        .pressd-sweep-inner {
-          transform-origin: ${DISC_CX}px ${DISC_CY}px;
-          animation: pressd-spin 5.6s linear infinite reverse;
-        }
         @media (prefers-reduced-motion: reduce) {
-          .pressd-sweep, .pressd-sweep-inner { animation: none; }
+          .pressd-sweep { animation: none; }
         }
       `}</style>
 
@@ -73,34 +69,22 @@ export default function PressdMark({
         <circle cx={DISC_CX} cy={DISC_CY} r="50" fill={c.disc} />
 
         {spinning && (
-          <>
-            {/* Highlight arcs. strokeDasharray leaves most of the ring empty so
-                only a short glint travels around, which is what sells the spin. */}
-            <circle
-              className="pressd-sweep"
-              cx={DISC_CX}
-              cy={DISC_CY}
-              r="40"
-              fill="none"
-              stroke={c.sweep}
-              strokeOpacity="0.5"
-              strokeWidth="5"
-              strokeLinecap="round"
-              strokeDasharray="30 221"
-            />
-            <circle
-              className="pressd-sweep-inner"
-              cx={DISC_CX}
-              cy={DISC_CY}
-              r="27"
-              fill="none"
-              stroke={c.sweep}
-              strokeOpacity="0.26"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeDasharray="16 154"
-            />
-          </>
+          /* One highlight only. strokeDasharray leaves most of the ring empty so
+             a short glint travels around, which is what sells the spin. A second
+             arc turning the other way read as two separate objects, not one
+             record — a disc's highlights all move together. */
+          <circle
+            className="pressd-sweep"
+            cx={DISC_CX}
+            cy={DISC_CY}
+            r="40"
+            fill="none"
+            stroke={c.sweep}
+            strokeOpacity="0.5"
+            strokeWidth="5"
+            strokeLinecap="round"
+            strokeDasharray="30 221"
+          />
         )}
 
         {/* Label and spindle sit above the arcs so the glint passes behind them */}

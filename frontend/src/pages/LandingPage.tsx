@@ -7,11 +7,19 @@
 // comes from PressdMark's highlight sweep rather than a rotating record.
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Music, Loader2, Star, Apple } from 'lucide-react'
+import { Loader2, Star } from 'lucide-react'
 import { useGoogleLogin } from '@react-oauth/google'
 import { signInWithGoogle } from '../api'
 import { useUser } from '../context/UserContext'
 import PressdMark from '../components/PressdMark'
+import AppleLogo from '../components/AppleLogo'
+
+// Real artwork, from the same iTunes artwork CDN the app already uses for
+// album covers. 200px renders crisply at the card's 44px on a 2x display.
+const ART = {
+  tpab: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/b5/a6/91/b5a69171-5232-3d5b-9c15-8963802f83dd/15UMGIM15814.rgb.jpg/200x200bb.jpg',
+  rumours: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/4d/13/ba/4d13bac3-d3d5-7581-2c74-034219eadf2b/081227970949.jpg/200x200bb.jpg',
+}
 
 function Stars({ filled }: { filled: number }) {
   return (
@@ -191,21 +199,6 @@ export default function LandingPage() {
 
         .hero-content { max-width: 540px; position: relative; z-index: 1; }
 
-        .hero-eyebrow {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 12px;
-          font-weight: 700;
-          color: #CFE3D6;
-          background: rgba(244,242,236,0.12);
-          padding: 5px 12px;
-          border-radius: 100px;
-          margin-bottom: 26px;
-          letter-spacing: 0.06em;
-          text-transform: uppercase;
-        }
-
         .hero-headline {
           font-family: 'Clash Display', 'Plus Jakarta Sans', system-ui, sans-serif;
           font-size: clamp(46px, 6vw, 84px);
@@ -329,18 +322,12 @@ export default function LandingPage() {
           50% { transform: translateY(-9px); }
         }
 
+        /* real cover art, so no gradient stand-ins */
         .sleeve {
           width: 44px; height: 44px; border-radius: 10px;
-          flex-shrink: 0; position: relative; overflow: hidden;
+          flex-shrink: 0; object-fit: cover; display: block;
+          background: rgba(28,25,23,0.08);
         }
-        .sleeve::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.22) 0 12%, transparent 13%);
-        }
-        .sleeve.amber { background: linear-gradient(135deg, #d97706, #7c2d12); }
-        .sleeve.slate { background: linear-gradient(135deg, #64748b, #1e293b); }
 
         .card-title { font-size: 13px; font-weight: 700; color: #1c1917; line-height: 1.2; white-space: nowrap; }
         .card-artist { font-size: 11.5px; color: #78716c; margin-top: 1px; white-space: nowrap; }
@@ -433,10 +420,8 @@ export default function LandingPage() {
             <span className="logo-text">Pressd</span>
           </Link>
 
-          {/* Charts is deliberately not offered here — the landing page points
-              visitors at How it Works and sign-up, nothing else. The page still
-              exists at /charts for anyone who has the link. */}
           <div className="nav-links">
+            <Link to="/charts" className="nav-link">Charts</Link>
             <Link to="/how-it-works" className="nav-link">How it Works</Link>
           </div>
 
@@ -449,19 +434,14 @@ export default function LandingPage() {
         {/* ── Hero ── */}
         <section className="hero">
           <div className="hero-content">
-            <div className="hero-eyebrow rise d1">
-              <Music size={11} />
-              Music · Rated
-            </div>
+            <h1 className="hero-headline rise d1">Track your taste.</h1>
 
-            <h1 className="hero-headline rise d2">Track your taste.</h1>
-
-            <p className="hero-sub rise d3">
+            <p className="hero-sub rise d2">
               Rate albums track by track, compare scores with friends,
               and find your next favorite record.
             </p>
 
-            <div className="rise d4">
+            <div className="rise d3">
               <button onClick={handleSignIn} disabled={authLoading} className="btn-primary">
                 <span className="google-chip">
                   {authLoading ? <Loader2 size={14} className="animate-spin" /> : <GoogleLogo />}
@@ -469,7 +449,7 @@ export default function LandingPage() {
                 {authLoading ? 'Signing in…' : 'Get started with Google'}
               </button>
               <p className="ios-note">
-                <Apple size={14} />
+                <AppleLogo size={13} />
                 Pressd is coming to iPhone — iOS beta starting soon.
               </p>
               {authError && <p className="auth-error">{authError}</p>}
@@ -481,30 +461,30 @@ export default function LandingPage() {
             <PressdMark className="mark" spinning tone="onGreen" />
 
             <div className="mini-card a" aria-hidden>
-              <div className="sleeve amber" />
+              <img className="sleeve" src={ART.tpab} alt="" loading="lazy" />
               <div>
                 <p className="card-title">To Pimp a Butterfly</p>
                 <p className="card-artist">Kendrick Lamar</p>
                 <Stars filled={5} />
               </div>
-              <span className="score-badge">9.8</span>
+              <span className="score-badge">9.80</span>
             </div>
 
             <div className="mini-card b" aria-hidden>
-              <div className="sleeve slate" />
+              <img className="sleeve" src={ART.rumours} alt="" loading="lazy" />
               <div>
                 <p className="card-title">Rumours</p>
                 <p className="card-artist">Fleetwood Mac</p>
                 <Stars filled={4} />
               </div>
-              <span className="score-badge">9.2</span>
+              <span className="score-badge">9.20</span>
             </div>
 
             <div className="friend-chip" aria-hidden>
               <span className="avatar">R</span>
               <span>
                 <strong>Roxy</strong> just rated <strong>Blonde</strong>{' '}
-                <span className="chip-score">9.5</span>
+                <span className="chip-score">9.50</span>
               </span>
             </div>
           </div>
