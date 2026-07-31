@@ -3,7 +3,15 @@
 // sign-in / sign-out flows to screens.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import * as SecureStore from 'expo-secure-store'
-import { signInWithGoogle, signInWithApple, fetchUsers, updateUser, type UserInfo } from '@pressd/shared/api'
+import {
+  signInWithGoogle,
+  signInWithApple,
+  linkGoogle,
+  linkApple,
+  fetchUsers,
+  updateUser,
+  type UserInfo,
+} from '@pressd/shared/api'
 import { getToken, setToken, loadStoredToken, setUnauthorizedHandler } from './api'
 
 const USER_KEY = 'pressd_user'
@@ -16,6 +24,10 @@ interface AuthContextValue {
   signInWithGoogleToken: (accessToken: string) => Promise<void>
   signInWithAppleToken: (identityToken: string, fullName?: string) => Promise<void>
   signInWithDevToken: (jwt: string) => Promise<void>
+  /** Attach a second sign-in method to the account already signed in, so the
+   *  user can come back through either one. */
+  linkGoogleToken: (accessToken: string) => Promise<void>
+  linkAppleToken: (identityToken: string, fullName?: string) => Promise<void>
   /** Persist profile edits (e.g. bio) and reflect them in context. */
   updateProfile: (data: { name?: string; avatarUrl?: string; bio?: string }) => Promise<void>
   signOut: () => void
@@ -84,6 +96,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     persistUser(u)
   }, [persistUser])
 
+  // Linking reuses the sign-in endpoints with link:true, so the response is a
+  // fresh token for the same account — persist it exactly like a sign-in.
+  const linkGoogleToken = useCallback(async (accessToken: string) => {
+    persistUser(await linkGoogle(accessToken))
+  }, [persistUser])
+
+  const linkAppleToken = useCallback(async (identityToken: string, fullName?: string) => {
+    persistUser(await linkApple(identityToken, fullName))
+  }, [persistUser])
+
   // Dev-only shortcut: paste a backend-minted JWT (EXPO_PUBLIC_DEV_TOKEN) to
   // test in Expo Go before the Google iOS client exists.
   const signInWithDevToken = useCallback(async (jwt: string) => {
@@ -108,8 +130,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const value = useMemo(
-    () => ({ user, ready, signInWithGoogleToken, signInWithAppleToken, signInWithDevToken, updateProfile, signOut }),
-    [user, ready, signInWithGoogleToken, signInWithAppleToken, signInWithDevToken, updateProfile, signOut],
+    () => ({
+      user,
+      ready,
+      signInWithGoogleToken,
+      signInWithAppleToken,
+      signInWithDevToken,
+      linkGoogleToken,
+      linkAppleToken,
+      updateProfile,
+      signOut,
+    }),
+    [
+      user,
+      ready,
+      signInWithGoogleToken,
+      signInWithAppleToken,
+      signInWithDevToken,
+      linkGoogleToken,
+      linkAppleToken,
+      updateProfile,
+      signOut,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

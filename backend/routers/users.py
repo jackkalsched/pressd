@@ -10,7 +10,17 @@ from sqlmodel import Session, select
 
 from ..database import get_session
 from ..deps import current_user, optional_user, authorize_view, auth_response
-from ..models import PressUser, Invite, Friendship
+from ..models import (
+    PressUser,
+    Invite,
+    Friendship,
+    Album,
+    Song,
+    SongAudioFeatures,
+    Like,
+    Comment,
+    WorkerRun,
+)
 from ..scoring import (
     get_user_points,
     recompute_user_scores,
@@ -272,6 +282,73 @@ def update_user(
     session.commit()
     session.refresh(user)
     return {"id": user.id, "name": user.name, "avatar_url": user.avatar_url, "bio": user.bio}
+
+
+@router.delete("/me")
+def delete_own_account(
+    current: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Permanently erase the caller's account and everything attached to it.
+
+    The App Store requires that an account created in-app can also be deleted
+    from in-app, so this is reachable from Settings. There is no soft-delete and
+    no recovery window — the confirmation lives in the client.
+
+    Rows are removed children-first because the foreign keys are not declared
+    ON DELETE CASCADE; deleting the user first would raise an integrity error.
+    Reference data shared across users (Track, TrackAudio, AlbumCorpus,
+    ArtistMeta) is deliberately left alone — it is not personal data, and other
+    users' predictions depend on it.
+    """
+    uid = current.id
+
+    album_ids = [a.id for a in session.exec(select(Album).where(Album.user_id == uid)).all()]
+    song_ids: list[int] = []
+    if album_ids:
+        song_ids = [
+            s.id for s in session.exec(select(Song).where(Song.album_id.in_(album_ids))).all()
+        ]
+
+    if song_ids:
+        for row in session.exec(
+            select(SongAudioFeatures).where(SongAudioFeatures.song_id.in_(song_ids))
+        ).all():
+            session.delete(row)
+
+    # Comments and likes are deleted both ways: the ones this user wrote, and
+    # everyone else's on the albums about to disappear (they would dangle).
+    for row in session.exec(select(Comment).where(Comment.user_id == uid)).all():
+        session.delete(row)
+    for row in session.exec(select(Like).where(Like.user_id == uid)).all():
+        session.delete(row)
+    if album_ids:
+        for row in session.exec(select(Comment).where(Comment.album_id.in_(album_ids))).all():
+            session.delete(row)
+        for row in session.exec(select(Like).where(Like.album_id.in_(album_ids))).all():
+            session.delete(row)
+        for row in session.exec(select(Song).where(Song.album_id.in_(album_ids))).all():
+            session.delete(row)
+    for row in session.exec(select(Album).where(Album.user_id == uid)).all():
+        session.delete(row)
+
+    for row in session.exec(
+        select(Friendship).where(
+            (Friendship.user_id_a == uid)
+            | (Friendship.user_id_b == uid)
+            | (Friendship.requested_by == uid)
+        )
+    ).all():
+        session.delete(row)
+
+    for row in session.exec(select(Invite).where(Invite.invited_by == uid)).all():
+        session.delete(row)
+    for row in session.exec(select(WorkerRun).where(WorkerRun.user_id == uid)).all():
+        session.delete(row)
+
+    session.delete(current)
+    session.commit()
+    return {"deleted": True}
 
 
 @router.get("/{user_id}/factor-weights")

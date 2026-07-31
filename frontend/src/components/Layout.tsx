@@ -5,7 +5,7 @@ import { useGoogleLogin } from '@react-oauth/google'
 import { Library, BarChart2, List, Mail, X, Loader2, MessageCircle, Pencil, Users, Plus, Sparkles } from 'lucide-react'
 import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
-import { fetchFriends, getInviteLink, updateUser, signInWithGoogle, removeFriend } from '../api'
+import { fetchFriends, getInviteLink, updateUser, linkGoogle, removeFriend } from '../api'
 import type { UserInfo } from '../api'
 import AddAlbumModal from './AddAlbumModal'
 import { FactorWeightsSection } from './FactorWeightsEditor'
@@ -162,7 +162,9 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
     onSuccess: async (tokenResponse) => {
       setError(null)
       try {
-        const user = await signInWithGoogle(tokenResponse.access_token, activeUser?.id)
+        // Links to whoever the stored session token belongs to; the server no
+        // longer accepts a user id from the client here.
+        const user = await linkGoogle(tokenResponse.access_token)
         setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to link Google account')

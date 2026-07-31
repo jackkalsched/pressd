@@ -101,8 +101,8 @@ export default function SignIn() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.hero}>
         <Image source={require('../assets/splash-icon.png')} style={styles.logo} contentFit="contain" />
-        <Text style={styles.wordmark}>Press'd</Text>
-        <Text style={styles.tagline}>Rate albums. Track your taste.</Text>
+        <Text style={styles.wordmark}>Pressd</Text>
+        <Text style={styles.tagline}>Track Your Taste</Text>
       </View>
 
       <View style={styles.actions}>
@@ -130,7 +130,10 @@ export default function SignIn() {
               </Pressable>
             ) : null}
 
-            {!GOOGLE_IOS_CLIENT_ID && !DEV_TOKEN ? (
+            {/* Release builds ship Apple as the only sign-in path, so this
+                developer hint must stay out of a tester's way — it is only
+                useful when there is genuinely no button on screen. */}
+            {!appleAvailable && !GOOGLE_IOS_CLIENT_ID && !DEV_TOKEN ? (
               <Text style={styles.hint}>
                 Set EXPO_PUBLIC_DEV_TOKEN or EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID in mobile/.env to sign in.
               </Text>
@@ -148,7 +151,9 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg, justifyContent: 'space-between' },
   hero: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   logo: { width: 96, height: 96 },
-  wordmark: { fontFamily: fonts.displayBlack, fontSize: 44, color: colors.ink, letterSpacing: 0.5 },
+  // Clash Display is wider and tighter-fitting than Playfair, so it wants
+  // negative tracking to match the mark's set width rather than Playfair's 0.5.
+  wordmark: { fontFamily: fonts.wordmark, fontSize: 46, color: colors.ink, letterSpacing: -1 },
   tagline: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.inkTertiary },
   actions: { padding: spacing.xl, gap: spacing.md, alignItems: 'stretch' },
   googleBtn: {

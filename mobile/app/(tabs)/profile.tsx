@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { Check, ChevronDown, LogOut, Search, X } from 'lucide-react-native'
+import { Check, ChevronDown, Search, Settings, X } from 'lucide-react-native'
 import {
   fetchAlbums,
   fetchSummary,
@@ -31,6 +31,7 @@ import { songScoreColor, type Album, type AlbumStatus } from '@pressd/shared/typ
 import { useAuth } from '../../lib/auth'
 import StatsView from '../../components/StatsView'
 import ProfileBanner from '../../components/ProfileBanner'
+import SettingsSheet from '../../components/SettingsSheet'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const GAP = 10
@@ -115,7 +116,7 @@ function topTags(tags: (string | null)[], n: number): string[] {
 }
 
 export default function Profile() {
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [tab, setTab] = useState<Tab>('library')
@@ -125,6 +126,7 @@ export default function Profile() {
   const [rankDir, setRankDir] = useState<'asc' | 'desc'>('desc')
   const [rankSearch, setRankSearch] = useState('')
   const [metricOpen, setMetricOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   function switchRankMode(m: RankMode) {
     setRankMode(m)
@@ -294,8 +296,10 @@ export default function Profile() {
               subgenres={topSubgenres}
               topInset={insets.top}
               action={
-                <Pressable onPress={signOut} hitSlop={12} accessibilityLabel="Sign out">
-                  <LogOut size={17} color="rgba(255,255,255,0.75)" />
+                // Sign out moved inside Settings, alongside the sign-in methods
+                // it belongs with.
+                <Pressable onPress={() => setSettingsOpen(true)} hitSlop={12} accessibilityLabel="Settings">
+                  <Settings size={18} color="rgba(255,255,255,0.75)" />
                 </Pressable>
               }
             />
@@ -465,6 +469,8 @@ export default function Profile() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <SettingsSheet visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </View>
   )
 }

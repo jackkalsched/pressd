@@ -28,6 +28,11 @@ export const fonts = {
   display: 'PlayfairDisplay_700Bold',
   displayRegular: 'PlayfairDisplay_400Regular',
   displayBlack: 'PlayfairDisplay_900Black',
+  // The Press'd wordmark itself — Clash Display, per the brand mark. Not a
+  // general-purpose face: use display/body for everything else.
+  wordmark: 'ClashDisplay_700Bold',
+  wordmarkSemiBold: 'ClashDisplay_600SemiBold',
+
   body: 'PlusJakartaSans_400Regular',
   bodyMedium: 'PlusJakartaSans_500Medium',
   bodySemiBold: 'PlusJakartaSans_600SemiBold',

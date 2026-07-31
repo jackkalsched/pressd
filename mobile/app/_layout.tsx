@@ -38,6 +38,10 @@ function RootNavigator() {
     PlusJakartaSans_500Medium,
     PlusJakartaSans_600SemiBold,
     PlusJakartaSans_700Bold,
+    // Clash Display isn't on Google Fonts, so it ships as a local file
+    // (Fontshare EULA permits app embedding — see assets/fonts/ClashDisplay-LICENSE.txt).
+    ClashDisplay_700Bold: require('../assets/fonts/ClashDisplay-Bold.ttf'),
+    ClashDisplay_600SemiBold: require('../assets/fonts/ClashDisplay-Semibold.ttf'),
   })
 
   useEffect(() => {

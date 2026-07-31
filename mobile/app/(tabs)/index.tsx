@@ -157,10 +157,12 @@ export default function ForYou() {
     router.push({
       pathname: '/album/[id]',
       params: {
-        id: String(r.deezerId),
+        // The id segment is unused when name+artist are present, but the route
+        // requires one; the Deezer id only travels when the match succeeded.
+        id: String(r.deezerId ?? 0),
         name: r.albumName,
         artist: r.artist,
-        deezer: String(r.deezerId),
+        ...(r.deezerId != null ? { deezer: String(r.deezerId) } : {}),
       },
     })
   }
@@ -278,8 +280,14 @@ export default function ForYou() {
           <View style={styles.block}>
             <SectionHead label="NEW & POPULAR" />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rail}>
+              {/* deezerId is null for releases that never matched Deezer, and
+                  more than one of those is normal — keying on it alone collides. */}
               {newReleases.map((r) => (
-                <NewReleaseCard key={r.deezerId} release={r} onOpen={() => openRelease(r)} />
+                <NewReleaseCard
+                  key={r.deezerId ?? `${r.artist}::${r.albumName}`}
+                  release={r}
+                  onOpen={() => openRelease(r)}
+                />
               ))}
             </ScrollView>
           </View>

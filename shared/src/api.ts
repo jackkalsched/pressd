@@ -430,13 +430,19 @@ export async function fetchAlbumColor(album: string, artist: string): Promise<Al
 // ── Discover: new releases (Deezer) ───────────────────────────────────────────
 
 export interface NewRelease {
-  deezerId: number
+  /** null when the release couldn't be matched to Deezer; it still displays,
+   *  and the tracklist is resolved by search when you choose to rate it. */
+  deezerId: number | null
   albumName: string
   artist: string
   coverUrl: string | null
   year: number | null
   releaseDate: string | null
   nbTracks: number | null
+  /** Popularity from the AOTY listing — how many people rated it this week. */
+  raterCount: number | null
+  userScore: number | null
+  criticScore: number | null
 }
 
 export async function fetchNewReleases(limit = 12): Promise<NewRelease[]> {
@@ -444,13 +450,16 @@ export async function fetchNewReleases(limit = 12): Promise<NewRelease[]> {
   if (!res.ok) throw new Error('Failed to load new releases')
   const data = await res.json()
   return (data as Record<string, unknown>[]).map((r) => ({
-    deezerId: r.deezer_id as number,
+    deezerId: (r.deezer_id as number | null) ?? null,
     albumName: r.album_name as string,
     artist: r.artist as string,
     coverUrl: (r.cover_url as string | null) ?? null,
     year: (r.year as number | null) ?? null,
     releaseDate: (r.release_date as string | null) ?? null,
     nbTracks: (r.nb_tracks as number | null) ?? null,
+    raterCount: (r.rater_count as number | null) ?? null,
+    userScore: (r.user_score as number | null) ?? null,
+    criticScore: (r.critic_score as number | null) ?? null,
   }))
 }
 
@@ -816,14 +825,15 @@ export async function refreshAotyArtist(artist: string): Promise<void> {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-export async function signInWithGoogle(
-  accessToken: string,
-  linkUserId?: number,
-): Promise<UserInfo> {
-  const res = await apiFetch(`${BASE()}/auth/google`, {
+/** Shape both providers return, and the point where the new session token is
+ *  swapped in. `link: true` attaches the identity to the account the current
+ *  token belongs to instead of signing in — the server takes the target user
+ *  from that token, never from the request body. */
+async function postAuth(path: string, body: Record<string, unknown>): Promise<UserInfo> {
+  const res = await apiFetch(`${BASE()}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ access_token: accessToken, link_user_id: linkUserId }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -835,24 +845,44 @@ export async function signInWithGoogle(
   return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined, bio: u.bio ?? undefined }
 }
 
-export async function signInWithApple(
-  identityToken: string,
-  fullName?: string,
-  linkUserId?: number,
-): Promise<UserInfo> {
-  const res = await apiFetch(`${BASE()}/auth/apple`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identity_token: identityToken, full_name: fullName, link_user_id: linkUserId }),
-  })
+export async function signInWithGoogle(accessToken: string): Promise<UserInfo> {
+  return postAuth('/auth/google', { access_token: accessToken })
+}
+
+export async function signInWithApple(identityToken: string, fullName?: string): Promise<UserInfo> {
+  return postAuth('/auth/apple', { identity_token: identityToken, full_name: fullName })
+}
+
+/** Attach Google to the signed-in account. Requires a valid session token. */
+export async function linkGoogle(accessToken: string): Promise<UserInfo> {
+  return postAuth('/auth/google', { access_token: accessToken, link: true })
+}
+
+/** Attach Apple to the signed-in account. Requires a valid session token. */
+export async function linkApple(identityToken: string, fullName?: string): Promise<UserInfo> {
+  return postAuth('/auth/apple', { identity_token: identityToken, full_name: fullName, link: true })
+}
+
+export interface LinkedProviders {
+  google: boolean
+  apple: boolean
+  email?: string | null
+}
+
+export async function fetchLinkedProviders(): Promise<LinkedProviders> {
+  const res = await apiFetch(`${BASE()}/auth/providers`)
+  if (!res.ok) throw new Error('Failed to load linked accounts')
+  return res.json()
+}
+
+/** Detach a provider. The server refuses if it is the only way into the
+ *  account, so the caller can surface that message as-is. */
+export async function unlinkProvider(provider: 'google' | 'apple'): Promise<void> {
+  const res = await apiFetch(`${BASE()}/auth/providers/${provider}`, { method: 'DELETE' })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error((err as { detail?: string }).detail ?? 'Sign in failed')
+    throw new Error((err as { detail?: string }).detail ?? 'Failed to unlink')
   }
-  const data = await res.json()
-  config.setToken(data.token)
-  const u = data.user
-  return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined, bio: u.bio ?? undefined }
 }
 
 // ── Users / Invites / Friends ─────────────────────────────────────────────────
@@ -975,6 +1005,17 @@ export async function updateUser(userId: number, data: { name?: string; avatarUr
   }
   const u = await res.json()
   return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined, bio: u.bio ?? undefined }
+}
+
+/** Permanently erase the signed-in account and everything attached to it.
+ *  Irreversible — callers must confirm with the user first. The session token
+ *  is dead the moment this returns, so sign out immediately after. */
+export async function deleteOwnAccount(): Promise<void> {
+  const res = await apiFetch(`${BASE()}/users/me`, { method: 'DELETE' })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? 'Failed to delete account')
+  }
 }
 
 export async function recommendAlbum(albumId: number, friendId: number, recommenderId: number): Promise<{ alreadyExisted: boolean }> {
@@ -1136,7 +1177,7 @@ export interface CompareItem {
   spread: number
   recent: boolean
   has_reviews: boolean
-  highlight: 'disagreement' | 'friends' | 'teaser'
+  highlight: 'disagreement' | 'friends'
   raters: CompareRater[]
 }
 

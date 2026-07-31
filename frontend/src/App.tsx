@@ -17,6 +17,7 @@ import AlbumDetail from './pages/AlbumDetail'
 import ArtistPage from './pages/ArtistPage'
 import Join from './pages/Join'
 import LandingPage from './pages/LandingPage'
+import Privacy from './pages/Privacy'
 
 function PublicHome() {
   const { activeUser } = useUser()
@@ -73,6 +74,10 @@ export default function App() {
           <Route path="/rate/:id" element={<RequireUser><RatingScreen /></RequireUser>} />
           <Route path="/welcome" element={<RequireUser><Onboarding /></RequireUser>} />
           <Route path="/join" element={<Join />} />
+          {/* Public: App Store Connect requires a privacy URL that Apple's
+              reviewers can open while signed out. Must stay above the catch-all,
+              which sends everything else through ProtectedRoutes. */}
+          <Route path="/privacy" element={<Privacy />} />
           <Route path="/*" element={<ProtectedRoutes />} />
         </Routes>
       </BrowserRouter>
