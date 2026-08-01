@@ -134,6 +134,16 @@ export default function HowItWorks() {
           font-size: 14px; color: rgba(244,242,236,0.7); margin-top: 18px;
         }
 
+        .contact-line {
+          font-size: 14.5px; line-height: 1.6;
+          color: rgba(244,242,236,0.72); margin-top: 22px;
+        }
+        .contact-line a {
+          color: #CFE3D6; font-weight: 700; text-decoration: none;
+          border-bottom: 1px solid rgba(207,227,214,0.35);
+        }
+        .contact-line a:hover { color: #fff; border-bottom-color: rgba(255,255,255,0.6); }
+
         @media (max-width: 700px) {
           .faqs { grid-template-columns: 1fr; }
           .step { grid-template-columns: 1fr; gap: 14px; padding: 20px 18px; }
@@ -172,6 +182,14 @@ export default function HowItWorks() {
             </div>
           ))}
         </div>
+
+        {/* Also the App Store's support contact. Apple wants a support URL that
+            leads somewhere a person can actually be reached, and this page is
+            otherwise all answers and no way to ask. */}
+        <p className="contact-line">
+          Question we haven&apos;t answered, or something to tell us?{' '}
+          <a href="mailto:pressdmusicapp@gmail.com">pressdmusicapp@gmail.com</a>
+        </p>
 
         <div className="closer">
           <div>
