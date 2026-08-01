@@ -237,3 +237,9 @@ class ArtistMeta(SQLModel, table=True):
     mb_artist_id: Optional[str] = None
     albums_json: Optional[str] = None       # JSON-serialised list of release dicts
     scraped_at: Optional[datetime] = None
+
+    # Artist photo, resolved from Deezer. The id is what's cached rather than
+    # the URL — Deezer's CDN paths rotate, so a stored URL goes stale.
+    deezer_artist_id: Optional[int] = None
+    image_url: Optional[str] = None
+    image_checked_at: Optional[datetime] = None

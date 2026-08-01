@@ -427,6 +427,14 @@ export async function fetchAlbumColor(album: string, artist: string): Promise<Al
   return { color: json.color ?? null, color2: json.color2 ?? null }
 }
 
+/** Artist photo for the artist-page banner (Deezer, resolved server-side). */
+export async function fetchArtistImage(artist: string): Promise<string | null> {
+  const res = await apiFetch(`${BASE()}/util/artist-image?artist=${encodeURIComponent(artist)}`)
+  if (!res.ok) return null
+  const json = await res.json()
+  return json.image_url ?? null
+}
+
 // ── Discover: new releases (Deezer) ───────────────────────────────────────────
 
 export interface NewRelease {
