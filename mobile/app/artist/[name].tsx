@@ -24,6 +24,31 @@ const SMALL_SAMPLE = 15
 // keyword muddies through black on Android, so fade from this instead.
 const BG_CLEAR = 'rgba(249,248,246,0)'
 
+// How far above the catalog strip the photo starts dissolving.
+const FADE_LEAD = spacing.lg
+// Stops sampled along the dissolve. A plain two-stop fade leaves a seam where
+// it begins — alpha's slope jumps from nothing to constant, and the eye catches
+// that crease as a band. Sampling a smoothstep instead leaves the ramp flat at
+// both ends, so the photo melts into the page with no edge anywhere along it.
+const FADE_STEPS = 12
+
+type Ramp = {
+  colors: readonly [string, string, ...string[]]
+  locations: readonly [number, number, ...number[]]
+}
+
+function fadeRamp(start: number): Ramp {
+  const steps = Array.from({ length: FADE_STEPS }, (_, i) => (i + 1) / FADE_STEPS)
+  return {
+    // Held clear down to `start`, then eased in — smoothstep leaves the ramp
+    // flat where it meets the clear run, so there is no crease at the join.
+    colors: [BG_CLEAR, BG_CLEAR, ...steps.map((t) => `rgba(249,248,246,${+(t * t * (3 - 2 * t)).toFixed(3)})`)],
+    locations: [0, start, ...steps.map((t) => start + t * (1 - start))],
+  }
+}
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
+
 export default function ArtistPage() {
   const { name } = useLocalSearchParams<{ name: string }>()
   const artist = decodeURIComponent(name ?? '')
@@ -58,10 +83,18 @@ export default function ArtistPage() {
     staleTime: Infinity,
   })
 
-  // Where the catalog strip sits inside the hero — the photo fades out into
-  // the page across this line, so the covers always land on clean background.
+  // The photo runs the full height of the hero and dissolves across its lower
+  // half, so the wash is gone by the hero's bottom edge — just above where the
+  // SONG+ / wSONG+ ranks start. `catalogY` anchors the shading: the strip's top
+  // is where the name has ended, so it doubles as the point the darkening tops
+  // out and the point the dissolve begins.
   const [catalogY, setCatalogY] = useState<number | null>(null)
-  const photoHeight = catalogY != null ? catalogY + STRIP_SIZE * 0.5 : null
+  const [heroHeight, setHeroHeight] = useState<number | null>(null)
+  const photoHeight = heroHeight
+  const anchor = photoHeight && catalogY != null ? clamp01(catalogY / photoHeight) : 0.66
+  const fade = fadeRamp(
+    photoHeight && catalogY != null ? clamp01((catalogY - FADE_LEAD) / photoHeight) : 0.55,
+  )
 
   // Reaching this page by deep link or notification leaves nothing on the
   // stack, and a bare router.back() then throws "The action 'GO_BACK' was not
@@ -91,7 +124,10 @@ export default function ArtistPage() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Hero — bleeds under the status bar, so the safe-area inset is padding
             here rather than a SafeAreaView edge. */}
-        <View style={[styles.hero, { paddingTop: insets.top + spacing.sm }]}>
+        <View
+          style={[styles.hero, { paddingTop: insets.top + spacing.sm }]}
+          onLayout={(e) => setHeroHeight(e.nativeEvent.layout.height)}
+        >
           {artistImage ? (
             <View style={[styles.heroArt, { height: photoHeight ?? 0 }]} pointerEvents="none">
               <Image
@@ -103,16 +139,17 @@ export default function ArtistPage() {
                 contentPosition="top"
                 transition={220}
               />
-              {/* Darkens the lower half so the white name holds up over a
-                  bright photo, then hands off to the page. */}
+              {/* Darkens down to the name's baseline so the white type holds up
+                  over a bright photo, then holds that level to the bottom —
+                  the dissolve above it is what hands off to the page. */}
               <LinearGradient
                 colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.30)', 'rgba(0,0,0,0.62)', 'rgba(0,0,0,0.62)']}
-                locations={[0, 0.38, 0.66, 1]}
+                locations={[0, anchor * 0.3, anchor * 0.8, 1]}
                 style={styles.heroFill}
               />
               <LinearGradient
-                colors={[BG_CLEAR, BG_CLEAR, colors.bg]}
-                locations={[0, 0.72, 1]}
+                colors={fade.colors}
+                locations={fade.locations}
                 style={styles.heroFill}
               />
             </View>

@@ -18,7 +18,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as Haptics from 'expo-haptics'
-import { ArrowLeft, Check, Heart, Pencil, Trash2 } from 'lucide-react-native'
+import { ArrowLeft, Check, ChevronRight, Heart, Pencil, Trash2 } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchAlbums,
@@ -44,13 +44,21 @@ import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const WINDOW_H = Dimensions.get('window').height
 
+// The comparison card sits over the album backdrop, and at a lighter wash the
+// cover's own colors read straight through and fight the score type. Heavier
+// than colors.greenSoft so the card settles a shade darker and mutes whatever
+// is behind it, but still short of opaque — the art should show, not compete.
+const CMP_CARD_TINT = 0.18
+const CMP_CARD_BORDER = 0.26
+
 export default function AlbumDetail() {
-  const { id, community, name, artist, deezer } = useLocalSearchParams<{
+  const { id, community, name, artist, deezer, compare } = useLocalSearchParams<{
     id: string
     community?: string
     name?: string
     artist?: string
     deezer?: string
+    compare?: string
   }>()
   const albumId = Number(id)
   // New releases arrive by name+artist (they may not exist in Pressd yet);
@@ -173,6 +181,18 @@ export default function AlbumDetail() {
     return (
       <CommunityAlbum
         data={shown}
+        // Arriving from a personal copy's Compare button opens straight on the
+        // breakdown rather than the averaged view.
+        initialComparing={compare === '1'}
+        onOpenYours={
+          shown.your_album_id != null
+            ? () =>
+                router.push({
+                  pathname: '/album/[id]',
+                  params: { id: String(shown.your_album_id) },
+                })
+            : undefined
+        }
         onBack={() => router.back()}
         onOpenArtist={(n) =>
           router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent(n) } })
@@ -207,6 +227,19 @@ export default function AlbumDetail() {
   const isMine = user != null && album.userId === user.id
   const owner = !isMine && album.userId != null ? friends.find((f) => f.id === album.userId) ?? null : null
   const ownerColor = owner ? avatarColor(owner.name) : colors.green
+
+  // Compare is offered wherever a comparison exists to make, so the control is
+  // the same however you reached the record — your own copy from the library or
+  // an artist page, or a friend's copy you've also rated. It needs a score of
+  // yours to hold against the userbase: this copy's when it's yours, otherwise
+  // your separate copy of the same record.
+  const canCompare =
+    (isMine ? isRated && album.score != null : myAlbum?.status === 'rated' && myAlbum.score != null) === true
+  const openCompare = () =>
+    router.push({
+      pathname: '/album/[id]',
+      params: { id: String(albumId), community: '1', compare: '1' },
+    })
 
   const openArtist = (name: string) =>
     router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent(name) } })
@@ -258,6 +291,9 @@ export default function AlbumDetail() {
         color={ownerColor}
         onBack={() => router.back()}
         onOpenMine={() => router.push({ pathname: '/album/[id]', params: { id: String(myAlbum.id) } })}
+        onOpenAverage={() =>
+          router.push({ pathname: '/album/[id]', params: { id: String(albumId), community: '1' } })
+        }
         onOpenArtist={openArtist}
       />
     )
@@ -295,6 +331,11 @@ export default function AlbumDetail() {
               {owner.name}'s rating
             </Text>
           </View>
+        )}
+        {canCompare && (
+          <Pressable style={styles.compareBtn} onPress={openCompare} hitSlop={8}>
+            <Text style={styles.compareBtnText}>Compare</Text>
+          </Pressable>
         )}
       </View>
 
@@ -410,14 +451,18 @@ function CommunityAlbum({
   onOpenArtist,
   onRate,
   onQueue,
+  initialComparing = false,
+  onOpenYours,
 }: {
   data: CommunityAlbumData
   onBack: () => void
   onOpenArtist: (name: string) => void
   onRate: () => void
   onQueue: () => Promise<void>
+  initialComparing?: boolean
+  onOpenYours?: () => void
 }) {
-  const [comparing, setComparing] = useState(false)
+  const [comparing, setComparing] = useState(initialComparing)
   const [rating, setRating] = useState(false)
   const [queuing, setQueuing] = useState(false)
   const [queued, setQueued] = useState(false)
@@ -440,9 +485,11 @@ function CommunityAlbum({
         <ArrowLeft size={18} color={colors.inkSecondary} />
         <Text style={styles.backText}>Back</Text>
       </Pressable>
-      {canCompare ? (
-        <Pressable style={styles.compareBtn} onPress={() => setComparing((v) => !v)} hitSlop={8}>
-          <Text style={styles.compareBtnText}>{comparing ? 'Average' : 'Compare'}</Text>
+      {/* Only the way in lives up here — the comparison itself carries its own
+          pair of exits, so there's no second Average control competing. */}
+      {canCompare && !comparing ? (
+        <Pressable style={styles.compareBtn} onPress={() => setComparing(true)} hitSlop={8}>
+          <Text style={styles.compareBtnText}>Compare</Text>
         </Pressable>
       ) : null}
     </View>
@@ -501,7 +548,15 @@ function CommunityAlbum({
               </View>
             </View>
 
-            <View style={[styles.cmpCard, { backgroundColor: colors.greenSoft, borderColor: 'rgba(45,106,79,0.18)' }]}>
+            <View
+              style={[
+                styles.cmpCard,
+                {
+                  backgroundColor: `rgba(45,106,79,${CMP_CARD_TINT})`,
+                  borderColor: `rgba(45,106,79,${CMP_CARD_BORDER})`,
+                },
+              ]}
+            >
               <View style={styles.cmpScores}>
                 <View style={styles.cmpScoreCol}>
                   <Text style={[styles.cmpWho, { color: left.head }]} numberOfLines={1}>{left.label}</Text>
@@ -528,6 +583,13 @@ function CommunityAlbum({
 
               <Text style={styles.cmpVerdict}>{verdict}</Text>
               <Text style={styles.cmpRaters}>Averaged across {raters}</Text>
+            </View>
+
+            {/* Either side of the comparison in full, so this screen forks
+                rather than dead-ends. */}
+            <View style={styles.cmpFork}>
+              {onOpenYours && <ForkBtn label="Your rating" onPress={onOpenYours} />}
+              <ForkBtn label="Average rating" onPress={() => setComparing(false)} />
             </View>
 
             <View style={styles.cmpTracksHead}>
@@ -753,6 +815,7 @@ function FriendCompare({
   color,
   onBack,
   onOpenMine,
+  onOpenAverage,
   onOpenArtist,
 }: {
   theirs: Album
@@ -761,6 +824,7 @@ function FriendCompare({
   color: string
   onBack: () => void
   onOpenMine: () => void
+  onOpenAverage: () => void
   onOpenArtist: (name: string) => void
 }) {
   const { user } = useAuth()
@@ -862,7 +926,7 @@ function FriendCompare({
           </View>
 
           {/* Score comparison */}
-          <View style={[styles.cmpCard, { backgroundColor: tint(color, 0.07), borderColor: tint(color, 0.18) }]}>
+          <View style={[styles.cmpCard, { backgroundColor: tint(color, CMP_CARD_TINT), borderColor: tint(color, CMP_CARD_BORDER) }]}>
             <View style={styles.cmpScores}>
               <View style={styles.cmpScoreCol}>
                 <Text style={[styles.cmpWho, { color: left.head }]} numberOfLines={1}>{left.label}</Text>
@@ -926,14 +990,27 @@ function FriendCompare({
             </View>
           ))}
 
-          <Pressable style={styles.cmpOpenMine} onPress={onOpenMine}>
-            <Text style={styles.cmpOpenMineText}>Open your rating</Text>
-          </Pressable>
+          {/* Same fork the userbase comparison offers, so both compare screens
+              lead the same two places. */}
+          <View style={styles.cmpFork}>
+            <ForkBtn label="Your rating" onPress={onOpenMine} />
+            <ForkBtn label="Average rating" onPress={onOpenAverage} />
+          </View>
 
           <CommentThread albumId={theirs.id} />
         </ScrollView>
       </SafeAreaView>
     </View>
+  )
+}
+
+/** One exit off a comparison — half of the pair both compare screens end on. */
+function ForkBtn({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable style={styles.cmpForkBtn} onPress={onPress} hitSlop={6}>
+      <Text style={styles.cmpForkText} numberOfLines={1}>{label}</Text>
+      <ChevronRight size={15} color={colors.green} />
+    </Pressable>
   )
 }
 
@@ -1120,8 +1197,21 @@ const styles = StyleSheet.create({
   cmpTrackTitle: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.ink },
   cmpTrackScore: { fontFamily: fonts.bodyBold, fontSize: 15, width: 40, textAlign: 'right' },
 
-  cmpOpenMine: { alignSelf: 'flex-start', marginTop: spacing.lg },
-  cmpOpenMineText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
+  cmpFork: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
+  cmpForkBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    backgroundColor: colors.raised,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    paddingVertical: 11,
+    paddingHorizontal: spacing.sm,
+  },
+  cmpForkText: { fontFamily: fonts.bodySemiBold, fontSize: 13.5, color: colors.green, flexShrink: 1 },
 
   head: { alignItems: 'center', marginTop: spacing.xxl },
   art: { width: 148, height: 148, borderRadius: radii.lg },
