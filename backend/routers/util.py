@@ -6,6 +6,8 @@ import re
 import subprocess
 import tempfile
 import threading
+import unicodedata
+from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from io import BytesIO
 
@@ -15,7 +17,7 @@ from PIL import Image
 from sqlmodel import Session, select
 
 from ..database import engine, get_session
-from ..models import Album, Song, SongAudioFeatures
+from ..models import Album, ArtistMeta, Song, SongAudioFeatures
 from ..trackkeys import same_album
 
 router = APIRouter(prefix="/util", tags=["util"])
@@ -607,3 +609,106 @@ async def album_color(album: str, artist: str, session: Session = Depends(get_se
         return {"color": None, "color2": None}
     except Exception:
         return {"color": None, "color2": None}
+
+
+# ── Artist photos (Deezer) ───────────────────────────────────────────────────
+#
+# Deezer covers ~99% of the library's artists, which is why it's the only
+# source here rather than a fanart.tv/Wikidata chain. Four behaviours of its
+# search API drive the matching below, each of which silently returns the wrong
+# artist (or none) if ignored:
+#
+#   1. Duplicate/imposter entries share an artist's exact name but carry a
+#      handful of fans and no photo. The canonical row is the most-followed.
+#   2. "No picture" is served as a real URL whose md5 segment is that of the
+#      empty string, not as a null field.
+#   3. Rate limiting comes back as HTTP 200 with an error body, so an
+#      unchecked response looks like "artist not found".
+#   4. Punctuation in the query suppresses hits ("J.I.D." finds nothing,
+#      "JID" finds the artist), and stored names carry diacritics the search
+#      results spell differently.
+
+DEEZER_API = "https://api.deezer.com"
+# md5(""), which Deezer substitutes when an artist has no photo.
+DEEZER_NO_IMAGE = "d41d8cd98f00b204e9800998ecf8427e"
+# Re-check misses occasionally; a hit is effectively permanent.
+ARTIST_IMAGE_TTL = timedelta(days=30)
+
+
+def _artist_key(name: str) -> str:
+    """Fold to a comparable key: no diacritics, case, punctuation or '&'."""
+    folded = unicodedata.normalize("NFKD", name)
+    folded = "".join(c for c in folded if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]", "", folded.lower().replace("&", "and"))
+
+
+async def _deezer_artist_photo(client: httpx.AsyncClient, artist: str) -> tuple[int, str] | None:
+    """Resolve an artist to their (deezer_id, picture_xl), or None."""
+    # Punctuation is stripped from the query but kept for the match.
+    query = re.sub(r"[^\w\s]", " ", artist).strip() or artist
+
+    body = None
+    for attempt in range(3):
+        try:
+            resp = await client.get(
+                f"{DEEZER_API}/search/artist", params={"q": query, "limit": 10}
+            )
+            body = resp.json()
+        except Exception:
+            body = None
+        # Rate limited (HTTP 200 + error body) — back off rather than treat it
+        # as a miss, which would cache an empty result for a month.
+        if body is not None and not body.get("error"):
+            break
+        body = None
+        await asyncio.sleep(1.5 * (attempt + 1))
+
+    hits = (body or {}).get("data") or []
+    if not hits:
+        return None
+
+    target = _artist_key(artist)
+    exact = [a for a in hits if _artist_key(a.get("name", "")) == target]
+    if not exact:
+        return None
+
+    best = max(exact, key=lambda a: a.get("nb_fan") or 0)
+    picture = best.get("picture_xl") or ""
+    if not picture or DEEZER_NO_IMAGE in picture:
+        return None
+    return best["id"], picture
+
+
+@router.get("/artist-image")
+async def artist_image(artist: str, session: Session = Depends(get_session)):
+    """Artist photo URL for the artist page banner, cached on ArtistMeta."""
+    meta = session.exec(select(ArtistMeta).where(ArtistMeta.artist == artist)).first()
+
+    fresh = (
+        meta is not None
+        and meta.image_checked_at is not None
+        and datetime.utcnow() - meta.image_checked_at < ARTIST_IMAGE_TTL
+    )
+    if fresh and meta.image_url:
+        return {"image_url": meta.image_url}
+    if fresh:
+        return {"image_url": None}
+
+    try:
+        async with httpx.AsyncClient(timeout=12) as client:
+            found = await _deezer_artist_photo(client, artist)
+    except Exception:
+        # Leave the cache untouched so a network blip retries next request.
+        return {"image_url": meta.image_url if meta else None}
+
+    if meta is None:
+        meta = ArtistMeta(artist=artist)
+        session.add(meta)
+    if found:
+        meta.deezer_artist_id, meta.image_url = found
+    else:
+        meta.image_url = None
+    meta.image_checked_at = datetime.utcnow()
+    session.commit()
+
+    return {"image_url": meta.image_url}

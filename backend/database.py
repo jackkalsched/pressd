@@ -105,6 +105,10 @@ def init_db():
             # ── Reviews: long-form prose attached to an album rating ──
             "ALTER TABLE album ADD COLUMN review TEXT",
             "ALTER TABLE album ADD COLUMN review_at TIMESTAMP",
+            # ── Artist photos, resolved from Deezer ──
+            "ALTER TABLE artistmeta ADD COLUMN deezer_artist_id INTEGER",
+            "ALTER TABLE artistmeta ADD COLUMN image_url VARCHAR",
+            "ALTER TABLE artistmeta ADD COLUMN image_checked_at TIMESTAMP",
             # ── Per-user external-factor weights (60-point budget) ──
             "ALTER TABLE pressuser ADD COLUMN theme_pts INTEGER DEFAULT 25",
             "ALTER TABLE pressuser ADD COLUMN replay_pts INTEGER DEFAULT 15",
