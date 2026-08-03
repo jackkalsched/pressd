@@ -14,7 +14,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Image } from 'expo-image'
-import { Plus, Search, X } from 'lucide-react-native'
+import { Check, Plus, Search, Star, X } from 'lucide-react-native'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAlbumSearch } from '@pressd/shared/hooks/useAlbumSearch'
 import type { AlbumSearchResult } from '@pressd/shared/api'
 import { importAlbum, resolveAlbum } from '../lib/api'
@@ -37,19 +38,34 @@ export default function AddAlbum() {
   const { results, searching, mbPending, noResults } = useAlbumSearch(query)
   const [picked, setPicked] = useState<AlbumSearchResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Rows already shelved this session — the list stays put after "add", so
+  // without a mark there's nothing to show the tap landed.
+  const [shelved, setShelved] = useState<string[]>([])
+  const queryClient = useQueryClient()
 
   function keyFor(r: AlbumSearchResult): string {
     return `${r.source}:${r.source_id}`
   }
 
-  async function pick(r: AlbumSearchResult) {
+  /** Both actions import the same album — they differ in the status it lands
+   *  in and where you end up. "Rate now" opens the rating flow; "Add to
+   *  library" shelves it under To Listen and stays here, so several records
+   *  can be queued from one search. */
+  async function pick(r: AlbumSearchResult, mode: 'rate' | 'shelve') {
     if (picked || !user) return
     setPicked(r)
     setError(null)
     try {
       const full = await resolveAlbum(r)
-      const album = await importAlbum(full, 'listening', user.id)
-      router.replace({ pathname: '/rate/[id]', params: { id: String(album.id) } })
+      const album = await importAlbum(full, mode === 'rate' ? 'listening' : 'to_listen', user.id)
+      if (mode === 'rate') {
+        router.replace({ pathname: '/rate/[id]', params: { id: String(album.id) } })
+        return
+      }
+      // Shelved: the library grids are now stale wherever they're mounted.
+      queryClient.invalidateQueries({ queryKey: ['albums'] })
+      setShelved((s) => [...s, keyFor(r)])
+      setPicked(null)
     } catch {
       setError('Could not load that album. Try another result.')
       setPicked(null)
@@ -121,31 +137,59 @@ export default function AddAlbum() {
             <Text style={styles.hint}>Start typing to search across every source.</Text>
           ) : null
         }
-        renderItem={({ item }) => (
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.inset }]}
-            onPress={() => pick(item)}
-          >
-            {item.cover_url ? (
-              <Image source={{ uri: item.cover_url }} style={styles.cover} contentFit="cover" />
-            ) : (
-              <View style={[styles.cover, styles.coverFallback]}>
-                <Text style={styles.coverInitial}>{item.album_name[0]?.toUpperCase()}</Text>
+        renderItem={({ item }) => {
+          const done = shelved.includes(keyFor(item))
+          return (
+            <View style={styles.row}>
+              {item.cover_url ? (
+                <Image source={{ uri: item.cover_url }} style={styles.cover} contentFit="cover" />
+              ) : (
+                <View style={[styles.cover, styles.coverFallback]}>
+                  <Text style={styles.coverInitial}>{item.album_name[0]?.toUpperCase()}</Text>
+                </View>
+              )}
+              <View style={styles.rowText}>
+                <Text style={styles.albumName} numberOfLines={1}>{item.album_name}</Text>
+                <Text style={styles.meta} numberOfLines={1}>
+                  {item.artist}
+                  {meta(item)}
+                  {item.upcoming ? ' · upcoming' : ''}
+                </Text>
               </View>
-            )}
-            <View style={styles.rowText}>
-              <Text style={styles.albumName} numberOfLines={1}>{item.album_name}</Text>
-              <Text style={styles.meta} numberOfLines={1}>
-                {item.artist}
-                {meta(item)}
-                {item.upcoming ? ' · upcoming' : ''}
-              </Text>
+
+              {/* Two ways in: score it now, or shelve it for later. Icons rather
+                  than labels — at this row height, two worded buttons would
+                  crowd out the album name they belong to. */}
+              <View style={styles.actions}>
+                <Pressable
+                  onPress={() => pick(item, 'rate')}
+                  hitSlop={6}
+                  accessibilityLabel={`Rate ${item.album_name} now`}
+                  style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnOn]}
+                >
+                  <Star size={17} color={colors.green} strokeWidth={2.2} />
+                </Pressable>
+                <Pressable
+                  onPress={() => pick(item, 'shelve')}
+                  disabled={done}
+                  hitSlop={6}
+                  accessibilityLabel={`Add ${item.album_name} to library`}
+                  style={({ pressed }) => [
+                    styles.actionBtn,
+                    done && styles.actionBtnDone,
+                    pressed && !done && styles.actionBtnOn,
+                  ]}
+                >
+                  {done ? (
+                    <Check size={17} color={colors.green} strokeWidth={2.5} />
+                  ) : (
+                    <Plus size={17} color={colors.green} strokeWidth={2.5} />
+                  )}
+                </Pressable>
+              </View>
             </View>
-            <View style={styles.addBtn}>
-              <Plus size={18} color={colors.green} strokeWidth={2.5} />
-            </View>
-          </Pressable>
-        )}
+          )
+        }}
       />
     </SafeAreaView>
   )
@@ -197,7 +241,8 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, minWidth: 0 },
   albumName: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.ink },
   meta: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, marginTop: 2 },
-  addBtn: {
+  actions: { flexDirection: 'row', gap: 8 },
+  actionBtn: {
     width: 34,
     height: 34,
     borderRadius: radii.sm,
@@ -205,6 +250,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  actionBtnOn: { opacity: 0.55 },
+  actionBtnDone: { backgroundColor: colors.inset },
   centerNote: {
     fontFamily: fonts.body,
     fontSize: 14,

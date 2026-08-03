@@ -280,14 +280,14 @@ export default function Charts() {
               <Link
                 key={it.album_id}
                 to={`/album/${it.album_id}`}
-                className="grid grid-cols-[32px_44px_1fr_38px_auto] md:grid-cols-[44px_56px_1fr_auto_42px_auto] items-center gap-3 md:gap-4 px-1.5 py-3 border-b border-[#ededed] hover:bg-[#f2f0ec] transition-colors"
+                className="group grid grid-cols-[32px_44px_1fr_38px_auto] md:grid-cols-[44px_56px_1fr_auto_42px_auto] items-center gap-3 md:gap-4 px-1.5 py-3 border-b border-[#ededed] hover:bg-[#f2f0ec] transition-colors"
               >
                 <span className="font-display text-[19px] text-[#aaa] tabular-nums text-center">{it.rank}</span>
                 <div className={`flex justify-center ${COVER_LIFT}`} style={{ willChange: 'transform' }}>
                   <Cover artUrl={it.album_art_url} seed={it.artist} size={44} radius={8} fontSize={18} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[14.5px] font-semibold text-[#111] leading-tight truncate">{it.album_name}</p>
+                  <p className="text-[14.5px] font-semibold text-[#111] leading-tight truncate group-hover:text-[#2d6a4f] transition-colors">{it.album_name}</p>
                   <p className="text-[12.5px] text-[#777] mt-0.5 truncate">
                     {it.artist}{it.year ? ` · ${it.year}` : ''}
                   </p>

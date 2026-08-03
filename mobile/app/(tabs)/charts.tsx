@@ -2,7 +2,7 @@
 // filters (period / genre / decade) plus a type-in year, a top-three podium
 // with the #1 raised, then the ranked list out to 50, each row showing its
 // day-over-day movement. Defaults to This Week with no other filters.
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
@@ -34,6 +34,17 @@ const POD_AVAIL = CONTENT_W - POD_GAP * 2
 const POD_SIDE = Math.floor(POD_AVAIL * 0.3)
 const POD_CENTER = Math.floor(POD_AVAIL * 0.4)
 
+/** Holds a value back until it stops changing, so a type-in filter fires one
+ *  request for a name rather than one per letter. */
+function useDebounced<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(value), ms)
+    return () => clearTimeout(t)
+  }, [value, ms])
+  return settled
+}
+
 // ISO week number, to date the board like a print chart ("WK 30 · 2026").
 function weekLabel(): string {
   const d = new Date()
@@ -53,16 +64,21 @@ export default function Charts() {
   const [genre, setGenre] = useState<string | null>(null)
   const [decade, setDecade] = useState<number | null>(null)
   const [yearText, setYearText] = useState('')
+  const [artistText, setArtistText] = useState('')
   const year = /^\d{4}$/.test(yearText) ? Number(yearText) : null
+  // Matched as a substring server-side, so it narrows as you type — but debounce
+  // it, or every keystroke is its own request and its own cache entry.
+  const artist = useDebounced(artistText.trim(), 300)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['charts', period, genre ?? '', decade ?? '', year ?? ''],
+    queryKey: ['charts', period, genre ?? '', decade ?? '', year ?? '', artist],
     queryFn: () =>
       fetchCharts({
         period,
         genre: genre ?? undefined,
         decade: decade ?? undefined,
         year: year ?? undefined,
+        artist: artist || undefined,
       }),
     staleTime: 5 * 60_000,
   })
@@ -168,6 +184,25 @@ export default function Charts() {
                 {yearText ? (
                   <Pressable onPress={() => setYearText('')} hitSlop={6}>
                     <X size={13} color={year != null ? colors.green : colors.inkTertiary} />
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {/* Artist type-in */}
+              <View style={[styles.filterBtn, artist ? styles.filterBtnOn : null]}>
+                <TextInput
+                  style={[styles.artistInput, artist ? styles.filterTextOn : null]}
+                  value={artistText}
+                  onChangeText={setArtistText}
+                  placeholder="Artist"
+                  placeholderTextColor={colors.inkTertiary}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                />
+                {artistText ? (
+                  <Pressable onPress={() => setArtistText('')} hitSlop={6}>
+                    <X size={13} color={artist ? colors.green : colors.inkTertiary} />
                   </Pressable>
                 ) : null}
               </View>
@@ -349,6 +384,8 @@ const styles = StyleSheet.create({
   filterText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.inkSecondary },
   filterTextOn: { color: colors.green },
   yearInput: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.inkSecondary, minWidth: 42, padding: 0 },
+  // Wider than the year field — it holds a name, not four digits.
+  artistInput: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.inkSecondary, minWidth: 96, padding: 0 },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.4)', justifyContent: 'flex-end' },
   sheet: {
