@@ -12,7 +12,7 @@ from ..database import get_session
 from ..deps import current_user, authorize_view, are_friends
 from ..models import Album, Song, SongAudioFeatures, PressUser, Like, Comment
 from ..scoring import compute_a_score, recompute_all_scores, BANG_THRESHOLD, SKIP_THRESHOLD
-from ..genres import GENRES, canonical_genre
+from ..genres import GENRES, canonical_genre, canonical_subgenre
 
 router = APIRouter(prefix="/albums", tags=["albums"])
 
@@ -224,7 +224,8 @@ def _classify_genre_claude(artist: str, album_name: str, year: int | None) -> tu
     data = _json.loads(text.strip())
     genre = canonical_genre(data.get("genre"))
     genre = genre if genre in _GENRE_LIST else None
-    subgenres = [s for s in data.get("subgenres", []) if isinstance(s, str) and s.strip()][:3]
+    subgenres = [canonical_subgenre(s) for s in data.get("subgenres", [])
+                 if isinstance(s, str) and s.strip()][:3]
     return genre, subgenres
 
 
@@ -634,9 +635,9 @@ def _clone_album(session: Session, source: Album, target_user_id: int, status: s
         artist=source.artist,
         year=source.year,
         genre=canonical_genre(source.genre),
-        sub_genre1=source.sub_genre1,
-        sub_genre2=source.sub_genre2,
-        sub_genre3=source.sub_genre3,
+        sub_genre1=canonical_subgenre(source.sub_genre1),
+        sub_genre2=canonical_subgenre(source.sub_genre2),
+        sub_genre3=canonical_subgenre(source.sub_genre3),
         album_art_url=source.album_art_url,
         spotify_id=source.spotify_id,
         total_tracks=source.total_tracks,
