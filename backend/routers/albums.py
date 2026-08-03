@@ -12,6 +12,7 @@ from ..database import get_session
 from ..deps import current_user, authorize_view, are_friends
 from ..models import Album, Song, SongAudioFeatures, PressUser, Like, Comment
 from ..scoring import compute_a_score, recompute_all_scores, BANG_THRESHOLD, SKIP_THRESHOLD
+from ..genres import GENRES, canonical_genre
 
 router = APIRouter(prefix="/albums", tags=["albums"])
 
@@ -192,11 +193,10 @@ def _queue_predictions(album_id: int):
     threading.Thread(target=_run, daemon=True).start()
 
 
-_GENRE_LIST = [
-    "Hip-Hop", "R&B", "Pop", "Rock", "Electronic", "Folk",
-    "Singer-Songwriter", "Country", "Jazz", "Latin", "Afrobeats",
-    "Classical", "Funk", "Disco", "Blues", "Gospel",
-]
+# The tagger's vocabulary lives in backend.genres alongside the synonym map,
+# so the list Claude is prompted with can't drift from the one that normalizes
+# what the scraper and importers send.
+_GENRE_LIST = GENRES
 
 def _classify_genre_claude(artist: str, album_name: str, year: int | None) -> tuple[str | None, list[str]]:
     """Call Claude Haiku to classify main genre + up to 3 subgenres."""
@@ -222,7 +222,8 @@ def _classify_genre_claude(artist: str, album_name: str, year: int | None) -> tu
         if text.startswith("json"):
             text = text[4:]
     data = _json.loads(text.strip())
-    genre = data.get("genre") if data.get("genre") in _GENRE_LIST else None
+    genre = canonical_genre(data.get("genre"))
+    genre = genre if genre in _GENRE_LIST else None
     subgenres = [s for s in data.get("subgenres", []) if isinstance(s, str) and s.strip()][:3]
     return genre, subgenres
 
@@ -338,7 +339,7 @@ def import_album(
         album_art_url=data.get("cover_url"),
         spotify_id=data.get("spotify_id"),
         total_tracks=data.get("total_tracks"),
-        genre=data.get("genre"),
+        genre=canonical_genre(data.get("genre")),
         extra_artists=json.dumps(extra) if extra else None,
         user_id=user_id,
     )
@@ -632,7 +633,7 @@ def _clone_album(session: Session, source: Album, target_user_id: int, status: s
         album_name=source.album_name,
         artist=source.artist,
         year=source.year,
-        genre=source.genre,
+        genre=canonical_genre(source.genre),
         sub_genre1=source.sub_genre1,
         sub_genre2=source.sub_genre2,
         sub_genre3=source.sub_genre3,
