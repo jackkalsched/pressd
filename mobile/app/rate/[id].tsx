@@ -19,7 +19,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as Haptics from 'expo-haptics'
-import { ArrowLeft, ArrowRight, Check, ListMusic, X } from 'lucide-react-native'
+import { ArrowLeft, ArrowRight, Check, ListMusic, Trash2, X } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchAlbums,
@@ -40,7 +40,10 @@ import {
 import { useAuth } from '../../lib/auth'
 import ShareCard from '../../components/ShareCard'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
+import { useDeleteAlbum } from '../../lib/useDeleteAlbum'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
+
+const DANGER = '#b91c1c'
 
 const FACTORS = [
   { key: 'theme', label: 'Theme / Cohesion', desc: 'Strength and cohesion of the central idea' },
@@ -84,6 +87,14 @@ export default function RatingScreen() {
   const { data: album, isLoading } = useQuery({
     queryKey: ['album', albumId],
     queryFn: () => fetchAlbum(albumId),
+  })
+
+  // Declared before the loading guards below, since hooks can't sit behind an
+  // early return. Deleting drops you back wherever you opened the flow from.
+  const { confirmDelete, deleting } = useDeleteAlbum({
+    albumId,
+    albumName: album?.albumName ?? 'This album',
+    onDeleted: () => router.replace('/(tabs)'),
   })
   const { data: factorStats } = useQuery({
     queryKey: ['factor-stats'],
@@ -481,6 +492,24 @@ export default function RatingScreen() {
               </Pressable>
             </>
           )}
+
+          {/* Bottom of the scroll, well past Submit and Save draft. Abandoning
+              a rating is a real thing to want, but it shouldn't sit anywhere
+              near the controls you're using to finish one. */}
+          <Pressable
+            style={styles.deleteRow}
+            onPress={confirmDelete}
+            disabled={deleting || busy}
+            hitSlop={8}
+            accessibilityLabel="Delete album from your library"
+          >
+            {deleting ? (
+              <ActivityIndicator size="small" color={DANGER} />
+            ) : (
+              <Trash2 size={14} color={DANGER} />
+            )}
+            <Text style={styles.deleteRowText}>Delete album</Text>
+          </Pressable>
         </ScrollView>
 
         <TrackSheet
@@ -801,6 +830,15 @@ const styles = StyleSheet.create({
   submitText: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: '#fff' },
   backToTracks: { alignSelf: 'center', marginTop: spacing.lg },
   backToTracksText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.inkTertiary },
+  deleteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: spacing.xxl,
+    paddingVertical: spacing.sm,
+  },
+  deleteRowText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: DANGER },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.4)', justifyContent: 'flex-end' },
   sheet: {

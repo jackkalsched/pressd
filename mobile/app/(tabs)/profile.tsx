@@ -15,10 +15,10 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { Check, ChevronDown, Search, Settings, X } from 'lucide-react-native'
+import { Check, ChevronDown, Search, Settings, Trash2, X } from 'lucide-react-native'
 import {
   fetchAlbums,
   fetchSummary,
@@ -29,6 +29,7 @@ import {
 } from '../../lib/api'
 import { songScoreColor, type Album, type AlbumStatus } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
+import { confirmDeleteAlbum } from '../../lib/useDeleteAlbum'
 import StatsView from '../../components/StatsView'
 import ProfileBanner from '../../components/ProfileBanner'
 import SettingsSheet from '../../components/SettingsSheet'
@@ -119,6 +120,7 @@ export default function Profile() {
   const { user } = useAuth()
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const queryClient = useQueryClient()
   const [tab, setTab] = useState<Tab>('library')
   const [libStatus, setLibStatus] = useState<AlbumStatus>('rated')
   const [rankMode, setRankMode] = useState<RankMode>('albums')
@@ -244,8 +246,19 @@ export default function Profile() {
       .sort((a, b) => cmpVals(metric.get(a), metric.get(b), rankDir))
   }, [tab, rankMode, scatter, artistStats, rankMetric, rankDir, q])
 
+  // To Listen has no ratings to order by, so lead with the model's guess — the
+  // most promising records first. Unscored albums sink rather than sorting as
+  // zero: "no prediction yet" isn't the same claim as "predicted terrible".
+  const gridSorted = useMemo(
+    () =>
+      libStatus === 'to_listen'
+        ? [...grid].sort((a, b) => (b.predictedScore ?? -1) - (a.predictedScore ?? -1))
+        : grid,
+    [grid, libStatus],
+  )
+
   const listData: (Album | ArtistRank)[] = isGrid
-    ? grid
+    ? gridSorted
     : tab === 'ratings'
     ? rankMode === 'albums'
       ? rankedAlbums
@@ -399,6 +412,14 @@ export default function Profile() {
                   })
                 }
               }}
+              onDelete={
+                (item as Album).status === 'to_listen'
+                  ? () => {
+                      const a = item as Album
+                      confirmDeleteAlbum({ albumId: a.id, albumName: a.albumName }, queryClient)
+                    }
+                  : undefined
+              }
             />
           ) : rankMode === 'artists' ? (
             <ArtistRankRow
@@ -475,7 +496,15 @@ export default function Profile() {
   )
 }
 
-function AlbumCell({ album, mu, sd, onPress }: { album: Album; mu: number; sd: number; onPress: () => void }) {
+function AlbumCell({
+  album, mu, sd, onPress, onDelete,
+}: {
+  album: Album
+  mu: number
+  sd: number
+  onPress: () => void
+  onDelete?: () => void
+}) {
   const showScore = album.status === 'rated' && album.score != null
   const badge = showScore ? scoreBadgeColor(album.score!, mu, sd) : null
   return (
@@ -487,6 +516,19 @@ function AlbumCell({ album, mu, sd, onPress }: { album: Album; mu: number; sd: n
           <View style={[styles.art, styles.artFallback]}>
             <Text style={styles.artInitial}>{album.albumName[0]?.toUpperCase()}</Text>
           </View>
+        )}
+        {/* Opposite corner from the prediction badge, so the two don't collide.
+            A tile is a small target for something destructive — the confirm
+            dialog is what makes a stray tap harmless. */}
+        {onDelete && (
+          <Pressable
+            style={styles.cellDelete}
+            onPress={onDelete}
+            hitSlop={8}
+            accessibilityLabel={`Delete ${album.albumName} from your library`}
+          >
+            <Trash2 size={12} color="#fff" />
+          </Pressable>
         )}
         {/* Rated: desktop-style white pill, colored text + border (top-right) */}
         {showScore ? (
@@ -627,6 +669,17 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   scoreBadgeText: { fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: -0.2 },
+  cellDelete: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(28,25,23,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   predBadge: {
     position: 'absolute',
     top: 6,

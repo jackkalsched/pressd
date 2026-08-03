@@ -40,9 +40,15 @@ import CommentThread from '../../components/CommentThread'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
 import BangSkip from '../../components/BangSkip'
 import ScoreDial from '../../components/ScoreDial'
+import { useDeleteAlbum } from '../../lib/useDeleteAlbum'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const WINDOW_H = Dimensions.get('window').height
+
+// Destructive red, and the wash behind it. Shared by every delete control so
+// removing a record looks the same wherever you reach it from.
+const DANGER = '#b91c1c'
+const DANGER_SOFT = 'rgba(185,28,28,0.09)'
 
 // The comparison card sits over the album backdrop, and at a lighter wash the
 // cover's own colors read straight through and fight the score type. Heavier
@@ -244,6 +250,13 @@ export default function AlbumDetail() {
   const openArtist = (name: string) =>
     router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent(name) } })
 
+  // Only your own copy can be deleted — a friend's rating isn't yours to remove.
+  const { confirmDelete, deleting } = useDeleteAlbum({
+    albumId,
+    albumName: album.albumName,
+    onDeleted: () => router.back(),
+  })
+
   /** Get this album into your library at `status`, returning your copy's id.
    *  Three routes in: you already have it; Pressd has someone else's copy to
    *  clone; or it's new to Pressd entirely and comes from Deezer. */
@@ -335,6 +348,23 @@ export default function AlbumDetail() {
         {canCompare && (
           <Pressable style={styles.compareBtn} onPress={openCompare} hitSlop={8}>
             <Text style={styles.compareBtnText}>Compare</Text>
+          </Pressable>
+        )}
+        {/* Sits last in the bar, away from Back and Compare — destructive, so
+            it shouldn't be adjacent to anything you tap on the way in. */}
+        {isMine && (
+          <Pressable
+            style={styles.deleteBtn}
+            onPress={confirmDelete}
+            disabled={deleting}
+            hitSlop={10}
+            accessibilityLabel="Delete album from your library"
+          >
+            {deleting ? (
+              <ActivityIndicator size="small" color={DANGER} />
+            ) : (
+              <Trash2 size={17} color={DANGER} />
+            )}
           </Pressable>
         )}
       </View>
@@ -1245,6 +1275,14 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   compareBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
+  deleteBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: DANGER_SOFT,
+  },
   raterLine: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 4 },
 
   // Average and prediction sit on one line; the column centres itself when
