@@ -73,3 +73,69 @@ def canonical_genre(raw: str | None) -> str | None:
     if not cleaned:
         return None
     return _CANONICAL_BY_KEY.get(_key(cleaned), cleaned)
+
+
+# ── Subgenres ────────────────────────────────────────────────────────────────
+#
+# Subgenres have no fixed vocabulary — they're whatever Claude or the scraper
+# returns — so there's no canonical list to map onto, only a canonical spelling.
+# Casing and hyphenation drifted freely, and "indie rock" (88) and "Indie Rock"
+# (19) counted as two different tags: enough to split a real favourite into two
+# lesser ones in the profile's tag tally.
+#
+# So rather than mapping names, this imposes a shape — Title Case, with the
+# things Title Case would ruin spelled out below. Applying it on every write
+# means two spellings of one subgenre can't coexist again, which a one-off
+# cleanup alone wouldn't have bought.
+
+# Tokens that are not words and must survive capitalisation untouched.
+_ACRONYMS = {"idm", "uk", "us", "edm", "dj", "mc", "nyc", "la"}
+
+# Written one way, conventionally displayed another. Applied to the whole
+# string after capitalisation, so they also fix tokens Title Case got wrong.
+_PHRASE_FIXES = {
+    "Rnb": "R&B",
+    "Hip Hop": "Hip-Hop",
+    "Lo Fi": "Lo-Fi",
+    "Trip Hop": "Trip-Hop",
+    "Soundcloud": "SoundCloud",
+    "Neo Soul": "Neo-Soul",
+    "Post Punk": "Post-Punk",
+    "Synth Pop": "Synth-Pop",
+    "Dance Pop": "Dance-Pop",
+    "Alt Country": "Alt-Country",
+    "Post Rock": "Post-Rock",
+    "Post Grunge": "Post-Grunge",
+    "Avant Garde": "Avant-Garde",
+    "Drum And Bass": "Drum and Bass",
+}
+
+
+def _capitalize_token(token: str) -> str:
+    """One whitespace-separated token, capitalised without flattening things
+    that carry meaning in their case: acronyms (IDM, UK) and names that are
+    deliberately camel-cased (SoundCloud) are left exactly as they arrived."""
+    letters = [c for c in token if c.isalpha()]
+    if not letters:
+        return token
+    if token.lower().strip("&-") in _ACRONYMS or (len(letters) > 1 and all(c.isupper() for c in letters)):
+        return token.upper() if token.islower() else token
+    # Internal capital (SoundCloud, iTunes) — already deliberate, leave it.
+    if any(c.isupper() for c in token[1:]):
+        return token
+    # Capitalise across hyphens too, so "post-punk" reads "Post-Punk".
+    return "-".join(p[:1].upper() + p[1:] for p in token.split("-"))
+
+
+def canonical_subgenre(raw: str | None) -> str | None:
+    """A subgenre in the house spelling: Title Case, hyphenated the way the
+    genre vocabulary hyphenates, acronyms intact."""
+    if raw is None:
+        return None
+    cleaned = " ".join(raw.split())
+    if not cleaned:
+        return None
+    titled = " ".join(_capitalize_token(t) for t in cleaned.split(" "))
+    for wrong, right in _PHRASE_FIXES.items():
+        titled = re.sub(rf"\b{re.escape(wrong)}\b", right, titled)
+    return titled

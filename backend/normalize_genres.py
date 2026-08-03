@@ -13,7 +13,20 @@ import argparse
 from sqlalchemy import text
 
 from .database import engine
-from .genres import canonical_genre
+from .genres import canonical_genre, canonical_subgenre
+
+SUBGENRE_COLUMNS = ("sub_genre1", "sub_genre2", "sub_genre3")
+
+
+def _plan(con, column: str, fn) -> list[tuple[str, str, int]]:
+    """Spellings in `column` that `fn` would rewrite, with how many rows each
+    covers. Counted per column, so one album can appear under several."""
+    rows = con.execute(text(
+        f"SELECT {column}, COUNT(*) c FROM album"
+        f" WHERE {column} IS NOT NULL AND {column} <> ''"
+        f" GROUP BY {column} ORDER BY c DESC"
+    )).fetchall()
+    return [(before, fn(before), c) for before, c in rows if fn(before) != before]
 
 
 def main() -> None:
@@ -22,35 +35,36 @@ def main() -> None:
     args = ap.parse_args()
 
     with engine.connect() as con:
-        rows = con.execute(text(
-            "SELECT genre, COUNT(*) c FROM album"
-            " WHERE genre IS NOT NULL AND genre <> ''"
-            " GROUP BY genre ORDER BY c DESC"
-        )).fetchall()
+        plans = [("genre", _plan(con, "genre", canonical_genre))]
+        for col in SUBGENRE_COLUMNS:
+            plans.append((col, _plan(con, col, canonical_subgenre)))
 
-        changes = [(g, canonical_genre(g), c) for g, c in rows]
-        changes = [(before, after, c) for before, after, c in changes if before != after]
-
-        if not changes:
-            print("[normalize_genres] nothing to do — every genre is already canonical")
+        if not any(changes for _, changes in plans):
+            print("[normalize_genres] nothing to do — every value is already canonical")
             return
 
-        total = sum(c for _, _, c in changes)
-        print(f"[normalize_genres] {len(changes)} spellings covering {total} albums:")
-        for before, after, c in changes:
-            print(f"  {c:5d}  {before!r} -> {after!r}")
+        for column, changes in plans:
+            if not changes:
+                continue
+            total = sum(c for _, _, c in changes)
+            print(f"[normalize_genres] {column}: {len(changes)} spellings, {total} rows")
+            for before, after, c in changes:
+                print(f"    {c:5d}  {before!r} -> {after!r}")
 
         if args.dry_run:
             print("[normalize_genres] dry run — nothing written")
             return
 
-        for before, after, _ in changes:
-            con.execute(
-                text("UPDATE album SET genre = :after WHERE genre = :before"),
-                {"after": after, "before": before},
-            )
+        written = 0
+        for column, changes in plans:
+            for before, after, c in changes:
+                con.execute(
+                    text(f"UPDATE album SET {column} = :after WHERE {column} = :before"),
+                    {"after": after, "before": before},
+                )
+                written += c
         con.commit()
-        print(f"[normalize_genres] updated {total} albums")
+        print(f"[normalize_genres] updated {written} values")
 
 
 if __name__ == "__main__":

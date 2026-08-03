@@ -15,7 +15,7 @@ import time
 import httpx
 from bs4 import BeautifulSoup
 
-from .genres import canonical_genre
+from .genres import canonical_genre, canonical_subgenre
 
 AOTY_BASE = "https://www.albumoftheyear.org"
 DDG_URL = "https://html.duckduckgo.com/html/"
@@ -219,10 +219,10 @@ def scrape_album_genres(album_url: str) -> dict | None:
 
     return {
         # AOTY's tag vocabulary isn't ours — it writes "Hip-Hop/Rap" where
-        # Pressd writes "Hip-Hop". Left as-is, the same genre would split its
-        # own chart facet. Subgenres pass through: they have no canonical list
-        # to be mapped onto.
+        # Pressd writes "Hip-Hop", and casing drifts freely on the subgenres.
+        # Left as-is, one genre splits its own chart facet and one subgenre
+        # splits its own tally in the profile's favourite tags.
         "genre": canonical_genre(genres[0]) if len(genres) > 0 else None,
-        "sub_genre1": genres[1] if len(genres) > 1 else None,
-        "sub_genre2": genres[2] if len(genres) > 2 else None,
+        "sub_genre1": canonical_subgenre(genres[1]) if len(genres) > 1 else None,
+        "sub_genre2": canonical_subgenre(genres[2]) if len(genres) > 2 else None,
     }
