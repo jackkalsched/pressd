@@ -521,12 +521,14 @@ export async function fetchCharts(params?: {
   genre?: string
   decade?: number
   year?: number
+  artist?: string
 }): Promise<ChartsResponse> {
   const qs = new URLSearchParams()
   if (params?.period) qs.set('period', params.period)
   if (params?.genre) qs.set('genre', params.genre)
   if (params?.decade) qs.set('decade', String(params.decade))
   if (params?.year) qs.set('year', String(params.year))
+  if (params?.artist) qs.set('artist', params.artist)
   const res = await apiFetch(`${BASE()}/discover/charts?${qs}`)
   if (!res.ok) throw new Error('Failed to load charts')
   return res.json()
@@ -539,12 +541,14 @@ export async function fetchPublicCharts(params?: {
   genre?: string
   decade?: number
   year?: number
+  artist?: string
 }): Promise<ChartsResponse> {
   const qs = new URLSearchParams()
   if (params?.period) qs.set('period', params.period)
   if (params?.genre) qs.set('genre', params.genre)
   if (params?.decade) qs.set('decade', String(params.decade))
   if (params?.year) qs.set('year', String(params.year))
+  if (params?.artist) qs.set('artist', params.artist)
   const res = await apiFetch(`${BASE()}/public/charts?${qs}`)
   if (!res.ok) throw new Error('Failed to load charts')
   return res.json()

@@ -129,17 +129,23 @@ function DistributionChart({ allScores, thisScore }: { allScores: number[]; this
 
   return (
     <svg width={W} height={H} style={{ display: 'block' }}>
-      <line x1={padL} y1={padTop + innerH} x2={W - padR} y2={padTop + innerH} stroke="#e5e7eb" strokeWidth={1} />
+      <line x1={padL} y1={padTop + innerH} x2={W - padR} y2={padTop + innerH} stroke="#e6ded2" strokeWidth={1} />
       {bins.map((count, i) => {
         const barH = count > 0 ? Math.max((count / maxCount) * innerH, 2) : 0
         const x = padL + i * bW
         const y = padTop + innerH - barH
+        // Tinted along the score gradient like every other histogram in the
+        // app. This album's own bin is the one at full strength — the rest are
+        // pulled back so it still reads at a glance, the job the flat grey did
+        // before the bars carried colour of their own.
+        const center = (i + 0.5) * BIN
         return (
           <rect
             key={i}
             x={x + 0.5} y={y}
             width={Math.max(bW - 1, 1)} height={barH}
-            fill={i === thisBin ? '#2d6a4f' : '#d1d5db'}
+            fill={songScoreColor(Math.max(1, Math.min(10, center)))}
+            opacity={i === thisBin ? 1 : 0.32}
             rx={1}
           />
         )

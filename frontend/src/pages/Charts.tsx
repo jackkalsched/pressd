@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Loader2, Triangle } from 'lucide-react'
 import { fetchCharts } from '../api'
 import type { ChartItem } from '../api'
+import { Cover, ScorePill, COVER_LIFT } from '../components/covers'
 
 const UP = '#2d6a4f'
 const DOWN = '#c0392b'
@@ -48,40 +49,43 @@ function Movement({ value }: { value: number | null }) {
   )
 }
 
-function Cover({ url, alt, size, rounded }: { url: string | null; alt: string; size: number; rounded: string }) {
-  if (!url) {
-    return (
-      <div
-        className={`bg-[#e8e6e1] ${rounded} shrink-0`}
-        style={{ width: size, height: size }}
-        aria-hidden
-      />
-    )
-  }
-  return (
-    <img
-      src={url}
-      alt={alt}
-      loading="lazy"
-      className={`object-cover ${rounded} shrink-0`}
-      style={{ width: size, height: size }}
-    />
-  )
+/** The year "Best of" jumps to. Bumping this is the whole maintenance story —
+ *  the label, the preset, and the active check all read from it. */
+const BEST_OF_YEAR = 2026
+
+const FIELD =
+  'text-[13px] font-medium h-9 px-3 rounded-lg border bg-white transition-colors ' +
+  'focus:outline-none focus:border-[#2d6a4f]'
+
+/** A filter that's set reads back in green, so which ones are narrowing the
+ *  board is obvious without having to open each one. */
+function fieldCls(active: boolean) {
+  return `${FIELD} ${active ? 'border-[#2d6a4f] text-[#2d6a4f]' : 'border-[#e2e2e2] text-[#111] hover:border-[#c8c8c8]'}`
 }
 
-/** Filter pill. The board's filters are all one-of-many toggles. */
-function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+function Select({
+  value, onChange, active, children, label,
+}: {
+  value: string
+  onChange: (v: string) => void
+  active: boolean
+  children: React.ReactNode
+  label: string
+}) {
   return (
-    <button
-      onClick={onClick}
-      className={`text-[13px] font-semibold px-3.5 py-1.5 rounded-full border transition-colors ${
-        on
-          ? 'bg-[#2d6a4f] border-[#2d6a4f] text-white'
-          : 'bg-white border-[#e2e2e2] text-[#777] hover:text-[#111] hover:border-[#c8c8c8]'
-      }`}
+    <select
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={`${fieldCls(active)} pr-7 cursor-pointer appearance-none bg-no-repeat`}
+      style={{
+        backgroundImage:
+          "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='3'><path d='M6 9l6 6 6-6'/></svg>\")",
+        backgroundPosition: 'right 10px center',
+      }}
     >
       {children}
-    </button>
+    </select>
   )
 }
 
@@ -90,29 +94,46 @@ export default function Charts() {
   const [genre, setGenre] = useState<string | null>(null)
   const [decade, setDecade] = useState<number | null>(null)
   const [yearText, setYearText] = useState('')
+  const [artist, setArtist] = useState('')
   const year = /^\d{4}$/.test(yearText) ? Number(yearText) : null
+  const artistQuery = artist.trim()
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['charts', period, genre ?? '', decade ?? '', year ?? ''],
+    queryKey: ['charts', period, genre ?? '', decade ?? '', year ?? '', artistQuery],
     queryFn: () =>
       fetchCharts({
         period,
         genre: genre ?? undefined,
         decade: decade ?? undefined,
         year: year ?? undefined,
+        artist: artistQuery || undefined,
       }),
     staleTime: 5 * 60_000,
   })
 
   // Decade and year both narrow by release date, and the server ANDs them —
   // holding both at once can only ever return nothing, so they clear each other.
-  function pickDecade(d: number) {
-    setDecade(d === decade ? null : d)
-    setYearText('')
+  function pickDecade(v: string) {
+    setDecade(v ? Number(v) : null)
+    if (v) setYearText('')
   }
   function typeYear(v: string) {
     setYearText(v)
     if (v) setDecade(null)
+  }
+
+  // "Best of" is the year read over the whole catalog, not just this week's
+  // ratings — scoping it to the week would rank a handful of recent listens.
+  const bestOfOn = period === 'all' && year === BEST_OF_YEAR
+  function toggleBestOf() {
+    if (bestOfOn) {
+      setPeriod('week')
+      setYearText('')
+      return
+    }
+    setPeriod('all')
+    setYearText(String(BEST_OF_YEAR))
+    setDecade(null)
   }
 
   const items: ChartItem[] = data?.items ?? []
@@ -124,41 +145,75 @@ export default function Charts() {
   return (
     <div className="p-4 md:p-8">
       <div className="flex items-end justify-between gap-5 flex-wrap mb-6">
-        <div>
-          <h1 className="font-display text-3xl font-bold text-[#111]">Charts</h1>
-          <p className="text-sm text-[#777] mt-1.5 max-w-xl">
-            Every album rated on Pressd, ranked by the average score across everyone who
-            rated it. Movement compares against yesterday's board.
-          </p>
-        </div>
+        <h1 className="font-display text-3xl font-bold text-[#111]">Charts</h1>
         <span className="text-[11px] font-bold tracking-[0.14em] uppercase text-[#aaa]">
           {period === 'week' ? weekLabel() : 'All time'}
         </span>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mb-8">
-        <Chip on={period === 'week'} onClick={() => setPeriod('week')}>This week</Chip>
-        <Chip on={period === 'all'} onClick={() => setPeriod('all')}>All time</Chip>
+        <button
+          onClick={toggleBestOf}
+          className={`text-[13px] font-semibold h-9 px-4 rounded-lg border transition-colors ${
+            bestOfOn
+              ? 'bg-[#2d6a4f] border-[#2d6a4f] text-white'
+              : 'bg-white border-[#e2e2e2] text-[#777] hover:text-[#111] hover:border-[#c8c8c8]'
+          }`}
+        >
+          Best of {BEST_OF_YEAR}
+        </button>
 
-        {data?.facets.genres.length ? <span className="w-px self-stretch bg-[#e2e2e2] mx-1.5" /> : null}
-        <Chip on={genre === null} onClick={() => setGenre(null)}>All genres</Chip>
-        {data?.facets.genres.map((g) => (
-          <Chip key={g} on={genre === g} onClick={() => setGenre(g === genre ? null : g)}>{g}</Chip>
-        ))}
+        <span className="w-px h-6 bg-[#e2e2e2] mx-1" />
 
-        {data?.facets.decades.length ? <span className="w-px self-stretch bg-[#e2e2e2] mx-1.5" /> : null}
-        {data?.facets.decades.slice(0, 6).map((d) => (
-          <Chip key={d} on={decade === d} onClick={() => pickDecade(d)}>{d}s</Chip>
-        ))}
+        <Select
+          label="Period"
+          value={period}
+          active={period === 'all'}
+          onChange={(v) => setPeriod(v as 'week' | 'all')}
+        >
+          <option value="week">This week</option>
+          <option value="all">All time</option>
+        </Select>
+
+        <Select
+          label="Genre"
+          value={genre ?? ''}
+          active={genre !== null}
+          onChange={(v) => setGenre(v || null)}
+        >
+          <option value="">All genres</option>
+          {data?.facets.genres.map((g) => (
+            <option key={g} value={g}>{g}</option>
+          ))}
+        </Select>
+
+        <Select
+          label="Decade"
+          value={decade != null ? String(decade) : ''}
+          active={decade !== null}
+          onChange={pickDecade}
+        >
+          <option value="">All decades</option>
+          {data?.facets.decades.map((d) => (
+            <option key={d} value={d}>{d}s</option>
+          ))}
+        </Select>
 
         <input
           value={yearText}
           onChange={(e) => typeYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
           placeholder="Year"
           inputMode="numeric"
-          className={`w-[74px] text-[13px] font-semibold px-3.5 py-1.5 rounded-full border bg-white transition-colors focus:outline-none placeholder:font-normal placeholder:text-[#bbb] ${
-            year ? 'border-[#2d6a4f] text-[#2d6a4f]' : 'border-[#e2e2e2] text-[#111] focus:border-[#2d6a4f]'
-          }`}
+          aria-label="Year"
+          className={`w-[86px] ${fieldCls(year !== null)} placeholder:text-[#bbb]`}
+        />
+
+        <input
+          value={artist}
+          onChange={(e) => setArtist(e.target.value)}
+          placeholder="Artist"
+          aria-label="Artist"
+          className={`w-[150px] ${fieldCls(artistQuery.length > 0)} placeholder:text-[#bbb]`}
         />
       </div>
 
@@ -191,20 +246,27 @@ export default function Charts() {
                     {it.rank}
                   </div>
                   <div className="flex justify-center">
-                    <Cover
-                      url={it.album_art_url}
-                      alt=""
-                      size={i === 1 ? 190 : 150}
-                      rounded="rounded-xl shadow-[0_14px_32px_-12px_rgba(0,0,0,0.35)] group-hover:shadow-[0_18px_40px_-12px_rgba(0,0,0,0.45)] transition-shadow"
-                    />
+                    <div
+                      className={`rounded-[14px] shadow-[0_14px_32px_-12px_rgba(0,0,0,0.35)] ${COVER_LIFT}`}
+                      style={{ willChange: 'transform' }}
+                    >
+                      <Cover
+                        artUrl={it.album_art_url}
+                        seed={it.artist}
+                        size={i === 1 ? 190 : 150}
+                        radius={14}
+                      />
+                    </div>
                   </div>
                   <p className="text-[14.5px] font-bold text-[#111] mt-3 leading-tight group-hover:text-[#2d6a4f] transition-colors">
                     {it.album_name}
                   </p>
                   <p className="text-[12.5px] text-[#777] mt-0.5">{it.artist}</p>
-                  <p className="font-display text-[22px] font-bold text-[#111] mt-1.5 tabular-nums">
-                    {it.avg_score?.toFixed(2)}
-                  </p>
+                  {it.avg_score != null && (
+                    <span className="inline-block mt-2">
+                      <ScorePill score={it.avg_score} big />
+                    </span>
+                  )}
                 </Link>
               ) : (
                 <div key={`empty-${i}`} />
@@ -221,8 +283,8 @@ export default function Charts() {
                 className="grid grid-cols-[32px_44px_1fr_38px_auto] md:grid-cols-[44px_56px_1fr_auto_42px_auto] items-center gap-3 md:gap-4 px-1.5 py-3 border-b border-[#ededed] hover:bg-[#f2f0ec] transition-colors"
               >
                 <span className="font-display text-[19px] text-[#aaa] tabular-nums text-center">{it.rank}</span>
-                <div className="flex justify-center">
-                  <Cover url={it.album_art_url} alt="" size={44} rounded="rounded-md" />
+                <div className={`flex justify-center ${COVER_LIFT}`} style={{ willChange: 'transform' }}>
+                  <Cover artUrl={it.album_art_url} seed={it.artist} size={44} radius={8} fontSize={18} />
                 </div>
                 <div className="min-w-0">
                   <p className="text-[14.5px] font-semibold text-[#111] leading-tight truncate">{it.album_name}</p>
@@ -236,8 +298,8 @@ export default function Charts() {
                 <span className="w-[38px] md:w-[42px] text-right">
                   <Movement value={it.movement} />
                 </span>
-                <span className="font-display text-[18px] text-[#111] tabular-nums text-right min-w-[46px]">
-                  {it.avg_score?.toFixed(2)}
+                <span className="flex justify-end">
+                  {it.avg_score != null && <ScorePill score={it.avg_score} />}
                 </span>
               </Link>
             ))}

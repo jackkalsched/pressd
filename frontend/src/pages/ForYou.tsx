@@ -5,24 +5,10 @@ import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Load
 import { fetchAlbums, fetchFeed, fetchFriendReviews, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum } from '../api'
 import type { FriendReview, NewRelease } from '../api'
 import { songScoreColor } from '../types'
+import { Cover, ScorePill, COVER_LIFT, hueFromString, coverGradient, scoreTint } from '../components/covers'
 import { useUser } from '../context/UserContext'
 
 // ── small helpers ─────────────────────────────────────────────────────────────
-
-function hueFromString(s: string): number {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360
-  return h
-}
-function coverGradient(hue: number): string {
-  return `linear-gradient(140deg, hsl(${hue} 42% 38%), hsl(${(hue + 26) % 360} 48% 56%))`
-}
-function scoreHue(s: number): number {
-  return Math.round(((s - 1) / 9) * 130)
-}
-function scoreTint(s: number): string {
-  return `hsl(${scoreHue(s)}, 46%, 94%)`
-}
 
 function dayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -55,55 +41,6 @@ function timeAgo(dateStr?: string): string {
 }
 
 // ── shared bits ───────────────────────────────────────────────────────────────
-
-function Cover({
-  artUrl, seed, size, radius = 12, fontSize,
-}: {
-  artUrl?: string | null
-  seed: string
-  size: number
-  radius?: number
-  fontSize?: number
-}) {
-  if (artUrl) {
-    return (
-      <img
-        src={artUrl}
-        alt=""
-        style={{ width: size, height: size, borderRadius: radius, objectFit: 'cover', flexShrink: 0, display: 'block' }}
-      />
-    )
-  }
-  const hue = hueFromString(seed || '?')
-  return (
-    <div
-      style={{
-        width: size, height: size, borderRadius: radius, flexShrink: 0, background: coverGradient(hue),
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: 'rgba(255,255,255,.92)', fontFamily: "'Playfair Display', serif", fontWeight: 700,
-        fontSize: fontSize ?? Math.round(size * 0.34),
-      }}
-    >
-      {(seed || '?')[0].toUpperCase()}
-    </div>
-  )
-}
-
-function ScorePill({ score, big }: { score: number; big?: boolean }) {
-  return (
-    <span
-      className="tabular-nums"
-      style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        minWidth: big ? 46 : 38, padding: big ? '6px 10px' : '3px 8px', borderRadius: 9,
-        background: scoreTint(score), color: songScoreColor(score),
-        fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: big ? 16 : 13, flexShrink: 0,
-      }}
-    >
-      {score.toFixed(2)}
-    </span>
-  )
-}
 
 const SECTION_LABEL = 'text-[11px] font-semibold uppercase tracking-[0.16em] text-[#a8998a] m-0'
 
@@ -352,10 +289,7 @@ export default function ForYou() {
                     style={{ borderTop: i === 0 ? 'none' : '1px solid #f0ebe3', padding: '15px 18px' }}
                   >
                     <span className="w-[22px] text-center shrink-0 tabular-nums" style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 15, color: '#c2b8ad' }}>{i + 1}</span>
-                    <div
-                      className="shrink-0 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-[1.13] group-hover:-rotate-3 group-active:scale-105"
-                      style={{ willChange: 'transform' }}
-                    >
+                    <div className={`shrink-0 ${COVER_LIFT}`} style={{ willChange: 'transform' }}>
                       <Cover artUrl={row.album_art_url} seed={row.artist} size={58} radius={13} fontSize={24} />
                     </div>
                     <div className="flex-1 min-w-0">

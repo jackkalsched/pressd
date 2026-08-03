@@ -349,6 +349,7 @@ def charts(
     genre: str | None = Query(default=None),
     decade: int | None = Query(default=None),   # e.g. 2020 for the 2020s
     year: int | None = Query(default=None),
+    artist: str | None = Query(default=None),
     limit: int = Query(50, ge=1, le=50),
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
@@ -393,6 +394,11 @@ def charts(
         if decade and (r.year is None or (r.year // 10) * 10 != decade):
             return False
         if year and r.year != year:
+            return False
+        # Substring, not equality — this one is typed a character at a time,
+        # so the board should narrow as you go rather than stay empty until
+        # the name is spelled out in full.
+        if artist and artist.strip().lower() not in (r.artist or "").lower():
             return False
         return True
 
