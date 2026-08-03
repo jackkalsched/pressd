@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎧 Press'd
+# 🎧 Pressd
 
 ### Log your music taste and find new favorites.
 
