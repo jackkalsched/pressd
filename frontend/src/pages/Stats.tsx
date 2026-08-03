@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { fetchSummary, fetchGenreStats, fetchScatterData, fetchGenreScores } from '../api'
+import { fetchSummary, fetchGenreStats, fetchScatterData, fetchGenreScores, fetchSongs } from '../api'
+import { ScoreHistogram } from '../components/histograms'
 import { useUser } from '../context/UserContext'
 import { Loader2, Disc3, ListMusic, Star, Trophy, Heart, CalendarDays, Flame, Music } from 'lucide-react'
 import {
@@ -71,6 +72,17 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
     queryFn: () => fetchGenreScores(userId),
     staleTime: 5 * 60 * 1000,
   })
+
+  // Every scored song, for the distribution histogram the app's Stats tab has.
+  const { data: songs = [] } = useQuery({
+    queryKey: ['stats', 'songs', userId],
+    queryFn: () => fetchSongs({ userId }),
+    staleTime: 5 * 60 * 1000,
+  })
+  const songScores = useMemo(
+    () => songs.filter((s) => s.score != null).map((s) => s.score!),
+    [songs],
+  )
 
 
   const kdeData = useMemo(() => {
@@ -310,6 +322,17 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
             </div>
           </div>
         </div>
+
+        {/* Song score distribution — the same board the app's Stats tab shows */}
+        {songScores.length > 0 && (
+          <div className={`mt-6 ${panelCls}`}>
+            <h2 className="text-sm font-semibold text-[#78716c] mb-1">Song Score Distribution</h2>
+            <p className="text-[#c2b8ad] text-xs mb-5">
+              {songScores.length.toLocaleString()} scored songs, bucketed by whole point
+            </p>
+            <ScoreHistogram scores={songScores} height={150} />
+          </div>
+        )}
 
         {/* Genre KDE */}
         {kdeData.length > 0 && (
