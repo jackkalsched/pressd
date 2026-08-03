@@ -87,6 +87,26 @@ def art_strip(
     return urls
 
 
+@router.get("/community-by-name")
+def community_album_by_name(
+    album_name: str = Query(...),
+    artist: str = Query(...),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Community view for an album identified by name + artist rather than by a
+    copy's id — how new releases arrive, since they may not be in Pressd yet."""
+    source = session.exec(
+        select(Album)
+        .where(
+            func.lower(func.trim(Album.album_name)) == album_name.strip().lower(),
+            func.lower(func.trim(Album.artist)) == artist.strip().lower(),
+        )
+        .options(selectinload(Album.songs))
+    ).first()
+    return _community_payload(session, user, album_name, artist, source)
+
+
 @router.get("/{album_id}")
 def get_album(
     album_id: int,
@@ -795,26 +815,6 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
             "distinctness": mine.distinctness,
         },
     }
-
-
-@router.get("/community-by-name")
-def community_album_by_name(
-    album_name: str = Query(...),
-    artist: str = Query(...),
-    user: PressUser = Depends(current_user),
-    session: Session = Depends(get_session),
-):
-    """Community view for an album identified by name + artist rather than by a
-    copy's id — how new releases arrive, since they may not be in Press'd yet."""
-    source = session.exec(
-        select(Album)
-        .where(
-            func.lower(func.trim(Album.album_name)) == album_name.strip().lower(),
-            func.lower(func.trim(Album.artist)) == artist.strip().lower(),
-        )
-        .options(selectinload(Album.songs))
-    ).first()
-    return _community_payload(session, user, album_name, artist, source)
 
 
 @router.get("/{album_id}/community")
