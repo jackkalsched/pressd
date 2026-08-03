@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useGoogleLogin } from '@react-oauth/google'
-import { Library, BarChart2, List, Mail, X, Loader2, MessageCircle, Pencil, Users, Plus, Sparkles } from 'lucide-react'
+import { Library, BarChart2, List, Mail, X, Loader2, MessageCircle, Pencil, Users, Plus, Sparkles, TrendingUp } from 'lucide-react'
 import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
 import { fetchFriends, getInviteLink, updateUser, linkGoogle, removeFriend } from '../api'
@@ -41,6 +41,9 @@ function Avatar({ user, size = 28 }: { user: Pick<UserInfo, 'name' | 'avatarUrl'
 
 const nav = [
   { to: '/for-you', label: 'For You', icon: Sparkles },
+  // Sits right after For You, where the mobile app puts it. BarChart2 is
+  // already Stats — this board is about movement, not your own distribution.
+  { to: '/charts', label: 'Charts', icon: TrendingUp },
   { to: '/library', label: 'Library', icon: Library },
   { to: '/ratings', label: 'Ratings', icon: List },
   { to: '/stats', label: 'Stats', icon: BarChart2 },

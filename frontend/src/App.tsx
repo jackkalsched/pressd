@@ -19,6 +19,7 @@ import Join from './pages/Join'
 import LandingPage from './pages/LandingPage'
 import Privacy from './pages/Privacy'
 import PublicCharts from './pages/PublicCharts'
+import Charts from './pages/Charts'
 import HowItWorks from './pages/HowItWorks'
 
 function PublicHome() {
@@ -33,11 +34,15 @@ function RequireUser({ children }: { children: ReactElement }) {
   return children
 }
 
-function ProtectedRoutes() {
+/** The app shell plus the first-login onboarding gate: no rated albums yet →
+ *  rate one before reaching the main site (skippable per session). /rate/:id
+ *  stays reachable — it's the flow the onboarding page hands off to.
+ *
+ *  Split out from ProtectedRoutes so a single page can sit behind the same gate
+ *  without going through the catch-all. A descendant <Routes> only matches
+ *  under a splat parent, so /charts could not reuse ProtectedRoutes directly. */
+function AppGate({ children }: { children: ReactElement }) {
   const { activeUser } = useUser()
-  // First-login onboarding: no rated albums yet → rate one before reaching
-  // the main site (skippable per session). /rate/:id stays reachable — it's
-  // the flow the onboarding page hands off to.
   const skipped = sessionStorage.getItem(ONBOARDING_SKIP_KEY) === '1'
   const { data: rated, isLoading } = useQuery({
     queryKey: ['albums', 'rated', activeUser?.id],
@@ -49,8 +54,21 @@ function ProtectedRoutes() {
     if (isLoading) return null
     if ((rated ?? []).length === 0) return <Navigate to="/welcome" replace />
   }
+  return <Layout>{children}</Layout>
+}
+
+/** Charts is the one board both audiences share, so it keeps a single URL and
+ *  resolves per visitor: signed out it's the public marketing view, signed in
+ *  it's the in-app board, with rows that open the album. */
+function ChartsRoute() {
+  const { activeUser } = useUser()
+  if (!activeUser) return <PublicCharts />
+  return <AppGate><Charts /></AppGate>
+}
+
+function ProtectedRoutes() {
   return (
-    <Layout>
+    <AppGate>
       <Routes>
         <Route path="/" element={<Navigate to="/for-you" replace />} />
         <Route path="/for-you" element={<ForYou />} />
@@ -62,7 +80,7 @@ function ProtectedRoutes() {
         <Route path="/album/:id" element={<AlbumDetail />} />
         <Route path="/artist/:name" element={<ArtistPage />} />
       </Routes>
-    </Layout>
+    </AppGate>
   )
 }
 
@@ -82,7 +100,7 @@ export default function App() {
           <Route path="/privacy" element={<Privacy />} />
           {/* Reachable from the landing page without an account. Must stay
               above the catch-all, or ProtectedRoutes bounces visitors home. */}
-          <Route path="/charts" element={<PublicCharts />} />
+          <Route path="/charts" element={<ChartsRoute />} />
           <Route path="/how-it-works" element={<HowItWorks />} />
           <Route path="/*" element={<ProtectedRoutes />} />
         </Routes>
