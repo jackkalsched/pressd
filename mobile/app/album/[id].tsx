@@ -18,7 +18,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as Haptics from 'expo-haptics'
-import { ArrowLeft, Check, ChevronRight, Heart, Pencil, Trash2 } from 'lucide-react-native'
+import { ArrowLeft, Check, ChevronRight, Heart, Pencil, Share2, Trash2 } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchAlbums,
@@ -40,15 +40,15 @@ import CommentThread from '../../components/CommentThread'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
 import BangSkip from '../../components/BangSkip'
 import ScoreDial from '../../components/ScoreDial'
-import { useDeleteAlbum } from '../../lib/useDeleteAlbum'
+import ShareCard from '../../components/ShareCard'
+import { confirmDeleteAlbum, useDeleteAlbum } from '../../lib/useDeleteAlbum'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const WINDOW_H = Dimensions.get('window').height
 
-// Destructive red, and the wash behind it. Shared by every delete control so
-// removing a record looks the same wherever you reach it from.
+// Destructive red, shared by every delete control so removing a record looks
+// the same wherever you reach it from.
 const DANGER = '#b91c1c'
-const DANGER_SOFT = 'rgba(185,28,28,0.09)'
 
 // The comparison card sits over the album backdrop, and at a lighter wash the
 // cover's own colors read straight through and fight the score type. Heavier
@@ -56,6 +56,48 @@ const DANGER_SOFT = 'rgba(185,28,28,0.09)'
 // is behind it, but still short of opaque — the art should show, not compete.
 const CMP_CARD_TINT = 0.18
 const CMP_CARD_BORDER = 0.26
+
+// Amber at parity, deepening toward green the further above and red the further
+// below — the same ramp the library score badges run. ±1.5 saturates it: album
+// scores cluster tightly enough that a gap that wide is already extreme.
+const DIFF_FULL = 1.5
+function diffColor(diff: number): string {
+  const t = Math.min(1, Math.abs(diff) / DIFF_FULL)
+  return diff >= 0
+    ? `hsl(${Math.round(30 + t * 108)}, 70%, 30%)`
+    : `hsl(${Math.round(30 - t * 30)}, 72%, 30%)`
+}
+
+/** The comparison in two lines: the sentence, with only the number carrying
+ *  colour, then the track that drove the gap. Splitting them stops a long song
+ *  title from wrapping the verdict into an unreadable block. */
+function CompareVerdict({
+  even,
+  diff,
+  before,
+  after,
+  widest,
+}: {
+  even: string
+  diff: number
+  before: string
+  after: string
+  widest: { title: string } | null
+}) {
+  if (Math.abs(diff) < 0.005) return <Text style={styles.cmpVerdict}>{even}</Text>
+  return (
+    <>
+      <Text style={styles.cmpVerdict}>
+        {before}
+        <Text style={[styles.cmpDiff, { color: diffColor(diff) }]}>{Math.abs(diff).toFixed(2)}</Text>
+        {after}
+      </Text>
+      {widest && (
+        <Text style={styles.cmpWidest}>Biggest difference on “{widest.title}”</Text>
+      )}
+    </>
+  )
+}
 
 export default function AlbumDetail() {
   const { id, community, name, artist, deezer, compare } = useLocalSearchParams<{
@@ -157,6 +199,20 @@ export default function AlbumDetail() {
     enabled: !!myCopyId,
   })
 
+  // Only your own copy can be deleted — a friend's rating isn't yours to remove.
+  // Declared above every early return: the community branch bails before this
+  // point, so leaving it further down changed the hook count between renders
+  // and blew up with "rendered more hooks than during the previous render" the
+  // moment a delete sent the page back through here.
+  const { confirmDelete, deleting } = useDeleteAlbum({
+    albumId,
+    albumName: album?.albumName ?? '',
+    onDeleted: () => router.back(),
+  })
+
+  // Above the early returns for the same reason useDeleteAlbum is.
+  const [sharing, setSharing] = useState(false)
+
   if (isCommunity) {
     if (communityLoading) {
       return (
@@ -205,6 +261,7 @@ export default function AlbumDetail() {
         }
         onRate={() => startRating(shown)}
         onQueue={() => queueAlbum(shown)}
+        onDeleted={() => router.back()}
       />
     )
   }
@@ -231,6 +288,10 @@ export default function AlbumDetail() {
   const cta =
     album.status === 'rated' ? 'Edit rating' : album.status === 'listening' ? 'Continue' : 'Rate this album'
   const isMine = user != null && album.userId === user.id
+
+  // Takes over the screen the way it does after a rating, so the card is the
+  // whole surface and the Share control sits directly beneath it.
+  if (sharing) return <ShareCard album={album} onClose={() => setSharing(false)} />
   const owner = !isMine && album.userId != null ? friends.find((f) => f.id === album.userId) ?? null : null
   const ownerColor = owner ? avatarColor(owner.name) : colors.green
 
@@ -249,13 +310,6 @@ export default function AlbumDetail() {
 
   const openArtist = (name: string) =>
     router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent(name) } })
-
-  // Only your own copy can be deleted — a friend's rating isn't yours to remove.
-  const { confirmDelete, deleting } = useDeleteAlbum({
-    albumId,
-    albumName: album.albumName,
-    onDeleted: () => router.back(),
-  })
 
   /** Get this album into your library at `status`, returning your copy's id.
    *  Three routes in: you already have it; Pressd has someone else's copy to
@@ -345,9 +399,25 @@ export default function AlbumDetail() {
             </Text>
           </View>
         )}
+        {/* Every action travels in one right-hand cluster. Left to space-between
+            they spread across the whole bar, and Compare drifts into the middle
+            where it reads as a title rather than a control. */}
+        <View style={styles.topBarRight}>
         {canCompare && (
           <Pressable style={styles.compareBtn} onPress={openCompare} hitSlop={8}>
             <Text style={styles.compareBtnText}>Compare</Text>
+          </Pressable>
+        )}
+        {/* Any finished album can be shared, not just your own — a friend's
+            rating is worth passing on too, and the card names whose it is. */}
+        {album.status === 'rated' && album.score != null && (
+          <Pressable
+            style={styles.shareBtn}
+            onPress={() => setSharing(true)}
+            hitSlop={10}
+            accessibilityLabel={`Share ${album.albumName}`}
+          >
+            <Share2 size={17} color={colors.green} />
           </Pressable>
         )}
         {/* Sits last in the bar, away from Back and Compare — destructive, so
@@ -367,6 +437,7 @@ export default function AlbumDetail() {
             )}
           </Pressable>
         )}
+        </View>
       </View>
 
       <Animated.ScrollView
@@ -483,6 +554,7 @@ function CommunityAlbum({
   onQueue,
   initialComparing = false,
   onOpenYours,
+  onDeleted,
 }: {
   data: CommunityAlbumData
   onBack: () => void
@@ -491,11 +563,16 @@ function CommunityAlbum({
   onQueue: () => Promise<void>
   initialComparing?: boolean
   onOpenYours?: () => void
+  /** Where to go once the copy is gone — this page is showing the thing that
+   *  just stopped existing. */
+  onDeleted?: () => void
 }) {
+  const queryClient = useQueryClient()
   const [comparing, setComparing] = useState(initialComparing)
   const [rating, setRating] = useState(false)
   const [queuing, setQueuing] = useState(false)
   const [queued, setQueued] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const notRated = data.your_status !== 'rated'
   const inLibrary = data.your_album_id != null
   const canCompare = data.you?.score != null && data.avg_score != null
@@ -515,13 +592,41 @@ function CommunityAlbum({
         <ArrowLeft size={18} color={colors.inkSecondary} />
         <Text style={styles.backText}>Back</Text>
       </Pressable>
-      {/* Only the way in lives up here — the comparison itself carries its own
-          pair of exits, so there's no second Average control competing. */}
-      {canCompare && !comparing ? (
-        <Pressable style={styles.compareBtn} onPress={() => setComparing(true)} hitSlop={8}>
-          <Text style={styles.compareBtnText}>Compare</Text>
-        </Pressable>
-      ) : null}
+      <View style={styles.topBarRight}>
+        {/* Only the way in lives up here — the comparison itself carries its own
+            pair of exits, so there's no second Average control competing. */}
+        {canCompare && !comparing ? (
+          <Pressable style={styles.compareBtn} onPress={() => setComparing(true)} hitSlop={8}>
+            <Text style={styles.compareBtnText}>Compare</Text>
+          </Pressable>
+        ) : null}
+        {/* Removing an unrated copy lives here rather than on the library tile:
+            a 12px target in a grid is a bad place for something with no undo,
+            and by this point you're looking at the record you'd be deleting.
+            Sits last in the bar, away from Back, like the rated page's. */}
+        {inLibrary && notRated && (
+          <Pressable
+            style={styles.deleteBtn}
+            onPress={() => {
+              if (deleting) return
+              confirmDeleteAlbum(
+                { albumId: data.your_album_id!, albumName: data.album_name, onDeleted },
+                queryClient,
+                setDeleting,
+              )
+            }}
+            disabled={deleting}
+            hitSlop={10}
+            accessibilityLabel={`Remove ${data.album_name} from your library`}
+          >
+            {deleting ? (
+              <ActivityIndicator size="small" color={DANGER} />
+            ) : (
+              <Trash2 size={17} color={DANGER} />
+            )}
+          </Pressable>
+        )}
+      </View>
     </View>
   )
 
@@ -539,11 +644,6 @@ function CommunityAlbum({
       const gap = Math.abs(t.your_score! - t.avg_score!)
       if (!widest || gap > widest.gap) widest = { title: t.title, gap }
     }
-    const verdict =
-      Math.abs(diff) < 0.005
-        ? `You landed exactly on the Pressd average.`
-        : `You rated this ${Math.abs(diff).toFixed(2)} ${diff > 0 ? 'above' : 'below'} the Pressd average` +
-          (widest ? ` — biggest gap on “${widest.title}”.` : '.')
 
     const left = youLeft
       ? { label: 'YOU', score: yourScore, color: colors.inkSecondary, head: colors.inkMuted }
@@ -611,7 +711,13 @@ function CommunityAlbum({
                 ))}
               </View>
 
-              <Text style={styles.cmpVerdict}>{verdict}</Text>
+              <CompareVerdict
+                even="You landed exactly on the Pressd average."
+                diff={diff}
+                before="You rated this "
+                after={` ${diff > 0 ? 'above' : 'below'} the Pressd average`}
+                widest={widest}
+              />
               <Text style={styles.cmpRaters}>Averaged across {raters}</Text>
             </View>
 
@@ -706,50 +812,66 @@ function CommunityAlbum({
             </View>
           )}
 
-          {notRated && (
-            <Pressable
-              style={({ pressed }) => [styles.cta, pressed && { backgroundColor: colors.greenPressed }]}
-              onPress={async () => {
-                if (rating) return
-                setRating(true)
-                try {
-                  await onRate()
-                } finally {
-                  setRating(false)
-                }
-              }}
-              disabled={rating}
-            >
-              {rating ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.ctaText}>
-                  {data.your_status === 'listening' ? 'Continue rating' : 'Rate now'}
-                </Text>
+          {/* The two ways in sit side by side rather than stacked — they're
+              alternatives, not a primary with an afterthought under it. Each
+              takes an equal share of the row, and a lone one spans the width on
+              its own. Queueing only means anything for albums you don't hold. */}
+          {(notRated || !inLibrary) && (
+            <View style={styles.ctaRow}>
+              {notRated && (
+                <Pressable
+                  style={({ pressed }) => [styles.cta, styles.ctaInRow, pressed && { backgroundColor: colors.greenPressed }]}
+                  onPress={async () => {
+                    if (rating) return
+                    setRating(true)
+                    try {
+                      await onRate()
+                    } finally {
+                      setRating(false)
+                    }
+                  }}
+                  disabled={rating}
+                >
+                  {rating ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.ctaText} numberOfLines={1}>
+                      {data.your_status === 'listening' ? 'Continue' : 'Rate now'}
+                    </Text>
+                  )}
+                </Pressable>
               )}
-            </Pressable>
-          )}
 
-          {/* Queueing only means anything for albums you don't already hold. */}
-          {!inLibrary && (
-            <Pressable
-              style={styles.queueBtn}
-              onPress={async () => {
-                if (queuing || queued) return
-                setQueuing(true)
-                try {
-                  await onQueue()
-                  setQueued(true)
-                } finally {
-                  setQueuing(false)
-                }
-              }}
-              disabled={queuing || queued}
-            >
-              <Text style={styles.queueBtnText}>
-                {queued ? 'Added to To Listen' : queuing ? 'Adding…' : 'Add to To Listen'}
-              </Text>
-            </Pressable>
+              {!inLibrary && (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.cta,
+                    styles.ctaInRow,
+                    queued && styles.ctaDone,
+                    pressed && !queued && { backgroundColor: colors.greenPressed },
+                  ]}
+                  onPress={async () => {
+                    if (queuing || queued) return
+                    setQueuing(true)
+                    try {
+                      await onQueue()
+                      setQueued(true)
+                    } finally {
+                      setQueuing(false)
+                    }
+                  }}
+                  disabled={queuing || queued}
+                >
+                  {queuing ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.ctaText} numberOfLines={1}>
+                      {queued ? 'Added' : 'Add to Library'}
+                    </Text>
+                  )}
+                </Pressable>
+              )}
+            </View>
           )}
 
           <Text style={styles.sectionLabel}>TRACKS</Text>
@@ -891,11 +1013,6 @@ function FriendCompare({
     ? { label: owner.name.toUpperCase(), score: theirScore, color, head: color }
     : { label: 'YOU', score: myScore, color: colors.inkSecondary, head: colors.inkMuted }
 
-  const verdict =
-    Math.abs(diff) < 0.005
-      ? `You and ${owner.name} landed on exactly the same score.`
-      : `${owner.name} rated this ${Math.abs(diff).toFixed(2)} ${diff > 0 ? 'higher' : 'lower'} than you` +
-        (widest ? ` — biggest gap on “${widest.title}”.` : '.')
 
   async function like() {
     if (!user) return
@@ -981,7 +1098,13 @@ function FriendCompare({
               ))}
             </View>
 
-            <Text style={styles.cmpVerdict}>{verdict}</Text>
+            <CompareVerdict
+              even={`You and ${owner.name} landed on exactly the same score.`}
+              diff={diff}
+              before={`${owner.name} rated this `}
+              after={` ${diff > 0 ? 'higher' : 'lower'} than you`}
+              widest={widest}
+            />
           </View>
 
           {/* Their review */}
@@ -1142,6 +1265,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
   },
+  // Compare and the delete control travel together at the right, so the bar
+  // still reads as one edge no matter which of them is showing.
+  topBarRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   backText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.inkSecondary },
   ownerTag: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
@@ -1196,6 +1322,10 @@ const styles = StyleSheet.create({
   railAxis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
   railAxisLabel: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted },
   cmpVerdict: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.inkSecondary, marginTop: spacing.md },
+  // Only the number is coloured — the sentence around it stays neutral so the
+  // gradient reads as data rather than decoration.
+  cmpDiff: { fontFamily: fonts.bodyBold, fontSize: 14 },
+  cmpWidest: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.inkSecondary, marginTop: 2 },
 
   cmpReview: { marginTop: spacing.xl },
   cmpSection: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.2 },
@@ -1268,20 +1398,42 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  // These three sit directly on the album backdrop. A 10% tint washed out over
+  // busy artwork; a light fill read as a white cell stamped on the art. The
+  // middle ground is a stronger tint of their own colour plus a border, so the
+  // artwork still shows through the control.
   compareBtn: {
-    backgroundColor: colors.greenSoft,
+    backgroundColor: 'rgba(45,106,79,0.20)',
+    borderWidth: 1,
+    borderColor: 'rgba(45,106,79,0.38)',
     borderRadius: radii.pill,
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    // Matches the 34pt icon buttons beside it so the cluster sits on one line
+    // rather than three controls of three heights.
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   compareBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
+  shareBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(45,106,79,0.20)',
+    borderWidth: 1,
+    borderColor: 'rgba(45,106,79,0.38)',
+  },
   deleteBtn: {
     width: 34,
     height: 34,
     borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: DANGER_SOFT,
+    backgroundColor: 'rgba(185,28,28,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(185,28,28,0.34)',
   },
   raterLine: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 4 },
 
@@ -1327,16 +1479,27 @@ const styles = StyleSheet.create({
   factorValue: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.ink },
   factorLabel: { fontFamily: fonts.bodyMedium, fontSize: 10, color: colors.inkSecondary, marginTop: 2 },
 
+  ctaRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xl },
+  // The standalone button — Edit rating on a finished album. Owns its own top
+  // margin, since nothing wraps it.
   cta: {
     backgroundColor: colors.green,
     borderRadius: radii.md,
+    // Horizontal padding as well as vertical: at half width the label would
+    // otherwise sit hard against the edges of its own button.
     paddingVertical: 15,
+    paddingHorizontal: spacing.md,
+    minHeight: 52,
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: spacing.xl,
   },
+  // Paired inside ctaRow, which supplies the margin for both.
+  ctaInRow: { flex: 1, marginTop: 0 },
+  // Shelved: holds the button's shape so the row doesn't reflow under the tap,
+  // but stops reading as something still to press.
+  ctaDone: { backgroundColor: colors.inkMuted },
   ctaText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: '#fff' },
-  queueBtn: { alignSelf: 'center', paddingVertical: spacing.md },
-  queueBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
 
   sectionLabel: {
     fontFamily: fonts.bodyBold,
