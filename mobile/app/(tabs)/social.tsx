@@ -318,7 +318,7 @@ export default function Social() {
           scrollEventThrottle={16}
           renderItem={({ item, index }) => (
             <View style={index > 0 ? styles.divider : undefined}>
-              <CompareCard item={item} onOpen={openAlbum} />
+              <CompareCard item={item} onOpen={openAlbum} onOpenUser={openFriend} />
             </View>
           )}
           ListEmptyComponent={
@@ -626,25 +626,36 @@ function NumberLine({ raters }: { raters: CompareItem['raters'] }) {
       />
       {raters.map((r, i) => {
         const x = pos(r.score)
+        // A real picture replaces the initial in the bubble; the tick below it
+        // still takes the name's color, so the mark stays findable on the line
+        // whether or not the photo reads at 26px.
+        const color = r.is_you ? colors.ink : avatarColor(r.name)
         if (r.is_you) {
           // Same bubble as friends, set apart by a soft glow ring.
           return (
             <View key={i} pointerEvents="none">
-              <View style={[styles.lineTick, { left: x - 1.5, backgroundColor: colors.ink }]} />
+              <View style={[styles.lineTick, { left: x - 1.5, backgroundColor: color }]} />
               <View style={[styles.youGlow, { left: clamp(x - 15, 0, CONTENT_W - 30) }]}>
-                <View style={styles.youBubble}>
-                  <Text style={styles.bubbleText}>{r.name[0]?.toUpperCase()}</Text>
-                </View>
+                {r.avatar_url ? (
+                  <Image source={{ uri: r.avatar_url }} style={styles.bubbleImg} contentFit="cover" />
+                ) : (
+                  <View style={styles.youBubble}>
+                    <Text style={styles.bubbleText}>{r.name[0]?.toUpperCase()}</Text>
+                  </View>
+                )}
               </View>
             </View>
           )
         }
-        const color = avatarColor(r.name)
         return (
           <View key={i} pointerEvents="none">
             <View style={[styles.lineTick, { left: x - 1.5, backgroundColor: color }]} />
             <View style={[styles.bubble, { left: clamp(x - 13, 0, CONTENT_W - 26), backgroundColor: color }]}>
-              <Text style={styles.bubbleText}>{r.name[0]?.toUpperCase()}</Text>
+              {r.avatar_url ? (
+                <Image source={{ uri: r.avatar_url }} style={styles.bubbleImg} contentFit="cover" />
+              ) : (
+                <Text style={styles.bubbleText}>{r.name[0]?.toUpperCase()}</Text>
+              )}
             </View>
           </View>
         )
@@ -658,7 +669,15 @@ function NumberLine({ raters }: { raters: CompareItem['raters'] }) {
   )
 }
 
-function CompareCard({ item, onOpen }: { item: CompareItem; onOpen: (id: number) => void }) {
+function CompareCard({
+  item,
+  onOpen,
+  onOpenUser,
+}: {
+  item: CompareItem
+  onOpen: (id: number) => void
+  onOpenUser: (id: number) => void
+}) {
   const week = item.recent ? ' this week' : ''
   const subtitle =
     item.highlight === 'disagreement'
@@ -671,7 +690,17 @@ function CompareCard({ item, onOpen }: { item: CompareItem; onOpen: (id: number)
       <View style={styles.compareHead}>
         <AlbumTile name={item.album_name} url={item.album_art_url} size={72} />
         <View style={styles.compareHeadText}>
-          <Text style={styles.compareName} numberOfLines={1}>{item.album_name}</Text>
+          {/* The title is the way in — a separate "View album" button underneath
+              said the same thing twice, and the name is what you were reaching
+              for anyway. */}
+          <Pressable
+            onPress={() => onOpen(item.album_id)}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${item.album_name}`}
+          >
+            <Text style={styles.compareName} numberOfLines={1}>{item.album_name}</Text>
+          </Pressable>
           <Text style={styles.compareMeta} numberOfLines={1}>
             {item.artist}{item.year ? ` · ${item.year}` : ''}
           </Text>
@@ -684,8 +713,24 @@ function CompareCard({ item, onOpen }: { item: CompareItem; onOpen: (id: number)
       <View style={styles.stack}>
         {item.raters.map((r, i) => (
           <View key={i} style={styles.stackRow}>
-            <Avatar name={r.name} size={28} style={r.is_you ? { backgroundColor: colors.ink } : undefined} />
-            <Text style={styles.stackName}>{r.is_you ? 'You' : r.name}</Text>
+            {/* Avatar + name are the link. Your own row isn't one — you're
+                already looking at your ratings. */}
+            <Pressable
+              style={styles.stackWho}
+              onPress={() => !r.is_you && onOpenUser(r.user_id)}
+              disabled={r.is_you}
+              hitSlop={6}
+              accessibilityRole={r.is_you ? undefined : 'button'}
+              accessibilityLabel={r.is_you ? undefined : `View ${r.name}'s profile`}
+            >
+              <Avatar
+                name={r.name}
+                url={r.avatar_url}
+                size={28}
+                style={r.is_you && !r.avatar_url ? { backgroundColor: colors.ink } : undefined}
+              />
+              <Text style={styles.stackName}>{r.is_you ? 'You' : r.name}</Text>
+            </Pressable>
             {r.review ? (
               <Text style={styles.stackReview} numberOfLines={1}>“{r.review}”</Text>
             ) : (
@@ -696,9 +741,6 @@ function CompareCard({ item, onOpen }: { item: CompareItem; onOpen: (id: number)
         ))}
       </View>
 
-      <Pressable style={styles.viewAlbum} onPress={() => onOpen(item.album_id)} hitSlop={6}>
-        <Text style={styles.viewAlbumText}>View album</Text>
-      </Pressable>
     </View>
   )
 }
@@ -813,6 +855,15 @@ const styles = StyleSheet.create({
   },
   bubbleText: { fontFamily: fonts.bodyBold, fontSize: 11, color: '#fff' },
   lineTick: { position: 'absolute', top: 32, width: 3, height: 11, borderRadius: 1.5 },
+  // Fills the bubble edge to edge. Keeps the same ring as the initial version
+  // so a photo and a fallback sit identically on the line.
+  bubbleImg: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: colors.bg,
+  },
   youGlow: {
     position: 'absolute',
     top: 4,
@@ -843,11 +894,12 @@ const styles = StyleSheet.create({
 
   stack: { marginTop: spacing.md },
   stackRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6 },
+  // Avatar + name as one tap target. Sized to its contents so the review text
+  // beside it keeps the rest of the row.
+  stackWho: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   stackName: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
   stackReview: { flex: 1, fontFamily: fonts.displayRegular, fontSize: 14, color: colors.inkSecondary },
   stackScore: { fontFamily: fonts.bodyBold, fontSize: 18 },
-  viewAlbum: { marginTop: spacing.md, alignSelf: 'flex-start' },
-  viewAlbumText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
 
   empty: { fontFamily: fonts.body, fontSize: 14, color: colors.inkTertiary, textAlign: 'center', marginTop: spacing.xxl, paddingHorizontal: spacing.lg },
 

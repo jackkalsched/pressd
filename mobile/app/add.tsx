@@ -47,6 +47,25 @@ export default function AddAlbum() {
     return `${r.source}:${r.source_id}`
   }
 
+  /** The third way out of a search result: look before you commit. Opens the
+   *  userbase view by name+artist — the record may not be in Pressd at all yet
+   *  — carrying the Deezer id when we have one so the tracklist resolves and
+   *  Rate now can import from it. Nothing is written to the library here. */
+  function preview(r: AlbumSearchResult) {
+    const deezerId = r.source === 'deezer' ? r.source_id : null
+    router.push({
+      pathname: '/album/[id]',
+      params: {
+        // The id segment goes unused once name+artist are present, but the
+        // route still requires one.
+        id: deezerId ?? '0',
+        name: r.album_name,
+        artist: r.artist,
+        ...(deezerId ? { deezer: deezerId } : {}),
+      },
+    })
+  }
+
   /** Both actions import the same album — they differ in the status it lands
    *  in and where you end up. "Rate now" opens the rating flow; "Add to
    *  library" shelves it under To Listen and stays here, so several records
@@ -141,21 +160,30 @@ export default function AddAlbum() {
           const done = shelved.includes(keyFor(item))
           return (
             <View style={styles.row}>
-              {item.cover_url ? (
-                <Image source={{ uri: item.cover_url }} style={styles.cover} contentFit="cover" />
-              ) : (
-                <View style={[styles.cover, styles.coverFallback]}>
-                  <Text style={styles.coverInitial}>{item.album_name[0]?.toUpperCase()}</Text>
+              {/* The record itself is the third action: tap it to read the
+                  tracklist before deciding. Only the art and title area — the
+                  two buttons keep their own targets. */}
+              <Pressable
+                style={styles.rowMain}
+                onPress={() => preview(item)}
+                accessibilityLabel={`See ${item.album_name} by ${item.artist}`}
+              >
+                {item.cover_url ? (
+                  <Image source={{ uri: item.cover_url }} style={styles.cover} contentFit="cover" />
+                ) : (
+                  <View style={[styles.cover, styles.coverFallback]}>
+                    <Text style={styles.coverInitial}>{item.album_name[0]?.toUpperCase()}</Text>
+                  </View>
+                )}
+                <View style={styles.rowText}>
+                  <Text style={styles.albumName} numberOfLines={1}>{item.album_name}</Text>
+                  <Text style={styles.meta} numberOfLines={1}>
+                    {item.artist}
+                    {meta(item)}
+                    {item.upcoming ? ' · upcoming' : ''}
+                  </Text>
                 </View>
-              )}
-              <View style={styles.rowText}>
-                <Text style={styles.albumName} numberOfLines={1}>{item.album_name}</Text>
-                <Text style={styles.meta} numberOfLines={1}>
-                  {item.artist}
-                  {meta(item)}
-                  {item.upcoming ? ' · upcoming' : ''}
-                </Text>
-              </View>
+              </Pressable>
 
               {/* Two ways in: score it now, or shelve it for later. Icons rather
                   than labels — at this row height, two worded buttons would
@@ -235,6 +263,9 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     borderRadius: radii.md,
   },
+  // Takes the row's slack so the tap target reaches the buttons rather than
+  // stopping at the end of the title.
+  rowMain: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   cover: { width: 52, height: 52, borderRadius: radii.sm },
   coverFallback: { backgroundColor: colors.inset, alignItems: 'center', justifyContent: 'center' },
   coverInitial: { fontFamily: fonts.display, fontSize: 22, color: colors.inkMuted },

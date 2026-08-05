@@ -31,7 +31,7 @@ import {
   type TopReview,
   type TrendingAlbum,
 } from '../../lib/api'
-import { songScoreColor } from '@pressd/shared/types'
+import { songScoreColor, type Album } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
@@ -169,6 +169,18 @@ export default function ForYou() {
   function openRate(id: number) {
     router.push({ pathname: '/rate/[id]', params: { id: String(id) } })
   }
+  /** Rate this next leads with recommendations, and a recommendation is someone
+   *  else's pick — dropping straight into the scoring flow scores a record the
+   *  person hasn't heard of yet and gives them no way to look at it first. Open
+   *  the album instead, which carries its own Rate now. Albums you queued
+   *  yourself keep the fast path: you already know what they are. */
+  function openSuggestion(a: Album) {
+    if (a.recommendedByName) {
+      router.push({ pathname: '/album/[id]', params: { id: String(a.id), community: '1' } })
+      return
+    }
+    openRate(a.id)
+  }
   async function likeReview(albumId: number) {
     if (!user) return
     try {
@@ -244,7 +256,7 @@ export default function ForYou() {
         {suggestion && (
           <View style={styles.block}>
             <SectionHead label="RATE THIS NEXT" />
-            <Pressable style={styles.suggestCell} onPress={() => openRate(suggestion.id)}>
+            <Pressable style={styles.suggestCell} onPress={() => openSuggestion(suggestion)}>
               <View style={styles.mediaRow}>
                 <Cover uri={suggestion.albumArtUrl} seed={suggestion.albumName} size={64} />
                 <View style={styles.mediaText}>
@@ -267,8 +279,12 @@ export default function ForYou() {
                   </View>
                 )}
               </View>
+              {/* Say where the tap actually goes — a recommendation opens the
+                  record, it doesn't start scoring it. */}
               <View style={styles.suggestCta}>
-                <Text style={styles.textCtaLabel}>Start rating</Text>
+                <Text style={styles.textCtaLabel}>
+                  {suggestion.recommendedByName ? 'See album' : 'Start rating'}
+                </Text>
                 <ArrowRight size={14} color={colors.green} />
               </View>
             </Pressable>

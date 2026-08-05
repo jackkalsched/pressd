@@ -80,6 +80,11 @@ export default function ProfileBanner({
   return (
     <>
       <View style={[styles.banner, { paddingTop: topInset + spacing.sm }]}>
+        {/* Pull-to-refresh drags the content down and exposes whatever sits
+            above it. Without this the screen's cream shows through and the
+            banner reads as a floating block, so carry the green up past the
+            top of the scroll view. */}
+        <View style={styles.overscroll} pointerEvents="none" />
         <View style={styles.bannerTop}>
           <View style={styles.avatar}>
             {avatarUrl ? (
@@ -208,6 +213,16 @@ const styles = StyleSheet.create({
     marginHorizontal: -spacing.lg,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.lg + 10,
+  },
+  // Taller than any realistic pull, and bled past both edges so it spans the
+  // full width regardless of the banner's own horizontal padding.
+  overscroll: {
+    position: 'absolute',
+    top: -600,
+    left: -spacing.lg * 2,
+    right: -spacing.lg * 2,
+    height: 600,
+    backgroundColor: colors.green,
   },
   bannerTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.sm },
   avatar: {

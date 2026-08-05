@@ -15,10 +15,10 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { Check, ChevronDown, Search, Settings, Trash2, X } from 'lucide-react-native'
+import { Check, ChevronDown, Search, Settings, X } from 'lucide-react-native'
 import {
   fetchAlbums,
   fetchSummary,
@@ -29,7 +29,6 @@ import {
 } from '../../lib/api'
 import { songScoreColor, type Album, type AlbumStatus } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
-import { confirmDeleteAlbum } from '../../lib/useDeleteAlbum'
 import StatsView from '../../components/StatsView'
 import ProfileBanner from '../../components/ProfileBanner'
 import SettingsSheet from '../../components/SettingsSheet'
@@ -120,13 +119,17 @@ export default function Profile() {
   const { user } = useAuth()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const queryClient = useQueryClient()
   const [tab, setTab] = useState<Tab>('library')
   const [libStatus, setLibStatus] = useState<AlbumStatus>('rated')
   const [rankMode, setRankMode] = useState<RankMode>('albums')
   const [rankMetric, setRankMetric] = useState('score')
   const [rankDir, setRankDir] = useState<'asc' | 'desc'>('desc')
   const [rankSearch, setRankSearch] = useState('')
+  // Kept separate from the Rankings search so switching sub-tabs doesn't carry
+  // one filter into a list it wasn't typed for. It does persist across the
+  // Rated / Listening / To Listen chips, though — those are three views of one
+  // library, and re-typing to follow a record between them is busywork.
+  const [libSearch, setLibSearch] = useState('')
   const [metricOpen, setMetricOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -215,6 +218,7 @@ export default function Profile() {
   const rankMetrics = rankMode === 'albums' ? ALBUM_METRICS : ARTIST_METRICS
   const currentMetric = rankMetrics.find((m) => m.key === rankMetric) ?? rankMetrics[0]
   const q = rankSearch.trim().toLowerCase()
+  const libQ = libSearch.trim().toLowerCase()
 
   const rankedAlbums = useMemo(() => {
     if (tab !== 'ratings' || rankMode !== 'albums') return []
@@ -249,13 +253,17 @@ export default function Profile() {
   // To Listen has no ratings to order by, so lead with the model's guess — the
   // most promising records first. Unscored albums sink rather than sorting as
   // zero: "no prediction yet" isn't the same claim as "predicted terrible".
-  const gridSorted = useMemo(
-    () =>
-      libStatus === 'to_listen'
-        ? [...grid].sort((a, b) => (b.predictedScore ?? -1) - (a.predictedScore ?? -1))
-        : grid,
-    [grid, libStatus],
-  )
+  // Album or artist, either one: you rarely remember which you're reaching for.
+  const gridSorted = useMemo(() => {
+    const matched = libQ
+      ? grid.filter(
+          (a) => a.albumName.toLowerCase().includes(libQ) || a.artist.toLowerCase().includes(libQ),
+        )
+      : grid
+    return libStatus === 'to_listen'
+      ? [...matched].sort((a, b) => (b.predictedScore ?? -1) - (a.predictedScore ?? -1))
+      : matched
+  }, [grid, libStatus, libQ])
 
   const listData: (Album | ArtistRank)[] = isGrid
     ? gridSorted
@@ -284,7 +292,9 @@ export default function Profile() {
         onScroll={onScroll}
         scrollEventThrottle={16}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.green} />
+          // Cream, not the default gray: the spinner sits in the green the
+          // banner carries up over the pull, where a gray wheel disappears.
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.bg} />
         }
         ListHeaderComponent={
           <View>
@@ -327,21 +337,46 @@ export default function Profile() {
               ))}
             </View>
 
-            {/* Status filter (Library only) */}
+            {/* Status filter + search (Library only) */}
             {tab === 'library' && (
-              <View style={styles.statusRow}>
-                {STATUSES.map(({ key, label }) => (
-                  <Pressable
-                    key={key}
-                    style={[styles.chip, libStatus === key && styles.chipActive]}
-                    onPress={() => setLibStatus(key)}
-                  >
-                    <Text style={[styles.chipText, libStatus === key && styles.chipTextActive]}>
-                      {label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+              <>
+                <View style={styles.statusRow}>
+                  {STATUSES.map(({ key, label }) => (
+                    <Pressable
+                      key={key}
+                      style={[styles.chip, libStatus === key && styles.chipActive]}
+                      onPress={() => setLibStatus(key)}
+                    >
+                      <Text style={[styles.chipText, libStatus === key && styles.chipTextActive]}>
+                        {label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={styles.searchBar}>
+                  <Search size={15} color={colors.inkTertiary} />
+                  <TextInput
+                    style={styles.searchBarInput}
+                    value={libSearch}
+                    onChangeText={setLibSearch}
+                    placeholder="Search album or artist"
+                    placeholderTextColor={colors.inkTertiary}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                    returnKeyType="search"
+                    clearButtonMode="never"
+                  />
+                  {libSearch.length > 0 && (
+                    <Pressable
+                      onPress={() => setLibSearch('')}
+                      hitSlop={8}
+                      accessibilityLabel="Clear search"
+                    >
+                      <X size={14} color={colors.inkMuted} />
+                    </Pressable>
+                  )}
+                </View>
+              </>
             )}
 
             {/* Rankings filters: Albums/Artists pills + metric dropdown + search */}
@@ -368,14 +403,14 @@ export default function Profile() {
                     <ChevronDown size={13} color={colors.inkSecondary} />
                   </Pressable>
                 </View>
-                <View style={styles.rankSearch}>
-                  <Search size={15} color={colors.inkMuted} />
+                <View style={styles.searchBar}>
+                  <Search size={15} color={colors.inkTertiary} />
                   <TextInput
-                    style={styles.rankSearchInput}
+                    style={styles.searchBarInput}
                     value={rankSearch}
                     onChangeText={setRankSearch}
                     placeholder="Search your library"
-                    placeholderTextColor={colors.inkMuted}
+                    placeholderTextColor={colors.inkTertiary}
                     autoCorrect={false}
                   />
                   {rankSearch.length > 0 && (
@@ -412,14 +447,6 @@ export default function Profile() {
                   })
                 }
               }}
-              onDelete={
-                (item as Album).status === 'to_listen'
-                  ? () => {
-                      const a = item as Album
-                      confirmDeleteAlbum({ albumId: a.id, albumName: a.albumName }, queryClient)
-                    }
-                  : undefined
-              }
             />
           ) : rankMode === 'artists' ? (
             <ArtistRankRow
@@ -443,7 +470,11 @@ export default function Profile() {
             <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
           ) : isGrid ? (
             <Text style={styles.emptyText}>
-              {libStatus === 'rated'
+              {/* A filtered-to-nothing shelf and an empty one look identical
+                  otherwise, and the fix for each is the opposite. */}
+              {libQ
+                ? 'No albums match your search.'
+                : libStatus === 'rated'
                 ? 'No rated albums yet.'
                 : libStatus === 'listening'
                 ? 'Nothing in progress.'
@@ -497,13 +528,12 @@ export default function Profile() {
 }
 
 function AlbumCell({
-  album, mu, sd, onPress, onDelete,
+  album, mu, sd, onPress,
 }: {
   album: Album
   mu: number
   sd: number
   onPress: () => void
-  onDelete?: () => void
 }) {
   const showScore = album.status === 'rated' && album.score != null
   const badge = showScore ? scoreBadgeColor(album.score!, mu, sd) : null
@@ -516,19 +546,6 @@ function AlbumCell({
           <View style={[styles.art, styles.artFallback]}>
             <Text style={styles.artInitial}>{album.albumName[0]?.toUpperCase()}</Text>
           </View>
-        )}
-        {/* Opposite corner from the prediction badge, so the two don't collide.
-            A tile is a small target for something destructive — the confirm
-            dialog is what makes a stray tap harmless. */}
-        {onDelete && (
-          <Pressable
-            style={styles.cellDelete}
-            onPress={onDelete}
-            hitSlop={8}
-            accessibilityLabel={`Delete ${album.albumName} from your library`}
-          >
-            <Trash2 size={12} color="#fff" />
-          </Pressable>
         )}
         {/* Rated: desktop-style white pill, colored text + border (top-right) */}
         {showScore ? (
@@ -669,17 +686,6 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   scoreBadgeText: { fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: -0.2 },
-  cellDelete: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(28,25,23,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   predBadge: {
     position: 'absolute',
     top: 6,
@@ -709,7 +715,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.inset,
   },
   metricBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.inkSecondary },
-  rankSearch: {
+  // Shared by the Library filter and the Rankings search — same control, two
+  // lists.
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -721,7 +729,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  rankSearchInput: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: colors.ink },
+  searchBarInput: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: colors.ink },
   rankNum: { fontFamily: fonts.display, fontSize: 15, color: colors.inkMuted, width: 22, textAlign: 'center' },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.4)', justifyContent: 'flex-end' },

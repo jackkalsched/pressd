@@ -2,7 +2,7 @@
 // AlbumDetail. Three layers, bottom to top:
 //   1. the page tint — a vertical gradient in the album's own hue, matching
 //      desktop's accentToPageGradient (strong at the top, app bg by 60%)
-//   2. the cover, blurred and bled from the top-right
+//   2. the cover, blurred and bled from the top, centered across the page
 //   3. a radial vignette dissolving the cover's square edge into that tint,
 //      then a bottom fade so text further down the page keeps its contrast
 import { useMemo } from 'react'
@@ -15,13 +15,16 @@ import { colors } from '../theme/tokens'
 
 const { width: W } = Dimensions.get('window')
 
-// Blurred cover bleed, anchored top-right and oversized so the wash reaches
+// Blurred cover bleed, centered horizontally and oversized so the wash reaches
 // across the upper page. Image and vignette share this frame so the radial
 // fade lines up; the fade goes solid well inside the square, which is why it
 // can overhang every edge without the artwork's border ever showing.
 const ART = W * 1.4
 const ART_TOP = -W * 0.2
-const ART_RIGHT = -W * 0.3
+// (W - ART) / 2 — the overhang split evenly, so the cover's midpoint sits on
+// the screen's. Anchoring one side instead pushes the artwork's centre off the
+// page and clips whatever it carries there.
+const ART_LEFT = (W - ART) / 2
 
 // Fully transparent app-bg. Interpolating from the literal 'transparent'
 // keyword muddies through black on Android, so fade from this instead.
@@ -113,5 +116,5 @@ export default function AlbumBackdrop({
 
 const styles = StyleSheet.create({
   fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  artPos: { position: 'absolute', top: ART_TOP, right: ART_RIGHT, width: ART, height: ART },
+  artPos: { position: 'absolute', top: ART_TOP, left: ART_LEFT, width: ART, height: ART },
 })
