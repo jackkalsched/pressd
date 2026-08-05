@@ -39,6 +39,7 @@ import {
   type CommunityAlbum as CommunityAlbumData,
 } from '../../lib/api'
 import { songScoreColor, avatarColor, EP_MAX_TRACKS, type Album, type Song } from '@pressd/shared/types'
+import { normalizeTrackTitle } from '@pressd/shared/albumSearch'
 import { useAuth } from '../../lib/auth'
 import CommentThread from '../../components/CommentThread'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
@@ -1011,7 +1012,9 @@ function tint(hsl: string, alpha: number): string {
   return hsl.replace('hsl(', 'hsla(').replace(')', `, ${alpha})`)
 }
 
-const normTitle = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '')
+// Matching your copy's tracks to theirs: same rules the server uses, so the
+// two views agree about what counts as one track.
+const normTitle = normalizeTrackTitle
 
 /** Clip a display name so long usernames can't blow out a column header. */
 const shortName = (name: string, max: number) =>

@@ -33,6 +33,24 @@ export function normalizeTitle(s: string): string {
   return t.replace(/[^a-z0-9]+/g, ' ').trim()
 }
 
+// Credit segments, which name the same recording: "(feat. X)", "[with Y]",
+// and the bare trailing form "Song feat. X".
+const FEAT_PAREN = /[([][^)\]]*\b(feat\.?|featuring|ft\.?|with)\b[^)\]]*[)\]]/gi
+const FEAT_TAIL = /\s\b(feat\.?|featuring|ft\.?)\b\s.*$/i
+
+/** Comparison key for a *track* title. Mirrors `match_title` in
+ *  backend/trackkeys.py — copies of one album disagree both about spelling the
+ *  feat-credit out ("From Time" vs "From Time (feat. Jhene Aiko)") and about
+ *  edition suffixes ("(Album Version)"), and matching on punctuation alone
+ *  splits a single track into two. Keep the two implementations in step. */
+export function normalizeTrackTitle(s: string): string {
+  let t = deaccent(s || '').toLowerCase()
+  t = t.replace(FEAT_PAREN, ' ').replace(EDITION_PAREN, ' ').replace(EDITION_TRAIL, ' ')
+  t = t.replace(FEAT_TAIL, ' ')
+  const cleaned = t.replace(/[^a-z0-9]+/g, ' ').trim()
+  return cleaned || deaccent(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
 function tokens(s: string): string[] {
   return normalizeTitle(s).split(' ').filter(Boolean)
 }

@@ -49,6 +49,22 @@ _EDITION_PAREN = re.compile(
     r"explicit|bonus|mono|stereo|reissue|remix|mix)\b[^)\]]*[)\]]", re.I)
 
 
+def match_title(title: str) -> str:
+    """Same-recording key for a *track* title.
+
+    Copies of one album disagree about titles in two ways at once: whether the
+    feat-credit is spelled out ("From Time" vs "From Time (feat. Jhene Aiko)")
+    and whether an edition qualifier is appended ("(Album Version)"). `_clean`
+    alone only handles the first, so a bare `re.sub` on punctuation — or
+    `_clean` on its own — splits one track into two rows on the community view.
+
+    Comparison only. `track_key` stays the stored key and must not change.
+    """
+    raw = title or ""
+    stripped = _EDITION_PAREN.sub(" ", raw)
+    return _clean(stripped) or _clean(raw)
+
+
 def _clean_album(s: str) -> str:
     """_clean plus parenthesized edition qualifiers — for comparing album names
     across catalogs. Kept separate from `album_key`, whose output is a stored

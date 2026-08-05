@@ -13,6 +13,7 @@ from ..deps import current_user, authorize_view, are_friends
 from ..models import Album, Song, SongAudioFeatures, PressUser, Like, Comment
 from ..scoring import compute_a_score, recompute_all_scores, BANG_THRESHOLD, SKIP_THRESHOLD
 from ..genres import GENRES, canonical_genre, canonical_subgenre
+from ..trackkeys import match_title, same_album
 
 router = APIRouter(prefix="/albums", tags=["albums"])
 
@@ -322,12 +323,7 @@ def import_album(
         if existing:
             return _return_existing(existing)
     else:
-        existing = session.exec(
-            select(Album)
-            .where(Album.album_name == data.get("album_name"))
-            .where(Album.artist == data.get("artist"))
-            .where(Album.user_id == user_id)
-        ).first()
+        existing = _find_users_copy(session, user_id, data.get("album_name"), data.get("artist"))
         if existing:
             return _return_existing(existing)
 
@@ -702,13 +698,7 @@ def recommend_album(
             detail="That album has no tracklist yet, so there's nothing to send. Open it once to resolve its tracks, then try again.",
         )
 
-    existing = session.exec(
-        select(Album).where(
-            Album.user_id == friend_id,
-            Album.album_name == source.album_name,
-            Album.artist == source.artist,
-        )
-    ).first()
+    existing = _find_users_copy(session, friend_id, source.album_name, source.artist)
 
     if existing:
         existing.recommended_by = recommender_id
@@ -773,6 +763,46 @@ def recommend_album(
     return {"ok": True, "already_existed": False}
 
 
+def _find_users_copy(session: Session, user_id: int, album_name: str, artist: str,
+                     *, with_songs: bool = False) -> Album | None:
+    """The copy this user already holds of a given record, if any.
+
+    Matched with `same_album` rather than string equality. Two people adding
+    one album from different catalogs get different strings for it — "Nothing
+    Was The Same (Deluxe)" against "Nothing Was the Same (Deluxe)", credits
+    spelled out or not — and an `==` lookup answers "no copy" to all of them,
+    which is how a second copy of a record you already own gets created.
+
+    Narrowed in SQL by user, compared in Python because `same_album` is a
+    predicate, not a clause. A single user's library is small enough that the
+    scan costs nothing.
+    """
+    q = select(Album).where(Album.user_id == user_id)
+    if with_songs:
+        q = q.options(selectinload(Album.songs))
+    for candidate in session.exec(q).all():
+        if same_album(album_name, artist, candidate.album_name, candidate.artist):
+            return candidate
+    return None
+
+
+_HAS_FEAT = re.compile(r"\b(feat\.?|featuring|ft\.?)\b", re.I)
+
+
+def _fuller_title(current: str, candidate: str) -> str:
+    """Pick the spelling to show once two copies' titles have merged.
+
+    Copies disagree on whether a title carries its features. The credited
+    spelling is strictly more informative — "All Me (feat. 2 Chainz & Big
+    Sean)" tells you who is on the track, "All Me" doesn't — so it wins.
+    Neither having credits leaves the seeded title alone rather than churning
+    between equivalent spellings.
+    """
+    if _HAS_FEAT.search(candidate or "") and not _HAS_FEAT.search(current or ""):
+        return candidate
+    return current
+
+
 def _community_payload(session: Session, user: PressUser, album_name: str, artist: str, source: Album | None):
     """The userbase's view of an album, averaged across everyone who rated it.
 
@@ -799,8 +829,10 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
         vals = [v for v in vals if v is not None]
         return round(sum(vals) / len(vals), 2) if vals else None
 
-    def norm(t: str) -> str:
-        return re.sub(r"[^a-z0-9]+", "", (t or "").lower())
+    # Titles are matched on the shared same-recording key, not raw punctuation:
+    # one copy spells the feat-credit out and another doesn't, and a local
+    # normalizer that ignored that split single tracks into two rows.
+    norm = match_title
 
     # Seed the tracklist from the most complete copy so unrated tracks still
     # show, then fold every copy's scores into it.
@@ -820,6 +852,8 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
                 b = buckets.setdefault(key, {
                     "title": s.title, "track_number": s.track_number, "scores": [], "your_score": None,
                 })
+            else:
+                b["title"] = _fuller_title(b["title"], s.title)
             b["scores"].append(s.score)
             if c.user_id == user.id:
                 b["your_score"] = s.score
@@ -919,15 +953,7 @@ def copy_album(
             .options(selectinload(Album.songs))
         ).first()
     if not existing:
-        existing = session.exec(
-            select(Album)
-            .where(
-                Album.album_name == source.album_name,
-                Album.artist == source.artist,
-                Album.user_id == user.id,
-            )
-            .options(selectinload(Album.songs))
-        ).first()
+        existing = _find_users_copy(session, user.id, source.album_name, source.artist, with_songs=True)
     if existing:
         return {**existing.model_dump(), "songs": [s.model_dump() for s in existing.songs], "already_existed": True}
 
