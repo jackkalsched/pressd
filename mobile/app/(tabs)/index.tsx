@@ -222,7 +222,10 @@ export default function ForYou() {
         <Animated.View style={{ opacity: mastheadOpacity, transform: [{ translateY: mastheadShift }] }}>
           <View style={styles.masthead}>
             <Text style={styles.title}>For You</Text>
-            <Text style={styles.date} numberOfLines={1}>{today}</Text>
+            {/* Two lines rather than one: on a narrow screen — a smaller phone,
+                or any phone with Display Zoom or large text — a single-line
+                date has nowhere to go and rides into the title. */}
+            <Text style={styles.date} numberOfLines={2}>{today}</Text>
           </View>
           <Text style={styles.sub}>
             {greeting()}{firstName ? ` ${firstName},` : ''} here's what's moving this week.
@@ -549,9 +552,27 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   compactTitle: { fontFamily: fonts.displayBlack, fontSize: 20, color: colors.ink, letterSpacing: 0.5 },
-  masthead: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: spacing.md },
-  date: { fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: 1.4, color: colors.inkTertiary, marginBottom: 8, textAlign: 'right' },
-  title: { fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: 0.5 },
+  // gap, not just space-between: with nothing between them the title and the
+  // date are free to touch once the row runs out of width.
+  masthead: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  // Shrinks and wraps; the title holds its size. A 40pt masthead losing
+  // characters is a worse trade than a date on two lines.
+  date: {
+    flexShrink: 1,
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    letterSpacing: 1.4,
+    color: colors.inkTertiary,
+    marginBottom: 8,
+    textAlign: 'right',
+  },
+  title: { flexShrink: 0, fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: 0.5 },
   sub: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkTertiary, marginTop: 4 },
 
   block: { marginTop: spacing.xxl },

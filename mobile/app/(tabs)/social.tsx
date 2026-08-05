@@ -766,10 +766,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
+    gap: spacing.md,
     paddingHorizontal: spacing.lg,
     marginTop: spacing.md,
   },
-  pageTitle: { fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: 0.5 },
+  pageTitle: { flexShrink: 0, fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: 0.5 },
   compactHeader: {
     position: 'absolute',
     top: 0,
@@ -791,7 +792,11 @@ const styles = StyleSheet.create({
   badgeText: { fontFamily: fonts.bodyBold, fontSize: 11, color: '#fff' },
 
   tabsScroll: { flexGrow: 0, marginTop: spacing.lg },
-  tabs: { flexDirection: 'row', gap: spacing.xl, paddingHorizontal: spacing.lg, paddingRight: spacing.xl },
+  // Four labels at a 24pt gap overflow a narrow screen and clip mid-word on
+  // the last one. The row scrolls, so nothing is unreachable, but a tab sliced
+  // in half reads as broken rather than scrollable — tighter spacing fits all
+  // four on every current iPhone and the scroll stays as the safety valve.
+  tabs: { flexDirection: 'row', gap: spacing.lg, paddingHorizontal: spacing.lg, paddingRight: spacing.lg },
   tab: { alignItems: 'center', gap: 6 },
   tabText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.inkMuted },
   tabTextActive: { color: colors.ink },

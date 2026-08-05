@@ -362,9 +362,25 @@ const styles = StyleSheet.create({
   },
   compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: colors.ink, letterSpacing: 0.5 },
 
-  masthead: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: spacing.md },
-  title: { fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: 0.5 },
-  week: { fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: 1.4, color: colors.inkTertiary, marginBottom: 8 },
+  // Same shape as For You's masthead, and the same guard: a gap so the two can
+  // never touch, and only the small label is allowed to give way.
+  masthead: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  title: { flexShrink: 0, fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: 0.5 },
+  week: {
+    flexShrink: 1,
+    textAlign: 'right',
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    letterSpacing: 1.4,
+    color: colors.inkTertiary,
+    marginBottom: 8,
+  },
   rule: { height: 2, backgroundColor: colors.ink, marginTop: spacing.sm },
 
   // Filters
