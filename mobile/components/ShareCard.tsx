@@ -16,11 +16,10 @@ import { ActivityIndicator, Dimensions, Pressable, ScrollView, StyleSheet, Text,
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
-import Svg, { Defs, Image as SvgImage, Mask, RadialGradient, Rect, Stop } from 'react-native-svg'
 import { useQuery } from '@tanstack/react-query'
 import { captureRef } from 'react-native-view-shot'
 import * as Sharing from 'expo-sharing'
-import { Share2, Star, X } from 'lucide-react-native'
+import { Share2, X } from 'lucide-react-native'
 import {
   songScoreColor,
   BANG_THRESHOLD,
@@ -41,6 +40,9 @@ const WARM2 = '#a8998a'
 const FAINT = '#c2b8ad'
 const CREAM = '#faf8f5'
 const HAIRLINE = '#e6ded2'
+// Zero-alpha cream. Interpolating from the literal 'transparent' keyword drags
+// the ramp through black — AlbumBackdrop hit this too.
+const CREAM_CLEAR = 'rgba(250,248,245,0)'
 
 const DESIGN_W = 1080
 const DESIGN_H = 1350
@@ -135,10 +137,14 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
         ? 'Middle of ratings'
         : 'Bottom third of ratings'
 
-  const pageGradient: [string, string, string] =
+  // The wash carries alpha at the top so the cover behind it reads through, and
+  // goes fully opaque by two-thirds down so the art is gone before it can
+  // interfere with the type. This is what replaced the SVG mask: gradients and
+  // images survive the PNG capture, an svg mask silently does not.
+  const pageGradient: [string, string, string, string] =
     hue == null
-      ? ['#f3efe8', CREAM, CREAM]
-      : [`hsl(${hue}, 42%, 86%)`, `hsl(${hue}, 30%, 92%)`, CREAM]
+      ? ['rgba(243,239,232,0.55)', 'rgba(250,248,245,0.86)', CREAM, CREAM]
+      : [`hsla(${hue}, 42%, 86%, 0.55)`, `hsla(${hue}, 30%, 92%, 0.86)`, CREAM, CREAM]
 
   async function share() {
     if (sharing) return
@@ -159,6 +165,7 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
   }
 
   const art = album.albumArtUrl
+  const subGenres = [album.subGenre1, album.subGenre2, album.subGenre3].filter(Boolean) as string[]
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -172,41 +179,29 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Captured region — everything inside becomes the shared PNG. */}
         <View ref={cardRef} collapsable={false} style={styles.card}>
+          {/* Bottom to top: the cover bled off the top-right, its left edge
+              dissolved into the card's own cream, then the wash over both. The
+              wash's alpha ramp is what fades the art downward, so nothing here
+              needs a mask. */}
+          {art && (
+            <Image source={{ uri: art }} style={styles.watermark} contentFit="cover" />
+          )}
+          {art && (
+            <LinearGradient
+              colors={[CREAM, CREAM_CLEAR]}
+              locations={[0.02, 0.55]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
+          )}
           <LinearGradient
             colors={pageGradient}
-            locations={[0, 0.32, 0.68]}
+            locations={[0, 0.32, 0.68, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 0.36, y: 1 }}
             style={StyleSheet.absoluteFill}
           />
-
-          {/* The cover, blurred and bled off the top-right, masked to true
-              transparency so no square edge can show against the wash. Same
-              technique as the album page's backdrop. */}
-          {art && (
-            <Svg width={u(1320)} height={u(1560)} style={{ position: 'absolute', top: u(-120), right: u(-140) }}>
-              <Defs>
-                <RadialGradient id="shareFade" gradientUnits="userSpaceOnUse" cx={u(1320)} cy={0} r={u(1000)}>
-                  <Stop offset="0" stopColor="#fff" stopOpacity={1} />
-                  <Stop offset="0.46" stopColor="#fff" stopOpacity={0.5} />
-                  <Stop offset="0.74" stopColor="#fff" stopOpacity={0} />
-                </RadialGradient>
-                <Mask id="shareMask" maskUnits="userSpaceOnUse" x={0} y={0} width={u(1320)} height={u(1560)}>
-                  <Rect x={0} y={0} width={u(1320)} height={u(1560)} fill="url(#shareFade)" />
-                </Mask>
-              </Defs>
-              <SvgImage
-                href={{ uri: art }}
-                x={0}
-                y={0}
-                width={u(1320)}
-                height={u(1560)}
-                preserveAspectRatio="xMidYMid slice"
-                opacity={0.2}
-                mask="url(#shareMask)"
-              />
-            </Svg>
-          )}
 
           <View style={styles.inner}>
             {/* header */}
@@ -236,6 +231,9 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
                   <View style={styles.genrePill}>
                     <Text style={styles.genrePillText}>{album.genre.toUpperCase()}</Text>
                   </View>
+                )}
+                {subGenres.length > 0 && (
+                  <Text style={styles.subGenres} numberOfLines={1}>{subGenres.join(' · ')}</Text>
                 )}
               </View>
             </View>
@@ -309,7 +307,9 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
               <View style={styles.trackRow}>
                 <View style={[styles.trackCard, { borderColor: 'rgba(45,106,79,0.3)' }]}>
                   <View style={styles.trackHead}>
-                    <Star size={u(40)} color={GREEN} fill={GREEN} strokeWidth={0} />
+                    {/* Mirrors the least-favourite's ▽ rather than a star, so the
+                        pair reads as one up/down comparison. */}
+                    <Text style={[styles.trackGlyph, { color: GREEN }]}>△</Text>
                     <Text style={[styles.trackKind, { color: GREEN }]}>FAVORITE</Text>
                   </View>
                   <Text style={styles.trackName} numberOfLines={1}>{stats.favorite.title}</Text>
@@ -321,7 +321,7 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
                 {stats.least && (
                   <View style={[styles.trackCard, { borderColor: 'rgba(176,64,47,0.3)' }]}>
                     <View style={styles.trackHead}>
-                      <Text style={{ fontSize: u(40), color: CORAL, lineHeight: u(46) }}>▽</Text>
+                      <Text style={[styles.trackGlyph, { color: CORAL }]}>▽</Text>
                       <Text style={[styles.trackKind, { color: CORAL }]}>LEAST FAVORITE</Text>
                     </View>
                     <Text style={styles.trackName} numberOfLines={1}>{stats.least.title}</Text>
@@ -346,7 +346,7 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
               </View>
             )}
 
-            <View style={{ flex: 1, minHeight: u(20) }} />
+            <View style={{ flex: 1, minHeight: 0 }} />
 
             {/* footer */}
             <View style={styles.footer}>
@@ -394,7 +394,7 @@ function Pill({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | '
         ? { color: CORAL, backgroundColor: 'rgba(176,64,47,0.10)', borderColor: 'rgba(176,64,47,0.3)' }
         : tone === 'solid'
           ? { color: '#fff', backgroundColor: GREEN, borderColor: GREEN }
-          : { color: '#4a423a', backgroundColor: 'rgba(255,255,255,0.6)', borderColor: HAIRLINE }
+          : { color: '#4a423a', backgroundColor: 'transparent', borderColor: HAIRLINE }
   return (
     <View style={[styles.pill, { backgroundColor: toneStyle.backgroundColor, borderColor: toneStyle.borderColor }]}>
       <Text style={[styles.pillText, { color: toneStyle.color }]}>{label}</Text>
@@ -412,7 +412,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   headerTitle: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink },
-  scroll: { alignItems: 'center', paddingBottom: 16 },
+  // The card is a fixed 4:5 and the phone is far taller, so left at the top it
+  // strands a block of empty cream above the Share button. Centre it in
+  // whatever room is left; flexGrow lets it still scroll if the card is taller
+  // than the viewport on a small device.
+  scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 16 },
 
   card: {
     width: CARD_W,
@@ -420,6 +424,15 @@ const styles = StyleSheet.create({
     borderRadius: u(44),
     overflow: 'hidden',
     backgroundColor: CREAM,
+  },
+  // Oversized and hung off the top-right corner, matching the web card's bleed.
+  // Sits under the wash, which supplies the fade.
+  watermark: {
+    position: 'absolute',
+    top: u(-120),
+    right: u(-140),
+    width: u(1320),
+    height: u(1400),
   },
   inner: { flex: 1, paddingHorizontal: u(70), paddingTop: u(52), paddingBottom: u(44) },
 
@@ -446,17 +459,18 @@ const styles = StyleSheet.create({
     paddingVertical: u(5),
   },
   genrePillText: { fontFamily: fonts.bodyBold, fontSize: u(13), letterSpacing: u(2), color: GREEN },
+  subGenres: { fontFamily: fonts.bodyMedium, fontSize: u(18), color: WARM, marginTop: u(9) },
 
   scoreBlock: { alignItems: 'center', marginTop: u(22) },
   scoreLabel: { fontFamily: fonts.bodyBold, fontSize: u(15), letterSpacing: u(4.5), color: WARM },
   scoreLine: { flexDirection: 'row', alignItems: 'baseline' },
   bigScore: { fontFamily: fonts.display, fontSize: u(148), lineHeight: u(150) },
   outOf: { fontFamily: fonts.bodySemiBold, fontSize: u(40), color: WARM2 },
-  pills: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: u(12), marginTop: u(24) },
+  pills: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: u(12), marginTop: u(18) },
   pill: { borderWidth: 1, borderRadius: u(99), paddingHorizontal: u(18), paddingVertical: u(9) },
   pillText: { fontFamily: fonts.bodyBold, fontSize: u(17) },
 
-  section: { marginTop: u(24) },
+  section: { marginTop: u(18) },
   bins: { flexDirection: 'row', alignItems: 'flex-end', gap: u(5), height: u(64) },
   caption: { fontFamily: fonts.bodySemiBold, fontSize: u(13), letterSpacing: u(1.3), color: FAINT, marginTop: u(11) },
 
@@ -468,26 +482,25 @@ const styles = StyleSheet.create({
   vs: { fontFamily: fonts.display, fontSize: u(20), color: WARM2 },
   bar: { flexDirection: 'row', gap: u(5), height: u(22), marginTop: u(14) },
 
-  trackRow: { flexDirection: 'row', gap: u(18), marginTop: u(22) },
+  trackRow: { flexDirection: 'row', gap: u(18), marginTop: u(18) },
   trackCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.5)',
     borderWidth: 1,
     borderRadius: u(22),
     paddingHorizontal: u(22),
     paddingVertical: u(18),
   },
   trackHead: { flexDirection: 'row', alignItems: 'center', gap: u(8) },
+  trackGlyph: { fontSize: u(40), lineHeight: u(46) },
   trackKind: { fontFamily: fonts.bodyBold, fontSize: u(14), letterSpacing: u(2.2) },
   trackName: { fontFamily: fonts.display, fontSize: u(32), lineHeight: u(36), color: INK, marginTop: u(11) },
   trackScore: { fontFamily: fonts.display, fontSize: u(40), marginTop: u(9) },
   trackOutOf: { fontFamily: fonts.bodySemiBold, fontSize: u(17), color: WARM2 },
 
-  factorRow: { flexDirection: 'row', gap: u(14), marginTop: u(26) },
+  factorRow: { flexDirection: 'row', gap: u(14), marginTop: u(20) },
   factorCell: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.5)',
     borderWidth: 1,
     borderColor: HAIRLINE,
     borderRadius: u(18),
