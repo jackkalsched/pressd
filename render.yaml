@@ -12,7 +12,5 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
-      - key: SPOTIFY_CLIENT_ID
-        sync: false
-      - key: SPOTIFY_CLIENT_SECRET
+      - key: LASTFM_API_KEY
         sync: false
