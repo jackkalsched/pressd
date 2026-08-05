@@ -6,6 +6,9 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,12 +16,13 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as Haptics from 'expo-haptics'
-import { ArrowLeft, Check, ChevronRight, Heart, Pencil, Share2, Trash2 } from 'lucide-react-native'
+import Svg, { Text as SvgText } from 'react-native-svg'
+import { ArrowLeft, Check, ChevronRight, Heart, Pencil, Share2, Star, Trash2 } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchAlbums,
@@ -49,6 +53,12 @@ const WINDOW_H = Dimensions.get('window').height
 // Destructive red, shared by every delete control so removing a record looks
 // the same wherever you reach it from.
 const DANGER = '#b91c1c'
+
+// The album average and the prediction are two readings of one thing, so they
+// are set at one size. Both the filled numeral and the stroked one read from
+// this — set it once and they can't drift.
+const SCORE_SIZE = 64
+const SCORE_LINE = SCORE_SIZE + 4
 
 // The comparison card sits over the album backdrop, and at a lighter wash the
 // cover's own colors read straight through and fight the score type. Heavier
@@ -96,6 +106,33 @@ function CompareVerdict({
         <Text style={styles.cmpWidest}>Biggest difference on “{widest.title}”</Text>
       )}
     </>
+  )
+}
+
+/** The prediction drawn hollow: the same face and size as the real score, but
+ *  stroked rather than filled, so the pair reads as measured-vs-estimated
+ *  without needing a second colour or a dial. React Native text has no stroke
+ *  property, so this goes through SVG. */
+function OutlineScore({ value, size = SCORE_SIZE }: { value: number; size?: number }) {
+  const w = size * 2.6
+  // Matches the filled numeral's line box exactly, so both columns' labels sit
+  // on the same line beneath them.
+  const h = SCORE_LINE
+  return (
+    <Svg width={w} height={h}>
+      <SvgText
+        x={w / 2}
+        y={size * 0.86}
+        textAnchor="middle"
+        fontFamily={fonts.display}
+        fontSize={size}
+        fill="none"
+        stroke={colors.green}
+        strokeWidth={1.6}
+      >
+        {value.toFixed(2)}
+      </SvgText>
+    </Svg>
   )
 }
 
@@ -503,12 +540,18 @@ export default function AlbumDetail() {
           </View>
         )}
 
+        {/* Only your own copy is yours to score. This page renders a friend's
+            rating too, and an ungated CTA offered to "edit" it — the server
+            refuses the write, so nothing could be overwritten, but you'd have
+            re-rated the whole record before finding that out. */}
+        {isMine && (
         <Pressable
           style={({ pressed }) => [styles.cta, pressed && { backgroundColor: colors.greenPressed }]}
           onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(albumId) } })}
         >
           <Text style={styles.ctaText}>{cta}</Text>
         </Pressable>
+        )}
 
         <Text style={styles.sectionLabel}>TRACKS</Text>
         {sorted.map((s) => (
@@ -593,6 +636,15 @@ function CommunityAlbum({
         <Text style={styles.backText}>Back</Text>
       </Pressable>
       <View style={styles.topBarRight}>
+        {/* Your own rating was only reachable through the comparison's fork —
+            two taps and a detour through a screen you didn't ask for. It sits
+            beside Compare now, since wanting your copy and wanting the
+            side-by-side are different intentions. */}
+        {canCompare && !comparing && onOpenYours ? (
+          <Pressable style={styles.compareBtn} onPress={onOpenYours} hitSlop={8}>
+            <Text style={styles.compareBtnText}>My Rating</Text>
+          </Pressable>
+        ) : null}
         {/* Only the way in lives up here — the comparison itself carries its own
             pair of exits, so there's no second Average control competing. */}
         {canCompare && !comparing ? (
@@ -785,19 +837,29 @@ function CommunityAlbum({
           {/* Pressd average and — when the model has a read on it and you
               haven't rated it — your predicted score, side by side. Paired in
               one row so the dial doesn't interrupt the vertical flow. */}
-          <View style={styles.scoreRow}>
+          {/* What the userbase thinks against what we think you'll think —
+              two readings of one album, so they share a card, a baseline and a
+              type size, split by a rule rather than set as headline + footnote. */}
+          <View style={styles.scoreCard}>
             <View style={styles.scoreCol}>
               <Text style={[styles.bigScore, { color: data.avg_score != null ? colors.green : colors.inkMuted }]}>
                 {data.avg_score != null ? data.avg_score.toFixed(2) : '—'}
               </Text>
-              <Text style={styles.scoreLabel}>PRESSD AVERAGE</Text>
+              <Text style={styles.scoreLabel}>PRESSD AVG</Text>
               <Text style={styles.raterLine}>{raters}</Text>
             </View>
             {notRated && data.predicted_score != null && (
-              <View style={styles.dialCol}>
-                <ScoreDial value={data.predicted_score} size={78} />
-                <Text style={styles.dialLabel}>PREDICTED</Text>
-              </View>
+              <>
+                <View style={styles.scoreDivider} />
+                <View style={styles.scoreCol}>
+                  <OutlineScore value={data.predicted_score} />
+                  <View style={styles.forYouRow}>
+                    <Star size={11} color={colors.green} fill={colors.green} strokeWidth={0} />
+                    <Text style={styles.scoreLabel}>FOR YOU</Text>
+                  </View>
+                  <Text style={styles.raterLine}>predicted</Text>
+                </View>
+              </>
             )}
           </View>
 
@@ -1169,6 +1231,10 @@ function ForkBtn({ label, onPress }: { label: string; onPress: () => void }) {
 
 function ReviewSection({ album, editable }: { album: Album; editable: boolean }) {
   const queryClient = useQueryClient()
+  // A Modal renders in its own native hierarchy, outside the SafeAreaProvider,
+  // so SafeAreaView is inert in there — the bar drew straight under the status
+  // bar. Read the insets from the app's tree and apply them by hand.
+  const insets = useSafeAreaInsets()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(album.review ?? '')
   const [busy, setBusy] = useState(false)
@@ -1204,36 +1270,15 @@ function ReviewSection({ album, editable }: { album: Album; editable: boolean })
   // Not mine and no review → nothing to show.
   if (!editable && !album.review) return null
 
+  function cancel() {
+    setDraft(album.review ?? '')
+    setEditing(false)
+  }
+
   return (
     <View>
       <Text style={styles.sectionLabel}>REVIEW</Text>
-      {editing ? (
-        <View>
-          <TextInput
-            style={styles.reviewInput}
-            value={draft}
-            onChangeText={setDraft}
-            placeholder="Write your thoughts on this album…"
-            placeholderTextColor={colors.inkMuted}
-            multiline
-            autoFocus
-          />
-          <View style={styles.reviewActions}>
-            <Pressable style={styles.reviewSave} onPress={save} disabled={busy}>
-              {busy ? <ActivityIndicator size="small" color="#fff" /> : <Check size={15} color="#fff" />}
-              <Text style={styles.reviewSaveText}>Save</Text>
-            </Pressable>
-            <Pressable style={styles.reviewCancel} onPress={() => { setDraft(album.review ?? ''); setEditing(false) }}>
-              <Text style={styles.reviewCancelText}>Cancel</Text>
-            </Pressable>
-            {album.review && (
-              <Pressable style={styles.reviewDelete} onPress={remove} disabled={busy} hitSlop={8}>
-                <Trash2 size={16} color="#b91c1c" />
-              </Pressable>
-            )}
-          </View>
-        </View>
-      ) : album.review ? (
+      {album.review ? (
         <View>
           <Text style={styles.reviewBody}>{album.review}</Text>
           {editable && (
@@ -1243,12 +1288,56 @@ function ReviewSection({ album, editable }: { album: Album; editable: boolean })
             </Pressable>
           )}
         </View>
-      ) : (
+      ) : editable ? (
         <Pressable style={styles.reviewWrite} onPress={() => setEditing(true)}>
           <Pencil size={14} color={colors.green} />
           <Text style={styles.reviewWriteText}>Write a review</Text>
         </Pressable>
-      )}
+      ) : null}
+
+      {/* Writing happens on its own surface, over the album page. Inline, the
+          box sat near the bottom of a long scroll and the keyboard covered the
+          thing you were typing into. Here the field takes every point between
+          the bar and the keyboard, so what you write is always in view. */}
+      <Modal visible={editing} animationType="slide" onRequestClose={cancel}>
+        <View style={[styles.reviewSheet, { paddingTop: insets.top }]}>
+          <View style={styles.reviewSheetBar}>
+            <Pressable onPress={cancel} hitSlop={10} disabled={busy}>
+              <Text style={styles.reviewCancelText}>Cancel</Text>
+            </Pressable>
+            <Text style={styles.reviewSheetTitle} numberOfLines={1}>{album.albumName}</Text>
+            <Pressable onPress={save} disabled={busy} hitSlop={10}>
+              {busy ? (
+                <ActivityIndicator size="small" color={colors.green} />
+              ) : (
+                <Text style={styles.reviewSheetSave}>Save</Text>
+              )}
+            </Pressable>
+          </View>
+
+          <KeyboardAvoidingView
+            style={[styles.reviewSheetBody, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <TextInput
+              style={styles.reviewSheetInput}
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Write your thoughts on this album…"
+              placeholderTextColor={colors.inkMuted}
+              multiline
+              autoFocus
+              textAlignVertical="top"
+            />
+            {album.review && (
+              <Pressable style={styles.reviewSheetDelete} onPress={remove} disabled={busy} hitSlop={8}>
+                <Trash2 size={15} color="#b91c1c" />
+                <Text style={styles.reviewSheetDeleteText}>Delete review</Text>
+              </Pressable>
+            )}
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -1437,18 +1526,22 @@ const styles = StyleSheet.create({
   },
   raterLine: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 4 },
 
-  // Average and prediction sit on one line; the column centres itself when
-  // there's no prediction to show.
-  scoreRow: {
+  // Average and prediction share one card. A single column centres itself when
+  // there's no prediction to pair it with.
+  scoreCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xxl,
+    // No fill and no frame — the album wash behind carries the block, and a
+    // white panel stamped over the artwork was fighting it.
+    paddingVertical: spacing.lg,
     marginTop: spacing.xl,
   },
-  scoreCol: { alignItems: 'center' },
-  dialCol: { alignItems: 'center', gap: 6 },
-  dialLabel: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.2, color: colors.inkTertiary },
+  scoreCol: { flex: 1, alignItems: 'center' },
+  // Stops short of the card's padding so it reads as a rule between two
+  // readings, not a wall between two boxes.
+  scoreDivider: { width: 1, alignSelf: 'stretch', marginVertical: 4, backgroundColor: colors.border },
+  forYouRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   cmpRaters: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 4 },
 
   failTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.ink, textAlign: 'center' },
@@ -1471,8 +1564,8 @@ const styles = StyleSheet.create({
   failBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: '#fff' },
 
   scoreBlock: { alignItems: 'center', marginTop: spacing.xl },
-  bigScore: { fontFamily: fonts.display, fontSize: 64, lineHeight: 68 },
-  scoreLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.4, color: colors.inkSecondary },
+  bigScore: { fontFamily: fonts.display, fontSize: SCORE_SIZE, lineHeight: SCORE_LINE },
+  scoreLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.4, color: colors.green },
 
   factorRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xl },
   factorCell: { alignItems: 'center', flex: 1 },
@@ -1523,32 +1616,46 @@ const styles = StyleSheet.create({
   trackScoreEmpty: { fontFamily: fonts.body, fontSize: 15, color: colors.inkTertiary },
 
   reviewBody: { fontFamily: fonts.body, fontSize: 15, color: colors.inkSecondary, lineHeight: 22 },
-  reviewInput: {
-    minHeight: 90,
-    backgroundColor: colors.raised,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    fontFamily: fonts.body,
-    fontSize: 15,
-    color: colors.ink,
-    textAlignVertical: 'top',
-  },
-  reviewActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
-  reviewSave: {
+  // The write-a-review sheet: a full surface over the album page, so the field
+  // can own everything between the bar and the keyboard.
+  reviewSheet: { flex: 1, backgroundColor: colors.bg },
+  reviewSheetBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.green,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: radii.md,
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  reviewSaveText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: '#fff' },
-  reviewCancel: { paddingHorizontal: 14, paddingVertical: 9 },
+  reviewSheetTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 15,
+    color: colors.ink,
+  },
+  reviewSheetSave: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.green },
+  reviewSheetBody: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  // flex rather than a fixed height: whatever the keyboard leaves is the field.
+  reviewSheetInput: {
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 16,
+    lineHeight: 24,
+    color: colors.ink,
+  },
+  reviewSheetDelete: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: spacing.md,
+  },
+  reviewSheetDeleteText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: '#b91c1c' },
+
   reviewCancelText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkTertiary },
-  reviewDelete: { marginLeft: 'auto', padding: spacing.sm },
   reviewEdit: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.sm },
   reviewEditText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary },
   reviewWrite: {

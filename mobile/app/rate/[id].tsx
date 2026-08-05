@@ -298,6 +298,24 @@ export default function RatingScreen() {
     )
   }
 
+  // Someone else's copy is not yours to score. The server refuses every write
+  // here anyway, so reaching this screen by deep link or a stale history entry
+  // only ever ended in rating the whole record and then failing at submit.
+  // Fail at the door instead, and say why.
+  if (user != null && album.userId !== user.id) {
+    return (
+      <SafeAreaView style={[styles.screen, styles.center]}>
+        <Text style={styles.notYoursTitle}>This isn’t your rating</Text>
+        <Text style={styles.notYoursBody}>
+          You can read {album.albumName} on its album page, but only its owner can score it.
+        </Text>
+        <Pressable style={styles.notYoursBtn} onPress={() => router.back()}>
+          <Text style={styles.notYoursBtnText}>Go back</Text>
+        </Pressable>
+      </SafeAreaView>
+    )
+  }
+
   const busy = submit.isPending || saveDraft.isPending
   const song = sortedSongs[idx]
   const done = ratedIdx.length
@@ -646,6 +664,25 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   screen: { flex: 1, backgroundColor: 'transparent' },
   center: { alignItems: 'center', justifyContent: 'center' },
+
+  notYoursTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.ink, textAlign: 'center' },
+  notYoursBody: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.inkTertiary,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xl,
+  },
+  notYoursBtn: {
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    backgroundColor: colors.greenSoft,
+  },
+  notYoursBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
 
   topBar: {
     flexDirection: 'row',
