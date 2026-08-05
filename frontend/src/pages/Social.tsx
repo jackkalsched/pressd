@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Music, Search, UserPlus, Check, Heart, X, Clock, MessageCircle, Star, BookOpen } from 'lucide-react'
+import { Loader2, Music, Search, UserPlus, Check, Heart, X, Clock, MessageCircle, Star, BookOpen, Users, ChevronDown } from 'lucide-react'
 import {
   fetchFeed, searchUsers, addFriend, toggleLike,
   fetchFriendRequests, acceptFriendRequest, declineFriendRequest,
-  fetchFriendReviews,
+  fetchFriends, fetchFriendReviews,
 } from '../api'
 import type { FeedItem, UserSearchResult, FriendReview } from '../api'
 import { useUser } from '../context/UserContext'
@@ -230,20 +230,39 @@ function FeedCard({ item }: { item: FeedItem }) {
   )
 }
 
-function FriendRequests() {
+function FriendsMenu() {
   const { activeUser } = useUser()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState<Set<number>>(new Set())
+  const menuRef = useRef<HTMLDivElement | null>(null)
 
-  const { data } = useQuery({
+  const { data: requests } = useQuery({
     queryKey: ['friend-requests', activeUser?.id],
     queryFn: () => fetchFriendRequests(activeUser!.id),
     enabled: !!activeUser,
     staleTime: 30_000,
   })
-  const incoming = data?.incoming ?? []
-  const outgoing = data?.outgoing ?? []
-  if (incoming.length === 0 && outgoing.length === 0) return null
+  const { data: friends } = useQuery({
+    queryKey: ['friends', activeUser?.id],
+    queryFn: () => fetchFriends(activeUser!.id),
+    enabled: !!activeUser,
+    staleTime: 30_000,
+  })
+
+  useEffect(() => {
+    if (!open) return
+    function handler(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const incoming = requests?.incoming ?? []
+  const outgoing = requests?.outgoing ?? []
+  const accepted = friends ?? []
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['friend-requests'] })
@@ -263,50 +282,89 @@ function FriendRequests() {
   }
 
   return (
-    <div className="mb-8">
-      <h2 className="text-sm font-semibold text-[#777] mb-3">Friend Requests</h2>
-      <div className="border border-[#e2e2e2] rounded-xl overflow-hidden divide-y divide-[#f0f0f0]">
-        {incoming.map(u => (
-          <div key={`in-${u.id}`} className="flex items-center gap-3 px-4 py-3 bg-white">
-            <FriendAvatar name={u.name} avatarUrl={u.avatarUrl} size={32} />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-[#111] truncate">{u.name}</p>
-              <p className="text-[11px] text-[#aaa]">wants to be friends</p>
+    <div ref={menuRef} className="relative shrink-0">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 px-3 py-2.5 bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl text-sm font-medium text-[#111] hover:border-[#2d6a4f] transition-colors"
+      >
+        <Users size={14} className="text-[#777]" />
+        <span>Friends</span>
+        <span className="text-[#999]">{accepted.length}</span>
+        {incoming.length > 0 && (
+          <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#2d6a4f] text-white text-[10px] font-bold flex items-center justify-center">
+            {incoming.length}
+          </span>
+        )}
+        <ChevronDown size={14} className={`text-[#aaa] transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] max-h-[70vh] overflow-y-auto bg-white border border-[#e2e2e2] rounded-xl shadow-lg z-20">
+          {incoming.length > 0 && (
+            <div className="border-b border-[#f0f0f0]">
+              <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#aaa]">Requests</p>
+              {incoming.map(u => (
+                <div key={`in-${u.id}`} className="flex items-center gap-3 px-4 py-2.5">
+                  <FriendAvatar name={u.name} avatarUrl={u.avatarUrl} size={28} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-[#111] truncate">{u.name}</p>
+                    <p className="text-[11px] text-[#aaa]">wants to be friends</p>
+                  </div>
+                  <button
+                    onClick={() => act(u.id, acceptFriendRequest)}
+                    disabled={busy.has(u.id)}
+                    className="flex items-center gap-1 text-xs font-semibold text-white bg-[#2d6a4f] hover:bg-[#245c43] px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <Check size={12} /> Accept
+                  </button>
+                  <button
+                    onClick={() => act(u.id, declineFriendRequest)}
+                    disabled={busy.has(u.id)}
+                    className="text-[#999] hover:text-[#c0392b] px-1 py-1.5 transition-colors disabled:opacity-50"
+                    aria-label="Decline"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
             </div>
+          )}
+
+          {accepted.map(u => (
             <button
-              onClick={() => act(u.id, acceptFriendRequest)}
-              disabled={busy.has(u.id)}
-              className="flex items-center gap-1 text-xs font-semibold text-white bg-[#2d6a4f] hover:bg-[#245c43] px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+              key={`fr-${u.id}`}
+              onClick={() => { setOpen(false); navigate(`/u/${u.id}`) }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[#fafafa] transition-colors"
             >
-              <Check size={12} /> Accept
+              <FriendAvatar name={u.name} avatarUrl={u.avatarUrl} size={28} />
+              <span className="flex-1 min-w-0 text-sm font-medium text-[#111] truncate">{u.name}</span>
+              <Check size={14} className="text-[#2d6a4f] shrink-0" />
             </button>
-            <button
-              onClick={() => act(u.id, declineFriendRequest)}
-              disabled={busy.has(u.id)}
-              className="flex items-center gap-1 text-xs font-medium text-[#999] hover:text-[#c0392b] px-2 py-1.5 transition-colors disabled:opacity-50"
-              aria-label="Decline"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        ))}
-        {outgoing.map(u => (
-          <div key={`out-${u.id}`} className="flex items-center gap-3 px-4 py-3 bg-white">
-            <FriendAvatar name={u.name} avatarUrl={u.avatarUrl} size={32} />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-[#111] truncate">{u.name}</p>
-              <p className="text-[11px] text-[#aaa] flex items-center gap-1"><Clock size={10} /> request sent</p>
+          ))}
+
+          {outgoing.map(u => (
+            <div key={`out-${u.id}`} className="flex items-center gap-3 px-4 py-2.5">
+              <FriendAvatar name={u.name} avatarUrl={u.avatarUrl} size={28} />
+              <span className="flex-1 min-w-0 text-sm font-medium text-[#111] truncate">{u.name}</span>
+              <span className="flex items-center gap-1 text-[11px] text-[#aaa] font-medium shrink-0">
+                <Clock size={11} /> Pending
+              </span>
+              <button
+                onClick={() => act(u.id, declineFriendRequest)}
+                disabled={busy.has(u.id)}
+                className="text-[#bbb] hover:text-[#c0392b] px-1 transition-colors disabled:opacity-50"
+                aria-label="Cancel request"
+              >
+                <X size={13} />
+              </button>
             </div>
-            <button
-              onClick={() => act(u.id, declineFriendRequest)}
-              disabled={busy.has(u.id)}
-              className="text-xs font-medium text-[#999] hover:text-[#c0392b] px-2 py-1.5 transition-colors disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
-        ))}
-      </div>
+          ))}
+
+          {incoming.length === 0 && accepted.length === 0 && outgoing.length === 0 && (
+            <p className="px-4 py-4 text-xs text-[#bbb]">No friends yet — search for people above.</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -583,10 +641,10 @@ export default function Social() {
     <div className="p-4 md:p-8">
       <div className="flex items-center justify-between gap-3 mb-6">
         <h1 className="font-display text-3xl font-bold text-[#111]">Friends</h1>
-        <FindPeople />
-      </div>
-      <div className="max-w-lg">
-        <FriendRequests />
+        <div className="flex items-center gap-2">
+          <FindPeople />
+          <FriendsMenu />
+        </div>
       </div>
 
       <div className="flex items-center gap-5 border-b border-[#eee] mb-6">
