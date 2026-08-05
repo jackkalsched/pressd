@@ -10,7 +10,13 @@ import { colors, fonts, radii, spacing } from '../theme/tokens'
 
 WebBrowser.maybeCompleteAuthSession()
 
-const DEV_TOKEN = process.env.EXPO_PUBLIC_DEV_TOKEN
+// Gated on __DEV__, not just on the variable being set. Expo layers env files
+// — .env is the base for every environment and .env.production only overrides
+// individual keys — so a token left in .env is inlined into a release bundle
+// even when the production file doesn't mention it. Metro strips this branch
+// from a production build entirely, so neither the button nor the credential
+// can reach a release binary by accident.
+const DEV_TOKEN = __DEV__ ? process.env.EXPO_PUBLIC_DEV_TOKEN : undefined
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
 
 // `Google.useAuthRequest` throws on native when no platform client id is set,
