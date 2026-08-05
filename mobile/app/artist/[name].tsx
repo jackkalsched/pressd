@@ -9,16 +9,39 @@ import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { StatusBar } from 'expo-status-bar'
+import Svg, { Defs, Pattern, Rect } from 'react-native-svg'
 import { ArrowLeft } from 'lucide-react-native'
 import { fetchArtistDetail, fetchAlbumColor, fetchArtistImage } from '../../lib/api'
+import type { ArtistPopulation } from '@pressd/shared/api'
 import { songScoreColor } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import ScoreHistogram from '../../components/ScoreHistogram'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
+/** Which rating set the page is showing.
+ *   mine    — your ratings, ranked among your own artists
+ *   pressd  — every user's pooled, ranked globally
+ *   compare — yours, with the userbase marked on each bar
+ *  `compare` asks the API for 'both'; the other two map straight through. */
+type Mode = 'mine' | 'pressd' | 'compare'
+const POPULATION: Record<Mode, ArtistPopulation> = {
+  mine: 'me',
+  pressd: 'global',
+  compare: 'both',
+}
+
 // Mirrors SMALL_SAMPLE in backend/routers/stats.py — the song count at which an
 // artist's percentiles and ranks start being published.
 const SMALL_SAMPLE = 15
+
+// Half the global mark's width as a share of the track, so it can be clamped
+// inside the bar the way the badge is. The badge is 22 wide and clamps to 3–97;
+// the mark is wider, so it needs more room or it hangs off the ends — which is
+// exactly what happened on a percentile of 1.
+const MARK_INSET_PCT = 3.4
+
+// Deficit red for the score comparison, matching the Social board's.
+const VS_DOWN = '#c0392b'
 
 // Fully transparent app-bg. Interpolating from the literal 'transparent'
 // keyword muddies through black on Android, so fade from this instead.
@@ -56,10 +79,14 @@ export default function ArtistPage() {
   const { user } = useAuth()
   const insets = useSafeAreaInsets()
 
+  const [mode, setMode] = useState<Mode>('mine')
   const { data, isLoading } = useQuery({
-    queryKey: ['artist', artist, user?.id],
-    queryFn: () => fetchArtistDetail(artist, user!.id),
+    queryKey: ['artist', artist, user?.id, mode],
+    queryFn: () => fetchArtistDetail(artist, user!.id, POPULATION[mode]),
     enabled: !!user && !!artist,
+    // Keeps the previous scope's numbers on screen while the next loads, so
+    // switching modes doesn't blank the page.
+    placeholderData: (prev) => prev,
   })
 
   const albums = data ? [...data.albums].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)) : []
@@ -117,6 +144,9 @@ export default function ArtistPage() {
   const pctv = (v: number | null) => (v != null ? `${(v * 100).toFixed(1)}%` : '—')
 
   const p = data.percentiles
+  // Only present in compare mode; every bar reads it optionally, so the same
+  // markup serves all three scopes.
+  const gp = data.global?.percentiles
 
   return (
     <View style={[styles.root, { backgroundColor: hero[0] }]}>
@@ -163,17 +193,53 @@ export default function ArtistPage() {
             />
           )}
 
-          <Pressable onPress={goBack} hitSlop={10} style={styles.backBtn}>
-            <ArrowLeft size={20} color="#ffffff" />
-            <Text style={styles.backText}>Back</Text>
-          </Pressable>
+          <View style={styles.heroBar}>
+            <Pressable onPress={goBack} hitSlop={10} style={styles.backBtn}>
+              <ArrowLeft size={20} color="#ffffff" />
+              <Text style={styles.backText}>Back</Text>
+            </Pressable>
+            {/* Which rating set you're reading. Both controls toggle, so the
+                same button that opened a scope closes it — there's no separate
+                way back to your own numbers. */}
+            <View style={styles.heroActions}>
+              <Pressable
+                style={[styles.modeBtn, mode === 'compare' && styles.modeBtnOn]}
+                onPress={() => setMode((m) => (m === 'compare' ? 'mine' : 'compare'))}
+                hitSlop={8}
+              >
+                <Text style={[styles.modeBtnText, mode === 'compare' && styles.modeBtnTextOn]}>Compare</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modeBtn, mode === 'pressd' && styles.modeBtnOn]}
+                onPress={() => setMode((m) => (m === 'pressd' ? 'mine' : 'pressd'))}
+                hitSlop={8}
+              >
+                <Text style={[styles.modeBtnText, mode === 'pressd' && styles.modeBtnTextOn]}>Pressd avg</Text>
+              </Pressable>
+            </View>
+          </View>
 
           <Text style={[styles.artist, { fontSize: nameSize(data.artist) }]} numberOfLines={2}>
             {data.artist}
           </Text>
-          <Text style={styles.sub}>
-            {data.song_count} songs · {data.album_count} album{data.album_count === 1 ? '' : 's'}
-          </Text>
+          {/* Your own page counts what you've rated. The other two scopes lead
+              with what the artist *is* instead — a pooled song count says
+              little, and the genres are the thing both views have in common. */}
+          {/* Genres on every scope — they're what the artist is, and that holds
+              whoever's ratings you're reading. Your own page keeps the counts
+              underneath, since what you've rated is the thing that scopes it. */}
+          {data.genre && <Text style={styles.heroGenre}>{data.genre.toUpperCase()}</Text>}
+          {data.subgenres.length > 0 && (
+            <Text style={styles.sub} numberOfLines={2}>{data.subgenres.join(' · ')}</Text>
+          )}
+          {mode === 'mine' && (
+            <Text style={styles.heroCounts}>
+              {data.song_count} songs rated · {data.album_count} album{data.album_count === 1 ? '' : 's'}
+            </Text>
+          )}
+          {mode === 'pressd' && (
+            <Text style={styles.scopeNote}>Averaged across every Pressd rating</Text>
+          )}
 
           <View onLayout={(e) => setCatalogY(e.nativeEvent.layout.y)}>
             <CatalogStrip
@@ -184,20 +250,26 @@ export default function ArtistPage() {
         </View>
 
         <View style={styles.body}>
-          {/* Headline ranks */}
-          <View style={styles.statRow}>
-            <StatCell
-              value={data.song_plus_rank != null ? `#${data.song_plus_rank}` : '—'}
-              label="SONG+"
-              accent
-            />
-            <StatCell
-              value={data.w_song_plus_rank != null ? `#${data.w_song_plus_rank}` : '—'}
-              label="WSONG+"
-              accent
-            />
-            <StatCell value={fmt2(data.avg_song_score)} label="AVG SONG" />
-          </View>
+          {/* Headline ranks — placements within whichever population you're
+              reading. Compare mode drops them for the score comparison below:
+              a Song+ rank is a position in one league table, and holding yours
+              against the userbase's would be two different tables. The row also
+              repeated the same avg song score the comparison already shows. */}
+          {mode !== 'compare' && (
+            <View style={styles.statRow}>
+              <StatCell
+                value={data.song_plus_rank != null ? `#${data.song_plus_rank}` : '—'}
+                label="SONG+"
+                accent
+              />
+              <StatCell
+                value={data.w_song_plus_rank != null ? `#${data.w_song_plus_rank}` : '—'}
+                label="WSONG+"
+                accent
+              />
+              <StatCell value={fmt2(data.avg_song_score)} label="AVG SONG" />
+            </View>
+          )}
 
           {/* Says why the ranks read "—" and the bars below are faded. The
               backend flags this under SMALL_SAMPLE (15) songs. */}
@@ -205,6 +277,12 @@ export default function ArtistPage() {
             <Text style={styles.sampleNote}>
               Rate at least {SMALL_SAMPLE} songs to see advanced stats!
             </Text>
+          )}
+
+          {/* Absolute scores, so it sits above the percentile list rather than
+              among rows that all share a track / badge / value grid. */}
+          {mode === 'compare' && (
+            <ScoreVersus mine={data.avg_song_score} theirs={data.global?.avg_song_score ?? null} />
           )}
 
           {/* Percentile rankings — savant-style bars */}
@@ -216,13 +294,13 @@ export default function ArtistPage() {
               <Text style={[styles.legendItem, { color: barColor(100) }]}>GREAT</Text>
             </View>
           </View>
-          <PercentileBar label="Avg Song"     value={fmt2(data.avg_song_score)}   percentile={p.avg_song_score}   smallSample={data.small_sample} />
-          <PercentileBar label="Song+"        value={plus(data.song_plus)}        percentile={p.song_plus}        smallSample={data.small_sample} />
-          <PercentileBar label="wSong+"       value={plus(data.w_song_plus)}      percentile={p.w_song_plus}      smallSample={data.small_sample} />
-          <PercentileBar label="Avg External" value={fmt2(data.avg_external)}     percentile={p.avg_external}     smallSample={data.small_sample} />
-          <PercentileBar label="Bang%"        value={pctv(data.bang_pct)}         percentile={p.bang_pct}         smallSample={data.small_sample} />
-          <PercentileBar label="Skip%"        value={pctv(data.skip_pct)}         percentile={p.skip_pct}         smallSample={data.small_sample} invert />
-          <PercentileBar label="Consistency+" value={plus(data.consistency_plus)} percentile={p.consistency_plus} smallSample={data.small_sample} />
+          <PercentileBar label="Avg Song"     value={fmt2(data.avg_song_score)}   percentile={p.avg_song_score}   globalPercentile={gp?.avg_song_score}   smallSample={data.small_sample} />
+          <PercentileBar label="Song+"        value={plus(data.song_plus)}        percentile={p.song_plus}        globalPercentile={gp?.song_plus}        smallSample={data.small_sample} />
+          <PercentileBar label="wSong+"       value={plus(data.w_song_plus)}      percentile={p.w_song_plus}      globalPercentile={gp?.w_song_plus}      smallSample={data.small_sample} />
+          <PercentileBar label="Avg External" value={fmt2(data.avg_external)}     percentile={p.avg_external}     globalPercentile={gp?.avg_external}     smallSample={data.small_sample} />
+          <PercentileBar label="Bang%"        value={pctv(data.bang_pct)}         percentile={p.bang_pct}         globalPercentile={gp?.bang_pct}         smallSample={data.small_sample} />
+          <PercentileBar label="Skip%"        value={pctv(data.skip_pct)}         percentile={p.skip_pct}         globalPercentile={gp?.skip_pct}         smallSample={data.small_sample} invert />
+          <PercentileBar label="Consistency+" value={plus(data.consistency_plus)} percentile={p.consistency_plus} globalPercentile={gp?.consistency_plus} smallSample={data.small_sample} />
 
           {/* Distribution — same histogram as Profile → Stats */}
           {data.song_scores.length > 0 && (
@@ -423,22 +501,67 @@ function StatCell({
 
 // One savant-style percentile bar: a track with a colored fill and a numbered
 // badge sitting at the percentile. `invert` flips the reading (low Skip% good).
+/** Your average song score for the artist against the userbase's, as raw scores
+ *  rather than percentiles — see the note at its call site for why the two +
+ *  metrics can't be compared directly. */
+function ScoreVersus({ mine, theirs }: { mine: number | null; theirs: number | null }) {
+  const diff = mine != null && theirs != null ? mine - theirs : null
+  return (
+    <View style={styles.vsBlock}>
+      <View style={styles.vsCol}>
+        <Text style={styles.vsLabel}>MY AVG SONG</Text>
+        <Text style={[styles.vsScore, { color: mine != null ? songScoreColor(mine) : colors.inkMuted }]}>
+          {mine != null ? mine.toFixed(2) : '—'}
+        </Text>
+      </View>
+
+      <View style={styles.vsMiddle}>
+        <Text style={styles.vsWord}>vs.</Text>
+        {diff != null && (
+          <Text style={[styles.vsDiff, { color: diff >= 0 ? colors.green : VS_DOWN }]}>
+            {diff >= 0 ? '+' : ''}{diff.toFixed(2)}
+          </Text>
+        )}
+      </View>
+
+      <View style={styles.vsCol}>
+        <Text style={styles.vsLabel}>PRESSD AVG SONG</Text>
+        <Text style={[styles.vsScore, { color: theirs != null ? songScoreColor(theirs) : colors.inkMuted }]}>
+          {theirs != null ? theirs.toFixed(2) : '—'}
+        </Text>
+      </View>
+    </View>
+  )
+}
+
 function PercentileBar({
   label,
   value,
   percentile,
+  globalPercentile = null,
   invert = false,
   smallSample = false,
 }: {
   label: string
   value: string
   percentile: number | null
+  /** The userbase's percentile on this metric. Given, the bar draws the gap
+   *  between the two rather than just your own fill. */
+  globalPercentile?: number | null
   invert?: boolean
   smallSample?: boolean
 }) {
   const display = percentile != null ? (invert ? 100 - percentile : percentile) : null
+  const gDisplay = globalPercentile != null ? (invert ? 100 - globalPercentile : globalPercentile) : null
   const color = display != null ? barColor(display) : '#ccc'
   const badgePct = display != null ? Math.max(3, Math.min(97, display)) : 50
+  const comparing = display != null && gDisplay != null
+  // Which side of you the userbase sits on decides how the gap is drawn: a
+  // solid lighter band when you rate the artist higher, hatching when they do.
+  const ahead = comparing && gDisplay < display
+  const lo = comparing ? Math.min(display, gDisplay) : 0
+  const hi = comparing ? Math.max(display, gDisplay) : 0
+  const patternId = `hatch-${label.replace(/[^a-z0-9]/gi, '')}`
 
   return (
     <View style={styles.pctRow}>
@@ -446,14 +569,86 @@ function PercentileBar({
       <View style={styles.pctTrack}>
         {display != null ? (
           <>
+            {/* Base fill. Comparing, it stops at whichever percentile is lower
+                and the band above it carries the difference. */}
             <View
-              style={[styles.pctFill, { width: `${display}%`, backgroundColor: color, opacity: smallSample ? 0.5 : 0.75 }]}
+              style={[
+                styles.pctFill,
+                {
+                  width: `${comparing ? lo : display}%`,
+                  backgroundColor: color,
+                  opacity: smallSample ? 0.5 : comparing ? 0.95 : 0.75,
+                },
+              ]}
             />
+
+            {comparing && ahead && (
+              // You above the userbase: the stretch you've earned beyond them,
+              // same hue at a lighter weight.
+              <View
+                style={[
+                  styles.pctFill,
+                  { left: `${lo}%`, width: `${hi - lo}%`, backgroundColor: color, opacity: 0.34 },
+                ]}
+              />
+            )}
+
+            {comparing && !ahead && hi > lo && (
+              // The userbase above you: hatched rather than filled, so a
+              // deficit never reads as progress. Same -45° stripe the web bars
+              // use for an unqualified sample.
+              <View style={[styles.pctFill, { left: `${lo}%`, width: `${hi - lo}%` }]}>
+                <Svg width="100%" height="100%">
+                  <Defs>
+                    <Pattern
+                      id={patternId}
+                      width={8}
+                      height={8}
+                      patternUnits="userSpaceOnUse"
+                      patternTransform="rotate(-45)"
+                    >
+                      <Rect x={0} y={0} width={3} height={8} fill={color} />
+                    </Pattern>
+                  </Defs>
+                  <Rect x={0} y={0} width="100%" height="100%" fill={`url(#${patternId})`} />
+                </Svg>
+              </View>
+            )}
+
             <View
               style={[styles.pctBadge, { left: `${badgePct}%`, backgroundColor: color, opacity: smallSample ? 0.7 : 1 }]}
             >
               <Text style={styles.pctBadgeText}>{Math.round(display)}</Text>
             </View>
+
+            {comparing && (
+              // The bare mark, no chip behind it. Its own cream lens is what
+              // separates it from the fill, so a white circle only boxed it in.
+              // Drawn last so it sits over your badge — the userbase's position
+              // is the thing this view exists to show.
+              <View
+                style={[
+                  styles.pctGlobalWrap,
+                  { left: `${Math.max(MARK_INSET_PCT, Math.min(100 - MARK_INSET_PCT, gDisplay))}%` },
+                ]}
+              >
+                {/* A white-tinted copy of the same mark, a couple of points
+                    larger, sitting behind it. A shadow glow softens edges but
+                    still lets a dark mark sink into a dark fill; an actual
+                    silhouette behind it can't. */}
+                <Image
+                  source={require('../../assets/pressd-mark.png')}
+                  style={styles.pctGlobalOutline}
+                  tintColor="#ffffff"
+                  contentFit="contain"
+                />
+                <Image
+                  source={require('../../assets/pressd-mark.png')}
+                  style={styles.pctGlobalMark}
+                  contentFit="contain"
+                />
+              </View>
+            )}
           </>
         ) : (
           <Text style={styles.pctDash}>—</Text>
@@ -542,10 +737,101 @@ const styles = StyleSheet.create({
   },
   legend: { flexDirection: 'row', gap: spacing.md },
   legendItem: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 0.8 },
+  heroBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  heroActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 0 },
+  // Reads on a photo of any brightness: translucent white over the hero's own
+  // scrim rather than a solid chip.
+  modeBtn: {
+    paddingHorizontal: 11,
+    height: 30,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.32)',
+  },
+  modeBtnOn: { backgroundColor: '#ffffff', borderColor: '#ffffff' },
+  modeBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 12.5, color: '#ffffff' },
+  modeBtnTextOn: { color: colors.green },
+  heroGenre: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 11.5,
+    letterSpacing: 1.6,
+    color: 'rgba(255,255,255,0.92)',
+    marginTop: 6,
+  },
+  heroCounts: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.78)',
+    marginTop: 4,
+  },
+  scopeNote: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 11.5,
+    color: 'rgba(255,255,255,0.62)',
+    marginTop: 4,
+  },
+
+  // Absolute scores, not percentiles, so this row wears no track — it sits in
+  // the bars' rhythm but shouldn't read as one of them.
+  vsBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    // Takes the headline row's place in compare mode, so it carries that row's
+    // vertical rhythm rather than a list row's.
+    marginTop: spacing.sm,
+    marginBottom: spacing.lg,
+    paddingBottom: spacing.lg,
+    borderBottomWidth: 1,
+    borderColor: colors.border,
+  },
+  vsCol: { flex: 1, alignItems: 'center' },
+  vsLabel: { fontFamily: fonts.bodyBold, fontSize: 9.5, letterSpacing: 1, color: colors.inkMuted },
+  vsScore: { fontFamily: fonts.display, fontSize: 30, lineHeight: 34, marginTop: 2 },
+  vsMiddle: { alignItems: 'center', gap: 1, flexShrink: 0 },
+  // Set in the display face like the scores it separates, but small and muted —
+  // it's a conjunction, not a third value.
+  vsWord: { fontFamily: fonts.display, fontSize: 15, color: colors.inkMuted },
+  vsDiff: { fontFamily: fonts.bodyBold, fontSize: 11 },
+
   pctRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 7 },
   pctLabel: { width: 84, textAlign: 'right', fontFamily: fonts.bodyMedium, fontSize: 11, lineHeight: 13, color: colors.inkMuted },
   pctTrack: { flex: 1, height: 14, borderRadius: 7, backgroundColor: colors.inset, position: 'relative', justifyContent: 'center' },
-  pctFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 7 },
+  pctFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 7, overflow: 'hidden' },
+  // The track is 14 tall; contentFit="contain" on a ~2:1 mark fits by width, so
+  // a 42-wide box renders about 21 tall — half again the bar's height, which is
+  // what makes it sit *on* the percentile rather than inside it. Width is the
+  // dial here; height only has to stay above half of it or contain letterboxes.
+  //
+  // The glow is white and follows the PNG's alpha, so it haloes the mark's own
+  // silhouette. That's the direction that matters: the mark is dark, and the
+  // fills it has to survive are the dark ones. (iOS shadow props only — Android
+  // has no coloured-glow equivalent, and elevation would just add a drop
+  // shadow.)
+  // The asset was a 256x256 canvas whose artwork filled only 49% of the height.
+  // contentFit="contain" fits the *canvas*, so height was the binding constraint
+  // and widening the box did nothing — the mark just sat in more transparent
+  // padding. Cropped to its own bounds now, so these numbers mean what they say:
+  // 1.84 aspect, sized a touch under the 22pt badge so the two read as a pair
+  // rather than the mark swallowing the row.
+  pctGlobalWrap: {
+    position: 'absolute',
+    top: '50%',
+    marginTop: -8,
+    marginLeft: -15,
+    width: 30,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // A keyline, not a halo — enough to hold the mark off a dark fill without
+  // swamping its thinner strokes.
+  pctGlobalOutline: { position: 'absolute', top: -2.5, left: -2.5, right: -2.5, bottom: -2.5 },
+  pctGlobalMark: { width: '100%', height: '100%' },
   pctBadge: {
     position: 'absolute',
     top: '50%',

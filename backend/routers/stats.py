@@ -11,6 +11,7 @@ import os
 from ..database import get_session
 from ..deps import current_user, viewable_user_id
 from ..models import Album, Song
+from ..trackkeys import _clean_album as _same_record
 from ..scoring import BANG_THRESHOLD, SKIP_THRESHOLD, compute_a_score, get_factor_stats
 
 router = APIRouter(prefix="/stats", tags=["stats"])
@@ -335,8 +336,76 @@ def scatter_data(user_id: int = Depends(viewable_user_id), before_date: Optional
     return {"points": points, "mean_song": mean_song, "mean_external": mean_ext}
 
 
-@router.get("/artist/{artist_name}")
-def artist_detail(artist_name: str, user_id: int = Depends(viewable_user_id), session: Session = Depends(get_session)):
+# An artist needs this many tagged albums in a scope before their genres can be
+# rolled up from it; below that the sample says more about which records the
+# scope happens to hold than about the artist.
+ARTIST_GENRE_MIN_ALBUMS = 1
+
+
+def _artist_genres(albums: list[Album]) -> tuple[str | None, list[str]]:
+    """An artist's genres, rolled up from their albums within one scope.
+
+    Ranked by how often each tag appears rather than taken from the best-rated
+    record: a second genre should be the one that recurs, not the one attached
+    to whichever album happened to score highest.
+    """
+    genre_votes: dict[str, int] = defaultdict(int)
+    sub_votes: dict[str, int] = defaultdict(int)
+    for a in albums:
+        if a.genre:
+            genre_votes[a.genre] += 1
+        for sub in (a.sub_genre1, a.sub_genre2, a.sub_genre3):
+            if sub:
+                sub_votes[sub] += 1
+    primary = max(genre_votes, key=genre_votes.get) if genre_votes else None
+    subs = sorted(sub_votes, key=lambda k: (-sub_votes[k], k))[:3]
+    return primary, subs
+
+
+def _artist_album_rows(albums: list[Album], album_ext, song_counts: dict[int, int]) -> list[dict]:
+    """One row per record, not per copy.
+
+    A single-user scope has one copy of each album, so grouping is a no-op. A
+    global scope holds every user's copy, and listing them raw would repeat the
+    same album once per rater with a different score on each line. Collapsed on
+    the same-record key and averaged, so the row reads as the userbase's score.
+    The id kept is a real copy's — whichever sorts first — so the row still
+    opens something.
+    """
+    groups: dict[str, list[Album]] = defaultdict(list)
+    for a in albums:
+        groups[f'{_same_record(a.album_name)}||{_same_record(a.artist)}'].append(a)
+
+    rows: list[dict] = []
+    for copies in groups.values():
+        scored = [c for c in copies if c.score is not None]
+        ext_vals = [e for c in copies if (e := album_ext(c)) is not None]
+        ref = max(copies, key=lambda c: (c.score or 0))
+        rows.append({
+            "id": ref.id,
+            "album_name": ref.album_name,
+            "year": next((c.year for c in copies if c.year), None),
+            "score": round(sum(c.score for c in scored) / len(scored), 4) if scored else None,
+            "album_art_url": next((c.album_art_url for c in copies if c.album_art_url), None),
+            "avg_external": round(sum(ext_vals) / len(ext_vals), 4) if ext_vals else None,
+            "is_ep": song_counts.get(ref.id, 0) <= 6,
+            "status": ref.status,
+            "rater_count": len(scored),
+        })
+    return sorted(rows, key=lambda r: r["score"] or 0, reverse=True)
+
+
+def _artist_payload(session: Session, artist_name: str, all_albums_any_status: list[Album]) -> dict:
+    """Everything the artist page shows, computed over whatever scope it's given.
+
+    The whole pipeline below — the per-artist league table, the empirical-Bayes
+    shrinkage on bang/skip, the + metrics, the ranks and percentiles — derives
+    from this one list. Hand it one user's albums and the numbers are that
+    user's; hand it every album in Pressd and the same code produces the
+    userbase's, ranked against a global league table rather than a personal one.
+    That symmetry is the point: the two populations can't drift apart, because
+    there is only one implementation.
+    """
     def album_ext(a: Album):
         if any(v is None for v in [a.theme, a.replay_value, a.production, a.distinctness]):
             return None
@@ -347,7 +416,6 @@ def artist_detail(artist_name: str, user_id: int = Depends(viewable_user_id), se
 
     from .albums import artist_in_album
 
-    all_albums_any_status = session.exec(select(Album).where(Album.user_id == user_id)).all()
     all_albums = [a for a in all_albums_any_status if a.status == "rated"]
     artist_albums = [a for a in all_albums if artist_in_album(a, artist_name)]
     all_artist_albums = [a for a in all_albums_any_status if artist_in_album(a, artist_name)]
@@ -533,8 +601,12 @@ def artist_detail(artist_name: str, user_id: int = Depends(viewable_user_id), se
         if r["avg_external"] is not None:
             r["avg_external"] = round(r["avg_external"], 4)
 
+    genre, subgenres = _artist_genres(all_artist_albums)
+
     return {
         "artist": artist_name,
+        "genre": genre,
+        "subgenres": subgenres,
         "song_count": song_count,
         "album_count": len(artist_albums),
         "avg_song_score": round(avg_song_score, 4) if avg_song_score else None,
@@ -556,24 +628,64 @@ def artist_detail(artist_name: str, user_id: int = Depends(viewable_user_id), se
         "w_song_plus_rank_of": len(ranked_wsp),
         "percentiles": percentiles,
         "song_scores": song_scores,
-        "albums": [
-            {
-                "id": a.id,
-                "album_name": a.album_name,
-                "year": a.year,
-                "score": a.score,
-                "album_art_url": a.album_art_url,
-                "avg_external": album_ext(a),
-                "is_ep": _song_counts.get(a.id, 0) <= 6,
-                "status": a.status,
-            }
-            for a in sorted(
-                [a for a in all_artist_albums if a.status == "rated" or len(_album_scores.get(a.id, [])) <= 6],
-                key=lambda x: x.score or 0, reverse=True,
-            )
-        ],
+        "albums": _artist_album_rows(
+            [a for a in all_artist_albums if a.status == "rated" or len(_album_scores.get(a.id, [])) <= 6],
+            album_ext,
+            _song_counts,
+        ),
         "all_artists": scatter_rows,
     }
+
+
+@router.get("/artist/{artist_name}")
+def artist_detail(
+    artist_name: str,
+    population: str = Query("me", pattern="^(me|global|both)$"),
+    user_id: int = Depends(viewable_user_id),
+    session: Session = Depends(get_session),
+):
+    """The artist page, for one library or for all of Pressd.
+
+    population=me      → this user's ratings, ranked among their own artists
+    population=global  → every user's ratings pooled, ranked globally
+    population=both    → the user's payload with the global percentiles and
+                         headline metrics attached, so the comparison view can
+                         draw two markers per bar off a single request
+
+    Pooled rather than averaged per user: a global percentile should be a
+    property of the whole rating set, and averaging each user's average would
+    let someone with three rated songs move it as far as someone with three
+    hundred.
+    """
+    def scope_global() -> list[Album]:
+        return session.exec(select(Album)).all()
+
+    if population == "global":
+        return _artist_payload(session, artist_name, scope_global())
+
+    mine = session.exec(select(Album).where(Album.user_id == user_id)).all()
+    payload = _artist_payload(session, artist_name, mine)
+    if population == "both":
+        g = _artist_payload(session, artist_name, scope_global())
+        # Only what the comparison actually draws — the full global payload
+        # would double the response for albums and song_scores the compare view
+        # never reads.
+        payload["global"] = {
+            "percentiles": g["percentiles"],
+            "avg_song_score": g["avg_song_score"],
+            "avg_external": g["avg_external"],
+            "song_plus": g["song_plus"],
+            "w_song_plus": g["w_song_plus"],
+            "consistency_plus": g["consistency_plus"],
+            "bang_pct": g["bang_pct"],
+            "skip_pct": g["skip_pct"],
+            "song_count": g["song_count"],
+            "album_count": g["album_count"],
+            "small_sample": g["small_sample"],
+            "genre": g["genre"],
+            "subgenres": g["subgenres"],
+        }
+    return payload
 
 
 @router.get("/genres")

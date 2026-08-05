@@ -781,8 +781,50 @@ export async function fetchYearByYear(userId = 1): Promise<Record<string, YearEn
   return res.json()
 }
 
+export interface ArtistPercentiles {
+  avg_song_score: number | null
+  song_plus: number | null
+  w_song_plus: number | null
+  avg_external: number | null
+  bang_pct: number | null
+  skip_pct: number | null
+  consistency_idx: number | null
+  consistency_plus: number | null
+}
+
+/** What the comparison view draws for the userbase: a trimmed slice of
+ *  ArtistDetail. The compare bars never read the album list or raw song
+ *  scores, so shipping the whole global payload would double the response for
+ *  fields nothing reads. */
+export interface ArtistPopulationSlice {
+  percentiles: ArtistPercentiles
+  avg_song_score: number | null
+  avg_external: number | null
+  song_plus: number | null
+  w_song_plus: number | null
+  consistency_plus: number | null
+  bang_pct: number | null
+  skip_pct: number | null
+  song_count: number
+  album_count: number
+  small_sample: boolean
+  genre: string | null
+  subgenres: string[]
+}
+
+/** Which rating set the page is showing: your library, all of Pressd pooled,
+ *  or yours with the userbase's attached for comparison. */
+export type ArtistPopulation = 'me' | 'global' | 'both'
+
 export interface ArtistDetail {
   artist: string
+  /** Rolled up from the artist's albums in whichever scope was requested,
+   *  ranked by how often each tag appears. */
+  genre: string | null
+  subgenres: string[]
+  /** population='both' only — the userbase's numbers alongside yours, so each
+   *  bar can mark both off one request. */
+  global?: ArtistPopulationSlice
   song_count: number
   album_count: number
   avg_song_score: number | null
@@ -802,16 +844,7 @@ export interface ArtistDetail {
   song_plus_rank_of: number
   w_song_plus_rank: number | null
   w_song_plus_rank_of: number
-  percentiles: {
-    avg_song_score: number | null
-    song_plus: number | null
-    w_song_plus: number | null
-    avg_external: number | null
-    bang_pct: number | null
-    skip_pct: number | null
-    consistency_idx: number | null
-    consistency_plus: number | null
-  }
+  percentiles: ArtistPercentiles
   song_scores: number[]
   albums: {
     id: number
@@ -865,8 +898,14 @@ export async function fetchScatterData(userId = 1, beforeDate?: string): Promise
   return res.json()
 }
 
-export async function fetchArtistDetail(artist: string, userId = 1): Promise<ArtistDetail> {
-  const res = await apiFetch(`${BASE()}/stats/artist/${encodeURIComponent(artist)}?user_id=${userId}`)
+export async function fetchArtistDetail(
+  artist: string,
+  userId = 1,
+  population: ArtistPopulation = 'me',
+): Promise<ArtistDetail> {
+  const res = await apiFetch(
+    `${BASE()}/stats/artist/${encodeURIComponent(artist)}?user_id=${userId}&population=${population}`,
+  )
   if (!res.ok) throw new Error('Artist not found')
   return res.json()
 }
