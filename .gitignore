@@ -51,9 +51,9 @@ backend/models/*.onnx
 .DS_Store
 node_modules
 
-# Node (workspaces)
-node_modules/
-mobile/.expo/
-mobile/dist/
-mobile/ios/
-mobile/android/
+# Brand / design deliverables (source of truth lives in Figma; the sizes the
+# apps actually ship are committed under mobile/assets and frontend/public)
+Pressd-Logo-Package/
+pressd_logos.zip
+*logo redesign.zip
+*-selection*.png

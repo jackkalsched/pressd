@@ -5,9 +5,10 @@ that has no audio features yet, exactly once, shared across all users.
 No-op on nights with no new unique tracks. Per-album yt-dlp download +
 Essentia extraction (source='yt_full'); the 30s-preview source replaces the
 acquisition step later (rollout steps 6–7). Requires essentia + yt-dlp —
-run where those work (currently the Mac via launchd).
+run where those work (the local Mac, on demand via ./run_audio_ingest.sh).
 
 Usage:
+    ./run_audio_ingest.sh [--limit N]      # convenience wrapper (sets PATH)
     python -m worker.audio_ingest [--limit N]
 """
 import argparse

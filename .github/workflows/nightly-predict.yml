@@ -1,8 +1,9 @@
 name: Nightly predictions
 
 # Per-user prediction pipeline (PLAN_ml_worker_split §4, phase B).
-# Audio ingest (phase A) runs separately on the Mac via launchd — see
-# ops/com.pressd.audio-ingest.plist — until the 30s-preview ingest lands.
+# Audio ingest (phase A) runs separately on the Mac — yt-dlp is bot-blocked
+# from datacenter IPs, so it can't run here. Trigger it manually when needed:
+# ./run_audio_ingest.sh (until the 30s-preview ingest lands and it can move here).
 
 on:
   schedule:
