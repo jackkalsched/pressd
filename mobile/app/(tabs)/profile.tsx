@@ -212,8 +212,6 @@ export default function Profile() {
   const compactOpacity = scrollY.interpolate({ inputRange: [70, 130], outputRange: [0, 1], extrapolate: 'clamp' })
   const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })
 
-  if (!user) return null
-
   const isGrid = tab === 'library'
   const rankMetrics = rankMode === 'albums' ? ALBUM_METRICS : ARTIST_METRICS
   const currentMetric = rankMetrics.find((m) => m.key === rankMetric) ?? rankMetrics[0]
@@ -264,6 +262,12 @@ export default function Profile() {
       ? [...matched].sort((a, b) => (b.predictedScore ?? -1) - (a.predictedScore ?? -1))
       : matched
   }, [grid, libStatus, libQ])
+
+  // Below every hook, not above them. `user` starts null and hydrates from
+  // storage, so a guard placed earlier skipped the three useMemos below on the
+  // first render and ran them on the next — the hook count changes and React
+  // throws "rendered more hooks than during the previous render".
+  if (!user) return null
 
   const listData: (Album | ArtistRank)[] = isGrid
     ? gridSorted
