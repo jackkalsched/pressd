@@ -648,6 +648,19 @@ def _clone_album(session: Session, source: Album, target_user_id: int, status: s
     )
     session.add(new_album)
     session.flush()
+    _copy_songs(session, source, new_album)
+    return new_album
+
+
+def _copy_songs(session: Session, source: Album, target: Album) -> int:
+    """Clone a tracklist onto someone else's copy and return how many landed.
+
+    Scores are left empty — `Song.score` defaults to None — so the tracklist
+    arrives unrated no matter what the source's own ratings were. Each song
+    keeps the source's `track_id`, so any audio already analyzed for that
+    recording is reused rather than downloaded again.
+    """
+    n = 0
     for s in source.songs:
         session.add(Song(
             title=s.title,
@@ -658,9 +671,10 @@ def _clone_album(session: Session, source: Album, target_user_id: int, status: s
             spotify_popularity=s.spotify_popularity,
             artist=s.artist,
             track_id=s.track_id,
-            album_id=new_album.id,
+            album_id=target.id,
         ))
-    return new_album
+        n += 1
+    return n
 
 
 @router.post("/{album_id}/recommend")
@@ -679,6 +693,15 @@ def recommend_album(
     if not friend_id or friend_id == user.id or not are_friends(session, user.id, friend_id):
         raise HTTPException(status_code=403, detail="You can only recommend to friends")
 
+    # The tracklist is half of what's being sent. Without one the recipient
+    # gets a shell that opens into a rating screen it can never submit, which
+    # is worse than the recommendation simply not going through.
+    if not source.songs:
+        raise HTTPException(
+            status_code=409,
+            detail="That album has no tracklist yet, so there's nothing to send. Open it once to resolve its tracks, then try again.",
+        )
+
     existing = session.exec(
         select(Album).where(
             Album.user_id == friend_id,
@@ -691,9 +714,49 @@ def recommend_album(
         existing.recommended_by = recommender_id
         existing.recommended_by_name = recommender.name
         existing.recommended_at = datetime.utcnow()
+
+        # The copy they already held may be a shell — added by name, or cloned
+        # before the source had a tracklist. Stamping it and stopping there is
+        # what produced albums that opened straight into an unsubmittable
+        # rating screen: no tracks means the "every track needs a score" guard
+        # can never be satisfied. A recommendation should arrive as complete as
+        # a fresh one, so fill in whatever's missing.
+        added = 0
+        if not existing.songs:
+            added = _copy_songs(session, source, existing)
+
+        # Anything they've actually engaged with is left alone — a rating or a
+        # part-finished pass is theirs, and a recommendation is not a reason to
+        # reset it. Only an untouched copy gets shelved under To Listen.
+        untouched = existing.score is None and existing.status != "listening"
+        if untouched:
+            existing.status = "to_listen"
+
+        # Metadata the shell was missing, so it renders like any other album.
+        if not existing.album_art_url:
+            existing.album_art_url = source.album_art_url
+        if existing.year is None:
+            existing.year = source.year
+        if not existing.genre:
+            existing.genre = canonical_genre(source.genre)
+            existing.sub_genre1 = canonical_subgenre(source.sub_genre1)
+            existing.sub_genre2 = canonical_subgenre(source.sub_genre2)
+            existing.sub_genre3 = canonical_subgenre(source.sub_genre3)
+        if not existing.total_tracks:
+            existing.total_tracks = source.total_tracks or added or None
+
         session.add(existing)
         session.commit()
-        return {"ok": True, "already_existed": True}
+
+        if added:
+            _link_tracks(session, existing.id)
+        # A shelf item without a prediction is missing the number To Listen
+        # sorts on, so backfill it once there are tracks to predict from.
+        if untouched and existing.predicted_score is None and (added or existing.songs):
+            _queue_predictions(existing.id)
+        if not existing.genre:
+            _queue_genre_tagging(existing.id, existing.artist, existing.album_name, existing.year)
+        return {"ok": True, "already_existed": True, "tracks_added": added}
 
     new_album = _clone_album(
         session, source, friend_id, status="to_listen",

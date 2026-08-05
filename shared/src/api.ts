@@ -1235,7 +1235,12 @@ export async function fetchTopReviews(limit = 8): Promise<TopReviewsResponse> {
 
 // Compare board — albums your community (you + friends) has rated, ≥2 raters.
 export interface CompareRater {
+  /** Who this is, so the client can link through to their profile. */
+  user_id: number
   name: string
+  /** Null for users who never set one — the client falls back to a colored
+   *  initial keyed off the name. */
+  avatar_url: string | null
   score: number
   review: string | null
   is_you: boolean

@@ -369,6 +369,7 @@ def get_compare(
             g["raters"][a.user_id] = {
                 "user_id": a.user_id,
                 "name": "You" if a.user_id == user_id else (users[a.user_id].name if a.user_id in users else "Friend"),
+                "avatar_url": users[a.user_id].avatar_url if a.user_id in users else None,
                 "is_you": a.user_id == user_id,
                 "score": a.score,
                 "album_id": a.id,
@@ -398,7 +399,17 @@ def get_compare(
             "spread": round(max(scores) - min(scores), 1),
             "recent": any(r["date_rated"] and (today - r["date_rated"]).days <= 7 for r in friend_raters),
             "has_reviews": any(r["review"] for r in raters),
-            "raters": [{"name": r["name"], "score": r["score"], "review": r["review"], "is_you": r["is_you"]} for r in ordered],
+            "raters": [
+                {
+                    "user_id": r["user_id"],
+                    "name": r["name"],
+                    "avatar_url": r["avatar_url"],
+                    "score": r["score"],
+                    "review": r["review"],
+                    "is_you": r["is_you"],
+                }
+                for r in ordered
+            ],
             "_last": max((r["date_rated"] for r in raters if r["date_rated"]), default=date.min),
         })
 
