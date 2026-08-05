@@ -277,7 +277,7 @@ export default function ForYou() {
           {trending.length > 0 && (
             <section className="mb-9">
               <div className="flex items-baseline justify-between mb-4 gap-3.5">
-                <h2 className={SECTION_LABEL}>Trending on Press&rsquo;d</h2>
+                <h2 className={SECTION_LABEL}>Trending on Pressd</h2>
                 <span className="text-[11px] text-[#b3a99c]">This week</span>
               </div>
               <div className="rounded-[18px] border border-[#e6ded2] bg-[#faf8f5] overflow-hidden">
