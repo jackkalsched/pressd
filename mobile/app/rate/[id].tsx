@@ -3,9 +3,10 @@
 // you've already scored so you can jump back and change one. After the last
 // track the four album factors are rated (skipped for EPs), then submitting
 // writes everything and surfaces the share card.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Animated,
   Modal,
   Pressable,
   ScrollView,
@@ -576,21 +577,59 @@ function ScoreField({
   )
 }
 
-/** Read-only reference scale showing where a score lands. */
+/** Where the score you're typing lands on the 0–10 ramp.
+ *
+ *  The dot is driven off a measured track width rather than a percentage
+ *  string: percentages can't be animated on the native thread, and this runs on
+ *  every keystroke. It springs rather than snapping so a digit typed or deleted
+ *  reads as the same dot moving, not a new one appearing somewhere else.
+ *
+ *  The SKIP / BANG captions that used to sit under here are gone. They were in
+ *  a space-between row with 0 and 10, which spread all four evenly — so 6.5 and
+ *  8.0 were drawn at a third and two thirds of the track, nowhere near where
+ *  those scores actually fall. A caption that lies about its own position is
+ *  worse than no caption; the ramp's colour already says where the bands are. */
 function ScoreScale({ value }: { value: number | null }) {
-  const pct = value != null ? (Math.max(0, Math.min(10, value)) / 10) * 100 : null
+  const [trackW, setTrackW] = useState(0)
+  const x = useRef(new Animated.Value(0)).current
+  const opacity = useRef(new Animated.Value(0)).current
+
+  const clamped = value != null ? Math.max(0, Math.min(10, value)) : null
+  const target = clamped != null && trackW > 0 ? (clamped / 10) * trackW : 0
+
+  // The dot appears at its value rather than sliding in from zero the first
+  // time; every move after that animates.
+  const placed = useRef(false)
+
+  useEffect(() => {
+    if (trackW === 0) return
+    if (clamped == null) {
+      Animated.timing(opacity, { toValue: 0, duration: 120, useNativeDriver: true }).start()
+      placed.current = false
+      return
+    }
+    if (placed.current) {
+      Animated.spring(x, { toValue: target, useNativeDriver: true, friction: 9, tension: 90 }).start()
+    } else {
+      x.setValue(target)
+      placed.current = true
+    }
+    Animated.timing(opacity, { toValue: 1, duration: 140, useNativeDriver: true }).start()
+  }, [clamped, target, trackW, x, opacity])
+
   return (
     <View style={styles.scaleWrap}>
-      <View style={styles.scaleTrack}>
+      <View style={styles.scaleTrack} onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}>
         {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
           <View key={i} style={{ flex: 1, backgroundColor: songScoreColor(i + 0.5) }} />
         ))}
       </View>
-      {pct != null && <View style={[styles.scaleMarker, { left: `${pct}%` }]} />}
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.scaleMarker, { opacity, transform: [{ translateX: x }] }]}
+      />
       <View style={styles.scaleLabels}>
         <Text style={styles.scaleLabel}>0</Text>
-        <Text style={styles.scaleLabel}>SKIP {SKIP_THRESHOLD.toFixed(1)}</Text>
-        <Text style={styles.scaleLabel}>BANG {BANG_THRESHOLD.toFixed(1)}</Text>
         <Text style={styles.scaleLabel}>10</Text>
       </View>
     </View>
@@ -733,6 +772,9 @@ const styles = StyleSheet.create({
   scaleMarker: {
     position: 'absolute',
     top: -5,
+    // Anchored at the track's origin; translateX carries it. The negative
+    // margin centres the dot on its value rather than hanging it to the right.
+    left: 0,
     marginLeft: -8,
     width: 16,
     height: 16,
