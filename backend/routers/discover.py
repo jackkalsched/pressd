@@ -17,7 +17,7 @@ from sqlmodel import Session, select
 
 from ..database import get_session
 from ..deps import current_user
-from ..global_rating import compute_global_ratings
+from ..global_rating import compute_global_ratings, is_single
 from ..models import Album, PressUser
 from ..trackkeys import same_album
 from ..aoty_releases import AOTY_THIS_WEEK, AOTY_UA, parse_releases
@@ -323,6 +323,8 @@ def trending(
             if alltime.get(key):
                 g["scores"] = alltime[key]
 
+    # Singles stay off trending for the same reason they stay off the charts.
+    global_ratings = compute_global_ratings(session)
     rows = [
         {
             "album_id": g["own_album_id"] or g["rep_album_id"],
@@ -334,7 +336,8 @@ def trending(
             "rater_count": len(g["raters"]),
             "last_rated": g["last"].isoformat() if g["last"] else None,
         }
-        for g in groups.values()
+        for key, g in groups.items()
+        if not is_single(global_ratings, key)
     ]
 
     if period == "top":
@@ -441,9 +444,11 @@ def charts(
         return sorted(groups.items(), key=lambda kv: (rank_score(kv), len(kv[1]["raters"])),
                       reverse=True)
 
-    today_ranked = build(pool)
+    # Singles don't chart — see the note in public.py's equivalent.
+    today_ranked = [kv for kv in build(pool) if not is_single(global_ratings, kv[0])]
     # Yesterday's board: copies first rated today don't count yet.
-    yest_ranked = build([r for r in pool if r.date_rated is None or r.date_rated < today])
+    yest_ranked = [kv for kv in build([r for r in pool if r.date_rated is None or r.date_rated < today])
+                   if not is_single(global_ratings, kv[0])]
     yest_rank = {key: i + 1 for i, (key, _) in enumerate(yest_ranked)}
 
     items = []

@@ -49,6 +49,21 @@ SKIP_THRESHOLD = 6.5
 # and the album score is just the song mean (mirrors isEP in RatingScreen.tsx)
 EP_MAX_TRACKS = 6
 
+# Releases this short are singles. They still score, still count toward artist
+# stats and a user's own library — they're just kept off the userbase-wide
+# charts and trending lists, where a one-track release rated 10 outranks every
+# real album on a single person's say-so.
+SINGLE_MAX_TRACKS = 2
+
+
+def is_single_release(album_name: str | None, track_count: int | None) -> bool:
+    """Whether a release is a single rather than a record. Track count is the
+    reliable signal; the "- Single" suffix is an iTunes naming convention that
+    only some copies carry, so it's a supplement, not the test."""
+    if track_count is not None and 0 < track_count <= SINGLE_MAX_TRACKS:
+        return True
+    return (album_name or "").strip().lower().endswith("- single")
+
 
 def compute_a_score(score: float) -> float:
     return (15 * score - 14) / 13

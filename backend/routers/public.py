@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
 
 from ..database import get_session
-from ..global_rating import compute_global_ratings
+from ..global_rating import compute_global_ratings, is_single
 from ..models import Album
 
 router = APIRouter(prefix="/public", tags=["public"])
@@ -114,8 +114,12 @@ def public_charts(
         return sorted(groups.items(), key=lambda kv: (rank_score(kv), len(kv[1]["raters"])),
                       reverse=True)
 
-    today_ranked = build(pool)
-    yest_ranked = build([r for r in pool if r.date_rated is None or r.date_rated < today])
+    # Singles are kept off the board: a one-track release rated 10 by one person
+    # outranks every real album. They still score, and still count toward artist
+    # stats and their owner's library — they just don't chart.
+    today_ranked = [kv for kv in build(pool) if not is_single(global_ratings, kv[0])]
+    yest_ranked = [kv for kv in build([r for r in pool if r.date_rated is None or r.date_rated < today])
+                   if not is_single(global_ratings, kv[0])]
     yest_rank = {key: i + 1 for i, (key, _) in enumerate(yest_ranked)}
 
     items = []

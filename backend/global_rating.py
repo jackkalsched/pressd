@@ -28,7 +28,15 @@ from .scoring import (
     WEIGHTS,
     compute_album_score,
     get_global_factor_stats,
+    is_single_release,
 )
+
+
+def is_single(ratings: dict, key: tuple[str, str]) -> bool:
+    """Whether a record should be kept off the userbase-wide lists. Unknown
+    records (nothing rated yet) are not singles — absence shouldn't hide them."""
+    entry = ratings.get(key)
+    return bool(entry and entry["is_single"])
 
 # The board reads the whole song table, which is ~400ms against a remote
 # Postgres — too slow to repeat on every chart load. The numbers only move when
@@ -75,6 +83,16 @@ def _compute(session) -> dict[tuple[str, str], dict]:
         WHERE a.status = 'rated' AND a.score IS NOT NULL AND s.score IS NOT NULL
     """)).fetchall()
 
+    # Every song, scored or not — the honest track count for telling a single
+    # from a record. per_track below only sees scored songs, so it would call a
+    # part-rated album a single.
+    counts = dict(session.execute(text("""
+        SELECT s.album_id, count(*)
+        FROM song s JOIN album a ON a.id = s.album_id
+        WHERE a.status = 'rated' AND a.score IS NOT NULL
+        GROUP BY s.album_id
+    """)).fetchall())
+
     songs_by_album = defaultdict(list)
     for s in songs:
         songs_by_album[s.album_id].append(s)
@@ -119,11 +137,19 @@ def _compute(session) -> dict[tuple[str, str], dict]:
             # song mean, mirroring the per-user rule.
             score = round(avg_song, 2)
 
+        # Longest copy wins: if one user imported a 1-track version of a record
+        # somebody else has in full, it is the record that counts, not the stub.
+        track_count = max([counts.get(a.id, 0) for a in g["copies"]] or [0])
+        is_single = all(
+            is_single_release(a.album_name, counts.get(a.id, 0)) for a in g["copies"]
+        ) if g["copies"] else False
+
         out[key] = {
             "score": score,
             "raters": len(g["raters"]),
-            "track_count": len(per_track),
-            "is_ep": len(per_track) <= EP_MAX_TRACKS,
+            "track_count": track_count,
+            "is_ep": track_count <= EP_MAX_TRACKS,
+            "is_single": is_single,
         }
 
     return out
