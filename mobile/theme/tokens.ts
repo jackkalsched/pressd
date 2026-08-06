@@ -1,6 +1,8 @@
 // Pressd design tokens — mirrors the website's palette (frontend/src/index.css
 // + Tailwind classes) so the two surfaces read as one brand.
 
+import { Dimensions } from 'react-native'
+
 export const colors = {
   // Surfaces
   bg: '#f9f8f6',
@@ -58,3 +60,32 @@ export const spacing = {
 
 /** Maps a 1–10 song score to the same gradient hue the website uses. */
 export { songScoreColor } from '@pressd/shared/types'
+
+// ── Fitting large type to the screen ────────────────────────────────────────
+// Display-face numerals are set big enough that a narrow screen runs out of
+// room, and a headline numeral that wraps ("10.0" over "0") reads as broken
+// rather than tight. Sizes below are derived from the width that's actually
+// available instead of being tuned to one device, because the trigger is as
+// likely to be Display Zoom or a large text setting as a smaller phone.
+
+export const screenWidth = Dimensions.get('window').width
+
+/** Width of a string as a multiple of its own font size, for the display face.
+ *  Playfair sets digits at ~0.55em and a period at ~0.27em, so the widest score
+ *  a column has to hold — "10.00" — needs about 2.5em. */
+export const SCORE_EM_WIDTH = 2.6
+
+/**
+ * The largest type that still fits `available` points across, for a string
+ * occupying `em` times its font size. Caps at `max`, so a roomy screen keeps
+ * the size the design asked for and only a cramped one steps down.
+ */
+export function fitType(max: number, available: number, em: number = SCORE_EM_WIDTH): number {
+  if (!(available > 0)) return max
+  return Math.max(1, Math.min(max, Math.floor(available / em)))
+}
+
+/** Content width inside a screen padded by `pad` on each side. */
+export function contentWidth(pad: number = spacing.lg): number {
+  return screenWidth - pad * 2
+}

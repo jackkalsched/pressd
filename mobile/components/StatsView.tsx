@@ -50,7 +50,7 @@ export default function StatsView({ userId }: { userId: number }) {
       <View style={styles.bsCard}>
         <View style={styles.bsHead}>
           <View>
-            <Text style={[styles.bsValue, { color: colors.green }]}>
+            <Text style={[styles.bsValue, { color: colors.green }]} numberOfLines={1} adjustsFontSizeToFit>
               {bangPct != null ? bangPct.toFixed(1) : '—'}%
             </Text>
             <Text style={styles.bsLabel}>BANGS</Text>
@@ -58,7 +58,7 @@ export default function StatsView({ userId }: { userId: number }) {
           </View>
           <Text style={styles.bsVs}>vs</Text>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={[styles.bsValue, { color: RED }]}>
+            <Text style={[styles.bsValue, { color: RED }]} numberOfLines={1} adjustsFontSizeToFit>
               {skipPct != null ? skipPct.toFixed(1) : '—'}%
             </Text>
             <Text style={styles.bsLabel}>SKIPS</Text>
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   wrap: { marginTop: spacing.lg },
 
   bsCard: { marginTop: spacing.sm },
-  bsHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  bsHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   bsValue: { fontFamily: fonts.display, fontSize: 34, lineHeight: 38 },
   bsLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.4, color: colors.ink, marginTop: 3 },
   bsCaption: { fontFamily: fonts.body, fontSize: 11.5, color: colors.inkTertiary, marginTop: 2 },

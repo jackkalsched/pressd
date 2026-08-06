@@ -510,7 +510,11 @@ function ScoreVersus({ mine, theirs }: { mine: number | null; theirs: number | n
     <View style={styles.vsBlock}>
       <View style={styles.vsCol}>
         <Text style={styles.vsLabel}>MY AVG SONG</Text>
-        <Text style={[styles.vsScore, { color: mine != null ? songScoreColor(mine) : colors.inkMuted }]}>
+        <Text
+          style={[styles.vsScore, { color: mine != null ? songScoreColor(mine) : colors.inkMuted }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
           {mine != null ? mine.toFixed(2) : '—'}
         </Text>
       </View>
@@ -526,7 +530,11 @@ function ScoreVersus({ mine, theirs }: { mine: number | null; theirs: number | n
 
       <View style={styles.vsCol}>
         <Text style={styles.vsLabel}>PRESSD AVG SONG</Text>
-        <Text style={[styles.vsScore, { color: theirs != null ? songScoreColor(theirs) : colors.inkMuted }]}>
+        <Text
+          style={[styles.vsScore, { color: theirs != null ? songScoreColor(theirs) : colors.inkMuted }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
           {theirs != null ? theirs.toFixed(2) : '—'}
         </Text>
       </View>

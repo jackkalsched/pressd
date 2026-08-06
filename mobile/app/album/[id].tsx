@@ -47,7 +47,7 @@ import BangSkip from '../../components/BangSkip'
 import ScoreDial from '../../components/ScoreDial'
 import ShareCard from '../../components/ShareCard'
 import { confirmDeleteAlbum, useDeleteAlbum } from '../../lib/useDeleteAlbum'
-import { colors, fonts, radii, spacing } from '../../theme/tokens'
+import { colors, contentWidth, fitType, fonts, radii, spacing } from '../../theme/tokens'
 
 const WINDOW_H = Dimensions.get('window').height
 
@@ -58,7 +58,14 @@ const DANGER = '#b91c1c'
 // The album average and the prediction are two readings of one thing, so they
 // are set at one size. Both the filled numeral and the stroked one read from
 // this — set it once and they can't drift.
-const SCORE_SIZE = 64
+//
+// 64 is the size the design asks for, but the two share a row, so each gets
+// half the content width less the divider. On a narrow screen "10.00" at 64pt
+// is wider than that half and wrapped to a second line, which reads as broken
+// rather than tight. Deriving the size from the width that's actually there
+// keeps every normal phone at 64 and steps only a cramped one down.
+const SCORE_COL_W = (contentWidth() - 1) / 2
+const SCORE_SIZE = fitType(64, SCORE_COL_W)
 const SCORE_LINE = SCORE_SIZE + 4
 
 // The comparison card sits over the album backdrop, and at a lighter wash the
@@ -521,7 +528,11 @@ export default function AlbumDetail() {
               <ScoreDial value={showScore} size={104} />
             </View>
           ) : (
-            <Text style={[styles.bigScore, { color: showScore != null ? colors.green : colors.inkMuted }]}>
+            <Text
+              style={[styles.bigScore, { color: showScore != null ? colors.green : colors.inkMuted }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
               {showScore != null ? showScore.toFixed(2) : '—'}
             </Text>
           )}
@@ -743,12 +754,12 @@ function CommunityAlbum({
               <View style={styles.cmpScores}>
                 <View style={styles.cmpScoreCol}>
                   <Text style={[styles.cmpWho, { color: left.head }]} numberOfLines={1}>{left.label}</Text>
-                  <Text style={[styles.cmpScore, { color: left.color }]}>{left.score.toFixed(2)}</Text>
+                  <Text style={[styles.cmpScore, { color: left.color }]} numberOfLines={1} adjustsFontSizeToFit>{left.score.toFixed(2)}</Text>
                 </View>
                 <View style={[styles.cmpDivider, { backgroundColor: 'rgba(45,106,79,0.25)' }]} />
                 <View style={styles.cmpScoreCol}>
                   <Text style={[styles.cmpWho, { color: right.head }]} numberOfLines={1}>{right.label}</Text>
-                  <Text style={[styles.cmpScore, { color: right.color }]}>{right.score.toFixed(2)}</Text>
+                  <Text style={[styles.cmpScore, { color: right.color }]} numberOfLines={1} adjustsFontSizeToFit>{right.score.toFixed(2)}</Text>
                 </View>
               </View>
 
@@ -843,7 +854,13 @@ function CommunityAlbum({
               type size, split by a rule rather than set as headline + footnote. */}
           <View style={styles.scoreCard}>
             <View style={styles.scoreCol}>
-              <Text style={[styles.bigScore, { color: data.avg_score != null ? colors.green : colors.inkMuted }]}>
+              {/* Sized to the column at build time; these two also guard against
+                  a large system text setting, which no width maths can predict. */}
+              <Text
+                style={[styles.bigScore, { color: data.avg_score != null ? colors.green : colors.inkMuted }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
                 {data.avg_score != null ? data.avg_score.toFixed(2) : '—'}
               </Text>
               <Text style={styles.scoreLabel}>PRESSD AVG</Text>
@@ -1142,12 +1159,12 @@ function FriendCompare({
             <View style={styles.cmpScores}>
               <View style={styles.cmpScoreCol}>
                 <Text style={[styles.cmpWho, { color: left.head }]} numberOfLines={1}>{left.label}</Text>
-                <Text style={[styles.cmpScore, { color: left.color }]}>{left.score.toFixed(2)}</Text>
+                <Text style={[styles.cmpScore, { color: left.color }]} numberOfLines={1} adjustsFontSizeToFit>{left.score.toFixed(2)}</Text>
               </View>
               <View style={[styles.cmpDivider, { backgroundColor: tint(color, 0.25) }]} />
               <View style={styles.cmpScoreCol}>
                 <Text style={[styles.cmpWho, { color: right.head }]} numberOfLines={1}>{right.label}</Text>
-                <Text style={[styles.cmpScore, { color: right.color }]}>{right.score.toFixed(2)}</Text>
+                <Text style={[styles.cmpScore, { color: right.color }]} numberOfLines={1} adjustsFontSizeToFit>{right.score.toFixed(2)}</Text>
               </View>
             </View>
 
