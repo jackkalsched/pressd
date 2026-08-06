@@ -17,6 +17,7 @@ from sqlmodel import Session, select
 
 from ..database import get_session
 from ..deps import current_user
+from ..global_rating import compute_global_ratings
 from ..models import Album, PressUser
 from ..trackkeys import same_album
 from ..aoty_releases import AOTY_THIS_WEEK, AOTY_UA, parse_releases
@@ -408,8 +409,10 @@ def charts(
         week_ago = today - timedelta(days=7)
         pool = [r for r in pool if r.date_rated is not None and r.date_rated >= week_ago]
 
+    global_ratings = compute_global_ratings(session)
+
     def build(subset):
-        """Group by (album, artist); return keys ranked by avg score desc."""
+        """Group by (album, artist); return keys ranked by the global rating."""
         groups: dict[tuple[str, str], dict] = {}
         for r in subset:
             key = (r.album_name.strip().lower(), r.artist.strip().lower())
@@ -428,12 +431,15 @@ def charts(
                 g["rep_date"], g["rep_id"] = r.date_rated, r.id
             if r.user_id == user.id:
                 g["own_id"] = r.id
-        ranked = sorted(
-            groups.items(),
-            key=lambda kv: (sum(kv[1]["scores"]) / len(kv[1]["scores"]), len(kv[1]["raters"])),
-            reverse=True,
-        )
-        return ranked
+        # Ranked by the global Pressd rating (pooled raw inputs scored once on
+        # the userbase's scale), falling back to the average of per-user scores
+        # only where the pooled pass had nothing to work with.
+        def rank_score(kv):
+            gr = global_ratings.get(kv[0])
+            return gr["score"] if gr else sum(kv[1]["scores"]) / len(kv[1]["scores"])
+
+        return sorted(groups.items(), key=lambda kv: (rank_score(kv), len(kv[1]["raters"])),
+                      reverse=True)
 
     today_ranked = build(pool)
     # Yesterday's board: copies first rated today don't count yet.
@@ -451,7 +457,10 @@ def charts(
             "artist": g["artist"],
             "year": g["year"],
             "album_art_url": g["art"],
-            "avg_score": round(sum(g["scores"]) / len(g["scores"]), 2),
+            # Field name kept for the shipped clients, which read `avg_score`;
+            # the value is now the pooled global rating rather than a mean.
+            "avg_score": round((global_ratings.get(key) or {}).get(
+                "score", sum(g["scores"]) / len(g["scores"])), 2),
             "rater_count": len(g["raters"]),
             "movement": (yr - rank) if yr is not None else None,  # + up, − down, None = new
         })

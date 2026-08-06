@@ -54,8 +54,20 @@ def compute_a_score(score: float) -> float:
     return (15 * score - 14) / 13
 
 
-def get_factor_stats(session, user_id: int | None = None) -> dict:
-    """Return {field: (mean, std)} from rated albums with complete factors, scoped to a user."""
+# Weight of the global prior when shrinking a thin library's factor stats,
+# expressed in album-equivalents: at SHRINKAGE_K rated albums a user's own
+# baseline carries equal weight with the userbase's. Derived from the variance
+# components of the corpus (k = within-user variance / between-user variance),
+# which implied ~3.2; 5 sits just above that, trading a little crowd bias for
+# steadier scores. Worth recomputing as the userbase grows.
+SHRINKAGE_K = 5
+
+# Used only when the userbase itself has too little data to form a prior.
+_COLD_PRIOR = {k: (5.0, 1.0) for k in FACTOR_KEYS}
+
+
+def _fetch_factor_values(session, user_id: int | None = None) -> dict:
+    """{field: [values]} over rated albums carrying a complete set of factors."""
     from sqlmodel import select
     from .models import Album
 
@@ -69,19 +81,58 @@ def get_factor_stats(session, user_id: int | None = None) -> dict:
     if user_id is not None:
         q = q.where(Album.user_id == user_id)
     albums = session.exec(q).all()
+    return {key: [getattr(a, key) for a in albums] for key in FACTOR_KEYS}
 
-    if len(albums) < 2:
-        return {k: (5.0, 1.0) for k in ["theme", "replay_value", "production", "distinctness"]}
 
-    def _s(vals):
-        return (_statistics.mean(vals), max(_statistics.stdev(vals), 0.001))
+def get_global_factor_stats(session) -> dict:
+    """{field: (mean, std)} across the whole userbase — the shrinkage prior, and
+    the scale the global Pressd rating is computed on."""
+    values = _fetch_factor_values(session)
+    if len(next(iter(values.values()), [])) < 2:
+        return dict(_COLD_PRIOR)
+    return {key: (_statistics.mean(v), max(_statistics.stdev(v), 0.001))
+            for key, v in values.items()}
 
-    return {
-        "theme":        _s([a.theme        for a in albums]),
-        "replay_value": _s([a.replay_value for a in albums]),
-        "production":   _s([a.production   for a in albums]),
-        "distinctness": _s([a.distinctness for a in albums]),
-    }
+
+def shrink_to_prior(values: dict, prior: dict, k: float = SHRINKAGE_K) -> dict:
+    """Empirical-Bayes: pull a user's factor mean and variance toward the global
+    prior, weighted by how much of their own data there is.
+
+        mu  = (n*mu_user + k*mu_global) / (n + k)
+        var = (n*var_user + k*var_global) / (n + k)
+
+    At n=0 this is the prior outright; at n=k it is an even blend; by n>>k it
+    converges on the user's own stats, so a settled library scores as it does
+    today. This is what stops a 2-album library from producing a near-zero
+    standard deviation, whose z-scores would otherwise pin scores to the clamp.
+    """
+    out = {}
+    for key in FACTOR_KEYS:
+        mu_g, sd_g = prior[key]
+        vals = values.get(key) or []
+        n = len(vals)
+        if n == 0:
+            out[key] = (mu_g, sd_g)
+            continue
+        var_u = _statistics.variance(vals) if n > 1 else 0.0
+        mu = (n * _statistics.mean(vals) + k * mu_g) / (n + k)
+        var = (n * var_u + k * sd_g ** 2) / (n + k)
+        out[key] = (mu, max(var ** 0.5, 0.001))
+    return out
+
+
+def get_factor_stats(session, user_id: int | None = None, prior: dict | None = None) -> dict:
+    """{field: (mean, std)} used to z-score an album's external factors.
+
+    Without a `user_id` this is the userbase-wide distribution. With one, it is
+    that user's own distribution shrunk toward the global prior, so a new user's
+    scores don't swing wildly as their first few albums land. Pass `prior` to
+    reuse an already-fetched global stat block instead of re-querying.
+    """
+    if user_id is None:
+        return prior or get_global_factor_stats(session)
+    prior = prior or get_global_factor_stats(session)
+    return shrink_to_prior(_fetch_factor_values(session, user_id=user_id), prior)
 
 
 def compute_album_score(
@@ -115,14 +166,16 @@ def compute_album_score(
     return round(max(1.0, min(10.0, composite)), 4)
 
 
-def recompute_user_scores(session, user) -> int:
+def recompute_user_scores(session, user, prior: dict | None = None) -> int:
     """Recompute (but don't commit) every rated album for one user, using their
-    own factor stats and weights. Returns the number of albums re-scored."""
+    own factor stats (shrunk toward the global prior) and weights. Returns the
+    number of albums re-scored. Pass `prior` when looping over users, so the
+    global stat block is fetched once rather than per user."""
     from sqlmodel import select
     from sqlalchemy.orm import selectinload
     from .models import Album
 
-    factor_stats = get_factor_stats(session, user_id=user.id)
+    factor_stats = get_factor_stats(session, user_id=user.id, prior=prior)
     weights = get_user_weights(user)
 
     albums = session.exec(
@@ -157,12 +210,14 @@ def recompute_user_scores(session, user) -> int:
 
 
 def recompute_all_scores(session) -> None:
-    """Recompute and persist scores for every rated album, using each user's own factor stats and weights."""
+    """Recompute and persist scores for every rated album, using each user's own
+    factor stats and weights. The global prior is read once and shared."""
     from sqlmodel import select
     from .models import PressUser
 
+    prior = get_global_factor_stats(session)
     users = session.exec(select(PressUser)).all()
     for user in users:
-        recompute_user_scores(session, user)
+        recompute_user_scores(session, user, prior=prior)
 
     session.commit()

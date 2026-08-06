@@ -12,6 +12,7 @@ from ..database import get_session
 from ..deps import current_user, authorize_view, are_friends
 from ..models import Album, Song, SongAudioFeatures, PressUser, Like, Comment
 from ..scoring import compute_a_score, recompute_all_scores, BANG_THRESHOLD, SKIP_THRESHOLD
+from ..global_rating import invalidate_cache as invalidate_global_ratings
 from ..genres import GENRES, canonical_genre, canonical_subgenre
 from ..trackkeys import match_title, same_album
 
@@ -170,6 +171,7 @@ def update_album(
 
     if any(k in data for k in ("theme", "replay_value", "production", "distinctness", "status")):
         recompute_all_scores(session)
+        invalidate_global_ratings()
         session.refresh(album)
 
     if data.get("status") == "rated":

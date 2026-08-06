@@ -6,6 +6,7 @@ from ..database import get_session
 from ..deps import current_user, authorize_view
 from ..models import Song, Album, PressUser
 from ..scoring import compute_a_score, compute_album_score, get_factor_stats, get_user_weights, EP_MAX_TRACKS
+from ..global_rating import invalidate_cache as invalidate_global_ratings
 
 router = APIRouter(prefix="/songs", tags=["songs"])
 
@@ -102,5 +103,6 @@ def rate_song(
             session.add(album)
 
     session.commit()
+    invalidate_global_ratings()   # a song score feeds the pooled board
     session.refresh(song)
     return song
