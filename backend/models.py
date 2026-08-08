@@ -1,6 +1,6 @@
 from typing import Optional
 from datetime import date, datetime
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import Column, LargeBinary, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -54,6 +54,23 @@ class Friendship(SQLModel, table=True):
     user_id_b: int = Field(foreign_key="pressuser.id", index=True)
     status: str = Field(default="accepted", index=True)  # pending | accepted
     requested_by: Optional[int] = Field(default=None, foreign_key="pressuser.id")
+
+
+class UserAvatar(SQLModel, table=True):
+    """An uploaded profile picture, stored as bytes.
+
+    Its own table rather than a column on PressUser: every list endpoint selects
+    whole user rows, and a couple of hundred kilobytes of image riding along on
+    each one would be paid for on every friends list and search.
+
+    Bytes in Postgres rather than object storage because there is no bucket
+    configured and 33 users' avatars is not a storage problem. If that changes,
+    this table becomes the migration source and avatar_url stops pointing here.
+    """
+    user_id: int = Field(primary_key=True, foreign_key="pressuser.id")
+    content_type: str
+    data: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class Album(SQLModel, table=True):

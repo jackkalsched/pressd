@@ -1,10 +1,12 @@
+import base64
 import os
 import uuid
 import smtplib
 from email.mime.text import MIMEText
+from binascii import Error as BinasciiError
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
@@ -21,6 +23,7 @@ from ..models import (
     Like,
     Comment,
     WorkerRun,
+    UserAvatar,
 )
 from ..scoring import (
     get_user_points,
@@ -505,6 +508,95 @@ def set_factor_weights(
     session.commit()
 
     return {"points": points, "recomputed": recomputed}
+
+
+# Uploads arrive as base64 in a JSON body rather than multipart: it keeps the
+# request shape identical to every other endpoint here, needs no extra server
+# dependency, and expo-image-picker can hand back base64 directly. The cost is
+# ~33% on the wire, which a resized avatar can afford.
+AVATAR_TYPES = {"image/jpeg", "image/png", "image/webp"}
+AVATAR_MAX_BYTES = 1_500_000  # the client resizes; this is the backstop
+
+
+@router.post("/{user_id}/avatar")
+def upload_avatar(
+    user_id: int,
+    data: dict,
+    request: Request,
+    current: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Store a profile picture and point avatar_url at it.
+
+    avatar_url keeps its meaning — a URL a client can render — so every screen
+    that already shows an avatar picks this up with no change. The cache-buster
+    matters: the URL is otherwise stable across uploads, and both expo-image and
+    the browser would happily keep showing the previous picture.
+    """
+    if user_id != current.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    user = session.get(PressUser, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    content_type = (data.get("content_type") or "").lower().strip()
+    if content_type not in AVATAR_TYPES:
+        raise HTTPException(status_code=400, detail="Use a JPEG, PNG or WebP image")
+    try:
+        raw = base64.b64decode(data.get("data") or "", validate=True)
+    except (BinasciiError, ValueError):
+        raise HTTPException(status_code=400, detail="Image data is not valid base64")
+    if not raw:
+        raise HTTPException(status_code=400, detail="Image is empty")
+    if len(raw) > AVATAR_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Image is too large — resize it first")
+
+    row = session.get(UserAvatar, user_id)
+    if row:
+        row.content_type, row.data, row.updated_at = content_type, raw, datetime.utcnow()
+    else:
+        row = UserAvatar(user_id=user_id, content_type=content_type, data=raw)
+    session.add(row)
+
+    stamp = int(row.updated_at.timestamp())
+    user.avatar_url = f"{str(request.base_url).rstrip('/')}/users/{user_id}/avatar?v={stamp}"
+    session.add(user)
+    session.commit()
+    return {"avatar_url": user.avatar_url, "bytes": len(raw)}
+
+
+@router.get("/{user_id}/avatar")
+def get_avatar(user_id: int, session: Session = Depends(get_session)):
+    """Unauthenticated on purpose: it is referenced as a plain image URL, and an
+    <Image> tag carries no bearer token."""
+    row = session.get(UserAvatar, user_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="No avatar")
+    return Response(
+        content=row.data,
+        media_type=row.content_type,
+        # Safe to cache hard — the URL changes whenever the picture does.
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
+@router.delete("/{user_id}/avatar")
+def delete_avatar(
+    user_id: int,
+    current: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    if user_id != current.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    row = session.get(UserAvatar, user_id)
+    if row:
+        session.delete(row)
+    user = session.get(PressUser, user_id)
+    if user:
+        user.avatar_url = None
+        session.add(user)
+    session.commit()
+    return {"ok": True}
 
 
 @router.get("/{user_id}/profile")
