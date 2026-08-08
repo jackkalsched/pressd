@@ -78,15 +78,8 @@ def build_analysis_prompt(corpus: dict) -> str:
         "high on concept_unity. A brilliant album can score low on narrative_arc.",
         "Use the full range: 5 is genuinely average for that axis, and both extremes",
         "should be reachable for the right record.",
-        "",
-        "These axes are related but NOT the same, and the most common failure is",
-        "giving one record five near-identical numbers. Before you answer, check each",
-        "against the others — a record can have a single clear idea (concept_unity)",
-        "with no story progression (narrative_arc); a deliberate running order",
-        "(sequencing_intent) carrying wildly mixed moods (emotional_throughline); or a",
-        "flawlessly sequenced concept written in clichés (lyrical_depth). Where two of",
-        "your numbers are equal, satisfy yourself that the record really is equal on",
-        "both rather than that one anchored the other.",
+        "Rate each axis on its own — a record can have a single clear idea with no",
+        "story progression, or a flawless running order written in clichés.",
         "",
         "AXES:",
     ]
@@ -101,10 +94,11 @@ def build_analysis_prompt(corpus: dict) -> str:
         f"Genre: {corpus.get('genre') or 'Unknown'}",
         f"Analysis: {analysis}",
         "",
-        "Think briefly, then end with exactly these lines and nothing after them:",
-        "AXES: {" + ", ".join(f'"{a}": <1-10>' for a in THEME_AXES) + "}",
-        "OVERALL: [1-10, your single overall read of the album's thematic coherence]",
-        "REASONING: [one sentence]",
+        "Think briefly, then end with exactly these three lines and nothing after them.",
+        "Substitute a value for each placeholder — do not reproduce the brackets:",
+        "AXES: {" + ", ".join(f'"{a}": <number>' for a in THEME_AXES) + "}",
+        "OVERALL: <a single number 1-10, your overall read of thematic coherence>",
+        "REASONING: <one sentence>",
     ]
     return "\n".join(lines)
 
@@ -130,13 +124,17 @@ def parse_analysis(response: str) -> tuple[dict | None, float | None, str | None
         except (ValueError, TypeError):
             axes = None
 
+    # Tolerate the model echoing the placeholder's punctuation around the value
+    # ("OVERALL: [3, a collection of...]", "**OVERALL:** 3"). Asking for a bare
+    # number is the real fix; this is here so a formatting habit can never
+    # silently null out the column again.
     overall = None
-    m = re.search(r"OVERALL:\s*([0-9]+(?:\.[0-9]+)?)", response)
+    m = re.search(r"OVERALL\**:?\**\s*[\[\(<]?\s*([0-9]+(?:\.[0-9]+)?)", response, re.I)
     if m:
         overall = round(max(1.0, min(10.0, float(m.group(1)))), 1)
 
-    m = re.search(r"REASONING:\s*(.+)", response, re.DOTALL)
-    reasoning = m.group(1).strip()[:500] if m else None
+    m = re.search(r"REASONING\**:?\**\s*[\[\(<]?\s*(.+)", response, re.I | re.DOTALL)
+    reasoning = m.group(1).strip().rstrip("])>").strip()[:500] if m else None
     return axes, overall, reasoning
 
 
