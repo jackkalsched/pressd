@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
-import { ArrowLeft, Check, Plus } from 'lucide-react-native'
+import { ArrowLeft, Check, ChevronDown, Plus } from 'lucide-react-native'
 import {
   fetchUsers,
   fetchFriends,
@@ -24,10 +24,18 @@ import {
   fetchScoreRange,
   addFriend,
   removeFriend,
+  fetchArtistStats,
+  fetchScatterData,
 } from '../../lib/api'
 import { songScoreColor, type Album } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import StatsView from '../../components/StatsView'
+import AnchoredMenu from '../../components/AnchoredMenu'
+import { ArtistRankRow, RatingRow } from '../../components/RatingsRows'
+import {
+  ALBUM_METRICS, ARTIST_METRICS, QUALIFIED, cmpVals, defaultMetricFor,
+  type ArtistRank, type RankDir, type RankMode,
+} from '../../lib/rankings'
 import ProfileBanner from '../../components/ProfileBanner'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
@@ -65,8 +73,32 @@ export default function FriendProfile() {
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
   const [tab, setTab] = useState<Tab>('library')
+  // Same board your own Ratings tab offers: album or artist, any metric,
+  // either direction. It used to be a fixed score-descending album list.
+  const [rankMode, setRankMode] = useState<RankMode>('albums')
+  const [rankMetric, setRankMetric] = useState(defaultMetricFor('albums'))
+  const [rankDir, setRankDir] = useState<RankDir>('desc')
+  const [metricOpen, setMetricOpen] = useState(false)
+  const metricBtnRef = useRef<View>(null)
+
+  function switchRankMode(m: RankMode) {
+    setRankMode(m)
+    setRankMetric(defaultMetricFor(m))
+    setRankDir('desc')
+  }
 
   const { data: allUsers = [] } = useQuery({ queryKey: ['users'], queryFn: fetchUsers })
+  const { data: artistStats = [] } = useQuery({
+    queryKey: ['artist-stats', fid],
+    queryFn: () => fetchArtistStats(fid),
+    enabled: tab === 'ratings',
+  })
+  const { data: scatter } = useQuery({
+    queryKey: ['stats', 'scatter', fid],
+    queryFn: () => fetchScatterData(fid),
+    enabled: tab === 'ratings',
+    staleTime: 5 * 60_000,
+  })
   const { data: myFriends = [] } = useQuery({
     queryKey: ['friends', user?.id],
     queryFn: () => fetchFriends(user!.id),
@@ -128,9 +160,52 @@ export default function FriendProfile() {
     queryClient.invalidateQueries({ queryKey: ['user-search'] })
   }
 
+  function openArtist(name: string) {
+    router.push({ pathname: '/artist/[name]', params: { name, userId: String(fid) } })
+  }
   function openAlbum(a: Album) {
     router.push({ pathname: '/album/[id]', params: { id: String(a.id) } })
   }
+
+  const isGrid = tab === 'library'
+
+  const rankedAlbums = useMemo(() => {
+    if (tab !== 'ratings' || rankMode !== 'albums') return []
+    const metric = ALBUM_METRICS.find((m) => m.key === rankMetric) ?? ALBUM_METRICS[0]
+    return [...rated].sort((a, b) => cmpVals(metric.get(a), metric.get(b), rankDir))
+  }, [tab, rankMode, rated, rankMetric, rankDir])
+
+  const rankedArtists = useMemo<ArtistRank[]>(() => {
+    if (tab !== 'ratings' || rankMode !== 'artists') return []
+    const metric = ARTIST_METRICS.find((m) => m.key === rankMetric) ?? ARTIST_METRICS[0]
+    const statBy = new Map(artistStats.map((s2) => [s2.artist, s2]))
+    return (scatter?.points ?? [])
+      .filter((pt) => pt.song_count >= QUALIFIED)
+      .map((pt): ArtistRank => {
+        const st = statBy.get(pt.artist)
+        return {
+          artist: pt.artist,
+          songs: pt.song_count,
+          avgSongScore: pt.avg_song_score,
+          songPlus: pt.song_plus,
+          wSongPlus: pt.w_song_plus,
+          consistencyPlus: pt.consistency_plus,
+          bangPct: st?.bangPct ?? null,
+          skipPct: st?.skipPct ?? null,
+        }
+      })
+      .sort((a, b) => cmpVals(metric.get(a), metric.get(b), rankDir))
+  }, [tab, rankMode, scatter, artistStats, rankMetric, rankDir])
+
+  const currentMetric =
+    (rankMode === 'albums' ? ALBUM_METRICS : ARTIST_METRICS).find((m) => m.key === rankMetric)
+    ?? (rankMode === 'albums' ? ALBUM_METRICS[0] : ARTIST_METRICS[0])
+
+  const listData: (Album | ArtistRank)[] = isGrid
+    ? rated
+    : rankMode === 'albums'
+    ? rankedAlbums
+    : rankedArtists
 
   if (!person) {
     return (
@@ -140,9 +215,6 @@ export default function FriendProfile() {
     )
   }
 
-  const isGrid = tab === 'library'
-  const ratingsSorted = tab === 'ratings' ? [...rated].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)) : []
-  const listData = isGrid ? rated : ratingsSorted
 
   return (
     <View style={styles.screen}>
@@ -164,8 +236,11 @@ export default function FriendProfile() {
 
       <Animated.FlatList
         key={isGrid ? 'grid' : 'list'}
-        data={listData}
-        keyExtractor={(a: Album) => String(a.id)}
+        data={listData as (Album | ArtistRank)[]}
+        // Artist rows have no id — the artist name is the identity there.
+        keyExtractor={(it: Album | ArtistRank) =>
+          'id' in it ? String(it.id) : `artist:${it.artist}`
+        }
         numColumns={isGrid ? 3 : 1}
         columnWrapperStyle={isGrid ? { gap: GAP } : undefined}
         contentContainerStyle={styles.content}
@@ -221,18 +296,77 @@ export default function FriendProfile() {
             </View>
 
             {tab === 'stats' && <StatsView userId={fid} />}
+
+            {/* Albums/Artists pills + the metric menu — the same controls your
+                own Ratings tab has, so a friend's board sorts the same way. */}
+            {tab === 'ratings' && (
+              <View style={styles.rankFilters}>
+                <View style={styles.rankPills}>
+                  {(['albums', 'artists'] as RankMode[]).map((m) => (
+                    <Pressable
+                      key={m}
+                      style={[styles.rankPill, rankMode === m && styles.rankPillOn]}
+                      onPress={() => switchRankMode(m)}
+                    >
+                      <Text style={[styles.rankPillText, rankMode === m && styles.rankPillTextOn]}>
+                        {m === 'albums' ? 'Albums' : 'Artists'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Pressable ref={metricBtnRef} style={styles.metricBtn} onPress={() => setMetricOpen(true)}>
+                  <Text style={styles.metricBtnText}>
+                    {currentMetric.label} {rankDir === 'desc' ? '↓' : '↑'}
+                  </Text>
+                  <ChevronDown size={13} color={colors.inkSecondary} />
+                </Pressable>
+              </View>
+            )}
           </View>
         }
-        renderItem={({ item, index }: { item: Album; index: number }) =>
-          isGrid ? (
-            <AlbumCell album={item} mu={badgeMu} sd={badgeSd} onPress={() => openAlbum(item)} />
-          ) : (
-            <RatingRow album={item} rank={index + 1} onPress={() => openAlbum(item)} />
-          )
-        }
+        renderItem={({ item, index }: { item: Album | ArtistRank; index: number }) => {
+          if (isGrid) {
+            return <AlbumCell album={item as Album} mu={badgeMu} sd={badgeSd} onPress={() => openAlbum(item as Album)} />
+          }
+          if ('artist' in item && !('id' in item)) {
+            return (
+              <ArtistRankRow
+                stat={item}
+                rank={index + 1}
+                metricKey={rankMetric}
+                onPress={() => openArtist(item.artist)}
+              />
+            )
+          }
+          const album = item as Album
+          return <RatingRow album={album} rank={index + 1} onPress={() => openAlbum(album)} />
+        }}
         ListEmptyComponent={
           tab === 'stats' ? null : <Text style={styles.empty}>No rated albums yet.</Text>
         }
+      />
+
+      <AnchoredMenu
+        visible={metricOpen}
+        anchorRef={metricBtnRef}
+        align="right"
+        options={(rankMode === 'albums' ? ALBUM_METRICS : ARTIST_METRICS).map((m) => {
+          const on = m.key === currentMetric.key
+          return {
+            key: m.key,
+            label: on ? `${m.label}  ${rankDir === 'desc' ? '↓' : '↑'}` : m.label,
+            value: m.key,
+            selected: on,
+          }
+        })}
+        onSelect={(v) => {
+          if (v === currentMetric.key) setRankDir((d) => (d === 'desc' ? 'asc' : 'desc'))
+          else {
+            setRankMetric(String(v))
+            setRankDir('desc')
+          }
+        }}
+        onClose={() => setMetricOpen(false)}
       />
     </View>
   )
@@ -261,33 +395,26 @@ function AlbumCell({ album, mu, sd, onPress }: { album: Album; mu: number; sd: n
   )
 }
 
-function RatingRow({ album, rank, onPress }: { album: Album; rank: number; onPress: () => void }) {
-  return (
-    <Pressable style={styles.ratingRow} onPress={onPress}>
-      <Text style={styles.rankNum}>{rank}</Text>
-      {album.albumArtUrl ? (
-        <Image source={{ uri: album.albumArtUrl }} style={styles.ratingArt} contentFit="cover" />
-      ) : (
-        <View style={[styles.ratingArt, styles.artFallback]}>
-          <Text style={styles.artInitial}>{album.albumName[0]?.toUpperCase()}</Text>
-        </View>
-      )}
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={styles.ratingName} numberOfLines={1}>{album.albumName}</Text>
-        <Text style={styles.ratingArtist} numberOfLines={1}>
-          {album.artist}{album.year ? ` · ${album.year}` : ''}
-        </Text>
-      </View>
-      {album.score != null && (
-        <Text style={[styles.ratingScore, { color: songScoreColor(album.score) }]}>
-          {album.score.toFixed(2)}
-        </Text>
-      )}
-    </Pressable>
-  )
-}
-
 const styles = StyleSheet.create({
+  // Mirrors Profile's Rankings filter bar, so the two boards read as one
+  // control in two places.
+  rankFilters: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg },
+  rankPills: { flexDirection: 'row', gap: spacing.sm },
+  rankPill: { paddingVertical: 7, paddingHorizontal: 16, borderRadius: radii.pill, backgroundColor: colors.inset },
+  rankPillOn: { backgroundColor: colors.green },
+  rankPillText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.inkSecondary },
+  rankPillTextOn: { color: '#ffffff' },
+  metricBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    backgroundColor: colors.inset,
+  },
+  metricBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.inkSecondary },
+
   screen: { flex: 1, backgroundColor: colors.bg },
   center: { alignItems: 'center', justifyContent: 'center' },
   content: { paddingHorizontal: spacing.lg, paddingBottom: 120, gap: GAP + 4 },
