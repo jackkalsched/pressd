@@ -22,6 +22,7 @@ import { useRouter } from 'expo-router'
 import { ArrowRight, Check, ChevronDown, Heart, MessageCircle, Triangle } from 'lucide-react-native'
 import {
   fetchAlbum,
+  fetchPredictedPicks,
   fetchAlbums,
   fetchNewReleases,
   fetchTrending,
@@ -37,11 +38,13 @@ import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const WINDOW_H = Dimensions.get('window').height
 
+// No terminal punctuation: this opens a sentence the subline finishes, rather
+// than standing as one of its own.
 function greeting(): string {
   const h = new Date().getHours()
-  if (h < 12) return 'Good morning.'
-  if (h < 18) return 'Good afternoon.'
-  return 'Good evening.'
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
+  return 'Good evening'
 }
 
 // Light tint of a score's own hue (dark-red → dark-green), matching the web
@@ -107,6 +110,15 @@ export default function ForYou() {
     queryKey: ['discover', 'trending', trendMode],
     queryFn: () => fetchTrending(trendMode, trendMode === 'top' ? 10 : 8),
   })
+  // Catalog picks: the nightly model scores every album anyone has added, not
+  // only this user's queue. Without them "Rate this next" had nothing to offer
+  // anyone who doesn't queue albums — which is nearly everyone.
+  const { data: picks = [] } = useQuery({
+    queryKey: ['picks', userId],
+    queryFn: () => fetchPredictedPicks(10),
+    enabled: userId > 0,
+    staleTime: 30 * 60_000,
+  })
   const { data: topReviews, refetch: refetchTopReviews } = useQuery({
     queryKey: ['top-reviews'],
     queryFn: () => fetchTopReviews(8),
@@ -129,13 +141,20 @@ export default function ForYou() {
 
   // Rate this next: rotates once per day through the queue (recommended albums
   // first when any exist), stable within the day.
+  const dayIndex = Math.floor(Date.now() / 86_400_000)
   const suggestion = useMemo(() => {
     if (toListen.length === 0) return null
     const recs = toListen.filter((a) => a.recommendedByName)
     const pool = [...(recs.length ? recs : toListen)].sort((a, b) => a.id - b.id)
-    const dayIndex = Math.floor(Date.now() / 86_400_000)
     return pool[dayIndex % pool.length]
-  }, [toListen])
+  }, [toListen, dayIndex])
+
+  // Nothing queued: offer the catalog instead. Rotates on the same daily clock
+  // as the queue suggestion so the whole section changes once a day, not twice.
+  const pick = useMemo(
+    () => (suggestion || picks.length === 0 ? null : picks[dayIndex % picks.length]),
+    [suggestion, picks, dayIndex],
+  )
 
   async function onRefresh() {
     setRefreshing(true)
@@ -164,6 +183,14 @@ export default function ForYou() {
         artist: r.artist,
         ...(r.deezerId != null ? { deezer: String(r.deezerId) } : {}),
       },
+    })
+  }
+  /** A pick isn't in the library, so it opens the userbase view by name the way
+   *  a new release does, and can be rated from there. */
+  function openPick(p: { albumName: string; artist: string }) {
+    router.push({
+      pathname: '/album/[id]',
+      params: { id: '0', name: p.albumName, artist: p.artist },
     })
   }
   function openRate(id: number) {
@@ -228,7 +255,7 @@ export default function ForYou() {
             <Text style={styles.date} numberOfLines={2}>{today}</Text>
           </View>
           <Text style={styles.sub}>
-            {greeting()}{firstName ? ` ${firstName},` : ''} here's what's moving this week.
+            {greeting()}{firstName ? ` ${firstName}` : ''}, here&rsquo;s what&rsquo;s moving this week.
           </Text>
         </Animated.View>
 
@@ -251,6 +278,35 @@ export default function ForYou() {
                 </View>
               </View>
               <ArrowRight size={18} color={colors.green} />
+            </Pressable>
+          </View>
+        )}
+
+        {/* Nothing queued, but the model still has an opinion — same cell, so
+            the section reads identically whether the record came from the
+            user's own queue or from the catalog. */}
+        {!suggestion && pick && (
+          <View style={styles.block}>
+            <SectionHead label="RATE THIS NEXT" />
+            <Pressable style={styles.suggestCell} onPress={() => openPick(pick)}>
+              <View style={styles.mediaRow}>
+                <Cover uri={pick.coverUrl} seed={pick.albumName} size={64} />
+                <View style={styles.mediaText}>
+                  <Text style={styles.rowTitle} numberOfLines={1}>{pick.albumName}</Text>
+                  <Text style={styles.rowSub} numberOfLines={1}>
+                    {pick.artist}{pick.year ? ` · ${pick.year}` : ''}
+                  </Text>
+                  <Text style={styles.suggestWhy} numberOfLines={1}>
+                    We think you&rsquo;ll rate this about {pick.predictedScore.toFixed(2)}
+                  </Text>
+                </View>
+                <View style={styles.predict}>
+                  <Text style={[styles.predictScore, { color: songScoreColor(pick.predictedScore) }]}>
+                    {pick.predictedScore.toFixed(2)}
+                  </Text>
+                  <Text style={styles.predictLabel}>PREDICTED</Text>
+                </View>
+              </View>
             </Pressable>
           </View>
         )}

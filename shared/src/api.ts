@@ -460,6 +460,31 @@ export interface NewRelease {
   criticScore: number | null
 }
 
+/** An album the nightly model expects this user to like, drawn from the whole
+ *  catalog rather than their own queue — so it has no album id of its own. */
+export interface PredictedPick {
+  albumName: string
+  artist: string
+  year: number | null
+  genre: string | null
+  coverUrl: string | null
+  predictedScore: number
+}
+
+export async function fetchPredictedPicks(limit = 10): Promise<PredictedPick[]> {
+  const res = await apiFetch(`${BASE()}/discover/picks?limit=${limit}`)
+  if (!res.ok) throw new Error('Failed to load predicted picks')
+  const data = await res.json()
+  return (data as Record<string, unknown>[]).map((r) => ({
+    albumName: r.album_name as string,
+    artist: r.artist as string,
+    year: (r.year as number | null) ?? null,
+    genre: (r.genre as string | null) ?? null,
+    coverUrl: (r.album_art_url as string | null) ?? null,
+    predictedScore: r.predicted_score as number,
+  }))
+}
+
 export async function fetchNewReleases(limit = 12): Promise<NewRelease[]> {
   const res = await apiFetch(`${BASE()}/discover/new-releases?limit=${limit}`)
   if (!res.ok) throw new Error('Failed to load new releases')

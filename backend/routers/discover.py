@@ -13,6 +13,7 @@ from datetime import date, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import text
 from sqlmodel import Session, select
 
 from ..database import get_session
@@ -471,6 +472,55 @@ def charts(
         })
 
     return {"items": items, "facets": facets}
+
+
+@router.get("/picks")
+def picks(
+    limit: int = Query(10, ge=1, le=30),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Records this user is predicted to rate highly, drawn from the whole
+    catalog rather than their own queue.
+
+    The nightly worker fits a model per user and scores every album anyone has
+    added into `albumprediction` — so a prediction exists for records the user
+    has never heard of. Nothing served that table until now, which meant "Rate
+    this next" could only ever offer something already sitting in To Listen: a
+    long list for the one user who queues heavily, and nothing at all for
+    everyone else.
+
+    Anything already in their library is filtered out — a pick they own is a
+    queue item, not a discovery.
+    """
+    rows = session.execute(text("""
+        SELECT p.album_name, p.artist, p.year, p.genre, p.album_art_url,
+               p.predicted_score
+        FROM albumprediction p
+        WHERE p.user_id = :uid
+          AND p.predicted_score IS NOT NULL
+          AND COALESCE(p.already_rated, FALSE) = FALSE
+          AND NOT EXISTS (
+            SELECT 1 FROM album a
+            WHERE a.user_id = p.user_id
+              AND lower(trim(a.album_name)) = lower(trim(p.album_name))
+              AND lower(trim(a.artist)) = lower(trim(p.artist))
+          )
+        ORDER BY p.predicted_score DESC
+        LIMIT :lim
+    """), {"uid": user.id, "lim": limit}).fetchall()
+
+    return [
+        {
+            "album_name": r.album_name,
+            "artist": r.artist,
+            "year": r.year,
+            "genre": r.genre,
+            "album_art_url": r.album_art_url,
+            "predicted_score": round(r.predicted_score, 2),
+        }
+        for r in rows
+    ]
 
 
 @router.get("/deezer/{deezer_id}")
