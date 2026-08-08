@@ -47,6 +47,9 @@ export interface Album {
   recommendedByName: string | null
   review: string | null
   reviewAt: string | null
+  /** The track the user picked when several tied for the album's best
+   *  score. Null when there was no tie, or they were never asked. */
+  topSongId: number | null
 }
 
 export interface ArtistStats {
@@ -69,6 +72,30 @@ export const SKIP_THRESHOLD = 6.5
 // Short releases (≤6 tracks) skip the factor ratings and score as the song
 // mean; they show everywhere with a tag so they read differently from LPs
 export const EP_MAX_TRACKS = 6
+
+/** Every track sharing the album's highest score, in track order. One entry
+ *  means no tie; two or more is what the tie-break dialog asks about. Mirrors
+ *  tied_top_songs() in backend/scoring.py — keep the two in step. */
+export function tiedTopSongs(album: Album): Song[] {
+  const scored = album.songs.filter((s) => s.score != null)
+  if (scored.length === 0) return []
+  const best = Math.max(...scored.map((s) => s.score as number))
+  return scored
+    .filter((s) => s.score === best)
+    .sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
+}
+
+/** The album's best track: the user's tie-break if they made one, otherwise the
+ *  highest score. Mirrors pick_top_song() in backend/scoring.py. */
+export function pickTopSong(album: Album): Song | null {
+  const scored = album.songs.filter((s) => s.score != null)
+  if (scored.length === 0) return null
+  if (album.topSongId != null) {
+    const chosen = scored.find((s) => s.id === album.topSongId)
+    if (chosen) return chosen
+  }
+  return scored.reduce((best, s) => ((s.score as number) > (best.score as number) ? s : best))
+}
 
 export function shortReleaseLabel(album: Album): 'EP' | 'Single' | null {
   const n = album.songs.length
@@ -142,11 +169,17 @@ export function computeAlbumScore(
     return (val - mu) / sd
   }
 
-  return (
+  const composite =
     1.00 * avgSong +
     (points.theme        / 100) * z(theme,        'theme') +
     (points.replay_value / 100) * z(replayValue,  'replay_value') +
     (points.production   / 100) * z(production,   'production') +
     (points.distinctness / 100) * z(distinctness, 'distinctness')
-  )
+
+  // Clamped and rounded exactly as compute_album_score does in
+  // backend/scoring.py. Above-average factors add z-score bonuses on top of the
+  // song mean, which can push a standout record past 10 — and this function
+  // draws the projected score during rating, so without the clamp the flow
+  // promised a 10.4 and then saved the 10 the server had clamped it to.
+  return Math.round(Math.min(10, Math.max(1, composite)) * 10_000) / 10_000
 }
