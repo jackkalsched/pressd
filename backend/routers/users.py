@@ -5,6 +5,7 @@ from email.mime.text import MIMEText
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -251,6 +252,23 @@ def accept_invite(
     return auth_response(user)
 
 
+# The picks are a summary of taste, and three slots filled from a library of two
+# say nothing. Same bar the nightly prediction pipeline uses before it will fit a
+# model for someone — below it, there isn't enough of a person there yet.
+PICKS_MIN_RATED_ALBUMS = 10
+
+
+def _rated_album_count(session: Session, user_id: int) -> int:
+    return session.exec(
+        select(func.count()).select_from(Album)
+        .where(Album.user_id == user_id, Album.status == "rated")
+    ).one()
+
+
+def _picks_unlocked(session: Session, user_id: int) -> bool:
+    return _rated_album_count(session, user_id) >= PICKS_MIN_RATED_ALBUMS
+
+
 def _own_rated_album(session: Session, user_id: int, album_id) -> int | None:
     """Validate an album pick: null clears it, anything else must be a rated
     album belonging to this user."""
@@ -290,11 +308,17 @@ def _profile_payload(session: Session, user: PressUser) -> dict:
     album = session.get(Album, user.favorite_album_id) if user.favorite_album_id else None
     song = session.get(Song, user.favorite_song_id) if user.favorite_song_id else None
     song_album = session.get(Album, song.album_id) if song else None
+    rated = _rated_album_count(session, user.id)
     return {
         "id": user.id,
         "name": user.name,
         "avatar_url": user.avatar_url,
         "bio": user.bio,
+        # The client hides the picks row entirely below the threshold rather
+        # than showing three empty slots on a new profile.
+        "picks_unlocked": rated >= PICKS_MIN_RATED_ALBUMS,
+        "picks_rated_count": rated,
+        "picks_required": PICKS_MIN_RATED_ALBUMS,
         "favorite_artist": user.favorite_artist,
         "favorite_album": {
             "id": album.id, "album_name": album.album_name, "artist": album.artist,
@@ -340,6 +364,13 @@ def update_user(
     # Favourites. An album or song has to be one this user has rated — the
     # picker only offers those, and accepting anything else would let a profile
     # advertise a record its owner never scored. null clears the pick.
+    picks = ("favorite_album_id", "favorite_song_id", "favorite_artist")
+    if any(k in data for k in picks) and not _picks_unlocked(session, user_id):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Rate {PICKS_MIN_RATED_ALBUMS} albums to choose your picks",
+        )
+
     if "favorite_album_id" in data:
         user.favorite_album_id = _own_rated_album(session, user_id, data["favorite_album_id"])
     if "favorite_song_id" in data:
