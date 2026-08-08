@@ -453,6 +453,14 @@ def _recompute_unrated(con, only_user: int | None = None,
     if only_user is not None:
         user_ids = [u for u in user_ids if u == only_user]
 
+    # Counts what the loop actually touched. It used to report len(unrated),
+    # a variable bound inside the loop — so for a user whose queue is empty the
+    # loop never ran, the name was never bound, and the function raised
+    # UnboundLocalError on its own log line. That aborted the nightly run before
+    # the catalog stage, which is why only users with a non-empty To Listen ever
+    # got albumprediction rows.
+    touched = 0
+
     for user_id in user_ids:
         theme_mu, theme_sd   = _factor_stats(con, "theme", user_id)
         replay_mu, replay_sd = _factor_stats(con, "replay_value", user_id)
@@ -474,6 +482,7 @@ def _recompute_unrated(con, only_user: int | None = None,
             ),
             {"uid": user_id},
         ).fetchall()
+        touched += len(unrated)
 
         for album_id, artist, genre, pred_theme, pred_dist, stored_song_mean, stored_replay in unrated:
             pred_replay = stored_replay if use_stored_replay else None
@@ -519,7 +528,7 @@ def _recompute_unrated(con, only_user: int | None = None,
             )
 
     con.commit()
-    print(f"[recompute_all_predictions] updated {len(unrated)} unrated albums")
+    print(f"[recompute_all_predictions] updated {touched} unrated albums")
 
 
 def _factor_stats(con, field: str, user_id: int | None = None) -> tuple[float, float]:
