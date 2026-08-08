@@ -24,31 +24,30 @@ LLM_MODEL = os.environ.get("THEME_LLM_MODEL", "claude-haiku-4-5-20251001")
 
 # Ordered — this tuple is the feature vector's column order, and personalize
 # relies on it being stable. Append new axes at the end; never reorder, and
-# never remove one without refitting every stored model.
+# never remove one without re-analysing every album and refitting every model.
+#
+# Four axes, all measuring one question from different angles: does this record
+# hold together as a structured work? That is a deliberate definition of what
+# "theme" means here, chosen over a wider or a purely data-selected list.
+#
+# The probe over 47 of user 1's rated albums (scratch: axis_probe.json) ranked a
+# greedy data-driven trio — lyrical_depth, sequencing_intent, ambition_scale —
+# ahead of this set on his ratings, LOO MAE 1.87 against 2.11. That trio is
+# largely measuring writing quality and reach, which predict his *album* score
+# well but are not what the theme factor is for. Keeping the cohesion axes costs
+# some fit against one user today and keeps the factor meaning what it says.
 THEME_AXES = (
     "narrative_arc",        # tracklist moves through a story or progression
     "concept_unity",        # one unifying idea genuinely carried across tracks
-    "lyrical_depth",        # specificity and substance of the writing
     "emotional_throughline",# coherent emotional register or journey
-    "sonic_cohesion",       # production palette as deliberate world-building
     "sequencing_intent",    # ordering, interludes, bookends as craft
-    "subject_breadth",      # range of subject matter vs repetition
-    "social_engagement",    # reaches past the personal into ideas or politics
-    "autobiography",        # confessional/personal specificity
-    "ambition_scale",       # sheer reach of what the record attempts
 )
 
 _AXIS_DOC = {
     "narrative_arc": "Does the tracklist move through a story, or a before/after? 10 = a genuine narrative with a beginning and an end. 1 = an unordered collection.",
     "concept_unity": "Is there one idea the record actually carries across its length? 10 = every track serves it. 1 = no unifying idea at all.",
-    "lyrical_depth": "Specificity and substance of the writing. 10 = precise, particular, revealing. 1 = generic filler or interchangeable clichés.",
     "emotional_throughline": "A coherent emotional register or journey. 10 = a sustained, deliberate mood arc. 1 = emotionally scattered.",
-    "sonic_cohesion": "Production and palette used as world-building. 10 = an unmistakable, consistent sonic world. 1 = tracks that could be from different records.",
     "sequencing_intent": "Evidence of deliberate ordering — interludes, bookends, transitions, escalation. 10 = clearly composed as a sequence. 1 = a playlist order.",
-    "subject_breadth": "Range of subject matter. 10 = many distinct subjects handled well. 1 = the same one or two topics repeated throughout.",
-    "social_engagement": "Reach beyond the personal into social, political, or cultural ideas. 10 = substantially engaged. 1 = entirely inward or absent.",
-    "autobiography": "Confessional or personal specificity about the artist's own life. 10 = deeply autobiographical. 1 = no personal disclosure.",
-    "ambition_scale": "How much the record is reaching for, independent of whether it succeeds. 10 = a huge swing. 1 = a modest, contained project.",
 }
 
 _SYSTEM = (
@@ -65,10 +64,18 @@ def build_analysis_prompt(corpus: dict) -> str:
         "Describe this album along ten independent thematic axes, each 1-10.",
         "",
         "These are measurements, not judgements of quality. A derivative album can score",
-        "high on concept_unity. An excellent album can score low on social_engagement.",
-        "Rate each axis on its own — do not let one pull the others along.",
+        "high on concept_unity. A brilliant album can score low on narrative_arc.",
         "Use the full range: 5 is genuinely average for that axis, and both extremes",
         "should be reachable for the right record.",
+        "",
+        "These four axes are related but NOT the same, and the most common failure is",
+        "giving one record four near-identical numbers. Before you answer, check each",
+        "against the others — a record can have a single clear idea (concept_unity)",
+        "with no story progression (narrative_arc); a deliberate running order",
+        "(sequencing_intent) carrying wildly mixed moods (emotional_throughline); or a",
+        "sustained atmosphere with no organising concept behind it. Where two of your",
+        "four numbers are equal, satisfy yourself that the record really is equal on",
+        "both rather than that one anchored the other.",
         "",
         "AXES:",
     ]
