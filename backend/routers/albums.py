@@ -175,7 +175,7 @@ def update_album(
         session.refresh(album)
 
     if data.get("status") == "rated":
-        _queue_song_repredictions()
+        _queue_song_repredictions(user.id)
 
     if data.get("status") == "to_listen" and album.predicted_score is None:
         _queue_predictions(album.id)
@@ -274,10 +274,15 @@ def _queue_genre_tagging(album_id: int, artist: str, album_name: str, year: int 
     threading.Thread(target=_run, daemon=True).start()
 
 
-def _queue_song_repredictions():
+def _queue_song_repredictions(user_id: int):
     """Spawn a background thread that retrains the song score model on the
     newly enlarged library and refreshes predicted_song_mean for every
-    to_listen album (composite scores included). Runs on each new rating."""
+    to_listen album (composite scores included). Runs on each new rating.
+
+    The user id is required, not defaulted: this used to call through with
+    repredict_all_song_means' default of 1, so whoever rated an album, it was
+    always user 1's model that got retrained and user 1's queue that got
+    refreshed."""
     import threading, sys, pathlib
     sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent))
     def _run():
@@ -285,9 +290,9 @@ def _queue_song_repredictions():
             from song_score_model import repredict_all_song_means
             from ..database import engine
             with engine.connect() as con:
-                repredict_all_song_means(con)
+                repredict_all_song_means(con, user_id)
         except Exception as e:
-            print(f"[_queue_song_repredictions] failed: {e}")
+            print(f"[_queue_song_repredictions] failed for user {user_id}: {e}")
     threading.Thread(target=_run, daemon=True).start()
 
 

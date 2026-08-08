@@ -87,6 +87,20 @@ _TRAINING_SQL = text(f"""
     WHERE s.score IS NOT NULL AND af.bpm IS NOT NULL AND a.user_id = :uid
 """)
 
+# Same rows, every user, with the owner appended so the loader can put each
+# user's ratings on a common scale before pooling them.
+_POOLED_SQL = text(f"""
+    SELECT s.id AS song_id, s.title, s.artist, s.score,
+           a.id AS album_id, a.album_name, a.genre,
+           a.sub_genre1, a.sub_genre2, a.sub_genre3, a.year,
+           a.theme, a.replay_value, a.production, a.distinctness,
+           {_AF_SELECT}, a.user_id
+    FROM song s
+    JOIN album a ON a.id = s.album_id
+    JOIN trackaudio af ON af.track_id = s.track_id
+    WHERE s.score IS NOT NULL AND af.bpm IS NOT NULL AND a.user_id IS NOT NULL
+""")
+
 _ALBUM_SQL = text(f"""
     SELECT s.id AS song_id, s.title, s.artist,
            a.id AS album_id, a.album_name, a.genre,
@@ -103,6 +117,75 @@ _ALBUM_SQL = text(f"""
 def load_data(con, user_id: int = 1) -> pd.DataFrame:
     result = con.execute(_TRAINING_SQL, {"uid": user_id})
     return pd.DataFrame(result.fetchall(), columns=_FEATURE_COLS)
+
+
+# Users below this contribute too little to locate their own scale, so pooling
+# their raw scores would import their offset as noise rather than signal.
+MIN_SONGS_TO_POOL = 20
+
+# Per-user columns re-expressed on the shared scale before pooling. `score` is
+# the target; the album factors feed the album clustering, and mixing one
+# user's 8.4 average with another's 5.0 would cluster by rater, not by record.
+_POOLED_Z_COLS = ("score", "theme", "replay_value", "production", "distinctness")
+
+
+def load_pooled_data(con) -> pd.DataFrame:
+    """Every user's rated+analyzed songs, each user's ratings z-scored within
+    their own distribution so the pooled target means the same thing for all of
+    them. Predictions therefore come out as z-scores and must be mapped back
+    onto a specific user's scale — see CalibratedModel.
+    """
+    rows = con.execute(_POOLED_SQL).fetchall()
+    df = pd.DataFrame(rows, columns=_FEATURE_COLS + ["user_id"])
+    if df.empty:
+        return df
+
+    counts = df.groupby("user_id")["score"].transform("size")
+    df = df[counts >= MIN_SONGS_TO_POOL].copy()
+    if df.empty:
+        return df
+
+    for col in _POOLED_Z_COLS:
+        if col not in df.columns:
+            continue
+        g = df.groupby("user_id")[col]
+        mu, sd = g.transform("mean"), g.transform("std")
+        # A user with no spread on a factor carries no information about it;
+        # centring alone keeps the row instead of dropping it to NaN.
+        df[col] = (df[col] - mu) / sd.where(sd > 1e-9, 1.0)
+
+    n_users = df["user_id"].nunique()
+    print(f"[song_score_model] pooled frame: {len(df)} songs from {n_users} users")
+    return df.drop(columns=["user_id"]).reset_index(drop=True)
+
+
+def user_score_scale(con, user_id: int, prior_n: float = 30.0) -> tuple[float, float]:
+    """(mu, sd) of one user's song scores, shrunk toward the userbase's.
+
+    A user with nine rated songs has a real mean and an unreliable one; the
+    shrink is what stops an unlucky early run from stretching every prediction
+    they see. Converges to their own numbers as they rate.
+    """
+    row = con.execute(text(
+        "SELECT AVG(s.score), STDDEV(s.score), COUNT(*) FROM song s"
+        " JOIN album a ON a.id = s.album_id"
+        " WHERE a.user_id = :uid AND s.score IS NOT NULL"), {"uid": user_id}).fetchone()
+    pooled = con.execute(text(
+        "SELECT AVG(s.score), STDDEV(s.score) FROM song s"
+        " JOIN album a ON a.id = s.album_id"
+        " WHERE s.score IS NOT NULL AND a.user_id IS NOT NULL")).fetchone()
+
+    p_mu = float(pooled[0]) if pooled and pooled[0] is not None else 7.21
+    p_sd = float(pooled[1]) if pooled and pooled[1] else 1.0
+
+    if not row or row[2] is None or row[2] == 0 or row[0] is None:
+        return p_mu, p_sd
+    n = float(row[2])
+    u_mu = float(row[0])
+    u_sd = float(row[1]) if row[1] else p_sd
+
+    w = n / (n + prior_n)
+    return (w * u_mu + (1 - w) * p_mu), (w * u_sd + (1 - w) * p_sd)
 
 
 def expand_mfcc(df: pd.DataFrame) -> pd.DataFrame:
@@ -458,6 +541,35 @@ def fit_taste_full(df: pd.DataFrame, artist_k: int | None = None,
     return TasteModel(artist_k, album_k).prepare(df).fit_clusters().fit_scores(df)
 
 
+def artist_cluster_replay_mean_for_user(taste: TasteModel, artist: str,
+                                        replay_by_artist: dict[str, float]) -> float | None:
+    """Mean replay of the artist's cluster-mates, using *this user's* ratings.
+
+    The clustering and the ratings come from deliberately different places. The
+    cluster map is fit over the whole artist dataset, so "similar artist" means
+    similar across everything the userbase has ever added — a new listener gets
+    the benefit of neighbourhoods their own library is far too small to
+    describe. The replay values averaged inside that neighbourhood are only
+    ever the user's own, so the answer is "how much do *I* replay artists like
+    this one", not "how much does the userbase replay them".
+
+    Averaged across the KMeans seeds, and the artist's own albums are excluded
+    so a caller can blend this with their own mean without double-counting.
+    """
+    if not replay_by_artist:
+        return None
+    vals = []
+    for cmap in taste.artist_clusters:
+        c = cmap.get(artist)
+        if c is None:
+            continue
+        mates = [r for a, r in replay_by_artist.items()
+                 if a != artist and cmap.get(a) == c]
+        if mates:
+            vals.append(sum(mates) / len(mates))
+    return float(np.mean(vals)) if vals else None
+
+
 def artist_cluster_replay_mean(df: pd.DataFrame, taste: TasteModel,
                                artist: str) -> float | None:
     """Mean replay_value of rated albums by the artist's cluster-mates,
@@ -744,12 +856,105 @@ def train_and_predict(df: pd.DataFrame, target: pd.Series, taste: TasteModel):
 class UserModel:
     """A user's fitted library: training frame, taste model, and pipeline.
     taste.extend() calls during prediction accumulate, so cluster-based
-    features (and replay cluster means) stay available for unseen artists."""
-    def __init__(self, user_id: int, df: pd.DataFrame, taste: TasteModel, pipe):
+    features (and replay cluster means) stay available for unseen artists.
+
+    `scale` records what the frame's score-derived columns mean. A model fit on
+    one user holds their raw 1–10 ratings ("raw"); the pooled model holds
+    per-user z-scores ("z"). Callers that read replay_value or theme off the
+    frame must check, via `raw_frame` — a z-scored replay read as a 1–10 value
+    lands near the bottom of the clamp for almost every album.
+    """
+    def __init__(self, user_id: int, df: pd.DataFrame, taste: TasteModel, pipe,
+                 scale: str = "raw"):
         self.user_id = user_id
         self.df = df
         self.taste = taste
         self.pipe = pipe
+        self.scale = scale
+
+    def predict_frame(self, df_pred: pd.DataFrame) -> np.ndarray:
+        """Per-song predictions for one album's frame, on this model's own
+        output scale. The single point every model variant has to implement."""
+        self.taste.extend(df_pred)   # nearest-cluster assignment for unseen artist/album
+        return self.pipe.predict(fold_features(df_pred, self.taste))
+
+    @property
+    def raw_frame(self) -> pd.DataFrame | None:
+        """The training frame, but only when its factor columns are on the
+        user's own 1–10 scale. None means "don't read ratings off me"."""
+        return self.df if self.scale == "raw" else None
+
+    @property
+    def source(self) -> str:
+        return "personal"
+
+
+class CalibratedModel:
+    """A pooled model plus the mapping from its z-score output onto one user's
+    scale. Same shape as the userbase's taste, positioned on the user's ruler.
+    """
+    def __init__(self, inner: UserModel, user_id: int, mu: float, sd: float):
+        self.inner = inner
+        self.user_id = user_id
+        self.mu = mu
+        self.sd = sd
+
+    @property
+    def df(self):
+        return self.inner.df
+
+    @property
+    def taste(self):
+        return self.inner.taste
+
+    @property
+    def raw_frame(self):
+        """None: the pooled frame's factor columns are per-user z-scores, so
+        nothing may read replay or theme values off it."""
+        return None
+
+    def predict_frame(self, df_pred: pd.DataFrame) -> np.ndarray:
+        return self.inner.predict_frame(df_pred) * self.sd + self.mu
+
+    @property
+    def source(self) -> str:
+        return "pooled"
+
+
+class BlendedModel:
+    """Personal model weighted against the calibrated pooled one.
+
+    `weight` is the share given to the personal model. It ramps with the
+    user's rated-song count so a library that has only just become fittable
+    leans on the userbase, and one that stands on its own is left alone —
+    at full weight this is exactly the personal model, unchanged.
+    """
+    def __init__(self, personal: UserModel, pooled: CalibratedModel, weight: float):
+        self.personal = personal
+        self.pooled = pooled
+        self.weight = weight
+        self.user_id = personal.user_id
+
+    @property
+    def df(self):
+        return self.personal.df
+
+    @property
+    def taste(self):
+        return self.personal.taste
+
+    @property
+    def raw_frame(self):
+        return self.personal.raw_frame
+
+    def predict_frame(self, df_pred: pd.DataFrame) -> np.ndarray:
+        w = self.weight
+        return (w * self.personal.predict_frame(df_pred)
+                + (1 - w) * self.pooled.predict_frame(df_pred))
+
+    @property
+    def source(self) -> str:
+        return f"blend({self.weight:.2f} personal)"
 
 
 def fit_user_model(con, user_id: int = 1) -> UserModel | None:
@@ -776,10 +981,98 @@ def fit_user_model(con, user_id: int = 1) -> UserModel | None:
     return None
 
 
+def fit_pooled_model(con) -> UserModel | None:
+    """One model over the whole userbase, trained on per-user z-scores.
+
+    This is the cold-start prior: it cannot know a given user's taste, but it
+    knows how audio maps to *a* listener's scores, which is enough to make
+    predictions vary by album instead of collapsing to one constant.
+    """
+    df = prepare_frame(load_pooled_data(con))
+    if len(df) < 20:
+        print(f"[song_score_model] pooled: only {len(df)} training songs — need ≥20")
+        return None
+
+    taste = fit_taste_full(df)
+    feats = fold_features(df, taste)
+    for model_name in ("LightGBM", "XGBoost", "RandomForest"):
+        models = get_models()
+        if model_name not in models:
+            continue
+        try:
+            pipe = models[model_name]
+            pipe.fit(feats, df["score"])
+            print(f"[song_score_model] pooled: trained {model_name} on {len(df)} songs")
+            return UserModel(0, df, taste, pipe, scale="z")
+        except Exception as e:
+            print(f"[song_score_model] pooled {model_name} failed ({e}), trying next")
+    return None
+
+
+# Rated+analyzed songs at which the personal model stands entirely on its own.
+# Below it the personal model is blended with the pooled prior in proportion to
+# how much data backs it; above it nothing changes for that user.
+FULL_PERSONAL_SONGS = 1300
+
+
+def fit_for_user(con, user_id: int, pooled: UserModel | None = None):
+    """The right song model for one user, whatever their library size.
+
+      • enough songs to fit their own and past FULL_PERSONAL_SONGS → personal
+      • enough to fit their own, but not that many                 → blended
+      • too few to fit anything                                    → pooled
+      • no pooled model either (empty DB)                          → None
+
+    Returns any of UserModel / BlendedModel / CalibratedModel — all of which
+    answer `predict_frame`, so callers don't branch.
+    """
+    n = con.execute(text(
+        "SELECT COUNT(*) FROM song s JOIN album a ON a.id = s.album_id"
+        " JOIN trackaudio ta ON ta.track_id = s.track_id"
+        " WHERE a.user_id = :uid AND s.score IS NOT NULL AND ta.bpm IS NOT NULL"),
+        {"uid": user_id}).scalar() or 0
+
+    personal = fit_user_model(con, user_id) if n >= 20 else None
+    if personal is not None and n >= FULL_PERSONAL_SONGS:
+        print(f"[song_score_model] user {user_id}: personal model ({n} songs)")
+        return personal
+
+    if pooled is None:
+        pooled = fit_pooled_model(con)
+    if pooled is None:
+        return personal  # nothing to blend with; personal or nothing
+
+    mu, sd = user_score_scale(con, user_id)
+    calibrated = CalibratedModel(pooled, user_id, mu, sd)
+
+    if personal is None:
+        print(f"[song_score_model] user {user_id}: pooled model, calibrated to "
+              f"mu={mu:.2f} sd={sd:.2f} ({n} songs — too few to fit their own)")
+        return calibrated
+
+    weight = min(1.0, n / FULL_PERSONAL_SONGS)
+    print(f"[song_score_model] user {user_id}: blended, {weight:.0%} personal "
+          f"({n}/{FULL_PERSONAL_SONGS} songs)")
+    return BlendedModel(personal, calibrated, weight)
+
+
 def train_model(con, user_id: int = 1):
     """Legacy-shaped wrapper: returns (pipeline, n_training_songs)."""
     um = fit_user_model(con, user_id)
     return (um.pipe if um else None), (len(um.df) if um else 0)
+
+
+_ALBUMS_SQL = text(f"""
+    SELECT s.id AS song_id, s.title, s.artist,
+           a.id AS album_id, a.album_name, a.genre,
+           a.sub_genre1, a.sub_genre2, a.sub_genre3, a.year,
+           a.theme, a.replay_value, a.production, a.distinctness,
+           {_AF_SELECT}
+    FROM song s
+    JOIN album a ON a.id = s.album_id
+    JOIN trackaudio af ON af.track_id = s.track_id
+    WHERE s.album_id = ANY(:album_ids) AND af.bpm IS NOT NULL
+""")
 
 
 def _album_frame(con, album_id: int) -> pd.DataFrame | None:
@@ -790,47 +1083,65 @@ def _album_frame(con, album_id: int) -> pd.DataFrame | None:
     return None if df_pred.empty else df_pred
 
 
-def predict_song_mean(con, um: UserModel, album_id: int) -> float | None:
-    """Predict one album's mean song score with an already-fitted UserModel."""
+def album_frames(con, album_ids: list[int]) -> pd.DataFrame | None:
+    """One prepared frame covering many albums at once, `album_id` intact so
+    callers can group predictions back per album.
+
+    Scoring a whole catalog for every user is a query-count problem before it
+    is a compute problem: per-album loading would be one round trip per album
+    per user, where this is one round trip total and one vectorised predict
+    per user.
+    """
+    if not album_ids:
+        return None
+    rows = con.execute(_ALBUMS_SQL, {"album_ids": list(album_ids)}).fetchall()
+    if not rows:
+        return None
+    df_pred = prepare_frame(pd.DataFrame(rows, columns=_PREDICT_COLS))
+    return None if df_pred.empty else df_pred
+
+
+def predict_song_mean(con, um, album_id: int) -> float | None:
+    """Predict one album's mean song score with an already-fitted model.
+
+    `um` is any of UserModel / BlendedModel / CalibratedModel."""
     df_pred = _album_frame(con, album_id)
     if df_pred is None:
         return None
-    um.taste.extend(df_pred)   # nearest-cluster assignment for unseen artist/album
-    preds = um.pipe.predict(fold_features(df_pred, um.taste))
-    return float(np.mean(preds))
+    return float(np.mean(um.predict_frame(df_pred)))
 
 
 def predict_for_album(con, album_id: int) -> float | None:
     """Self-contained single-album prediction (fits the album owner's model
-    from scratch — prefer fit_user_model + predict_song_mean for batches)."""
+    from scratch — prefer fit_for_user + predict_song_mean for batches)."""
     row = con.execute(text("SELECT user_id FROM album WHERE id = :id"),
                       {"id": album_id}).fetchone()
     if not row:
         return None
-    um = fit_user_model(con, row[0] or 1)
+    um = fit_for_user(con, row[0] or 1)
     if um is None:
         return None
     avg = predict_song_mean(con, um, album_id)
     if avg is not None:
-        print(f"[song_score_model] album {album_id}: avg={round(avg, 3)}")
+        print(f"[song_score_model] album {album_id}: avg={round(avg, 3)} ({um.source})")
     return avg
 
 
-def repredict_all_song_means(con, user_id: int = 1, um: UserModel | None = None,
+def repredict_all_song_means(con, user_id: int = 1, um=None,
                              recompute_composites: bool = True) -> dict:
     """Refresh predicted_song_mean for every one of the user's unrated albums
     (to_listen + listening) that has analyzed audio.
 
     This is the post-rating pipeline: run it whenever the user rates an album
-    so predictions absorb the new data. Pass a prefitted UserModel to reuse
-    across pipeline stages (the nightly worker does); the worker also passes
+    so predictions absorb the new data. Pass a prefitted model to reuse across
+    pipeline stages (the nightly worker does); the worker also passes
     recompute_composites=False because it runs its own composite stage."""
     albums = con.execute(text(
         "SELECT id FROM album WHERE status IN ('to_listen', 'listening')"
         " AND user_id = :uid ORDER BY id"), {"uid": user_id}).fetchall()
 
     if um is None:
-        um = fit_user_model(con, user_id)
+        um = fit_for_user(con, user_id)
     if um is None:
         return {"updated": 0, "skipped": len(albums)}
 

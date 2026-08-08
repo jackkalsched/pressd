@@ -118,6 +118,15 @@ def init_db():
             "UPDATE pressuser SET replay_pts = 15 WHERE replay_pts IS NULL",
             "UPDATE pressuser SET production_pts = 15 WHERE production_pts IS NULL",
             "UPDATE pressuser SET distinctness_pts = 5 WHERE distinctness_pts IS NULL",
+            # ── Global theme/distinctness store (one LLM pass per album, not
+            #    per user copy). create_all builds the table on fresh DBs; the
+            #    unique index is what existing DBs need.
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_albumfactors_key ON albumfactors (album_key)",
+            "ALTER TABLE albumfactors ADD COLUMN theme_features TEXT",
+            # ── Catalog-wide predictions: one row per (user, album), including
+            #    albums the user doesn't own.
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_albumprediction_user_album ON albumprediction (user_id, album_key)",
+            "CREATE INDEX IF NOT EXISTS ix_albumprediction_user ON albumprediction (user_id)",
         ]:
             _exec_migration(conn, stmt)
 

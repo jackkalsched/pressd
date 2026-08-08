@@ -21,14 +21,18 @@ DIST_STD   = 1.70
 
 
 def build_distinctness_prompt(target_corpus: dict, examples: list[dict],
-                               corpora_map: dict[int, dict]) -> str:
+                               corpora_map: dict[int, dict],
+                               subject: str = "Jack", baseline: float = DIST_MEAN) -> str:
+    """Distinctness prompt. `subject`/`baseline` default to the original
+    single-user framing; the global pass overrides them (see build_prompt)."""
+    poss = f"{subject}'s"
     lines = [
-        'You are predicting a personal music score for Jack.\n',
-        'Jack rates albums on "Distinctness" (1–10).',
+        f'You are predicting a personal music score for {subject}.\n',
+        f'{subject} rates albums on "Distinctness" (1–10).',
         'Distinctness measures how ORIGINAL and SONICALLY UNIQUE an album sounds',
         'relative to its genre and era. It is NOT about quality — a bad album can be distinct.',
         '',
-        'His average distinctness rating is 5.6. Use this as your baseline.',
+        f'The average distinctness rating is {baseline:.1f}. Use this as your baseline.',
         'Most albums score 4–7. Scores of 9–10 are genuinely rare.',
         '',
         'Scoring rubric:',
@@ -61,7 +65,7 @@ def build_distinctness_prompt(target_corpus: dict, examples: list[dict],
         '  Rock: derivative indie rock scores 3–5. Avant-garde or pioneering scores 7+.',
         '  R&B: smooth R&B clones score 3–4. Genre-bending R&B scores 6+.',
         '',
-        'Here are albums Jack has already rated with their Distinctness scores:\n',
+        f'Here are albums {subject} has already rated with their Distinctness scores:\n',
     ]
 
     for i, ex in enumerate(examples, 1):
@@ -72,7 +76,7 @@ def build_distinctness_prompt(target_corpus: dict, examples: list[dict],
         lines += [
             f"--- EXAMPLE {i} ---",
             f"Album: {ex['artist']} – {ex['album_name']}{genre_str}",
-            f"Jack's Distinctness Score: {ex['theme_score']:.1f}/10",
+            f"{poss} Distinctness Score: {ex['theme_score']:.1f}/10",
             f"Analysis: {analysis}",
             "",
         ]
@@ -85,7 +89,7 @@ def build_distinctness_prompt(target_corpus: dict, examples: list[dict],
         f"Analysis: {target_analysis}",
         "",
         "Apply bonuses and penalties explicitly before settling on a score.",
-        "Remember: 5.6 is average. Most albums score 4–7. Derivative albums score 2–4.",
+        f"Remember: {baseline:.1f} is average. Most albums score 4–7. Derivative albums score 2–4.",
         "Think step by step, then respond with exactly:",
         "SCORE: [number 1-10, one decimal allowed]",
         "REASONING: [1-2 sentences explaining the score and any bonuses/penalties applied]",
@@ -104,8 +108,9 @@ def parse_response(response: str) -> tuple[float | None, str | None]:
 
 
 def predict_distinctness(target_corpus: dict, examples: list[dict],
-                          corpora_map: dict[int, dict]) -> tuple[float | None, str | None]:
-    prompt = build_distinctness_prompt(target_corpus, examples, corpora_map)
+                          corpora_map: dict[int, dict],
+                          subject: str = "Jack", baseline: float = DIST_MEAN) -> tuple[float | None, str | None]:
+    prompt = build_distinctness_prompt(target_corpus, examples, corpora_map, subject, baseline)
     try:
         client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
         response = client.messages.create(

@@ -265,10 +265,51 @@ def _rag_corpus(artist: str, album_name: str, genre: str | None) -> dict:
 
 def predict_llm_factors(con, album_id: int, artist: str, album_name: str,
                         year: int | None, genre: str | None, user_id: int):
-    """Predict theme + distinctness for one album via Claude, using the album
-    owner's own rated albums as RAG examples. Writes predicted_theme,
-    predicted_theme_reasoning, predicted_distinctness. Each factor fails
-    independently."""
+    """Theme + distinctness for one album, on the owner's scale.
+
+    Scores the album globally if nobody has yet (one LLM pass per album, ever),
+    then derives this user's values from it — Layer 1 rescaling plus, past the
+    gate, their learned Layer 2 corrections. See theme_predictor.personalize.
+
+    Falls back to the original per-copy LLM call only if the album has no
+    global row and couldn't get one, so a cold DB still produces something.
+    """
+    from .global_factors import ensure_global_factors
+    from .personalize import build_user_models
+
+    try:
+        factors = ensure_global_factors(con, artist, album_name, year, genre, album_id)
+    except Exception as e:
+        print(f"[predict_single] global factors failed: {e}")
+        factors = None
+
+    if factors and (factors["theme_raw"] is not None
+                    or factors["distinctness_raw"] is not None):
+        models = build_user_models(con, user_id)
+        theme = models["theme"].predict(factors["theme_raw"], genre, year)
+        dist = models["distinctness"].predict(factors["distinctness_raw"], genre, year)
+        con.execute(text(
+            "UPDATE album SET predicted_theme = COALESCE(:t, predicted_theme),"
+            " predicted_theme_reasoning = COALESCE(:tr, predicted_theme_reasoning),"
+            " predicted_distinctness = COALESCE(:d, predicted_distinctness)"
+            " WHERE id = :id"),
+            {"t": theme, "tr": factors["theme_reasoning"], "d": dist, "id": album_id})
+        con.commit()
+        print(f"[predict_single] theme={theme} distinctness={dist} "
+              f"(global raw {factors['theme_raw']}/{factors['distinctness_raw']}, "
+              f"L{models['theme'].layer})")
+        return
+
+    print("[predict_single] no global factors — falling back to per-copy LLM call")
+    _predict_llm_factors_per_copy(con, album_id, artist, album_name, year, genre, user_id)
+
+
+def _predict_llm_factors_per_copy(con, album_id: int, artist: str, album_name: str,
+                                  year: int | None, genre: str | None, user_id: int):
+    """Original per-user-copy LLM call. Retained only as the cold-start
+    fallback for an album the global pass couldn't score; its output still
+    needs normalize_predicted_themes afterwards, which the global path does
+    not."""
     # ── Theme ──
     try:
         from .corpus import load_or_build_corpus
@@ -337,9 +378,21 @@ def predict_llm_factors(con, album_id: int, artist: str, album_name: str,
 
 
 def normalize_predicted_themes(only_user: int | None = None):
-    """Remap all predicted_theme values so their distribution matches the user's actual
-    theme rating distribution. Prevents LLM scores from being systematically biased."""
+    """Remap predicted_theme values so their distribution matches the user's actual
+    theme rating distribution. Prevents LLM scores from being systematically biased.
+
+    Only touches albums scored by the legacy per-copy call. A value derived from
+    `albumfactors` has already been put on the user's scale by Layer 1
+    (theme_predictor.personalize), and re-normalising it here would remap an
+    already-remapped number — compounding drift on every run.
+    """
+    from backend.trackkeys import album_key
+
     with engine.connect() as con:
+        globally_scored = {
+            r[0] for r in con.execute(text(
+                "SELECT album_key FROM albumfactors WHERE theme_raw IS NOT NULL")).fetchall()
+        }
         user_ids = [r[0] for r in con.execute(
             text("SELECT DISTINCT user_id FROM album WHERE status IN ('to_listen', 'listening') AND predicted_theme IS NOT NULL")
         ).fetchall()]
@@ -348,9 +401,13 @@ def normalize_predicted_themes(only_user: int | None = None):
         for user_id in user_ids:
             target_mu, target_sd = _factor_stats(con, "theme", user_id)
             rows = con.execute(
-                text("SELECT id, predicted_theme FROM album WHERE user_id=:uid AND status IN ('to_listen', 'listening') AND predicted_theme IS NOT NULL"),
+                text("SELECT id, predicted_theme, artist, album_name FROM album"
+                     " WHERE user_id=:uid AND status IN ('to_listen', 'listening')"
+                     " AND predicted_theme IS NOT NULL"),
                 {"uid": user_id},
             ).fetchall()
+            rows = [(rid, pt) for rid, pt, artist, name in rows
+                    if album_key(artist, name) not in globally_scored]
             if not rows:
                 continue
             raw_scores = [r[1] for r in rows]

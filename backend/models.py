@@ -212,6 +212,87 @@ class AlbumCorpus(SQLModel, table=True):
     built_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class AlbumFactors(SQLModel, table=True):
+    """Global, user-agnostic theme + distinctness for one album, keyed by
+    normalized artist+album (same key as AlbumCorpus). Scored once by the LLM
+    and shared across every user's copy — per-user values are derived from
+    these by theme_predictor.personalize rather than re-prompting.
+
+    The raw values live on an arbitrary internal reference scale
+    (personalize.GLOBAL_REF_MU/SD); Layer 1 z-scores them away immediately, so
+    only their *relative* ordering and spread carry meaning.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    album_key: str = Field(unique=True, index=True)
+    artist: str
+    album_name: str
+    genre: Optional[str] = None
+    year: Optional[int] = None
+
+    # Theme is stored as a *measurement of the record*, not a score for anyone:
+    # a JSON object of album-intrinsic semantic axes (narrative arc, concept
+    # unity, sequencing intent, …), each 1–10. Every user's theme prediction is
+    # a model fitted over these against their own theme ratings, so one LLM
+    # call per album serves the whole userbase and personalization comes from
+    # ratings rather than from re-prompting. See theme_predictor.personalize.
+    theme_features: Optional[str] = None  # JSON {axis: value}
+    theme_raw: Optional[float] = None     # the LLM's own overall read; one more feature
+    theme_reasoning: Optional[str] = None
+
+    # Distinctness stays a single global scalar, rescaled per user and no more.
+    # It correlates with the album score at 0.36 against theme's 0.69 and carries
+    # a 0.05 weight, so a per-user model over it would move a composite by
+    # hundredths — not worth an axis breakdown or a second fit.
+    distinctness_raw: Optional[float] = None
+    distinctness_reasoning: Optional[str] = None
+
+    model: Optional[str] = None  # LLM that produced the values
+    computed_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AlbumPrediction(SQLModel, table=True):
+    """One user's predicted score for one album in the catalog — including
+    albums they don't own.
+
+    The `album.predicted_*` columns can only describe a record that is already
+    in someone's library, because they are columns on a per-user copy. This
+    table is keyed by (user_id, album_key) instead, so every user can have a
+    prediction for every album anyone has ever added. `album_key` matches
+    AlbumCorpus and AlbumFactors.
+
+    Deliberately not a 4th album.status: charts, trending, stats and the global
+    rating pass all filter on status, and several use `status IN (...)` lists
+    that would silently absorb rows that are predictions rather than library
+    entries.
+    """
+    __table_args__ = (UniqueConstraint("user_id", "album_key", name="uq_albumprediction_user_album"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="pressuser.id", index=True)
+    album_key: str = Field(index=True)
+
+    artist: str
+    album_name: str
+    genre: Optional[str] = None
+    year: Optional[int] = None
+    album_art_url: Optional[str] = None
+
+    predicted_song_mean: Optional[float] = None
+    predicted_theme: Optional[float] = None
+    predicted_distinctness: Optional[float] = None
+    predicted_replay: Optional[float] = None
+    predicted_score: Optional[float] = None
+
+    # Which song model produced it: 'personal' | 'pooled' | 'blend(...)'.
+    # Worth storing — a prediction from a 2%-personal blend deserves different
+    # confidence in the UI than one from a settled personal model.
+    model_source: Optional[str] = None
+    # True when the user has already rated this album; kept rather than skipped
+    # so predictions can be scored against outcomes.
+    already_rated: bool = Field(default=False)
+    computed_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class WorkerRun(SQLModel, table=True):
     """One row per worker job execution (audio ingest / per-user predict)."""
     id: Optional[int] = Field(default=None, primary_key=True)

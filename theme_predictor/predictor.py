@@ -11,10 +11,15 @@ import anthropic
 LLM_MODEL = os.environ.get("THEME_LLM_MODEL", "claude-haiku-4-5-20251001")
 
 
-def build_prompt(target_corpus: dict, examples: list[dict], corpora_map: dict[int, dict]) -> str:
+def build_prompt(target_corpus: dict, examples: list[dict], corpora_map: dict[int, dict],
+                 subject: str = "Jack", baseline: float = 5.0) -> str:
+    """Theme prompt. `subject`/`baseline` default to the original single-user
+    framing; the global pass (theme_predictor.global_factors) overrides them to
+    score on a shared reference scale instead of one listener's."""
+    poss = f"{subject}'s"
     lines = [
-        'You are predicting a personal music score for Jack.\n',
-        'Jack rates albums on "Theme" (1–10). His average rating is 5.0 — use this as your baseline.',
+        f'You are predicting a personal music score for {subject}.\n',
+        f'{subject} rates albums on "Theme" (1–10). The average rating is {baseline:.1f} — use this as your baseline.',
         'Most albums land between 3 and 6. Scores of 8+ are genuinely rare and reserved for exceptional work.',
         '',
         'Scoring rubric:',
@@ -56,7 +61,7 @@ def build_prompt(target_corpus: dict, examples: list[dict], corpora_map: dict[in
         'IMPORTANT: When in doubt, score lower. Most albums do not have a strong concept.',
         'A score of 5 means the album is average — not bad. Default to 3–5 for mainstream pop/rap/trap.',
         '',
-        'Here are albums Jack has already rated with their Theme scores:\n',
+        f'Here are albums {subject} has already rated with their Theme scores:\n',
     ]
 
     for i, ex in enumerate(examples, 1):
@@ -66,7 +71,7 @@ def build_prompt(target_corpus: dict, examples: list[dict], corpora_map: dict[in
         lines += [
             f"--- EXAMPLE {i} ---",
             f"Album: {ex['artist']} – {ex['album_name']}",
-            f"Jack's Theme Score: {ex['theme_score']:.1f}/10",
+            f"{poss} Theme Score: {ex['theme_score']:.1f}/10",
             f"Analysis: {analysis}",
             "",
         ]
@@ -78,7 +83,7 @@ def build_prompt(target_corpus: dict, examples: list[dict], corpora_map: dict[in
         f"Analysis: {target_analysis}",
         "",
         "Apply the penalties above explicitly before settling on a score.",
-        "Remember: the average is 5. Most mainstream albums score 4–6.",
+        f"Remember: the average is {baseline:.1f}. Most mainstream albums score 4–6.",
         "Think step by step, then respond with exactly:",
         "SCORE: [number 1-10, one decimal allowed]",
         "REASONING: [1-2 sentences explaining the score and any penalties applied]",
@@ -97,8 +102,9 @@ def parse_response(response: str) -> tuple[float | None, str | None]:
 
 
 def predict_theme(target_corpus: dict, examples: list[dict],
-                  corpora_map: dict[int, dict]) -> tuple[float | None, str | None]:
-    prompt = build_prompt(target_corpus, examples, corpora_map)
+                  corpora_map: dict[int, dict],
+                  subject: str = "Jack", baseline: float = 5.0) -> tuple[float | None, str | None]:
+    prompt = build_prompt(target_corpus, examples, corpora_map, subject, baseline)
     try:
         client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
         response = client.messages.create(
