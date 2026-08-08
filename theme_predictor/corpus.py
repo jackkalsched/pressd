@@ -19,7 +19,10 @@ LLM_MODEL = os.environ.get("THEME_LLM_MODEL", "claude-haiku-4-5-20251001")
 # (`fetch_lastfm` returns empty tags), so a missing key costs enrichment rather
 # than breaking a run.
 LASTFM_KEY = os.environ.get("LASTFM_API_KEY")
-GENIUS_TOKEN = os.environ.get("GENIUS_ACCESS_TOKEN", "CtIqNw8ogjNwFn8QOGXvt2FotAlKUtgtacCZEofFjDNQdtnFLx4IxxPmi_FQdVTx")
+# No inline fallback: a literal here is a committed credential, and this file is
+# tracked. fetch_genius already degrades to None when the token is unset, so an
+# unconfigured environment loses one corpus source rather than breaking.
+GENIUS_TOKEN = os.environ.get("GENIUS_ACCESS_TOKEN")
 
 
 def _safe_filename(artist: str, album: str) -> str:
