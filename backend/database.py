@@ -120,6 +120,10 @@ def init_db():
             "UPDATE pressuser SET distinctness_pts = 5 WHERE distinctness_pts IS NULL",
             # ── Tie-break: which track wins when several share the top score ──
             "ALTER TABLE album ADD COLUMN top_song_id INTEGER",
+            # ── Profile favourites: one album, one song, one artist ──
+            "ALTER TABLE pressuser ADD COLUMN favorite_album_id INTEGER",
+            "ALTER TABLE pressuser ADD COLUMN favorite_song_id INTEGER",
+            "ALTER TABLE pressuser ADD COLUMN favorite_artist VARCHAR",
             # ── Global theme/distinctness store (one LLM pass per album, not
             #    per user copy). create_all builds the table on fresh DBs; the
             #    unique index is what existing DBs need.

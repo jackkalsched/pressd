@@ -251,6 +251,64 @@ def accept_invite(
     return auth_response(user)
 
 
+def _own_rated_album(session: Session, user_id: int, album_id) -> int | None:
+    """Validate an album pick: null clears it, anything else must be a rated
+    album belonging to this user."""
+    if album_id is None:
+        return None
+    owned = session.exec(
+        select(Album.id).where(
+            Album.id == album_id, Album.user_id == user_id, Album.status == "rated"
+        )
+    ).first()
+    if owned is None:
+        raise HTTPException(status_code=400, detail="Pick one of your own rated albums")
+    return album_id
+
+
+def _own_rated_song(session: Session, user_id: int, song_id) -> int | None:
+    """Same for a song — scored, and on an album this user owns."""
+    if song_id is None:
+        return None
+    owned = session.exec(
+        select(Song.id)
+        .join(Album, Album.id == Song.album_id)
+        .where(Song.id == song_id, Album.user_id == user_id, Song.score.is_not(None))
+    ).first()
+    if owned is None:
+        raise HTTPException(status_code=400, detail="Pick one of your own rated songs")
+    return song_id
+
+
+def _profile_payload(session: Session, user: PressUser) -> dict:
+    """The user plus their three favourites, resolved to something displayable.
+
+    Resolved on read rather than stored denormalised: an album can be deleted or
+    re-rated long after it was pinned, and a stale title on a profile is worse
+    than a blank one.
+    """
+    album = session.get(Album, user.favorite_album_id) if user.favorite_album_id else None
+    song = session.get(Song, user.favorite_song_id) if user.favorite_song_id else None
+    song_album = session.get(Album, song.album_id) if song else None
+    return {
+        "id": user.id,
+        "name": user.name,
+        "avatar_url": user.avatar_url,
+        "bio": user.bio,
+        "favorite_artist": user.favorite_artist,
+        "favorite_album": {
+            "id": album.id, "album_name": album.album_name, "artist": album.artist,
+            "album_art_url": album.album_art_url, "score": album.score,
+        } if album else None,
+        "favorite_song": {
+            "id": song.id, "title": song.title, "score": song.score,
+            "album_name": song_album.album_name if song_album else None,
+            "artist": song.artist or (song_album.artist if song_album else None),
+            "album_art_url": song_album.album_art_url if song_album else None,
+        } if song else None,
+    }
+
+
 @router.patch("/{user_id}")
 def update_user(
     user_id: int,
@@ -278,10 +336,22 @@ def update_user(
         if len(bio) > 240:
             raise HTTPException(status_code=400, detail="Bio must be 240 characters or fewer")
         user.bio = bio or None
+
+    # Favourites. An album or song has to be one this user has rated — the
+    # picker only offers those, and accepting anything else would let a profile
+    # advertise a record its owner never scored. null clears the pick.
+    if "favorite_album_id" in data:
+        user.favorite_album_id = _own_rated_album(session, user_id, data["favorite_album_id"])
+    if "favorite_song_id" in data:
+        user.favorite_song_id = _own_rated_song(session, user_id, data["favorite_song_id"])
+    if "favorite_artist" in data:
+        artist = (data["favorite_artist"] or "").strip()
+        user.favorite_artist = artist or None
+
     session.add(user)
     session.commit()
     session.refresh(user)
-    return {"id": user.id, "name": user.name, "avatar_url": user.avatar_url, "bio": user.bio}
+    return _profile_payload(session, user)
 
 
 @router.delete("/me")

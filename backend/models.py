@@ -9,6 +9,16 @@ class PressUser(SQLModel, table=True):
     name: str = Field(unique=True, index=True)
     avatar_url: Optional[str] = None
     bio: Optional[str] = None
+
+    # Three picks the user pins to their profile. Albums and songs are stored by
+    # id and must be their own rated copy — the picker only ever offers those —
+    # while the artist is a name, because an artist is not a row anyone owns.
+    # Plain columns rather than foreign keys: a deleted album should blank the
+    # pick, not block the delete, so the read path validates instead.
+    favorite_album_id: Optional[int] = None
+    favorite_song_id: Optional[int] = None
+    favorite_artist: Optional[str] = None
+
     google_sub: Optional[str] = Field(default=None, unique=True, index=True)
     apple_sub: Optional[str] = Field(default=None, unique=True, index=True)
     email: Optional[str] = None
