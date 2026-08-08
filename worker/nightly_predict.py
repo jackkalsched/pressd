@@ -43,14 +43,20 @@ import backend.models  # noqa: F401 — registers tables in SQLModel.metadata
 from backend.database import engine
 from worker import runlog
 
-# Tier 1 gates all prediction output. It used to sit at 50 rated albums, which
-# in practice meant one user in twenty ever got a prediction — everyone else
-# was told "below threshold" indefinitely. The two components that needed a
-# large personal library now degrade instead of failing: the song model falls
-# back to a pooled prior calibrated to the user (song_score_model.fit_for_user)
-# and theme/distinctness to the global consensus mapped onto their scale
-# (theme_predictor.personalize). One rating is enough to be worth a run.
-MIN_RATED_ALBUMS = 1
+# Tier 1 gates all prediction output. It sat at 50 once, which meant one user in
+# twenty ever got a prediction; then at 1, which produced predictions for anyone
+# who had rated anything at all. The components that need a large personal
+# library degrade rather than fail either way — the song model falls back to a
+# pooled prior calibrated to the user (song_score_model.fit_for_user), and
+# theme/distinctness to the global consensus mapped onto their scale
+# (theme_predictor.personalize).
+#
+# The catch is what that fallback is made of. At one or two ratings the blend is
+# almost entirely pooled, and the pool is one person's taste while the userbase
+# is this small — so the prediction reads as a stranger's opinion wearing the
+# user's name. Ten ratings is where enough of their own signal survives the
+# blend to be worth showing.
+MIN_RATED_ALBUMS = 10
 
 # Retained for reporting only — fit_for_user now decides how much of the
 # personal model to trust, on a ramp rather than a cliff.
@@ -368,10 +374,11 @@ def main():
         user_ids = [args.user]
     else:
         with engine.connect() as con:
-            # Anyone with a library, not just anyone who has rated. A user who
-            # has queued albums but rated nothing still gets predictions — the
-            # global consensus on their scale — which is the whole point of
-            # the cold-start path.
+            # Cast wide and let MIN_RATED_ALBUMS decide per user — being
+            # selected here is not the same as being eligible. Note the gate
+            # returns before sync_predictions_to_albums, so a user under the
+            # threshold gets nothing at all this run, including a sync of
+            # predictions the catalog may already hold for them.
             user_ids = [r[0] for r in con.execute(text(
                 "SELECT DISTINCT user_id FROM album"
                 " WHERE status IN ('rated', 'to_listen', 'listening')"
