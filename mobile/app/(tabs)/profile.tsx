@@ -64,6 +64,16 @@ const STATUSES: { key: AlbumStatus; label: string }[] = [
 // ── Rankings sub-tab: sortable album/artist leaderboards ──
 const QUALIFIED = 15 // artists need ≥15 rated songs to rank
 
+// The rank column holds a position in a library that grows without bound, so
+// it is sized from what it has to show rather than pinned. Same shape as the
+// chart board: cap how far the numeral scales, then give it a floor wide
+// enough for three digits at that ceiling, and let it grow past it if a
+// library ever runs to four.
+const NUM_SCALE_CAP = 1.3
+const RANK_NUM_SIZE = 15
+// Playfair sets digits at roughly 0.55em.
+const RANK_NUM_MIN_W = Math.ceil(RANK_NUM_SIZE * NUM_SCALE_CAP * 0.55 * 3)
+
 type RankMode = 'albums' | 'artists'
 interface Metric<T> {
   key: string
@@ -570,7 +580,9 @@ function AlbumCell({
 function RatingRow({ album, rank, onPress }: { album: Album; rank: number; onPress: () => void }) {
   return (
     <Pressable style={styles.ratingRow} onPress={onPress}>
-      <Text style={styles.rankNum}>{rank}</Text>
+      <Text style={styles.rankNum} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+        {rank}
+      </Text>
       {album.albumArtUrl ? (
         <Image source={{ uri: album.albumArtUrl }} style={styles.ratingArt} contentFit="cover" />
       ) : (
@@ -624,7 +636,9 @@ function ArtistRankRow({
   })()
   return (
     <Pressable style={styles.ratingRow} onPress={onPress}>
-      <Text style={styles.rankNum}>{rank}</Text>
+      <Text style={styles.rankNum} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+        {rank}
+      </Text>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.ratingName} numberOfLines={1}>{stat.artist}</Text>
         <Text style={styles.ratingArtist} numberOfLines={1}>
@@ -734,7 +748,15 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   searchBarInput: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: colors.ink },
-  rankNum: { fontFamily: fonts.display, fontSize: 15, color: colors.inkMuted, width: 22, textAlign: 'center' },
+  // minWidth, not width: a library past 99 albums needs three digits and
+  // jack's is past 400. At 22 the third wrapped — "103" set as "10" over "3".
+  rankNum: {
+    fontFamily: fonts.display,
+    fontSize: RANK_NUM_SIZE,
+    color: colors.inkMuted,
+    minWidth: RANK_NUM_MIN_W,
+    textAlign: 'center',
+  },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.4)', justifyContent: 'flex-end' },
   sheet: {
