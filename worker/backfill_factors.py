@@ -18,8 +18,10 @@ Usage:
     python -m worker.backfill_factors --apply --user 1
 """
 import argparse
+import itertools
 import sys
 import pathlib
+from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
@@ -29,11 +31,33 @@ from backend.database import engine
 from worker import runlog
 
 
-def backfill(limit: int | None = None, dry_run: bool = False) -> dict:
-    from theme_predictor.global_factors import albums_missing_factors, ensure_global_factors
+# Supabase's session-mode pooler allows 15 clients across the entire project —
+# the live web service included — and backend.database's engine is configured
+# for pool_size(5) + max_overflow(10), which is exactly that ceiling on its own.
+# A first attempt at six workers holding a connection across their LLM calls
+# took the pooler to EMAXCONNSESSION and locked the app out of its own database.
+#
+# So: workers never hold a connection while waiting on the model (see
+# global_factors.analyze_album), and the count stays low enough that the
+# millisecond-long writes cannot collide into the app's headroom.
+WORKERS = 4
+
+
+def backfill(limit: int | None = None, dry_run: bool = False,
+             workers: int = WORKERS) -> dict:
+    from theme_predictor.global_factors import (
+        albums_missing_factors, analyze_album, store_global_factors,
+        _anchor_examples, _corpora_for)
+    from theme_predictor.predictor import LLM_MODEL
+    from backend.trackkeys import album_key
 
     with engine.connect() as con:
         todo = albums_missing_factors(con, limit)
+        # The distinctness anchor set is the same for every album of a given
+        # genre and costs a full table scan, so it is built once here rather
+        # than inside each worker.
+        anchors = _anchor_examples(con, "distinctness", None)
+    anchor_corpora = _corpora_for(anchors)
 
     print(f"[backfill_factors] {len(todo)} distinct albums need global scoring")
     if dry_run:
@@ -43,22 +67,39 @@ def backfill(limit: int | None = None, dry_run: bool = False) -> dict:
             print(f"   … and {len(todo) - 40} more")
         return {"pending": len(todo), "scored": 0}
 
-    scored, failed = 0, 0
-    for i, (aid, artist, album_name, year, genre) in enumerate(todo, 1):
-        print(f"[backfill_factors] [{i}/{len(todo)}] {artist} – {album_name}")
-        # Fresh connection per album: a full backfill runs long enough for the
-        # Supabase pooler to drop an idle one.
-        try:
-            with engine.connect() as con:
-                got = ensure_global_factors(con, artist, album_name, year, genre, aid)
-            if got and (got["theme_raw"] is not None or got["distinctness_raw"] is not None):
-                scored += 1
-            else:
-                failed += 1
-        except Exception as e:
-            print(f"[backfill_factors] failed: {e}")
-            failed += 1
+    done = itertools.count(1)
 
+    def one(rec):
+        aid, artist, album_name, year, genre = rec
+        i = next(done)
+        try:
+            # No connection held here — this is the slow part.
+            got = analyze_album(artist, album_name, year, genre, aid,
+                                anchors, anchor_corpora)
+            ok = bool(got["theme_features"] is not None
+                      or got["distinctness_raw"] is not None)
+            if ok:
+                # ...and only now, for the length of one INSERT.
+                with engine.connect() as con:
+                    store_global_factors(
+                        con, album_key(artist, album_name), artist, album_name,
+                        genre, year, got["theme_features"], got["theme_raw"],
+                        got["theme_reasoning"], got["distinctness_raw"],
+                        got["distinctness_reasoning"], LLM_MODEL)
+        except Exception as e:
+            print(f"[backfill_factors] [{i}/{len(todo)}] FAILED {artist} – {album_name}: {e}",
+                  flush=True)
+            return False
+        if i % 25 == 0 or not ok:
+            print(f"[backfill_factors] [{i}/{len(todo)}] {artist} – {album_name}"
+                  f"{'' if ok else '  <-- nothing scored'}", flush=True)
+        return ok
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        results = list(ex.map(one, todo))
+
+    scored = sum(1 for r in results if r)
+    failed = len(results) - scored
     print(f"[backfill_factors] done: {scored} scored, {failed} failed")
     return {"pending": len(todo), "scored": scored, "failed": failed}
 
@@ -95,6 +136,8 @@ def main():
     ap.add_argument("--apply", action="store_true",
                     help="derive per-user values from the global scores (no LLM)")
     ap.add_argument("--user", type=int, help="with --apply, one user only")
+    ap.add_argument("--workers", type=int, default=WORKERS,
+                    help=f"concurrent albums (default {WORKERS})")
     args = ap.parse_args()
 
     if args.apply:
@@ -104,7 +147,7 @@ def main():
     with engine.connect() as con:
         run_id = runlog.start(con, "backfill_factors", None)
     try:
-        detail = backfill(args.limit, args.dry_run)
+        detail = backfill(args.limit, args.dry_run, args.workers)
         with engine.connect() as con:
             runlog.finish(con, run_id, "ok", **detail)
     except Exception as e:

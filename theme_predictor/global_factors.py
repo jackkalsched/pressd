@@ -174,6 +174,52 @@ def ensure_global_factors(con, artist: str, album_name: str,
     if theme_features is None and theme_raw is None and dist_raw is None:
         return existing
 
+    store_global_factors(con, key, artist, album_name, genre, year, theme_features,
+                         theme_raw, theme_reason, dist_raw, dist_reason, LLM_MODEL)
+    return get_global_factors(con, artist, album_name)
+
+
+def analyze_album(artist: str, album_name: str, year: int | None, genre: str | None,
+                  album_id: int | None = None, anchors: list[dict] | None = None,
+                  anchor_corpora: dict | None = None) -> dict:
+    """Everything an album's scoring needs from the LLM, holding no connection.
+
+    Split out from ensure_global_factors so a bulk run can hold a database
+    connection for the millisecond of the write instead of the ten seconds of
+    the API calls. Supabase's session-mode pooler allows 15 clients across the
+    *whole project* — the web service included — so a worker that keeps a
+    connection open across its LLM calls will starve the live app long before
+    it saturates the model provider.
+    """
+    from .corpus import load_or_build_corpus
+    from .theme_analysis import analyze_theme
+    from .distinctness_predictor import predict_distinctness
+
+    corpus = load_or_build_corpus(album_id or 0, artist, album_name, year, None)
+    corpus["genre"] = genre
+
+    out = {"theme_features": None, "theme_raw": None, "theme_reasoning": None,
+           "distinctness_raw": None, "distinctness_reasoning": None}
+    try:
+        axes, overall, reason = analyze_theme(corpus)
+        if axes:
+            out["theme_features"] = json.dumps(axes)
+        out["theme_raw"], out["theme_reasoning"] = overall, reason
+    except Exception as e:
+        print(f"[global_factors] theme analysis failed for {artist} – {album_name}: {e}")
+
+    try:
+        out["distinctness_raw"], out["distinctness_reasoning"] = predict_distinctness(
+            corpus, anchors or [], anchor_corpora or {},
+            subject=GLOBAL_SUBJECT, baseline=GLOBAL_REF_MU)
+    except Exception as e:
+        print(f"[global_factors] distinctness failed for {artist} – {album_name}: {e}")
+    return out
+
+
+def store_global_factors(con, key, artist, album_name, genre, year, theme_features,
+                         theme_raw, theme_reason, dist_raw, dist_reason, model):
+    """Persist one album's global factors. Nulls never overwrite stored values."""
     con.execute(text("""
         INSERT INTO albumfactors
             (album_key, artist, album_name, genre, year, theme_features, theme_raw,
@@ -191,12 +237,8 @@ def ensure_global_factors(con, artist: str, album_name: str,
             computed_at = NOW()
     """), {"k": key, "ar": artist, "al": album_name, "g": genre, "y": year,
            "tf": theme_features, "t": theme_raw, "tr": theme_reason,
-           "d": dist_raw, "dr": dist_reason, "m": LLM_MODEL})
+           "d": dist_raw, "dr": dist_reason, "m": model})
     con.commit()
-    n_axes = len(json.loads(theme_features)) if theme_features else 0
-    print(f"[global_factors] {artist} – {album_name}: "
-          f"{n_axes} theme axes, overall={theme_raw}, dist={dist_raw}")
-    return get_global_factors(con, artist, album_name)
 
 
 def albums_missing_factors(con, limit: int | None = None) -> list[tuple]:
