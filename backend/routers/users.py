@@ -476,6 +476,24 @@ def set_factor_weights(
     return {"points": points, "recomputed": recomputed}
 
 
+@router.get("/{user_id}/profile")
+def get_profile(
+    user_id: int,
+    current: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """A user's public face: name, avatar, bio and their three picks.
+
+    Readable for anyone — the picks are the social half of the feature, so a
+    friend's page shows them the same way your own does. Nothing here is
+    private; scores and libraries stay behind their own endpoints.
+    """
+    user = session.get(PressUser, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return _profile_payload(session, user)
+
+
 @router.get("/{user_id}/friends")
 def list_friends(
     user_id: int,
