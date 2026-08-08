@@ -21,6 +21,7 @@ import argparse
 import itertools
 import sys
 import pathlib
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
@@ -41,6 +42,11 @@ from worker import runlog
 # global_factors.analyze_album), and the count stays low enough that the
 # millisecond-long writes cannot collide into the app's headroom.
 WORKERS = 4
+
+# Stop the run after this many albums in a row score nothing. An exhausted API
+# budget, a dead key and a provider outage are indistinguishable per album and
+# none of them recover on their own.
+ABORT_AFTER_CONSECUTIVE_FAILURES = 8
 
 
 def backfill(limit: int | None = None, dry_run: bool = False,
@@ -69,8 +75,37 @@ def backfill(limit: int | None = None, dry_run: bool = False,
 
     done = itertools.count(1)
 
+    aborted = threading.Event()
+    streak_lock = threading.Lock()
+    consecutive = [0]
+
+    def note(ok: bool, why: str | None):
+        """Track consecutive failures and trip the breaker on a run of them.
+
+        A budget that runs dry, an expired key, or a provider outage all look
+        the same from one album: nothing scored. The difference is that they
+        do not recover, and without this the run works through every remaining
+        album producing nothing — which is exactly what happened on the first
+        full attempt, for 140 albums, while reporting zero failures.
+        """
+        with streak_lock:
+            if ok:
+                consecutive[0] = 0
+                return
+            consecutive[0] += 1
+            if consecutive[0] >= ABORT_AFTER_CONSECUTIVE_FAILURES and not aborted.is_set():
+                aborted.set()
+                print(f"\n[backfill_factors] ABORTING — "
+                      f"{consecutive[0]} albums in a row scored nothing.\n"
+                      f"[backfill_factors] last error: {why or '(no exception; '
+                      f'the model returned an unparseable response)'}\n"
+                      f"[backfill_factors] already-scored albums are kept; re-run to resume.",
+                      flush=True)
+
     def one(rec):
         aid, artist, album_name, year, genre = rec
+        if aborted.is_set():
+            return None                      # distinct from a real failure
         i = next(done)
         try:
             # No connection held here — this is the slow part.
@@ -86,22 +121,28 @@ def backfill(limit: int | None = None, dry_run: bool = False,
                         genre, year, got["theme_features"], got["theme_raw"],
                         got["theme_reasoning"], got["distinctness_raw"],
                         got["distinctness_reasoning"], LLM_MODEL)
+            note(ok, got.get("error"))
         except Exception as e:
-            print(f"[backfill_factors] [{i}/{len(todo)}] FAILED {artist} – {album_name}: {e}",
-                  flush=True)
+            print(f"[backfill_factors] [{i}/{len(todo)}] FAILED {artist} – {album_name}: "
+                  f"{type(e).__name__}: {e}", flush=True)
+            note(False, f"{type(e).__name__}: {e}")
             return False
         if i % 25 == 0 or not ok:
             print(f"[backfill_factors] [{i}/{len(todo)}] {artist} – {album_name}"
-                  f"{'' if ok else '  <-- nothing scored'}", flush=True)
+                  f"{'' if ok else '  <-- nothing scored: ' + (got.get('error') or 'unparseable response')}",
+                  flush=True)
         return ok
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
         results = list(ex.map(one, todo))
 
-    scored = sum(1 for r in results if r)
-    failed = len(results) - scored
-    print(f"[backfill_factors] done: {scored} scored, {failed} failed")
-    return {"pending": len(todo), "scored": scored, "failed": failed}
+    scored = sum(1 for r in results if r is True)
+    failed = sum(1 for r in results if r is False)
+    skipped = sum(1 for r in results if r is None)
+    tail = f", {skipped} not attempted (aborted)" if skipped else ""
+    print(f"[backfill_factors] done: {scored} scored, {failed} failed{tail}")
+    return {"pending": len(todo), "scored": scored, "failed": failed,
+            "skipped": skipped, "aborted": aborted.is_set()}
 
 
 def apply_all(only_user: int | None = None) -> dict:

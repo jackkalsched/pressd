@@ -199,21 +199,24 @@ def analyze_album(artist: str, album_name: str, year: int | None, genre: str | N
     corpus["genre"] = genre
 
     out = {"theme_features": None, "theme_raw": None, "theme_reasoning": None,
-           "distinctness_raw": None, "distinctness_reasoning": None}
+           "distinctness_raw": None, "distinctness_reasoning": None, "error": None}
     try:
         axes, overall, reason = analyze_theme(corpus)
         if axes:
             out["theme_features"] = json.dumps(axes)
         out["theme_raw"], out["theme_reasoning"] = overall, reason
     except Exception as e:
-        print(f"[global_factors] theme analysis failed for {artist} – {album_name}: {e}")
+        out["error"] = f"theme: {type(e).__name__}: {e}"
+        print(f"[global_factors] {artist} – {album_name} — {out['error']}", flush=True)
 
     try:
         out["distinctness_raw"], out["distinctness_reasoning"] = predict_distinctness(
             corpus, anchors or [], anchor_corpora or {},
             subject=GLOBAL_SUBJECT, baseline=GLOBAL_REF_MU)
     except Exception as e:
-        print(f"[global_factors] distinctness failed for {artist} – {album_name}: {e}")
+        err = f"distinctness: {type(e).__name__}: {e}"
+        out["error"] = f"{out['error']}; {err}" if out["error"] else err
+        print(f"[global_factors] {artist} – {album_name} — {err}", flush=True)
     return out
 
 

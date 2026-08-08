@@ -110,19 +110,18 @@ def parse_response(response: str) -> tuple[float | None, str | None]:
 def predict_distinctness(target_corpus: dict, examples: list[dict],
                           corpora_map: dict[int, dict],
                           subject: str = "Jack", baseline: float = DIST_MEAN) -> tuple[float | None, str | None]:
+    """Raises on API failure — see theme_analysis.analyze_theme for why the
+    previous string-swallowing behaviour hid an exhausted budget as silence."""
     prompt = build_distinctness_prompt(target_corpus, examples, corpora_map, subject, baseline)
-    try:
-        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-        response = client.messages.create(
-            model=LLM_MODEL,
-            max_tokens=600,
-            temperature=0.2,
-            system="You are a music scoring assistant. After your analysis, you MUST end your response with exactly these two lines:\nSCORE: [a number 1-10, one decimal allowed]\nREASONING: [1-2 sentences]",
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return parse_response(response.content[0].text)
-    except Exception as e:
-        return None, f"[failed: {e}]"
+    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    response = client.messages.create(
+        model=LLM_MODEL,
+        max_tokens=600,
+        temperature=0.2,
+        system="You are a music scoring assistant. After your analysis, you MUST end your response with exactly these two lines:\nSCORE: [a number 1-10, one decimal allowed]\nREASONING: [1-2 sentences]",
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return parse_response(response.content[0].text)
 
 
 def normalize_to_jack(raw_scores: list[tuple[int, float]]) -> list[tuple[int, float]]:

@@ -139,16 +139,21 @@ def parse_analysis(response: str) -> tuple[dict | None, float | None, str | None
 
 
 def analyze_theme(corpus: dict) -> tuple[dict | None, float | None, str | None]:
-    """One call. Returns (axes, overall, reasoning); (None, None, msg) on failure."""
-    try:
-        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-        resp = client.messages.create(
-            model=LLM_MODEL,
-            max_tokens=900,
-            temperature=0.0,   # a measurement should be reproducible
-            system=_SYSTEM,
-            messages=[{"role": "user", "content": build_analysis_prompt(corpus)}],
-        )
-        return parse_analysis(resp.content[0].text)
-    except Exception as e:
-        return None, None, f"[analysis failed: {e}]"
+    """One call. Returns (axes, overall, reasoning).
+
+    Raises on API failure rather than returning it as a string. The previous
+    version swallowed every exception into the reasoning field, which the
+    caller discards when there are no axes — so an exhausted API budget looked
+    exactly like an album the model had nothing to say about, and a run could
+    burn through hundreds of albums reporting zero failures. Callers decide
+    what a failure means; this function's job is to be honest about it.
+    """
+    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    resp = client.messages.create(
+        model=LLM_MODEL,
+        max_tokens=900,
+        temperature=0.0,   # a measurement should be reproducible
+        system=_SYSTEM,
+        messages=[{"role": "user", "content": build_analysis_prompt(corpus)}],
+    )
+    return parse_analysis(resp.content[0].text)
