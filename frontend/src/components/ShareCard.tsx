@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { X, Download, Loader2, Star } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import { fetchAlbums } from '../api'
-import { BANG_THRESHOLD, SKIP_THRESHOLD, songScoreColor } from '../types'
+import { BANG_THRESHOLD, SKIP_THRESHOLD, pickTopSong, songScoreColor } from '../types'
 import type { Album } from '../types'
 import { useUser } from '../context/UserContext'
 
@@ -66,7 +66,9 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
     const mids = rated.length - bangs.length - skips.length
     const pct = (n: number) => (rated.length ? Math.round((n / rated.length) * 100) : 0)
     const sortedByScore = [...rated].sort((a, b) => b.score! - a.score!)
-    const favorite = sortedByScore[0] ?? null
+    // The rater's tie-break when several tracks shared the top score, so the
+    // web card names the same favourite the app does.
+    const favorite = pickTopSong(album)
     const least = sortedByScore.length > 1 ? sortedByScore[sortedByScore.length - 1] : null
 
     // ranking + distribution across the user's rated albums

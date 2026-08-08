@@ -118,6 +118,8 @@ def init_db():
             "UPDATE pressuser SET replay_pts = 15 WHERE replay_pts IS NULL",
             "UPDATE pressuser SET production_pts = 15 WHERE production_pts IS NULL",
             "UPDATE pressuser SET distinctness_pts = 5 WHERE distinctness_pts IS NULL",
+            # ── Tie-break: which track wins when several share the top score ──
+            "ALTER TABLE album ADD COLUMN top_song_id INTEGER",
             # ── Global theme/distinctness store (one LLM pass per album, not
             #    per user copy). create_all builds the table on fresh DBs; the
             #    unique index is what existing DBs need.

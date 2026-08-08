@@ -56,6 +56,35 @@ EP_MAX_TRACKS = 6
 SINGLE_MAX_TRACKS = 2
 
 
+def tied_top_songs(songs: list) -> list:
+    """Every song sharing the album's highest score, best-known order preserved.
+    One entry means no tie; two or more is the case worth asking the user about.
+    Scores are stored to two decimals, so an exact match is the right test."""
+    scored = [s for s in songs if s.score is not None]
+    if not scored:
+        return []
+    best = max(s.score for s in scored)
+    return [s for s in scored if s.score == best]
+
+
+def pick_top_song(album, songs: list):
+    """The album's best track. Honours the user's tie-break when they made one,
+    otherwise the highest score — the behaviour everything had before.
+
+    The stored pick is validated against the songs passed in rather than
+    trusted: a track can be removed by a re-import long after the tie was
+    broken, and a dangling id should quietly fall back, not blank the field."""
+    scored = [s for s in songs if s.score is not None]
+    if not scored:
+        return None
+    chosen = getattr(album, "top_song_id", None)
+    if chosen is not None:
+        for s in scored:
+            if s.id == chosen:
+                return s
+    return max(scored, key=lambda s: s.score)
+
+
 def is_single_release(album_name: str | None, track_count: int | None) -> bool:
     """Whether a release is a single rather than a record. Track count is the
     reliable signal; the "- Single" suffix is an iTunes naming convention that

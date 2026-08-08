@@ -26,6 +26,7 @@ import {
   SKIP_THRESHOLD,
   EP_MAX_TRACKS,
   type Album,
+  pickTopSong,
 } from '@pressd/shared/types'
 import { fetchAlbums, fetchAlbumColor } from '../lib/api'
 import { colors, fonts } from '../theme/tokens'
@@ -104,7 +105,9 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
       bangPct: pct(bangs.length),
       skipPct: pct(skips.length),
       midPct: pct(mids),
-      favorite: byScore[0] ?? null,
+      // The rater's own tie-break when several tracks shared the top score,
+      // otherwise the highest — pickTopSong applies that rule for both.
+      favorite: pickTopSong(album),
       least: byScore.length > 1 ? byScore[byScore.length - 1] : null,
       rank,
       total,

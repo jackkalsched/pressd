@@ -162,6 +162,21 @@ def update_album(
         if key in ALBUM_MUTABLE_FIELDS:
             setattr(album, key, value)
 
+    # Not in ALBUM_MUTABLE_FIELDS: it names a row in another table, so it is
+    # checked rather than assigned. Only a track on this album can be its top
+    # song; null clears the pick and restores the highest-score default.
+    if "top_song_id" in data:
+        chosen = data["top_song_id"]
+        if chosen is None:
+            album.top_song_id = None
+        else:
+            owned = session.exec(
+                select(Song.id).where(Song.album_id == album.id, Song.id == chosen)
+            ).first()
+            if owned is None:
+                raise HTTPException(status_code=400, detail="That song is not on this album")
+            album.top_song_id = chosen
+
     if data.get("status") == "rated":
         album.date_rated = date.today()
 
@@ -180,7 +195,10 @@ def update_album(
     if data.get("status") == "to_listen" and album.predicted_score is None:
         _queue_predictions(album.id)
 
-    return album
+    # Same shape GET returns. A bare `album` serialises its columns but not its
+    # songs, so a client that renders from the PATCH response — the share card
+    # does — saw a record with no tracks at all.
+    return {**album.model_dump(), "songs": [s.model_dump() for s in album.songs]}
 
 
 def _queue_predictions(album_id: int):

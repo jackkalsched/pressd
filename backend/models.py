@@ -91,6 +91,15 @@ class Album(SQLModel, table=True):
     review: Optional[str] = None
     review_at: Optional[datetime] = None  # set on first write, immutable on edit (feed ordering)
 
+    # The user's pick when several tracks tie for the album's best score. Only
+    # set when they were asked and answered, so null means "nobody broke a tie"
+    # — reviews and share cards fall back to the highest score as before. A
+    # plain column rather than a foreign key: song.album_id already points the
+    # other way, and a second constraint between the two tables would have to be
+    # created after both exist. pick_top_song() validates it against the album's
+    # own songs on read, which covers a track deleted out from under it.
+    top_song_id: Optional[int] = None
+
     date_added: Optional[date] = Field(default_factory=date.today)
     date_rated: Optional[date] = None
 

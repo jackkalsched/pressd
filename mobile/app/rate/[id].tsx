@@ -28,6 +28,7 @@ import {
   updateAlbum,
   fetchFactorStats,
   fetchFactorWeights,
+  setTopSong,
 } from '../../lib/api'
 import {
   computeAlbumScore,
@@ -35,11 +36,13 @@ import {
   BANG_THRESHOLD,
   SKIP_THRESHOLD,
   EP_MAX_TRACKS,
+  tiedTopSongs,
   type Album,
   type Song,
 } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import ShareCard from '../../components/ShareCard'
+import TopSongTiebreak from '../../components/TopSongTiebreak'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
 import { useDeleteAlbum } from '../../lib/useDeleteAlbum'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
@@ -134,6 +137,9 @@ export default function RatingScreen() {
   const [listOpen, setListOpen] = useState(false)
   const [initialized, setInitialized] = useState(false)
   const [shareAlbum, setShareAlbum] = useState<Album | null>(null)
+  // Held between submitting and the share card: the album whose top score two
+  // or more tracks reached, waiting on the user to say which one counts.
+  const [tiebreak, setTiebreak] = useState<Album | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Seed once the album arrives; resume at the first unscored track.
@@ -215,7 +221,7 @@ export default function RatingScreen() {
   function advance() {
     Haptics.selectionAsync().catch(() => {})
     if (idx < sortedSongs.length - 1) setIdx(idx + 1)
-    else setPhase(isEP ? 'factors' : 'factors')
+    else setPhase('factors')
   }
 
   function onNext() {
@@ -266,10 +272,37 @@ export default function RatingScreen() {
       queryClient.invalidateQueries({ queryKey: ['stats'] })
       queryClient.invalidateQueries({ queryKey: ['album', albumId] })
       const fresh = await fetchAlbum(albumId).catch(() => null)
-      if (fresh) setShareAlbum(fresh)
-      else router.replace({ pathname: '/album/[id]', params: { id: String(albumId) } })
+      if (!fresh) {
+        router.replace({ pathname: '/album/[id]', params: { id: String(albumId) } })
+        return
+      }
+      // Ask about a tie before the share card, since the card is one of the
+      // things that has to name a single favourite.
+      if (tiedTopSongs(fresh).length > 1) setTiebreak(fresh)
+      else setShareAlbum(fresh)
     },
     onError: () => setError('Could not save your rating. Please try again.'),
+  })
+
+  // Recording the pick shouldn't be able to cost someone their share card, so a
+  // failure here falls through to it rather than stranding them on the dialog.
+  const chooseTopSong = useMutation({
+    mutationFn: (songId: number) => setTopSong(albumId, songId),
+    // Carry the album we already hold rather than the one the request echoes
+    // back. It has the songs the share card is built from, and this way the
+    // card doesn't depend on the response shape of an endpoint it never reads
+    // directly.
+    onSuccess: (_updated, songId) => {
+      setShareAlbum(tiebreak ? { ...tiebreak, topSongId: songId } : null)
+    },
+    // A failed write shouldn't cost them the card, and shouldn't claim a pick
+    // that never landed either.
+    onError: () => setShareAlbum(tiebreak),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['album', albumId] })
+      queryClient.invalidateQueries({ queryKey: ['reviews'] })
+      setTiebreak(null)
+    },
   })
 
   const saveDraft = useMutation({
@@ -281,6 +314,23 @@ export default function RatingScreen() {
     },
     onError: () => setError('Could not save. Please try again.'),
   })
+
+  if (tiebreak) {
+    const tied = tiedTopSongs(tiebreak)
+    return (
+      <TopSongTiebreak
+        visible
+        songs={tied}
+        score={tied[0]?.score ?? 0}
+        busy={chooseTopSong.isPending}
+        onPick={(songId) => chooseTopSong.mutate(songId)}
+        onSkip={() => {
+          setShareAlbum(tiebreak)
+          setTiebreak(null)
+        }}
+      />
+    )
+  }
 
   if (shareAlbum) {
     return (
@@ -441,7 +491,7 @@ export default function RatingScreen() {
           ) : (
             /* Factors */
             <>
-              <Text style={styles.trackEyebrow}>THE ALBUM</Text>
+              <Text style={styles.trackEyebrow}>{isEP ? 'FINISH' : 'THE ALBUM'}</Text>
               <Text style={styles.trackTitle}>{album.albumName}</Text>
               <Text style={styles.trackMeta}>
                 {withScores.length} track{withScores.length === 1 ? '' : 's'} scored · avg{' '}
@@ -452,7 +502,10 @@ export default function RatingScreen() {
                 <Text style={styles.warn}>Every track needs a score or a skip before you can submit.</Text>
               )}
 
-              {FACTORS.map(({ key, label, desc }) => (
+              {/* An EP scores as its song mean and never reads these, so it
+                  gets the finish screen without them rather than four inputs
+                  that change nothing. */}
+              {!isEP && FACTORS.map(({ key, label, desc }) => (
                 <View key={key} style={styles.factorRow}>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={styles.factorLabel}>{label}</Text>

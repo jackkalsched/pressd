@@ -96,6 +96,7 @@ function transformAlbum(a: Record<string, unknown>): Album {
     recommendedByName: a.recommended_by_name as string | null ?? null,
     review: a.review as string | null ?? null,
     reviewAt: a.review_at as string | null ?? null,
+    topSongId: (a.top_song_id as number | null) ?? null,
     songs,
   }
 }
@@ -152,6 +153,12 @@ export async function updateAlbum(id: number, patch: Record<string, unknown>): P
   })
   if (!res.ok) throw new Error('Failed to update album')
   return transformAlbum(await res.json())
+}
+
+/** Record which track wins when several tie for the album's top score, or pass
+ *  null to clear the pick and fall back to the highest score. */
+export async function setTopSong(albumId: number, songId: number | null): Promise<Album> {
+  return updateAlbum(albumId, { top_song_id: songId })
 }
 
 export async function deleteAlbum(id: number): Promise<void> {
