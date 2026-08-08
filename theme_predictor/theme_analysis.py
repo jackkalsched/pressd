@@ -26,21 +26,31 @@ LLM_MODEL = os.environ.get("THEME_LLM_MODEL", "claude-haiku-4-5-20251001")
 # relies on it being stable. Append new axes at the end; never reorder, and
 # never remove one without re-analysing every album and refitting every model.
 #
-# Four axes, all measuring one question from different angles: does this record
-# hold together as a structured work? That is a deliberate definition of what
-# "theme" means here, chosen over a wider or a purely data-selected list.
+# Four axes asking one question from different angles — does this record hold
+# together as a structured work — plus lyrical_depth, which asks whether there
+# is anything worth holding together.
 #
-# The probe over 47 of user 1's rated albums (scratch: axis_probe.json) ranked a
-# greedy data-driven trio — lyrical_depth, sequencing_intent, ambition_scale —
-# ahead of this set on his ratings, LOO MAE 1.87 against 2.11. That trio is
-# largely measuring writing quality and reach, which predict his *album* score
-# well but are not what the theme factor is for. Keeping the cohesion axes costs
-# some fit against one user today and keeps the factor meaning what it says.
+# Measured over 47 of user 1's rated albums (scratch: axis_probe.json), by
+# leave-one-out MAE against his own theme ratings:
+#
+#     predict-the-mean                      2.207
+#     the four cohesion axes                2.107
+#     + lyrical_depth                       1.965
+#     greedy pick over all ten              1.874
+#     all ten                               2.030
+#
+# The greedy pick (lyrical_depth, sequencing_intent, ambition_scale) still fits
+# him best, but it drifts toward writing quality and reach — things that predict
+# an album *score* rather than isolate a theme. This set keeps the factor
+# meaning what it says and gives up ~0.09 MAE against one user for it. The
+# greedy number is also optimistic: it was chosen and scored on the same 47
+# points.
 THEME_AXES = (
     "narrative_arc",        # tracklist moves through a story or progression
     "concept_unity",        # one unifying idea genuinely carried across tracks
     "emotional_throughline",# coherent emotional register or journey
     "sequencing_intent",    # ordering, interludes, bookends as craft
+    "lyrical_depth",        # substance of the writing being carried
 )
 
 _AXIS_DOC = {
@@ -48,6 +58,7 @@ _AXIS_DOC = {
     "concept_unity": "Is there one idea the record actually carries across its length? 10 = every track serves it. 1 = no unifying idea at all.",
     "emotional_throughline": "A coherent emotional register or journey. 10 = a sustained, deliberate mood arc. 1 = emotionally scattered.",
     "sequencing_intent": "Evidence of deliberate ordering — interludes, bookends, transitions, escalation. 10 = clearly composed as a sequence. 1 = a playlist order.",
+    "lyrical_depth": "Specificity and substance of the writing itself. 10 = precise, particular, revealing. 1 = generic filler or interchangeable clichés. Judge the writing, not how well it serves the concept — a tightly themed record can still be written thinly.",
 }
 
 _SYSTEM = (
@@ -68,13 +79,13 @@ def build_analysis_prompt(corpus: dict) -> str:
         "Use the full range: 5 is genuinely average for that axis, and both extremes",
         "should be reachable for the right record.",
         "",
-        "These four axes are related but NOT the same, and the most common failure is",
-        "giving one record four near-identical numbers. Before you answer, check each",
+        "These axes are related but NOT the same, and the most common failure is",
+        "giving one record five near-identical numbers. Before you answer, check each",
         "against the others — a record can have a single clear idea (concept_unity)",
         "with no story progression (narrative_arc); a deliberate running order",
         "(sequencing_intent) carrying wildly mixed moods (emotional_throughline); or a",
-        "sustained atmosphere with no organising concept behind it. Where two of your",
-        "four numbers are equal, satisfy yourself that the record really is equal on",
+        "flawlessly sequenced concept written in clichés (lyrical_depth). Where two of",
+        "your numbers are equal, satisfy yourself that the record really is equal on",
         "both rather than that one anchored the other.",
         "",
         "AXES:",
