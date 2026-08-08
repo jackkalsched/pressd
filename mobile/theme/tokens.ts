@@ -69,6 +69,7 @@ export { songScoreColor } from '@pressd/shared/types'
 // likely to be Display Zoom or a large text setting as a smaller phone.
 
 export const screenWidth = Dimensions.get('window').width
+export const screenHeight = Dimensions.get('window').height
 
 /** Width of a string as a multiple of its own font size, for the display face.
  *  Playfair sets digits at ~0.55em and a period at ~0.27em, so the widest score

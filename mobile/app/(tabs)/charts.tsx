@@ -6,7 +6,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
-  Dimensions,
   Modal,
   Pressable,
   ScrollView,
@@ -22,17 +21,43 @@ import { useRouter } from 'expo-router'
 import { Check, ChevronDown, Triangle, X } from 'lucide-react-native'
 import { fetchCharts, type ChartItem } from '../../lib/api'
 import { songScoreColor, avatarColor } from '@pressd/shared/types'
-import { colors, fonts, radii, spacing } from '../../theme/tokens'
+import { colors, contentWidth, fonts, radii, screenHeight, spacing } from '../../theme/tokens'
 
 const DOWN = '#c0392b'
 
 // Podium sizes derived from the viewport: sides 30%, center 40% of the row,
 // leaving generous air between the three covers.
-const CONTENT_W = Dimensions.get('window').width - spacing.lg * 2
+const CONTENT_W = contentWidth()
 const POD_GAP = spacing.xl
 const POD_AVAIL = CONTENT_W - POD_GAP * 2
 const POD_SIDE = Math.floor(POD_AVAIL * 0.3)
 const POD_CENTER = Math.floor(POD_AVAIL * 0.4)
+
+// A chart row is three sized columns around one flexible middle: rank,
+// movement, title/artist, score. The sized ones are what broke — they were
+// pinned in points, so a large text setting (or Display Zoom) grew the glyphs
+// inside boxes that couldn't grow with them and "24" wrapped to "2" over "4".
+//
+// Two changes. The board's numerals stop scaling past NUM_SCALE_CAP, because
+// they sit in columns measured against the row and unbounded growth has nowhere
+// to go — album and artist names keep scaling freely, since they only ever have
+// to shrink. And the columns are minimums rather than fixed widths, so anything
+// past what the cap allows (a third digit, a wider glyph) takes the room it
+// needs and the flexible middle gives way, which is the one part of the row that
+// can afford to.
+const NUM_SCALE_CAP = 1.3
+
+const RANK_SIZE = 19
+// Playfair Black sets digits at roughly 0.62em. Sized to hold two of them at the
+// largest type the cap allows, so the column still lines up row to row.
+const RANK_MIN_W = Math.ceil(RANK_SIZE * NUM_SCALE_CAP * 0.62 * 2)
+// A caret, its gap, and a two-digit move at the same ceiling.
+const MOVE_MIN_W = Math.ceil(9 + 2 + 10 * NUM_SCALE_CAP * 0.6 * 2)
+
+// The filter sheet rises from the bottom, so its option list has to leave room
+// for the title, the padding and the home indicator on whatever phone it lands
+// on. 340 was fine on a tall screen and most of a short one.
+const OPTION_LIST_MAX_H = Math.min(340, Math.round(screenHeight * 0.42))
 
 /** Holds a value back until it stops changing, so a type-in filter fires one
  *  request for a name rather than one per letter. */
@@ -247,7 +272,7 @@ function FilterDropdown({
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
           <Pressable style={styles.sheet}>
             <Text style={styles.sheetTitle}>{title}</Text>
-            <ScrollView style={{ maxHeight: 340 }}>
+            <ScrollView style={{ maxHeight: OPTION_LIST_MAX_H }}>
               {options.map((o) => (
                 <Pressable
                   key={o.key}
@@ -292,10 +317,20 @@ function PodiumTile({ item, size, onOpen }: { item: ChartItem; size: number; onO
           </View>
         )}
       </View>
+      {/* Rank and score share a line inside a tile whose width comes from the
+          viewport, so both have to be able to give way rather than push the
+          pair wider than the cover above them. */}
       <View style={styles.podMeta}>
-        <Text style={styles.podRank}>{item.rank}</Text>
+        <Text style={styles.podRank} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+          {item.rank}
+        </Text>
         {item.avg_score != null && (
-          <Text style={[styles.podScore, { color: songScoreColor(item.avg_score) }]}>
+          <Text
+            style={[styles.podScore, { color: songScoreColor(item.avg_score) }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            maxFontSizeMultiplier={NUM_SCALE_CAP}
+          >
             {item.avg_score.toFixed(2)}
           </Text>
         )}
@@ -307,7 +342,9 @@ function PodiumTile({ item, size, onOpen }: { item: ChartItem; size: number; onO
 }
 
 function Movement({ value }: { value: number | null }) {
-  if (value == null || value === 0) return <Text style={styles.moveFlat}>–</Text>
+  if (value == null || value === 0) {
+    return <Text style={styles.moveFlat} maxFontSizeMultiplier={NUM_SCALE_CAP}>–</Text>
+  }
   const up = value > 0
   const color = up ? colors.green : DOWN
   return (
@@ -319,7 +356,15 @@ function Movement({ value }: { value: number | null }) {
           <Triangle size={9} color={color} fill={color} />
         </View>
       )}
-      <Text style={[styles.moveNum, { color }]}>{Math.abs(value)}</Text>
+      {/* A double-digit climb is the widest this gets, and it sits beside a
+          glyph that doesn't scale — so cap it and keep it on one line. */}
+      <Text
+        style={[styles.moveNum, { color }]}
+        numberOfLines={1}
+        maxFontSizeMultiplier={NUM_SCALE_CAP}
+      >
+        {Math.abs(value)}
+      </Text>
     </View>
   )
 }
@@ -327,16 +372,26 @@ function Movement({ value }: { value: number | null }) {
 function ChartRow({ item, onOpen }: { item: ChartItem; onOpen: (id: number) => void }) {
   return (
     <Pressable style={styles.row} onPress={() => onOpen(item.album_id)}>
-      <Text style={styles.rowRank}>{item.rank}</Text>
+      <Text
+        style={styles.rowRank}
+        numberOfLines={1}
+        maxFontSizeMultiplier={NUM_SCALE_CAP}
+      >
+        {item.rank}
+      </Text>
       <View style={styles.moveCol}>
         <Movement value={item.movement} />
       </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
+      <View style={styles.rowText}>
         <Text style={styles.rowName} numberOfLines={1}>{item.album_name}</Text>
         <Text style={styles.rowArtist} numberOfLines={1}>{item.artist}</Text>
       </View>
       {item.avg_score != null && (
-        <Text style={[styles.rowScore, { color: songScoreColor(item.avg_score) }]}>
+        <Text
+          style={[styles.rowScore, { color: songScoreColor(item.avg_score) }]}
+          numberOfLines={1}
+          maxFontSizeMultiplier={NUM_SCALE_CAP}
+        >
           {item.avg_score.toFixed(2)}
         </Text>
       )}
@@ -438,9 +493,11 @@ const styles = StyleSheet.create({
   podImg: { width: '100%', height: '100%' },
   podFallback: { alignItems: 'center', justifyContent: 'center' },
   podLetter: { fontFamily: fonts.display, color: 'rgba(255,255,255,0.92)' },
-  podMeta: { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: spacing.sm },
-  podRank: { fontFamily: fonts.displayBlack, fontSize: 26, color: colors.ink },
-  podScore: { fontFamily: fonts.bodyBold, fontSize: 14 },
+  // maxWidth so the pair can never out-measure the cover it sits under, and
+  // flexShrink on the score so the rank keeps its size when it does.
+  podMeta: { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: spacing.sm, maxWidth: '100%' },
+  podRank: { flexShrink: 0, fontFamily: fonts.displayBlack, fontSize: 26, color: colors.ink },
+  podScore: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 14 },
   podName: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink, marginTop: 2, maxWidth: '100%' },
   podArtist: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
 
@@ -453,14 +510,28 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
-  rowRank: { fontFamily: fonts.displayBlack, fontSize: 19, color: colors.ink, width: 28, textAlign: 'center' },
-  moveCol: { width: 32, alignItems: 'center' },
+  // minWidth, not width: a fixed box is what forced "24" onto two lines. The
+  // column still lines up row to row at normal type sizes, and grows instead of
+  // wrapping when the glyphs get bigger.
+  rowRank: {
+    fontFamily: fonts.displayBlack,
+    fontSize: RANK_SIZE,
+    color: colors.ink,
+    minWidth: RANK_MIN_W,
+    textAlign: 'center',
+  },
+  moveCol: { minWidth: MOVE_MIN_W, alignItems: 'center' },
   moveWrap: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   moveNum: { fontFamily: fonts.bodyBold, fontSize: 10 },
   moveFlat: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkMuted },
+  // Takes the row's slack, so every other column can size to its content and
+  // this is what gives way.
+  rowText: { flex: 1, minWidth: 0 },
   rowName: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink },
   rowArtist: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
-  rowScore: { fontFamily: fonts.bodyBold, fontSize: 15, marginLeft: spacing.lg },
+  // The row already sets a gap; a second fixed margin on top of it was pure
+  // width the title could have used.
+  rowScore: { fontFamily: fonts.bodyBold, fontSize: 15, marginLeft: spacing.sm },
 
   empty: { fontFamily: fonts.body, fontSize: 14, color: colors.inkTertiary, textAlign: 'center', marginTop: spacing.xxl },
 })
