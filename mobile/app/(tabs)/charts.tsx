@@ -6,7 +6,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,10 +17,11 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { Check, ChevronDown, Triangle, X } from 'lucide-react-native'
+import { ChevronDown, Triangle, X } from 'lucide-react-native'
 import { fetchCharts, type ChartItem } from '../../lib/api'
 import { songScoreColor, avatarColor } from '@pressd/shared/types'
-import { colors, contentWidth, fonts, radii, screenHeight, spacing } from '../../theme/tokens'
+import AnchoredMenu, { type MenuOption } from '../../components/AnchoredMenu'
+import { colors, contentWidth, fonts, radii, spacing } from '../../theme/tokens'
 
 const DOWN = '#c0392b'
 
@@ -54,10 +54,6 @@ const RANK_MIN_W = Math.ceil(RANK_SIZE * NUM_SCALE_CAP * 0.62 * 2)
 // A caret, its gap, and a two-digit move at the same ceiling.
 const MOVE_MIN_W = Math.ceil(9 + 2 + 10 * NUM_SCALE_CAP * 0.6 * 2)
 
-// The filter sheet rises from the bottom, so its option list has to leave room
-// for the title, the padding and the home indicator on whatever phone it lands
-// on. 340 was fine on a tall screen and most of a short one.
-const OPTION_LIST_MAX_H = Math.min(340, Math.round(screenHeight * 0.42))
 
 /** Holds a value back until it stops changing, so a type-in filter fires one
  *  request for a name rather than one per letter. */
@@ -258,38 +254,30 @@ function FilterDropdown({
   title: string
   display: string
   active: boolean
-  options: { key: string; label: string; value: string | number; selected: boolean }[]
+  options: MenuOption[]
   onSelect: (v: string | number) => void
 }) {
   const [open, setOpen] = useState(false)
+  const ref = useRef<View>(null)
   return (
     <>
-      <Pressable style={[styles.filterBtn, active && styles.filterBtnOn]} onPress={() => setOpen(true)}>
+      <Pressable
+        ref={ref}
+        style={[styles.filterBtn, active && styles.filterBtnOn]}
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`${title}: ${display}`}
+      >
         <Text style={[styles.filterText, active && styles.filterTextOn]}>{display}</Text>
         <ChevronDown size={13} color={active ? colors.green : colors.inkTertiary} />
       </Pressable>
-      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <Pressable style={styles.sheet}>
-            <Text style={styles.sheetTitle}>{title}</Text>
-            <ScrollView style={{ maxHeight: OPTION_LIST_MAX_H }}>
-              {options.map((o) => (
-                <Pressable
-                  key={o.key}
-                  style={styles.optionRow}
-                  onPress={() => {
-                    onSelect(o.value)
-                    setOpen(false)
-                  }}
-                >
-                  <Text style={styles.optionText}>{o.label}</Text>
-                  {o.selected && <Check size={18} color={colors.green} />}
-                </Pressable>
-              ))}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <AnchoredMenu
+        visible={open}
+        anchorRef={ref}
+        options={options}
+        onSelect={onSelect}
+        onClose={() => setOpen(false)}
+      />
     </>
   )
 }
@@ -458,25 +446,6 @@ const styles = StyleSheet.create({
   // Wider than the year field — it holds a name, not four digits.
   artistInput: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.inkSecondary, minWidth: 96, padding: 0 },
 
-  backdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.4)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.bg,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    paddingTop: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxl,
-  },
-  sheetTitle: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink, marginBottom: spacing.sm },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  optionText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.ink },
 
   // Podium
   podium: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: POD_GAP, marginTop: spacing.xl, marginBottom: spacing.xxl },

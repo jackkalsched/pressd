@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
-  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -19,7 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { ArrowRight, Check, ChevronDown, Heart, MessageCircle, Triangle } from 'lucide-react-native'
+import { ArrowRight, ChevronDown, Heart, MessageCircle, Triangle } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchPredictedPicks,
@@ -33,6 +32,7 @@ import {
   type TrendingAlbum,
 } from '../../lib/api'
 import { songScoreColor, type Album } from '@pressd/shared/types'
+import AnchoredMenu from '../../components/AnchoredMenu'
 import { useAuth } from '../../lib/auth'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
@@ -65,12 +65,18 @@ function dayLabel(iso: string | null): string {
   return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
 }
 
-function SectionHead({ label, meta, onMetaPress }: { label: string; meta?: string; onMetaPress?: () => void }) {
+function SectionHead({ label, meta, onMetaPress, metaRef }: {
+  label: string
+  meta?: string
+  onMetaPress?: () => void
+  /** The meta chip doubles as a dropdown trigger; the menu anchors to it. */
+  metaRef?: React.RefObject<View | null>
+}) {
   return (
     <View style={styles.sectionHead}>
       <Text style={styles.sectionLabel}>{label}</Text>
       {meta == null ? null : onMetaPress ? (
-        <Pressable style={styles.sectionMetaBtn} onPress={onMetaPress} hitSlop={8}>
+        <Pressable ref={metaRef} style={styles.sectionMetaBtn} onPress={onMetaPress} hitSlop={8}>
           <Text style={styles.sectionMetaBtnText}>{meta}</Text>
           <ChevronDown size={12} color={colors.green} />
         </Pressable>
@@ -90,6 +96,7 @@ export default function ForYou() {
   const [refreshing, setRefreshing] = useState(false)
   const [trendMode, setTrendMode] = useState<'week' | 'top'>('week')
   const [trendPickerOpen, setTrendPickerOpen] = useState(false)
+  const trendChipRef = useRef<View>(null)
   const [trendBlockY, setTrendBlockY] = useState(0)
 
   const { data: listening = [], refetch: refetchListening } = useQuery({
@@ -375,6 +382,7 @@ export default function ForYou() {
               label="PRESSD TRENDING"
               meta={trendMode === 'week' ? 'This week' : 'All time'}
               onMetaPress={() => setTrendPickerOpen(true)}
+              metaRef={trendChipRef}
             />
             {trending.map((t, i) => (
               <TrendRow
@@ -423,24 +431,18 @@ export default function ForYou() {
         )}
       </Animated.ScrollView>
 
-      {/* Pressd Trending range dropdown */}
-      <Modal visible={trendPickerOpen} transparent animationType="slide" onRequestClose={() => setTrendPickerOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setTrendPickerOpen(false)}>
-          <Pressable style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Pressd Trending</Text>
-            {([['week', 'This week'], ['top', 'All time']] as const).map(([key, label]) => (
-              <Pressable
-                key={key}
-                style={styles.optionRow}
-                onPress={() => { setTrendMode(key); setTrendPickerOpen(false) }}
-              >
-                <Text style={styles.optionText}>{label}</Text>
-                {trendMode === key && <Check size={18} color={colors.green} />}
-              </Pressable>
-            ))}
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {/* Pressd Trending range — anchored to the chip that opens it */}
+      <AnchoredMenu
+        visible={trendPickerOpen}
+        anchorRef={trendChipRef}
+        align="right"
+        options={[
+          { key: 'week', label: 'This week', value: 'week', selected: trendMode === 'week' },
+          { key: 'top', label: 'All time', value: 'top', selected: trendMode === 'top' },
+        ]}
+        onSelect={(v) => setTrendMode(v as 'week' | 'top')}
+        onClose={() => setTrendPickerOpen(false)}
+      />
     </SafeAreaView>
   )
 }

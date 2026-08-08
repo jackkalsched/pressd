@@ -6,7 +6,6 @@ import { useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
-  Modal,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -18,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { Check, ChevronDown, Search, Settings, X } from 'lucide-react-native'
+import { ChevronDown, Search, Settings, X } from 'lucide-react-native'
 import {
   fetchAlbums,
   fetchSummary,
@@ -32,6 +31,7 @@ import { useAuth } from '../../lib/auth'
 import StatsView from '../../components/StatsView'
 import ProfileBanner from '../../components/ProfileBanner'
 import SettingsSheet from '../../components/SettingsSheet'
+import AnchoredMenu from '../../components/AnchoredMenu'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const GAP = 10
@@ -135,6 +135,7 @@ export default function Profile() {
   const [rankMetric, setRankMetric] = useState('score')
   const [rankDir, setRankDir] = useState<'asc' | 'desc'>('desc')
   const [rankSearch, setRankSearch] = useState('')
+  const metricBtnRef = useRef<View>(null)
   // Kept separate from the Rankings search so switching sub-tabs doesn't carry
   // one filter into a list it wasn't typed for. It does persist across the
   // Rated / Listening / To Listen chips, though — those are three views of one
@@ -410,7 +411,7 @@ export default function Profile() {
                       </Pressable>
                     ))}
                   </View>
-                  <Pressable style={styles.metricBtn} onPress={() => setMetricOpen(true)}>
+                  <Pressable ref={metricBtnRef} style={styles.metricBtn} onPress={() => setMetricOpen(true)}>
                     <Text style={styles.metricBtnText}>
                       {currentMetric.label} {rankDir === 'desc' ? '↓' : '↑'}
                     </Text>
@@ -503,38 +504,32 @@ export default function Profile() {
       />
 
       {/* Metric picker: tap a new metric to sort by it (descending), tap the
-          selected one again to flip the order. */}
-      <Modal visible={metricOpen} transparent animationType="slide" onRequestClose={() => setMetricOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setMetricOpen(false)}>
-          <Pressable style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Sort by</Text>
-            {rankMetrics.map((m) => {
-              const on = m.key === currentMetric.key
-              return (
-                <Pressable
-                  key={m.key}
-                  style={styles.optionRow}
-                  onPress={() => {
-                    if (on) setRankDir((d) => (d === 'desc' ? 'asc' : 'desc'))
-                    else {
-                      setRankMetric(m.key)
-                      setRankDir('desc')
-                    }
-                    setMetricOpen(false)
-                  }}
-                >
-                  <Text style={styles.optionText}>
-                    {m.label}
-                    {on ? `  ${rankDir === 'desc' ? '↓' : '↑'}` : ''}
-                  </Text>
-                  {on && <Check size={18} color={colors.green} />}
-                </Pressable>
-              )
-            })}
-            <Text style={styles.sheetHint}>Tap the selected metric again to flip the order.</Text>
-          </Pressable>
-        </Pressable>
-      </Modal>
+          selected one again to flip the order. Right-aligned — the chip sits at
+          the end of its row, so the menu opens inward. */}
+      <AnchoredMenu
+        visible={metricOpen}
+        anchorRef={metricBtnRef}
+        align="right"
+        options={rankMetrics.map((m) => {
+          const on = m.key === currentMetric.key
+          return {
+            key: m.key,
+            // The arrow rides on the label rather than needing a second slot —
+            // it only ever appears on the one selected row.
+            label: on ? `${m.label}  ${rankDir === 'desc' ? '↓' : '↑'}` : m.label,
+            value: m.key,
+            selected: on,
+          }
+        })}
+        onSelect={(v) => {
+          if (v === currentMetric.key) setRankDir((d) => (d === 'desc' ? 'asc' : 'desc'))
+          else {
+            setRankMetric(String(v))
+            setRankDir('desc')
+          }
+        }}
+        onClose={() => setMetricOpen(false)}
+      />
 
       <SettingsSheet visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </View>
