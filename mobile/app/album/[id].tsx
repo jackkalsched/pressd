@@ -37,6 +37,7 @@ import {
   deleteReview,
   toggleLike,
   type CommunityAlbum as CommunityAlbumData,
+  type CommunityTrack,
 } from '../../lib/api'
 import { songScoreColor, avatarColor, EP_MAX_TRACKS, type Album, type Song } from '@pressd/shared/types'
 import { normalizeTrackTitle } from '@pressd/shared/albumSearch'
@@ -46,6 +47,8 @@ import AlbumBackdrop from '../../components/AlbumBackdrop'
 import BangSkip from '../../components/BangSkip'
 import ScoreDial from '../../components/ScoreDial'
 import ShareCard from '../../components/ShareCard'
+import RecommendSheet from '../../components/RecommendSheet'
+import NoComparisonYet from '../../components/NoComparisonYet'
 import { confirmDeleteAlbum, useDeleteAlbum } from '../../lib/useDeleteAlbum'
 import { colors, contentWidth, fitType, fonts, radii, spacing } from '../../theme/tokens'
 
@@ -54,6 +57,8 @@ const WINDOW_H = Dimensions.get('window').height
 // Destructive red, shared by every delete control so removing a record looks
 // the same wherever you reach it from.
 const DANGER = '#b91c1c'
+// The recommendation accent, shared with the star on a recommended cover.
+const RECOMMEND = '#f97316'
 
 // The album average and the prediction are two readings of one thing, so they
 // are set at one size. Both the filled numeral and the stroked one read from
@@ -257,6 +262,7 @@ export default function AlbumDetail() {
 
   // Above the early returns for the same reason useDeleteAlbum is.
   const [sharing, setSharing] = useState(false)
+  const [recommending, setRecommending] = useState(false)
 
   if (isCommunity) {
     if (communityLoading) {
@@ -465,6 +471,20 @@ export default function AlbumDetail() {
             <Share2 size={17} color={colors.green} />
           </Pressable>
         )}
+        {/* Only a record you've finished, and only your own copy: passing on an
+            album you haven't scored is a suggestion with nothing behind it, and
+            a friend's copy isn't yours to send. Same condition the desktop
+            detail page uses. */}
+        {isMine && album.status === 'rated' && (
+          <Pressable
+            style={styles.recommendBtn}
+            onPress={() => setRecommending(true)}
+            hitSlop={10}
+            accessibilityLabel={`Recommend ${album.albumName} to a friend`}
+          >
+            <Star size={17} color={RECOMMEND} fill={RECOMMEND} />
+          </Pressable>
+        )}
         {/* Sits last in the bar, away from Back and Compare — destructive, so
             it shouldn't be adjacent to anything you tap on the way in. */}
         {isMine && (
@@ -541,6 +561,22 @@ export default function AlbumDetail() {
           </Text>
         </View>
 
+        {/* Why it's on your shelf, from the person who put it there. Sits above
+            the tracklist because it's the reason you're looking at this at all —
+            and without somewhere to read it, the note the sender wrote would be
+            stored and never seen. */}
+        {album.recommendedByName && (
+          <View style={styles.recCard}>
+            <View style={styles.recHead}>
+              <Star size={13} color={RECOMMEND} fill={RECOMMEND} />
+              <Text style={styles.recFrom}>Recommended by {album.recommendedByName}</Text>
+            </View>
+            {album.recommendationNote ? (
+              <Text style={styles.recNote}>“{album.recommendationNote}”</Text>
+            ) : null}
+          </View>
+        )}
+
         {factors.length > 0 && isRated && (
           <View style={styles.factorRow}>
             {factors.map((f) => (
@@ -580,6 +616,12 @@ export default function AlbumDetail() {
         <CommentThread albumId={albumId} />
       </Animated.ScrollView>
       </SafeAreaView>
+
+      <RecommendSheet
+        album={album}
+        visible={recommending}
+        onClose={() => setRecommending(false)}
+      />
     </View>
   )
 }
@@ -630,7 +672,11 @@ function CommunityAlbum({
   const [deleting, setDeleting] = useState(false)
   const notRated = data.your_status !== 'rated'
   const inLibrary = data.your_album_id != null
-  const canCompare = data.you?.score != null && data.avg_score != null
+  // Someone other than you has to have rated it. Without that check the button
+  // appeared on a record only you had scored, and opened a side-by-side of your
+  // score against a "Pressd average" that was your score.
+  const noOneElse = data.others_rater_count === 0
+  const canCompare = data.you?.score != null && data.avg_score != null && !noOneElse
   const subs = [data.sub_genre1, data.sub_genre2, data.sub_genre3].filter(Boolean) as string[]
   const raters = `${data.rater_count} ${data.rater_count === 1 ? 'rater' : 'raters'}`
 
@@ -657,11 +703,23 @@ function CommunityAlbum({
             <Text style={styles.compareBtnText}>My Rating</Text>
           </Pressable>
         ) : null}
-        {/* Only the way in lives up here — the comparison itself carries its own
-            pair of exits, so there's no second Average control competing. */}
         {canCompare && !comparing ? (
           <Pressable style={styles.compareBtn} onPress={() => setComparing(true)} hitSlop={8}>
             <Text style={styles.compareBtnText}>Compare</Text>
+          </Pressable>
+        ) : null}
+        {/* The comparison's two exits, in the bar rather than halfway down the
+            page. Every other screen keeps its controls in this corner, and a
+            fork buried under the verdict meant scrolling to leave a view you
+            could enter from up here. */}
+        {comparing && onOpenYours ? (
+          <Pressable style={[styles.compareBtn, styles.compareBtnFlex]} onPress={onOpenYours} hitSlop={8}>
+            <Text style={styles.compareBtnText} numberOfLines={1}>Your Rating</Text>
+          </Pressable>
+        ) : null}
+        {comparing ? (
+          <Pressable style={[styles.compareBtn, styles.compareBtnFlex]} onPress={() => setComparing(false)} hitSlop={8}>
+            <Text style={styles.compareBtnText} numberOfLines={1}>Average Rating</Text>
           </Pressable>
         ) : null}
         {/* Removing an unrated copy lives here rather than on the library tile:
@@ -694,18 +752,23 @@ function CommunityAlbum({
     </View>
   )
 
-  if (comparing && data.you) {
+  if (comparing && data.you && !noOneElse) {
     const you = data.you
     const pos = (v: number) => ((Math.max(5, Math.min(10, v)) - 5) / 5) * 100
-    const avgScore = data.avg_score!
+    // Everyone but you. `avg_score` pools your own copy in, so a panel headed
+    // "PRESSD USERS | YOU" was counting the reader on both sides — on a record
+    // with one other rater that halves the gap exactly.
+    const avgScore = data.others_avg_score ?? data.avg_score!
+    const cmpRaters = data.others_rater_count || data.rater_count
     const yourScore = you.score!
     const diff = yourScore - avgScore
     const youLeft = yourScore <= avgScore
 
-    const rated = data.tracks.filter((t) => t.avg_score != null && t.your_score != null)
+    const otherScore = (t: CommunityTrack) => t.others_avg_score ?? t.avg_score
+    const rated = data.tracks.filter((t) => otherScore(t) != null && t.your_score != null)
     let widest: { title: string; gap: number } | null = null
     for (const t of rated) {
-      const gap = Math.abs(t.your_score! - t.avg_score!)
+      const gap = Math.abs(t.your_score! - otherScore(t)!)
       if (!widest || gap > widest.gap) widest = { title: t.title, gap }
     }
 
@@ -754,12 +817,12 @@ function CommunityAlbum({
               <View style={styles.cmpScores}>
                 <View style={styles.cmpScoreCol}>
                   <Text style={[styles.cmpWho, { color: left.head }]} numberOfLines={1}>{left.label}</Text>
-                  <Text style={[styles.cmpScore, { color: left.color }]} numberOfLines={1} adjustsFontSizeToFit>{left.score.toFixed(2)}</Text>
+                  <Text style={[styles.cmpScore, { color: left.color }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{left.score.toFixed(2)}</Text>
                 </View>
                 <View style={[styles.cmpDivider, { backgroundColor: 'rgba(45,106,79,0.25)' }]} />
                 <View style={styles.cmpScoreCol}>
                   <Text style={[styles.cmpWho, { color: right.head }]} numberOfLines={1}>{right.label}</Text>
-                  <Text style={[styles.cmpScore, { color: right.color }]} numberOfLines={1} adjustsFontSizeToFit>{right.score.toFixed(2)}</Text>
+                  <Text style={[styles.cmpScore, { color: right.color }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{right.score.toFixed(2)}</Text>
                 </View>
               </View>
 
@@ -782,14 +845,9 @@ function CommunityAlbum({
                 after={` ${diff > 0 ? 'above' : 'below'} the Pressd average`}
                 widest={widest}
               />
-              <Text style={styles.cmpRaters}>Averaged across {raters}</Text>
-            </View>
-
-            {/* Either side of the comparison in full, so this screen forks
-                rather than dead-ends. */}
-            <View style={styles.cmpFork}>
-              {onOpenYours && <ForkBtn label="Your rating" onPress={onOpenYours} />}
-              <ForkBtn label="Average rating" onPress={() => setComparing(false)} />
+              <Text style={styles.cmpRaters}>
+                Averaged across {cmpRaters} other {cmpRaters === 1 ? 'rater' : 'raters'}
+              </Text>
             </View>
 
             <View style={styles.cmpTracksHead}>
@@ -801,8 +859,8 @@ function CommunityAlbum({
               </Text>
             </View>
             {data.tracks.map((t, i) => {
-              const leftVal = youLeft ? t.your_score : t.avg_score
-              const rightVal = youLeft ? t.avg_score : t.your_score
+              const leftVal = youLeft ? t.your_score : otherScore(t)
+              const rightVal = youLeft ? otherScore(t) : t.your_score
               return (
                 <View key={`${t.title}-${i}`} style={[styles.cmpTrackRow, i > 0 && styles.cmpTrackDivider]}>
                   <Text style={styles.cmpTrackNum}>{t.track_number}</Text>
@@ -880,6 +938,31 @@ function CommunityAlbum({
               </>
             )}
           </View>
+
+          {/* You've scored it and nobody else has, so there is no comparison to
+              draw — say why, and point at the thing that would create one. */}
+          {data.you?.score != null && noOneElse && (
+            <View style={{ marginTop: spacing.lg }}>
+              <NoComparisonYet
+                title={`No one else has rated ${data.album_name} :(. Recommend it to a friend!`}
+              />
+            </View>
+          )}
+
+          {/* Same card the personal view carries. It reads off your own copy,
+              so it says why this record is on your shelf — which is worth
+              knowing here too, where the decision to rate it gets made. */}
+          {data.recommended_by_name && (
+            <View style={styles.recCard}>
+              <View style={styles.recHead}>
+                <Star size={13} color={RECOMMEND} fill={RECOMMEND} />
+                <Text style={styles.recFrom}>Recommended by {data.recommended_by_name}</Text>
+              </View>
+              {data.recommendation_note ? (
+                <Text style={styles.recNote}>“{data.recommendation_note}”</Text>
+              ) : null}
+            </View>
+          )}
 
           {factors.some((f) => f.value != null) && (
             <View style={styles.factorRow}>
@@ -1159,12 +1242,12 @@ function FriendCompare({
             <View style={styles.cmpScores}>
               <View style={styles.cmpScoreCol}>
                 <Text style={[styles.cmpWho, { color: left.head }]} numberOfLines={1}>{left.label}</Text>
-                <Text style={[styles.cmpScore, { color: left.color }]} numberOfLines={1} adjustsFontSizeToFit>{left.score.toFixed(2)}</Text>
+                <Text style={[styles.cmpScore, { color: left.color }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{left.score.toFixed(2)}</Text>
               </View>
               <View style={[styles.cmpDivider, { backgroundColor: tint(color, 0.25) }]} />
               <View style={styles.cmpScoreCol}>
                 <Text style={[styles.cmpWho, { color: right.head }]} numberOfLines={1}>{right.label}</Text>
-                <Text style={[styles.cmpScore, { color: right.color }]} numberOfLines={1} adjustsFontSizeToFit>{right.score.toFixed(2)}</Text>
+                <Text style={[styles.cmpScore, { color: right.color }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{right.score.toFixed(2)}</Text>
               </View>
             </View>
 
@@ -1376,8 +1459,11 @@ const styles = StyleSheet.create({
   },
   // Compare and the delete control travel together at the right, so the bar
   // still reads as one edge no matter which of them is showing.
-  topBarRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  topBarRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1, minWidth: 0 },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 },
+  // Two word-labels ride this bar in the comparison; at a large text size they
+  // give way rather than pushing Back off the screen.
+  compareBtnFlex: { flexShrink: 1, minWidth: 0 },
   backText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.inkSecondary },
   ownerTag: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
   ownerPfp: {
@@ -1533,6 +1619,36 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(45,106,79,0.20)',
     borderWidth: 1,
     borderColor: 'rgba(45,106,79,0.38)',
+  },
+  recCard: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: 'rgba(249,115,22,0.30)',
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    marginTop: spacing.lg,
+  },
+  recHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  recFrom: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: '#c2410c' },
+  recNote: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.inkSecondary,
+    marginTop: 6,
+  },
+  // Same shape as Share, in the recommendation orange rather than the brand
+  // green, so the two read as siblings without reading as the same action.
+  recommendBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(249,115,22,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(249,115,22,0.40)',
   },
   deleteBtn: {
     width: 34,

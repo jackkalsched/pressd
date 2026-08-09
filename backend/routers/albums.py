@@ -120,7 +120,23 @@ def get_album(
     if not album:
         raise HTTPException(status_code=404, detail="Album not found")
     authorize_view(user, album.user_id, session)
-    return {**album.model_dump(), "songs": [s.model_dump() for s in album.songs]}
+    # Whether a comparison exists to make. Counted here rather than left to the
+    # client, which would otherwise have to pull the whole pooled community
+    # payload — tracks and all — just to learn whether the number is zero.
+    others = session.exec(
+        select(func.count(func.distinct(Album.user_id))).where(
+            func.lower(func.trim(Album.album_name)) == (album.album_name or "").strip().lower(),
+            func.lower(func.trim(Album.artist)) == (album.artist or "").strip().lower(),
+            Album.status == "rated",
+            Album.score.is_not(None),
+            Album.user_id != user.id,
+        )
+    ).one()
+    return {
+        **album.model_dump(),
+        "others_rater_count": others,
+        "songs": [s.model_dump() for s in album.songs],
+    }
 
 
 @router.post("/")
@@ -698,6 +714,11 @@ def _copy_songs(session: Session, source: Album, target: Album) -> int:
     return n
 
 
+# Long enough for a real reason, short enough to read on a shelf row without
+# becoming a review — that's what the review field is for.
+RECOMMENDATION_NOTE_MAX = 280
+
+
 @router.post("/{album_id}/recommend")
 def recommend_album(
     album_id: int,
@@ -714,6 +735,16 @@ def recommend_album(
     if not friend_id or friend_id == user.id or not are_friends(session, user.id, friend_id):
         raise HTTPException(status_code=403, detail="You can only recommend to friends")
 
+    # Optional — a recommendation with nothing said about it is still a
+    # recommendation, so an empty note stores as null rather than "".
+    note = (data.get("note") or "").strip()
+    if len(note) > RECOMMENDATION_NOTE_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Keep your note to {RECOMMENDATION_NOTE_MAX} characters or fewer",
+        )
+    note = note or None
+
     # The tracklist is half of what's being sent. Without one the recipient
     # gets a shell that opens into a rating screen it can never submit, which
     # is worse than the recommendation simply not going through.
@@ -729,6 +760,10 @@ def recommend_album(
         existing.recommended_by = recommender_id
         existing.recommended_by_name = recommender.name
         existing.recommended_at = datetime.utcnow()
+        # Overwritten wholesale, including back to null: this stamp records the
+        # latest recommendation, so a new one sending no note must not leave the
+        # previous sender's words attached to it.
+        existing.recommendation_note = note
 
         # The copy they already held may be a shell — added by name, or cloned
         # before the source had a tracklist. Stamping it and stopping there is
@@ -778,6 +813,7 @@ def recommend_album(
         recommended_by=recommender_id,
         recommended_by_name=recommender.name,
         recommended_at=datetime.utcnow(),
+        recommendation_note=note,
     )
     session.commit()
     session.refresh(new_album)
@@ -865,7 +901,8 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
     buckets: dict[str, dict] = {}
     for s in sorted(base.songs, key=lambda s: s.track_number or 0) if base else []:
         buckets[norm(s.title)] = {
-            "title": s.title, "track_number": s.track_number, "scores": [], "your_score": None,
+            "title": s.title, "track_number": s.track_number,
+            "scores": [], "others": [], "your_score": None,
         }
     for c in copies:
         for s in c.songs:
@@ -875,13 +912,21 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
             b = buckets.get(key)
             if b is None:
                 b = buckets.setdefault(key, {
-                    "title": s.title, "track_number": s.track_number, "scores": [], "your_score": None,
+                    "title": s.title, "track_number": s.track_number,
+                    "scores": [], "others": [], "your_score": None,
                 })
             else:
                 b["title"] = _fuller_title(b["title"], s.title)
             b["scores"].append(s.score)
             if c.user_id == user.id:
                 b["your_score"] = s.score
+            else:
+                # Kept apart from `scores` so a side-by-side can put you on one
+                # side and everyone else on the other. Pooling both into one
+                # figure and labelling it "Pressd users" put the reader inside
+                # the group they were being measured against, which halves every
+                # gap on a two-rater record.
+                b["others"].append(s.score)
 
     tracks = [
         {
@@ -889,6 +934,8 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
             "track_number": b["track_number"],
             "avg_score": avg(b["scores"]),
             "rater_count": len(b["scores"]),
+            "others_avg_score": avg(b["others"]),
+            "others_rater_count": len(b["others"]),
             "your_score": b["your_score"],
         }
         for b in sorted(buckets.values(), key=lambda b: (b["track_number"] or 999, b["title"]))
@@ -921,6 +968,14 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
         "sub_genre2": pick("sub_genre2"),
         "sub_genre3": pick("sub_genre3"),
         "rater_count": len({c.user_id for c in copies if c.user_id is not None}),
+        # Everyone but you. rater_count includes your own copy, so on a record
+        # only you have rated it reads 1 and the pooled average is your own
+        # score — which let the compare view offer a side-by-side of you
+        # against yourself and report exact agreement.
+        "others_rater_count": len(
+            {c.user_id for c in copies if c.user_id is not None and c.user_id != user.id}
+        ),
+        "others_avg_score": avg([c.score for c in copies if c.user_id != user.id]),
         "avg_score": avg([c.score for c in copies]),
         "avg_theme": avg([c.theme for c in copies]),
         "avg_replay_value": avg([c.replay_value for c in copies]),
@@ -930,6 +985,11 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
         "your_album_id": mine_any.id if mine_any else None,
         "your_status": mine_any.status if mine_any else None,
         "predicted_score": mine_any.predicted_score if mine_any else None,
+        # Off your own copy, not the pooled record: a recommendation is made to
+        # one person, so it has no meaning on the userbase view of an album
+        # except as "this is why it's on your shelf".
+        "recommended_by_name": mine_any.recommended_by_name if mine_any else None,
+        "recommendation_note": mine_any.recommendation_note if mine_any else None,
         "you": None if mine is None else {
             "album_id": mine.id,
             "score": mine.score,

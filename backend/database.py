@@ -120,6 +120,8 @@ def init_db():
             "UPDATE pressuser SET distinctness_pts = 5 WHERE distinctness_pts IS NULL",
             # ── Tie-break: which track wins when several share the top score ──
             "ALTER TABLE album ADD COLUMN top_song_id INTEGER",
+            # ── A note carried alongside a recommendation ──
+            "ALTER TABLE album ADD COLUMN recommendation_note VARCHAR",
             # ── Profile favourites: one album, one song, one artist ──
             "ALTER TABLE pressuser ADD COLUMN favorite_album_id INTEGER",
             "ALTER TABLE pressuser ADD COLUMN favorite_song_id INTEGER",

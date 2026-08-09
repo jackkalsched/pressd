@@ -94,9 +94,11 @@ function transformAlbum(a: Record<string, unknown>): Album {
     predictedScore: a.predicted_score as number | null ?? null,
     recommendedBy: a.recommended_by as number | null ?? null,
     recommendedByName: a.recommended_by_name as string | null ?? null,
+    recommendationNote: a.recommendation_note as string | null ?? null,
     review: a.review as string | null ?? null,
     reviewAt: a.review_at as string | null ?? null,
     topSongId: (a.top_song_id as number | null) ?? null,
+    othersRaterCount: (a.others_rater_count as number | undefined) ?? 0,
     songs,
   }
 }
@@ -348,6 +350,9 @@ export async function importAlbum(
 // The userbase's averaged view of an album — what generic entry points
 // (trending, charts) open, since those aren't tied to any one person's copy.
 export interface CommunityTrack {
+  /** Per-track equivalents of the album-level `others_*` fields. */
+  others_avg_score?: number | null
+  others_rater_count?: number
   title: string
   track_number: number | null
   avg_score: number | null
@@ -367,6 +372,12 @@ export interface CommunityAlbum {
   sub_genre2: string | null
   sub_genre3: string | null
   rater_count: number
+  /** Raters other than you. Zero means there is nobody to compare against,
+   *  however many `rater_count` claims. */
+  others_rater_count: number
+  /** The pooled score with your own copy left out — the figure a side-by-side
+   *  must use, so "Pressd users" and "You" are disjoint. */
+  others_avg_score: number | null
   avg_score: number | null
   avg_theme: number | null
   avg_replay_value: number | null
@@ -377,6 +388,9 @@ export interface CommunityAlbum {
   your_album_id: number | null
   your_status: 'to_listen' | 'listening' | 'rated' | null
   predicted_score: number | null
+  /** From your own copy — who sent you this album and what they said. */
+  recommended_by_name: string | null
+  recommendation_note: string | null
   you: {
     album_id: number
     score: number | null
@@ -842,11 +856,25 @@ export interface ArtistPopulationSlice {
   small_sample: boolean
   genre: string | null
   subgenres: string[]
+  /** population='both' only — everyone else's raw song scores for this artist,
+   *  so the compare view can draw their distribution against yours. */
+  song_scores?: number[]
 }
 
 /** Which rating set the page is showing: your library, all of Pressd pooled,
  *  or yours with the userbase's attached for comparison. */
 export type ArtistPopulation = 'me' | 'global' | 'both'
+
+/** How far one of your song scores sits from the pooled Press'd score for the
+ *  same track. Positive means you rate it higher than the crowd. */
+export interface SongGap {
+  title: string
+  mine: number
+  theirs: number
+  diff: number
+  /** How many other people rated it — the pooled figure excludes you. */
+  raters: number
+}
 
 export interface ArtistDetail {
   artist: string
@@ -878,6 +906,19 @@ export interface ArtistDetail {
   w_song_plus_rank_of: number
   percentiles: ArtistPercentiles
   song_scores: number[]
+  /** Placement by songs rated within this payload's scope — site-wide when
+   *  population='global'. `genre_*` is the same ranking inside their own genre. */
+  popularity_rank: number | null
+  popularity_of: number
+  genre_popularity_rank: number | null
+  genre_popularity_of: number
+  popularity_genre: string | null
+  /** Cover art for this artist from anywhere in Press'd, newest first. Lets the
+   *  header show covers for an artist you've barely rated, or not at all. */
+  catalog_art?: { album_name: string; album_art_url: string; year: number | null }[]
+  /** population='both' only. One row per track you and at least one other
+   *  person have both rated, biggest disagreement first. */
+  song_gaps?: SongGap[]
   albums: {
     id: number
     album_name: string
@@ -927,6 +968,26 @@ export async function fetchScatterData(userId = 1, beforeDate?: string): Promise
   const params = new URLSearchParams({ user_id: String(userId) })
   if (beforeDate) params.set('before_date', beforeDate)
   const res = await apiFetch(`${BASE()}/stats/scatter?${params}`)
+  return res.json()
+}
+
+/** One neighbouring artist and the single track you split from Press'd on most.
+ *  "Neighbouring" is shared canonical genre, ranked by subgenre overlap. */
+export interface SimilarArtistComparison {
+  artist: string
+  image_url: string | null
+  shared_subgenres: number
+  top_gap: { title: string; diff: number }
+}
+
+export async function fetchSimilarArtistComparisons(
+  artist: string,
+  userId: number,
+): Promise<SimilarArtistComparison[]> {
+  const res = await apiFetch(
+    `${BASE()}/stats/artist/${encodeURIComponent(artist)}/similar?user_id=${userId}`,
+  )
+  if (!res.ok) return []
   return res.json()
 }
 
@@ -1282,11 +1343,21 @@ export async function deleteOwnAccount(): Promise<void> {
   }
 }
 
-export async function recommendAlbum(albumId: number, friendId: number, recommenderId: number): Promise<{ alreadyExisted: boolean }> {
+/** Send an album to a friend's To Listen shelf. `note` is the optional line the
+ *  sender writes about why — it rides on the recipient's copy, so two friends
+ *  sending the same record each carry their own. */
+export const RECOMMENDATION_NOTE_MAX = 280
+
+export async function recommendAlbum(
+  albumId: number,
+  friendId: number,
+  recommenderId: number,
+  note?: string,
+): Promise<{ alreadyExisted: boolean }> {
   const res = await apiFetch(`${BASE()}/albums/${albumId}/recommend`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ friend_id: friendId, recommender_id: recommenderId }),
+    body: JSON.stringify({ friend_id: friendId, recommender_id: recommenderId, note }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))

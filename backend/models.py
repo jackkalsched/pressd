@@ -113,6 +113,10 @@ class Album(SQLModel, table=True):
     recommended_by: Optional[int] = None
     recommended_by_name: Optional[str] = None
     recommended_at: Optional[datetime] = None  # when the recommendation was made (feed event)
+    # What the sender said about it. Stored on the recipient's copy, next to who
+    # sent it — the note belongs to the act of recommending, not to the record,
+    # so two friends sending the same album each carry their own.
+    recommendation_note: Optional[str] = None
 
     # Long-form review — optional prose attached to this album rating.
     review: Optional[str] = None

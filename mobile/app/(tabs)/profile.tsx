@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { ChevronDown, Search, Settings, X } from 'lucide-react-native'
+import { ChevronDown, Search, Settings, Star, X } from 'lucide-react-native'
 import {
   fetchAlbums,
   fetchSummary,
@@ -36,6 +36,8 @@ import AnchoredMenu from '../../components/AnchoredMenu'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const GAP = 10
+// The recommendation accent, shared with the Recommend control on album detail.
+const RECOMMEND = '#f97316'
 
 // Score-badge color relative to the user's own mean/sd, matching the desktop
 // AlbumCard: amber at the mean → dark green above (+2.5 SD), dark red below.
@@ -564,6 +566,13 @@ function AlbumCell({
             <Text style={styles.artInitial}>{album.albumName[0]?.toUpperCase()}</Text>
           </View>
         )}
+        {/* Top-left, because the prediction badge holds the top-right on the
+            same shelf — a recommended To Listen album shows both at once. */}
+        {album.recommendedBy != null && (
+          <View style={styles.recBadge}>
+            <Star size={11} color={RECOMMEND} fill={RECOMMEND} />
+          </View>
+        )}
         {/* Rated: desktop-style white pill, colored text + border (top-right) */}
         {showScore ? (
           <View style={[styles.scoreBadge, { borderColor: badge! }]}>
@@ -707,6 +716,20 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   scoreBadgeText: { fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: -0.2 },
+  // White disc so the star reads on dark art, mirroring the desktop card.
+  recBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: radii.pill,
+    padding: 4,
+    shadowColor: '#321e0a',
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
   predBadge: {
     position: 'absolute',
     top: 6,

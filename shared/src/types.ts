@@ -45,6 +45,11 @@ export interface Album {
   predictedScore: number | null
   recommendedBy: number | null
   recommendedByName: string | null
+  /** What the sender said when they passed it on, if anything. */
+  recommendationNote: string | null
+  /** People other than you who have rated this record. Zero means there is no
+   *  comparison to offer. Only populated by the single-album fetch. */
+  othersRaterCount: number
   review: string | null
   reviewAt: string | null
   /** The track the user picked when several tied for the album's best
