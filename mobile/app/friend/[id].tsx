@@ -29,6 +29,7 @@ import {
 } from '../../lib/api'
 import { songScoreColor, type Album } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
+import { useProfile } from '../../lib/picks'
 import StatsView from '../../components/StatsView'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import { ArtistRankRow, RatingRow } from '../../components/RatingsRows'
@@ -63,6 +64,12 @@ function topTags(tags: (string | null)[], n: number): string[] {
   const counts = new Map<string, number>()
   for (const t of tags) if (t) counts.set(t, (counts.get(t) ?? 0) + 1)
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([t]) => t)
+}
+
+/** The picks heading on someone else's page. "MY PICKS" here would be reading
+ *  the wrong person's profile back at you, so the name carries it instead. */
+function possessive(name: string): string {
+  return /s$/i.test(name) ? `${name}'` : `${name}'s`
 }
 
 export default function FriendProfile() {
@@ -125,6 +132,9 @@ export default function FriendProfile() {
     enabled: Number.isFinite(fid),
     staleTime: 5 * 60_000,
   })
+  // Their picks — the same endpoint your own page reads, so the row renders
+  // identically here. No onPickPress: someone else's cards aren't editable.
+  const { data: profile } = useProfile(Number.isFinite(fid) ? fid : undefined)
   const badgeMu = scoreRange?.mu ?? 7.0
   const badgeSd = scoreRange?.sd ?? 1.0
 
@@ -268,6 +278,9 @@ export default function FriendProfile() {
               genres={topGenres}
               subgenres={topSubgenres}
               topInset={insets.top + 22}
+              bio={person.bio}
+              profile={profile}
+              picksHeading={`${possessive(person.name)} picks`}
               action={
                 <Pressable
                   style={[styles.friendBtn, isFriend && styles.friendBtnOn]}
@@ -283,8 +296,6 @@ export default function FriendProfile() {
                 </Pressable>
               }
             />
-
-            {person.bio ? <Text style={styles.bio}>{person.bio}</Text> : null}
 
             <View style={styles.tabBar}>
               {TABS.map(({ key, label }) => (

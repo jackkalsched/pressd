@@ -1,4 +1,5 @@
-// Settings — a bottom sheet off the Profile banner. Its main job is sign-in
+// Settings — a bottom sheet off the Profile banner. It carries the profile
+// itself (name, picture, the three picks) and, its other main job, sign-in
 // methods: an account reached only through Apple and one reached only through
 // Google are two different accounts, so linking both here is what lets someone
 // come back either way (see the Hide My Email note in mobile/TESTFLIGHT.md).
@@ -12,16 +13,28 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native'
 import * as Google from 'expo-auth-session/providers/google'
 import * as AppleAuthentication from 'expo-apple-authentication'
+import * as ImagePicker from 'expo-image-picker'
+import { Image } from 'expo-image'
+import { useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Apple, Check, LogOut, Trash2, X } from 'lucide-react-native'
+import { Apple, Check, ChevronRight, LogOut, Trash2, X } from 'lucide-react-native'
 import { fetchLinkedProviders, unlinkProvider, deleteOwnAccount } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useProfile } from '../lib/picks'
 import { colors, fonts, radii, spacing } from '../theme/tokens'
+
+// The server owns the avatar's final shape — it crops, resizes to 512², strips
+// EXIF and re-encodes — so this only has to hand it something reasonable.
+// `quality` is the one lever worth pulling here: uploads travel as base64, so
+// every byte costs a third more on the wire, and a camera-roll original is
+// several megabytes before compression.
+const AVATAR_UPLOAD_QUALITY = 0.8
 
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
 
@@ -53,12 +66,17 @@ function GoogleConnectButton({
 }
 
 export default function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { user, signOut, linkGoogleToken, linkAppleToken } = useAuth()
+  const { user, signOut, linkGoogleToken, linkAppleToken, updateProfile, uploadAvatarImage, removeAvatar } = useAuth()
+  const router = useRouter()
   const qc = useQueryClient()
   const [busy, setBusy] = useState<'google' | 'apple' | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [appleAvailable, setAppleAvailable] = useState(false)
+  const [nameDraft, setNameDraft] = useState<string | null>(null) // non-null while editing
+  const [savingName, setSavingName] = useState(false)
+  const [avatarBusy, setAvatarBusy] = useState(false)
+  const { data: profile } = useProfile(visible ? user?.id : undefined)
   // Sized to the device rather than a fixed height: with the danger zone added,
   // a constant cap pushed "Delete my account" below the fold on every phone.
   const { height: screenH } = useWindowDimensions()
@@ -110,6 +128,80 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
     } finally {
       setBusy(null)
     }
+  }
+
+  async function saveName() {
+    const next = (nameDraft ?? '').trim()
+    if (!next || next === user?.name) {
+      setNameDraft(null)
+      return
+    }
+    setSavingName(true)
+    setError(null)
+    try {
+      await updateProfile({ name: next })
+      setNameDraft(null)
+    } catch (e) {
+      // Names are unique, so this is usually "already taken" — worth showing
+      // verbatim rather than flattening to a generic failure.
+      setError(e instanceof Error ? e.message : 'Could not save your name')
+    } finally {
+      setSavingName(false)
+    }
+  }
+
+  /** Pick a square from the library and send it up.
+   *
+   *  `allowsEditing` gives the user the crop rather than letting the server
+   *  guess at one — the server's centre-crop is the fallback for whatever it
+   *  receives, not the intended framing. Asking the picker for base64 avoids
+   *  reading the file back off disk separately.
+   */
+  async function pickAvatar() {
+    setError(null)
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: AVATAR_UPLOAD_QUALITY,
+      base64: true,
+    })
+    if (result.canceled || !result.assets[0]) return
+    const asset = result.assets[0]
+    if (!asset.base64) {
+      setError('Could not read that image')
+      return
+    }
+    setAvatarBusy(true)
+    try {
+      await uploadAvatarImage({
+        base64: asset.base64,
+        contentType: asset.mimeType ?? 'image/jpeg',
+      })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not set your picture')
+    } finally {
+      setAvatarBusy(false)
+    }
+  }
+
+  async function clearAvatar() {
+    setAvatarBusy(true)
+    setError(null)
+    try {
+      await removeAvatar()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove your picture')
+    } finally {
+      setAvatarBusy(false)
+    }
+  }
+
+  /** The pickers are full screens, and this sheet sits above the navigator —
+   *  so it has to get out of the way before the push lands. */
+  function openPicker(kind: 'song' | 'album' | 'artist') {
+    onClose()
+    router.push(`/favorite/${kind}`)
   }
 
   async function handleUnlink(provider: 'google' | 'apple') {
@@ -168,6 +260,119 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
           </View>
 
           <ScrollView style={{ maxHeight: screenH * 0.68 }} showsVerticalScrollIndicator={false}>
+            <Text style={styles.sectionLabel}>PROFILE</Text>
+
+            <View style={styles.avatarRow}>
+              <Pressable onPress={pickAvatar} disabled={avatarBusy} accessibilityLabel="Change profile picture">
+                <View style={styles.avatar}>
+                  {user?.avatarUrl ? (
+                    <Image
+                      source={{ uri: user.avatarUrl }}
+                      style={styles.avatarImg}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      // Keyed on the URL so a fresh upload's ?v= stamp swaps the
+                      // picture instead of the old one lingering in the cache.
+                      recyclingKey={user.avatarUrl}
+                    />
+                  ) : (
+                    <Text style={styles.avatarInitial}>{user?.name[0]?.toUpperCase()}</Text>
+                  )}
+                </View>
+              </Pressable>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.providerLabel}>Profile picture</Text>
+                <Text style={styles.notConnectedText}>
+                  {user?.avatarUrl ? 'Shown on your profile and in the feed' : 'No picture set'}
+                </Text>
+              </View>
+              {avatarBusy ? (
+                <ActivityIndicator color={colors.green} />
+              ) : (
+                <View style={styles.avatarActions}>
+                  <Pressable onPress={pickAvatar} hitSlop={8}>
+                    <Text style={styles.linkAction}>{user?.avatarUrl ? 'Change' : 'Add'}</Text>
+                  </Pressable>
+                  {user?.avatarUrl ? (
+                    <Pressable onPress={clearAvatar} hitSlop={8}>
+                      <Text style={styles.removeText}>Remove</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              )}
+            </View>
+
+            {/* Display name edits in place rather than on its own screen — it's
+                one field, and the name is right there to check against. */}
+            <View style={styles.settingRow}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.providerLabel}>Display name</Text>
+                {nameDraft === null ? (
+                  <Text style={styles.settingValue} numberOfLines={1}>{user?.name}</Text>
+                ) : (
+                  <TextInput
+                    style={styles.nameInput}
+                    value={nameDraft}
+                    onChangeText={setNameDraft}
+                    autoFocus
+                    autoCorrect={false}
+                    maxLength={40}
+                    returnKeyType="done"
+                    onSubmitEditing={saveName}
+                    placeholder="Your name"
+                    placeholderTextColor={colors.inkTertiary}
+                  />
+                )}
+              </View>
+              {savingName ? (
+                <ActivityIndicator color={colors.green} />
+              ) : nameDraft === null ? (
+                <Pressable onPress={() => setNameDraft(user?.name ?? '')} hitSlop={8}>
+                  <Text style={styles.linkAction}>Edit</Text>
+                </Pressable>
+              ) : (
+                <View style={styles.avatarActions}>
+                  <Pressable onPress={() => setNameDraft(null)} hitSlop={8}>
+                    <Text style={styles.removeText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable onPress={saveName} hitSlop={8}>
+                    <Text style={styles.linkAction}>Save</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+
+            <Text style={styles.sectionLabel}>MY PICKS</Text>
+            {/* Nothing is offered until the lock state is known: the rows would
+                otherwise flash as tappable and then 403 on save. */}
+            {!profile ? (
+              <ActivityIndicator color={colors.green} style={{ marginVertical: spacing.lg }} />
+            ) : !profile.picks_unlocked ? (
+              <Text style={styles.sectionHint}>
+                Rate {Math.max(0, profile.picks_required - profile.picks_rated_count)} more{' '}
+                {profile.picks_required - profile.picks_rated_count === 1 ? 'album' : 'albums'} to
+                choose your favourite song, album and artist.
+              </Text>
+            ) : (
+              <>
+                <PickSettingRow
+                  label="Favourite song"
+                  value={profile?.favorite_song?.title}
+                  onPress={() => openPicker('song')}
+                />
+                <PickSettingRow
+                  label="Favourite album"
+                  value={profile?.favorite_album?.album_name}
+                  onPress={() => openPicker('album')}
+                />
+                <PickSettingRow
+                  label="Favourite artist"
+                  value={profile?.favorite_artist}
+                  onPress={() => openPicker('artist')}
+                />
+              </>
+            )}
+
             <Text style={styles.sectionLabel}>SIGN-IN METHODS</Text>
             <Text style={styles.sectionHint}>
               Connect both and you can sign back in with either one. With only one connected,
@@ -268,6 +473,30 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
   )
 }
 
+/** One pick, showing what's currently set and opening its picker. The picks
+ *  row on the banner is the other way in; this is the one you find by looking. */
+function PickSettingRow({
+  label,
+  value,
+  onPress,
+}: {
+  label: string
+  value?: string | null
+  onPress: () => void
+}) {
+  return (
+    <Pressable style={styles.settingRow} onPress={onPress} accessibilityRole="button">
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.providerLabel}>{label}</Text>
+        <Text style={[styles.settingValue, !value && styles.settingValueEmpty]} numberOfLines={1}>
+          {value || 'Not set'}
+        </Text>
+      </View>
+      <ChevronRight size={17} color={colors.inkMuted} />
+    </Pressable>
+  )
+}
+
 function ProviderRow({
   icon,
   label,
@@ -363,6 +592,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  // Profile rows share the provider row's card so the sheet reads as one list.
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.raised,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+  },
+  settingValue: { fontFamily: fonts.body, fontSize: 12.5, color: colors.inkSecondary, marginTop: 1 },
+  settingValueEmpty: { color: colors.inkTertiary },
+  nameInput: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.ink,
+    paddingVertical: 2,
+    marginTop: 1,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.raised,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.inset,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImg: { width: '100%', height: '100%' },
+  avatarInitial: { fontFamily: fonts.display, fontSize: 20, color: colors.green },
+  avatarActions: { alignItems: 'flex-end', gap: 4 },
+  linkAction: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
   googleGlyph: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.ink },
   providerLabel: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.ink },
   connectedRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },

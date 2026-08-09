@@ -201,12 +201,19 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
     setLoading(true)
     setError(null)
     try {
+      // The endpoint answers with the whole profile now — picks included — but
+      // this dialog only edits identity, so it keeps the fields it knows.
       const updated = await updateUser(activeUser.id, {
         name: name.trim() !== activeUser.name ? name.trim() : undefined,
         avatarUrl: avatarUrl !== (activeUser.avatarUrl ?? '') ? avatarUrl : undefined,
         bio: bio.trim() !== (activeUser.bio ?? '') ? bio.trim() : undefined,
       })
-      setActiveUser(updated)
+      setActiveUser({
+        id: updated.id,
+        name: updated.name,
+        avatarUrl: updated.avatar_url ?? undefined,
+        bio: updated.bio ?? undefined,
+      })
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save')

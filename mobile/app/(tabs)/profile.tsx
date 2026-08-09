@@ -28,8 +28,9 @@ import {
 } from '../../lib/api'
 import { songScoreColor, type Album, type AlbumStatus } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
+import { useProfile } from '../../lib/picks'
 import StatsView from '../../components/StatsView'
-import ProfileBanner from '../../components/ProfileBanner'
+import ProfileBanner, { type PickKind } from '../../components/ProfileBanner'
 import SettingsSheet from '../../components/SettingsSheet'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
@@ -186,6 +187,10 @@ export default function Profile() {
     enabled: !!user,
   })
 
+  // Name, avatar and the three picks, resolved server-side. The banner hides
+  // the picks row on its own until the ten-album bar is cleared.
+  const { data: profile } = useProfile(user?.id)
+
   // Artist leaderboard data for Rankings (same cache keys as the Stats sub-tab
   // and the artist pages). Scatter carries the league-indexed + metrics;
   // artist-stats carries bang/skip.
@@ -333,6 +338,9 @@ export default function Profile() {
               genres={topGenres}
               subgenres={topSubgenres}
               topInset={insets.top}
+              profile={profile}
+              picksHeading="MY PICKS"
+              onPickPress={(kind: PickKind) => router.push(`/favorite/${kind}`)}
               action={
                 // Sign out moved inside Settings, alongside the sign-in methods
                 // it belongs with.

@@ -47,7 +47,14 @@
           "backgroundColor": "#f9f8f6"
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Pressd uses your photos so you can set a profile picture.",
+          "cameraPermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

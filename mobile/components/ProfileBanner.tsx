@@ -1,12 +1,15 @@
 // The green profile header, shared by your own Profile tab and a friend's
-// page: identity, an average-score ring, four headline stats, and taste chips
-// that straddle the banner's bottom edge. The `action` slot holds whatever
-// control belongs to the viewer (sign out on your own page, add/remove friend
-// on someone else's).
+// page: identity, an average-score ring, four headline stats, taste chips
+// that straddle the banner's bottom edge, and the three picks below them. The
+// `action` slot holds whatever control belongs to the viewer (settings on your
+// own page, add/remove friend on someone else's).
 import { useMemo, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Image } from 'expo-image'
 import Svg, { Circle } from 'react-native-svg'
+import { useQuery } from '@tanstack/react-query'
+import type { Profile } from '@pressd/shared/api'
+import { fetchArtistImage } from '../lib/api'
 import { colors, fonts, radii, spacing } from '../theme/tokens'
 
 export interface BannerStatItem {
@@ -24,6 +27,10 @@ export default function ProfileBanner({
   subgenres,
   action,
   topInset,
+  bio,
+  profile,
+  picksHeading,
+  onPickPress,
 }: {
   name: string
   avatarUrl?: string | null
@@ -34,6 +41,17 @@ export default function ProfileBanner({
   subgenres: string[]
   action?: ReactNode
   topInset: number
+  /** Rendered between the taste chips and the picks — the prose belongs with
+   *  the identity above it, not stranded under a row of cards. */
+  bio?: string | null
+  /** Picks come from GET /users/{id}/profile; the row hides itself until the
+   *  ten-album bar is cleared, so a new account never shows three empty slots. */
+  profile?: Profile | null
+  /** "MY PICKS" on your own page, a possessive on someone else's — the banner
+   *  can't tell whose page it is, so whoever renders it says. */
+  picksHeading?: string
+  /** Only your own page passes this; a friend's cards are not editable. */
+  onPickPress?: (kind: PickKind) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [rowW, setRowW] = useState(0)
@@ -88,7 +106,17 @@ export default function ProfileBanner({
         <View style={styles.bannerTop}>
           <View style={styles.avatar}>
             {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImg} contentFit="cover" />
+              // The URL carries a ?v= stamp that only changes when the picture
+              // does, and the server marks it immutable — so this can be held
+              // on disk indefinitely and survive a cold launch.
+              <Image
+                source={{ uri: avatarUrl }}
+                style={styles.avatarImg}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                recyclingKey={avatarUrl}
+                transition={120}
+              />
             ) : (
               <Text style={styles.avatarInitial}>{name[0]?.toUpperCase()}</Text>
             )}
@@ -169,7 +197,151 @@ export default function ProfileBanner({
           )}
         </>
       )}
+
+      {bio ? <Text style={styles.bio}>{bio}</Text> : null}
+
+      <PicksRow profile={profile} heading={picksHeading} onPickPress={onPickPress} />
     </>
+  )
+}
+
+export type PickKind = 'song' | 'album' | 'artist'
+
+/** The three pinned favourites, under the taste chips.
+ *
+ *  Hidden wholesale below the unlock bar rather than shown as three empty
+ *  slots: a profile with nothing rated yet has nothing to say here, and the
+ *  server refuses to set a pick that early anyway.
+ */
+function PicksRow({
+  profile,
+  heading,
+  onPickPress,
+}: {
+  profile?: Profile | null
+  heading?: string
+  onPickPress?: (kind: PickKind) => void
+}) {
+  // An artist is a name, not a row, so it has no art of its own — this is the
+  // same lookup the artist page runs, sharing its cache key and its permanent
+  // staleTime, so whichever screen is opened first pays for it once.
+  //
+  // Above the early returns on purpose: hooks can't sit behind a conditional.
+  const artist = profile?.favorite_artist ?? null
+  const { data: artistImage } = useQuery({
+    queryKey: ['artist-image', artist],
+    queryFn: () => fetchArtistImage(artist!),
+    enabled: !!artist,
+    staleTime: Infinity,
+  })
+
+  if (!profile?.picks_unlocked) return null
+
+  const song = profile.favorite_song
+  const album = profile.favorite_album
+  const editable = !!onPickPress
+
+  // On someone else's page an untouched set of picks is just noise, so the row
+  // waits until there's something to show. On your own the empty slots are the
+  // invitation to fill them, so they always render.
+  if (!editable && !song && !album && !artist) return null
+
+  return (
+    <View style={styles.picks}>
+      <Text style={styles.picksHeading}>{heading ?? 'PICKS'}</Text>
+      <View style={styles.picksRow}>
+        <PickCard
+          label="SONG"
+          artUrl={song?.album_art_url}
+          fallback={song?.title}
+          title={song?.title}
+          subtitle={song?.artist ?? song?.album_name}
+          editable={editable}
+          onPress={() => onPickPress?.('song')}
+        />
+        <PickCard
+          label="ALBUM"
+          artUrl={album?.album_art_url}
+          fallback={album?.album_name}
+          title={album?.album_name}
+          subtitle={album?.artist}
+          editable={editable}
+          onPress={() => onPickPress?.('album')}
+        />
+        <PickCard
+          label="ARTIST"
+          // A press photo is rarely square and never centred the way cover art
+          // is, so it fills the tile and takes the crop rather than letterboxing
+          // beside the two album covers next to it.
+          artUrl={artistImage}
+          fallback={artist}
+          title={artist}
+          editable={editable}
+          onPress={() => onPickPress?.('artist')}
+        />
+      </View>
+    </View>
+  )
+}
+
+function PickCard({
+  label,
+  artUrl,
+  fallback,
+  title,
+  subtitle,
+  editable,
+  onPress,
+}: {
+  label: string
+  artUrl?: string | null
+  fallback?: string | null
+  title?: string | null
+  subtitle?: string | null
+  editable: boolean
+  onPress: () => void
+}) {
+  const empty = !title
+  return (
+    <Pressable
+      style={styles.pickCard}
+      onPress={onPress}
+      disabled={!editable}
+      accessibilityRole={editable ? 'button' : undefined}
+      accessibilityLabel={
+        editable
+          ? `${empty ? 'Choose your favorite' : 'Change your favorite'} ${label.toLowerCase()}`
+          : undefined
+      }
+    >
+      <Text style={styles.pickLabel}>{label}</Text>
+      <View style={[styles.pickArt, empty && styles.pickArtEmpty]}>
+        {/* The initial shows through underneath, so an artist whose photo is
+            still in flight — or who has none — reads as a filled pick rather
+            than a hole. */}
+        <Text style={[styles.pickInitial, empty && styles.pickInitialEmpty]}>
+          {empty ? '+' : fallback?.[0]?.toUpperCase() ?? '?'}
+        </Text>
+        {artUrl ? (
+          <Image
+            source={{ uri: artUrl }}
+            style={styles.pickArtImg}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={artUrl}
+            transition={140}
+          />
+        ) : null}
+      </View>
+      <Text style={[styles.pickTitle, empty && styles.pickTitleEmpty]} numberOfLines={1}>
+        {title ?? (editable ? 'Choose' : 'Not set')}
+      </Text>
+      {/* An artist card has no second line, and a blank one would leave the
+          three columns sitting at different heights. */}
+      {subtitle ? (
+        <Text style={styles.pickSubtitle} numberOfLines={1}>{subtitle}</Text>
+      ) : null}
+    </Pressable>
   )
 }
 
@@ -282,4 +454,52 @@ const styles = StyleSheet.create({
   subRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: spacing.sm },
   chipSub: { borderColor: '#c9c2b8' },
   chipSubText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.inkTertiary },
+
+  bio: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSecondary, lineHeight: 19, marginTop: spacing.md },
+
+  // Picks: three equal columns below the taste chips, each a slot label, a
+  // square of art and the name. Same column rhythm as the Library grid, so the
+  // page reads as one thing rather than a banner with a widget bolted on.
+  picks: { marginTop: spacing.lg },
+  picksHeading: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    color: colors.inkMuted,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
+  },
+  picksRow: { flexDirection: 'row', gap: 10 },
+  pickCard: { flex: 1, minWidth: 0 },
+  pickLabel: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 8.5,
+    letterSpacing: 1,
+    color: colors.green,
+    marginBottom: 5,
+  },
+  pickArt: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: radii.md,
+    backgroundColor: colors.inset,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  // An unfilled slot reads as an invitation, not as art that failed to load.
+  pickArtEmpty: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+  },
+  // Absolute so it covers the initial sitting behind it rather than displacing
+  // it — the letter is the placeholder, not a sibling.
+  pickArtImg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  pickInitial: { fontFamily: fonts.display, fontSize: 30, color: colors.inkMuted },
+  pickInitialEmpty: { fontFamily: fonts.body, fontSize: 24, color: colors.inkMuted },
+  pickTitle: { fontFamily: fonts.bodySemiBold, fontSize: 12.5, color: colors.ink, marginTop: 6 },
+  pickTitleEmpty: { fontFamily: fonts.bodyMedium, color: colors.inkMuted },
+  pickSubtitle: { fontFamily: fonts.body, fontSize: 11, color: colors.inkTertiary, marginTop: 1 },
 })

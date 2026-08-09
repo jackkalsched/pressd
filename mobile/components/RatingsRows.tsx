@@ -1,12 +1,14 @@
-// The two row shapes the Ratings leaderboard renders — an album and an artist.
+// The row shapes a ranked list of a library renders — an album, an artist and
+// a song.
 //
 // Shared so a friend's page and your own render the same board rather than
 // diverging, which they already had: yours sorts by any metric in either
 // direction, theirs was a fixed score-descending list of albums with no artist
-// mode at all.
+// mode at all. The favourite-pickers list through the same three.
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Image } from 'expo-image'
 import { songScoreColor, type Album } from '@pressd/shared/types'
+import type { RankedSong } from '@pressd/shared/api'
 import { NUM_SCALE_CAP, RANK_NUM_MIN_W, RANK_NUM_SIZE, type ArtistRank } from '../lib/rankings'
 import { colors, fonts, radii, spacing } from '../theme/tokens'
 
@@ -50,7 +52,9 @@ export function RatingRow({
  *  number you ranked on is the number you can read. */
 function artistValue(stat: ArtistRank, metricKey: string): { text: string; color?: string } {
   const plus = (v: number | null) => (v == null ? '—' : String(Math.round(v)))
-  const pct = (v: number | null) => (v == null ? '—' : `${Math.round(v)}%`)
+  // /stats/artists reports bang/skip as a fraction, not a percentage — without
+  // the scale every row on a friend's board rounded to "0%".
+  const pct = (v: number | null) => (v == null ? '—' : `${Math.round(v * 100)}%`)
   switch (metricKey) {
     case 'songPlus':
       return { text: plus(stat.songPlus) }
@@ -93,6 +97,45 @@ export function ArtistRankRow({
       <Text style={[styles.ratingScore, value.color ? { color: value.color } : { color: colors.ink }]}>
         {value.text}
       </Text>
+    </Pressable>
+  )
+}
+
+/** A scored track, carrying its album's art. The second line names the album
+ *  rather than the artist alone — two tracks called "Intro" are told apart by
+ *  the record they're on, not by who made them. */
+export function SongRankRow({
+  song,
+  rank,
+  onPress,
+}: {
+  song: RankedSong
+  rank: number
+  onPress: () => void
+}) {
+  return (
+    <Pressable style={styles.ratingRow} onPress={onPress}>
+      <Text style={styles.rankNum} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+        {rank}
+      </Text>
+      {song.album_art_url ? (
+        <Image source={{ uri: song.album_art_url }} style={styles.ratingArt} contentFit="cover" />
+      ) : (
+        <View style={[styles.ratingArt, styles.artFallback]}>
+          <Text style={styles.artInitial}>{song.title[0]?.toUpperCase()}</Text>
+        </View>
+      )}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.ratingName} numberOfLines={1}>{song.title}</Text>
+        <Text style={styles.ratingArtist} numberOfLines={1}>
+          {song.artist} · {song.album_name}
+        </Text>
+      </View>
+      {song.score != null && (
+        <Text style={[styles.ratingScore, { color: songScoreColor(song.score) }]}>
+          {song.score.toFixed(1)}
+        </Text>
+      )}
     </Pressable>
   )
 }

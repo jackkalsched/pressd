@@ -1139,18 +1139,136 @@ export async function removeFriend(userId: number, friendId: number): Promise<vo
   if (!res.ok) throw new Error('Failed to remove friend')
 }
 
-export async function updateUser(userId: number, data: { name?: string; avatarUrl?: string; bio?: string }): Promise<UserInfo> {
+// ── Profile & picks ───────────────────────────────────────────────────────────
+// Left in the server's snake_case, like FeedItem and Comment below: the payload
+// is read straight onto a card rather than merged into an Album or Song, so a
+// transformer would only add a shape to keep in sync.
+
+export interface ProfileAlbumPick {
+  id: number
+  album_name: string
+  artist: string
+  album_art_url: string | null
+  score: number | null
+}
+
+export interface ProfileSongPick {
+  id: number
+  title: string
+  score: number | null
+  album_name: string | null
+  artist: string | null
+  album_art_url: string | null
+}
+
+export interface Profile {
+  id: number
+  name: string
+  avatar_url: string | null
+  bio: string | null
+  /** False until `picks_required` albums are rated; the picks row stays hidden. */
+  picks_unlocked: boolean
+  picks_rated_count: number
+  picks_required: number
+  favorite_artist: string | null
+  favorite_album: ProfileAlbumPick | null
+  favorite_song: ProfileSongPick | null
+}
+
+/** Readable for any user, so a friend's page renders their picks the same way
+ *  your own does. The picks are resolved server-side on every read — a deleted
+ *  album comes back null rather than as a stale title. */
+export async function fetchProfile(userId: number): Promise<Profile> {
+  const res = await apiFetch(`${BASE()}/users/${userId}/profile`)
+  if (!res.ok) throw new Error('Failed to load profile')
+  return res.json()
+}
+
+/** Patch the signed-in user's profile. Every field is optional and omitted keys
+ *  are left alone; an explicit `null` on a pick clears it. Albums and songs must
+ *  be the caller's own rated items, and all three picks are refused until ten
+ *  albums are rated — which is why the pickers are only reachable past that bar. */
+export async function updateUser(
+  userId: number,
+  data: {
+    name?: string
+    avatarUrl?: string | null
+    bio?: string
+    favoriteAlbumId?: number | null
+    favoriteSongId?: number | null
+    favoriteArtist?: string | null
+  },
+): Promise<Profile> {
   const res = await apiFetch(`${BASE()}/users/${userId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: data.name, avatar_url: data.avatarUrl, bio: data.bio }),
+    // JSON.stringify drops undefined keys, which is what keeps "not mentioned"
+    // distinct from "clear this" — the difference the endpoint is built around.
+    body: JSON.stringify({
+      name: data.name,
+      avatar_url: data.avatarUrl,
+      bio: data.bio,
+      favorite_album_id: data.favoriteAlbumId,
+      favorite_song_id: data.favoriteSongId,
+      favorite_artist: data.favoriteArtist,
+    }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { detail?: string }).detail ?? 'Failed to update profile')
   }
-  const u = await res.json()
-  return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined, bio: u.bio ?? undefined }
+  return res.json()
+}
+
+/** One scored song of a user's, as the favourite-song picker lists them: best
+ *  first, capped, and carrying enough of its album to draw a row. Search runs
+ *  server-side because the cap would otherwise hide anything outside the top. */
+export interface RankedSong {
+  id: number
+  title: string
+  score: number | null
+  album_id: number
+  album_name: string
+  artist: string
+  album_art_url: string | null
+}
+
+export async function fetchRankedSongs(params?: {
+  userId?: number
+  q?: string
+  limit?: number
+}): Promise<RankedSong[]> {
+  const qs = new URLSearchParams()
+  if (params?.userId != null) qs.set('user_id', String(params.userId))
+  if (params?.q?.trim()) qs.set('q', params.q.trim())
+  if (params?.limit != null) qs.set('limit', String(params.limit))
+  const res = await apiFetch(`${BASE()}/songs/ranked?${qs}`)
+  if (!res.ok) throw new Error('Failed to load songs')
+  return res.json()
+}
+
+/** Upload a profile picture as base64. The response's avatar_url carries a
+ *  cache-busting stamp, so callers must adopt it rather than reusing the old
+ *  one — the path is otherwise identical and the previous image would stick. */
+export async function uploadAvatar(
+  userId: number,
+  image: { base64: string; contentType: string },
+): Promise<{ avatar_url: string }> {
+  const res = await apiFetch(`${BASE()}/users/${userId}/avatar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: image.base64, content_type: image.contentType }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? 'Failed to upload picture')
+  }
+  return res.json()
+}
+
+export async function deleteAvatar(userId: number): Promise<void> {
+  const res = await apiFetch(`${BASE()}/users/${userId}/avatar`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to remove picture')
 }
 
 /** Permanently erase the signed-in account and everything attached to it.

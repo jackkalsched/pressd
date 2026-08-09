@@ -10,6 +10,9 @@ import {
   linkApple,
   fetchUsers,
   updateUser,
+  uploadAvatar,
+  deleteAvatar,
+  type Profile,
   type UserInfo,
 } from '@pressd/shared/api'
 import { getToken, setToken, loadStoredToken, setUnauthorizedHandler } from './api'
@@ -28,8 +31,19 @@ interface AuthContextValue {
    *  user can come back through either one. */
   linkGoogleToken: (accessToken: string) => Promise<void>
   linkAppleToken: (identityToken: string, fullName?: string) => Promise<void>
-  /** Persist profile edits (e.g. bio) and reflect them in context. */
-  updateProfile: (data: { name?: string; avatarUrl?: string; bio?: string }) => Promise<void>
+  /** Persist profile edits (name, avatar, bio, picks) and reflect the identity
+   *  half of them in context. Returns the full profile the server settled on. */
+  updateProfile: (data: {
+    name?: string
+    avatarUrl?: string | null
+    bio?: string
+    favoriteAlbumId?: number | null
+    favoriteSongId?: number | null
+    favoriteArtist?: string | null
+  }) => Promise<Profile>
+  /** Upload a profile picture and adopt the cache-busted URL it returns. */
+  uploadAvatarImage: (image: { base64: string; contentType: string }) => Promise<void>
+  removeAvatar: () => Promise<void>
   signOut: () => void
 }
 
@@ -120,14 +134,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     persistUser(u)
   }, [persistUser])
 
+  // PATCH /users/{id} answers with the whole profile — picks included — but the
+  // session only tracks identity, so the picks are handed back to the caller
+  // (which seeds its React Query cache with them) rather than stored twice.
   const updateProfile = useCallback(
-    async (data: { name?: string; avatarUrl?: string; bio?: string }) => {
-      if (!user) return
-      const updated = await updateUser(user.id, data)
-      persistUser(updated)
+    async (data: {
+      name?: string
+      avatarUrl?: string | null
+      bio?: string
+      favoriteAlbumId?: number | null
+      favoriteSongId?: number | null
+      favoriteArtist?: string | null
+    }): Promise<Profile> => {
+      if (!user) throw new Error('Not signed in')
+      const profile = await updateUser(user.id, data)
+      persistUser({
+        id: profile.id,
+        name: profile.name,
+        avatarUrl: profile.avatar_url ?? undefined,
+        bio: profile.bio ?? undefined,
+      })
+      return profile
     },
     [user, persistUser],
   )
+
+  const uploadAvatarImage = useCallback(
+    async (image: { base64: string; contentType: string }) => {
+      if (!user) return
+      const { avatar_url } = await uploadAvatar(user.id, image)
+      persistUser({ ...user, avatarUrl: avatar_url })
+    },
+    [user, persistUser],
+  )
+
+  const removeAvatar = useCallback(async () => {
+    if (!user) return
+    await deleteAvatar(user.id)
+    persistUser({ ...user, avatarUrl: undefined })
+  }, [user, persistUser])
 
   const value = useMemo(
     () => ({
@@ -139,6 +184,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       linkGoogleToken,
       linkAppleToken,
       updateProfile,
+      uploadAvatarImage,
+      removeAvatar,
       signOut,
     }),
     [
@@ -150,6 +197,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       linkGoogleToken,
       linkAppleToken,
       updateProfile,
+      uploadAvatarImage,
+      removeAvatar,
       signOut,
     ],
   )
