@@ -8,7 +8,6 @@ import { useUser } from '../context/UserContext'
 import { fetchFriends, getInviteLink, updateUser, linkGoogle, removeFriend } from '../api'
 import type { UserInfo } from '../api'
 import AddAlbumModal from './AddAlbumModal'
-import { FactorWeightsSection } from './FactorWeightsEditor'
 
 function avatarColor(name: string): string {
   const colors = ['#2d6a4f', '#1d4ed8', '#7c3aed', '#b45309', '#0f766e', '#be185d', '#c2410c']
@@ -276,10 +275,6 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
             {loading ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save'}
           </button>
         </form>
-
-        <div className="mt-4 pt-4 border-t border-[#f0f0f0]">
-          <FactorWeightsSection userId={activeUser.id} />
-        </div>
 
         <div className="mt-4 pt-4 border-t border-[#f0f0f0] flex flex-col gap-2">
           {!activeUser?.avatarUrl && (
