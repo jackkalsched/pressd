@@ -163,7 +163,12 @@ export default function ForYou() {
   const nothingYet = !resume && toListen.length === 0 && rated.length === 0
 
   return (
-    <div className="min-h-screen bg-[#efece6] text-[#1c1917]">
+    {/* Same ground as every other page: the shell in Layout and the pages that
+        set their own root (Ratings, Stats) are all #f9f8f6. This one was alone
+        on a darker #efece6, so moving between tabs shifted the background. The
+        cards here are delineated by their borders rather than their fill, so
+        they still read against the lighter ground. */}
+    <div className="min-h-screen bg-[#f9f8f6] text-[#1c1917]">
       <div className="mx-auto w-full max-w-[1600px] px-6 md:px-12 py-8 pb-24 flex flex-col lg:flex-row gap-8">
 
         {/* ─────────── FEED COLUMN ─────────── */}
