@@ -3,7 +3,7 @@
 // methods: an account reached only through Apple and one reached only through
 // Google are two different accounts, so linking both here is what lets someone
 // come back either way (see the Hide My Email note in mobile/TESTFLIGHT.md).
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -76,6 +76,11 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
   const [nameDraft, setNameDraft] = useState<string | null>(null) // non-null while editing
   const [savingName, setSavingName] = useState(false)
   const [avatarBusy, setAvatarBusy] = useState(false)
+  // Reset each time the sheet comes back up; see openPicker.
+  const navigatingRef = useRef(false)
+  useEffect(() => {
+    if (visible) navigatingRef.current = false
+  }, [visible])
   const { data: profile } = useProfile(visible ? user?.id : undefined)
   // Sized to the device rather than a fixed height: with the danger zone added,
   // a constant cap pushed "Delete my account" below the fold on every phone.
@@ -198,8 +203,12 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
   }
 
   /** The pickers are full screens, and this sheet sits above the navigator —
-   *  so it has to get out of the way before the push lands. */
+   *  so it has to get out of the way before the push lands, and it has to stop
+   *  taking taps in the gap while it animates out. Without the guard a second
+   *  tap opens a second picker behind the first. */
   function openPicker(kind: 'song' | 'album' | 'artist') {
+    if (navigatingRef.current) return
+    navigatingRef.current = true
     onClose()
     router.push(`/favorite/${kind}`)
   }

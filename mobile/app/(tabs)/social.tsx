@@ -4,7 +4,7 @@
 //     the gap against your own rating (only when you've rated it too).
 //   Reviews  — a feed of friends' written reviews.
 //   Friends  — your current friends.
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
@@ -526,6 +526,26 @@ function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onC
 
   const incoming = requests?.incoming ?? []
 
+  // This sheet is a native modal sitting on top of the navigator, so a push
+  // from inside it lands on a screen nobody can see: the profile opens behind
+  // the sheet, the sheet stays up, and tapping again just stacks another one.
+  // Closing first is what puts the pushed screen in front.
+  //
+  // The ref guards the gap between the two — `visible` is already false while
+  // the sheet animates out, but it is still on screen and still taking taps,
+  // and a second one would push a second profile.
+  const navigatingRef = useRef(false)
+  useEffect(() => {
+    if (visible) navigatingRef.current = false
+  }, [visible])
+
+  function openProfile(id: number) {
+    if (navigatingRef.current) return
+    navigatingRef.current = true
+    onClose()
+    onOpenFriend(id)
+  }
+
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ['friend-requests', user?.id] })
     queryClient.invalidateQueries({ queryKey: ['user-search'] })
@@ -565,7 +585,7 @@ function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onC
             <Text style={styles.sectionLabel}>REQUESTS</Text>
             {incoming.map((u) => (
               <View key={u.id} style={styles.userRow}>
-                <Pressable style={styles.userInfo} onPress={() => onOpenFriend(u.id)}>
+                <Pressable style={styles.userInfo} onPress={() => openProfile(u.id)}>
                   <Avatar name={u.name} url={u.avatarUrl} size={36} />
                   <Text style={styles.userName}>{u.name}</Text>
                 </Pressable>
@@ -592,7 +612,7 @@ function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onC
           }
           renderItem={({ item }) => (
             <View style={styles.userRow}>
-              <Pressable style={styles.userInfo} onPress={() => onOpenFriend(item.id)}>
+              <Pressable style={styles.userInfo} onPress={() => openProfile(item.id)}>
                 <Avatar name={item.name} url={item.avatar_url} size={36} />
                 <Text style={styles.userName}>{item.name}</Text>
               </Pressable>
