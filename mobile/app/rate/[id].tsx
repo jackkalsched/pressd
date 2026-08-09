@@ -57,6 +57,10 @@ const FACTORS = [
 ] as const
 
 /** Text → score, tolerating partial input like "8." while typing. */
+// Long enough that typing "8.5" is one write rather than three, short enough
+// that putting the phone down mid-album has already saved.
+const AUTOSAVE_DELAY_MS = 1200
+
 function parseScore(text: string): number | null {
   if (!text.trim()) return null
   const n = Number.parseFloat(text)
@@ -314,6 +318,66 @@ export default function RatingScreen() {
     },
     onError: () => setError('Could not save. Please try again.'),
   })
+
+  // ── Autosave ────────────────────────────────────────────────────────────────
+  // Everything needed to resume was already here: scores live on the songs, and
+  // the seeding block above reads them back and jumps to the first unscored
+  // track. The only missing half was writing without being asked, which is what
+  // cost you the work if the app died mid-album.
+  //
+  // It writes exactly what Save & exit writes, so this introduces no new server
+  // behaviour — only a new moment to do it at.
+  const lastSavedRef = useRef<string | null>(null)
+  const autosaving = useRef(false)
+
+  // Everything a resume would need to reconstruct. `idx` and `phase` are left
+  // out deliberately: where you were sitting is derived on the way back in, and
+  // including them would write on every arrow press.
+  const snapshot = useMemo(
+    () => JSON.stringify({ drafts, factorText, extraArtists, skipped: [...skipped].sort() }),
+    [drafts, factorText, extraArtists, skipped],
+  )
+
+  useEffect(() => {
+    if (!album || !initialized) return
+    if (user == null || album.userId !== user.id) return // not yours to write
+    // Submitting owns the record from here; an autosave landing after it would
+    // put `listening` back on an album that just finished being rated.
+    if (submit.isPending || saveDraft.isPending || submit.isSuccess) return
+    if (tiebreak || shareAlbum) return
+
+    // First pass after seeding establishes the baseline, so opening a
+    // part-rated album doesn't immediately write back what it just read.
+    if (lastSavedRef.current === null) {
+      lastSavedRef.current = snapshot
+      return
+    }
+    if (snapshot === lastSavedRef.current) return
+
+    // Typing a two-digit score passes through a one-digit state; a pause is
+    // what separates "still typing" from "moved on".
+    const t = setTimeout(async () => {
+      if (autosaving.current) return
+      autosaving.current = true
+      const attempted = snapshot
+      try {
+        await persist(isEditing ? 'rated' : 'listening')
+        lastSavedRef.current = attempted
+        // The library grid reads status and score off this album, so a
+        // part-rated record shows as in-progress without a manual save.
+        queryClient.invalidateQueries({ queryKey: ['albums'] })
+      } catch {
+        // Deliberately silent, and the baseline is left untouched so the next
+        // edit retries. A dropped connection mid-album should not put an error
+        // banner over the track you are trying to score — the explicit Save &
+        // exit still reports failure, which is where it matters.
+      } finally {
+        autosaving.current = false
+      }
+    }, AUTOSAVE_DELAY_MS)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshot, album, initialized, isEditing, submit.isPending, submit.isSuccess, saveDraft.isPending, tiebreak, shareAlbum])
 
   if (tiebreak) {
     const tied = tiedTopSongs(tiebreak)
