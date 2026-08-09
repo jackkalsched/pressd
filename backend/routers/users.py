@@ -1,10 +1,13 @@
 import base64
+import io
 import os
 import uuid
 import smtplib
 from email.mime.text import MIMEText
 from binascii import Error as BinasciiError
 from datetime import datetime
+
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import func
@@ -513,9 +516,64 @@ def set_factor_weights(
 # Uploads arrive as base64 in a JSON body rather than multipart: it keeps the
 # request shape identical to every other endpoint here, needs no extra server
 # dependency, and expo-image-picker can hand back base64 directly. The cost is
-# ~33% on the wire, which a resized avatar can afford.
-AVATAR_TYPES = {"image/jpeg", "image/png", "image/webp"}
-AVATAR_MAX_BYTES = 1_500_000  # the client resizes; this is the backstop
+# ~33% on the wire, which one picture can afford.
+#
+# The server, not the client, decides what an avatar is. Clients send roughly
+# what the photo picker gave them and this normalises every one to the same
+# 512² JPEG, which is what keeps a web upload and a phone upload identical and
+# means a new client can't introduce a new avatar shape. Doing it here also
+# fixes two things a client reliably gets wrong: EXIF orientation (portrait
+# photos arrive rotated) and EXIF metadata (a camera roll photo carries GPS
+# coordinates, which have no business on a public profile).
+AVATAR_FORMATS = {"JPEG", "PNG", "WEBP", "HEIF", "HEIC", "GIF"}
+AVATAR_EDGE = 512           # rendered at 56pt at most; 512 covers 3x and to spare
+AVATAR_JPEG_QUALITY = 85
+# Generous, because this is an unresized original off the camera roll now. The
+# guard that matters is the pixel bound below — bytes are a poor proxy for how
+# much memory a decode will want.
+AVATAR_MAX_BYTES = 12_000_000
+# A 50MP phone panorama is ~50M pixels; anything past this is a decompression
+# bomb rather than a profile picture.
+AVATAR_MAX_PIXELS = 80_000_000
+
+
+def _normalize_avatar(raw: bytes) -> bytes:
+    """Decode whatever was sent and re-encode it as the one avatar shape.
+
+    Center-cropped rather than letterboxed: every surface draws this in a
+    circle, so the edges are clipped regardless and fitting inside would just
+    add bars that then get cut. Re-encoding also drops all metadata, which is
+    the point as much as the resize is.
+    """
+    try:
+        img = Image.open(io.BytesIO(raw))
+        if (img.size[0] * img.size[1]) > AVATAR_MAX_PIXELS:
+            raise HTTPException(status_code=413, detail="Image is too large — resize it first")
+        if img.format not in AVATAR_FORMATS:
+            raise HTTPException(status_code=400, detail="Use a JPEG, PNG, WebP or HEIC image")
+        img.load()
+        # Rotate to how it was shot, then discard the tag so it isn't applied
+        # twice by whatever renders it next.
+        img = ImageOps.exif_transpose(img)
+        # JPEG has no alpha; flatten onto white so a transparent PNG doesn't
+        # come out with a black square behind it.
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGBA")
+            flat = Image.new("RGB", img.size, (255, 255, 255))
+            flat.paste(img, mask=img.split()[-1])
+            img = flat
+        else:
+            img = img.convert("RGB")
+        img = ImageOps.fit(img, (AVATAR_EDGE, AVATAR_EDGE), method=Image.Resampling.LANCZOS)
+    except HTTPException:
+        raise
+    except (UnidentifiedImageError, OSError, ValueError):
+        raise HTTPException(status_code=400, detail="That file isn't an image we can read")
+
+    out = io.BytesIO()
+    # No exif= argument, so nothing from the original survives the round trip.
+    img.save(out, format="JPEG", quality=AVATAR_JPEG_QUALITY, optimize=True, progressive=True)
+    return out.getvalue()
 
 
 @router.post("/{user_id}/avatar")
@@ -539,9 +597,6 @@ def upload_avatar(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    content_type = (data.get("content_type") or "").lower().strip()
-    if content_type not in AVATAR_TYPES:
-        raise HTTPException(status_code=400, detail="Use a JPEG, PNG or WebP image")
     try:
         raw = base64.b64decode(data.get("data") or "", validate=True)
     except (BinasciiError, ValueError):
@@ -551,18 +606,22 @@ def upload_avatar(
     if len(raw) > AVATAR_MAX_BYTES:
         raise HTTPException(status_code=413, detail="Image is too large — resize it first")
 
+    # The client's declared content_type is ignored: the bytes say what they
+    # are, and after this they are all the same thing anyway.
+    stored = _normalize_avatar(raw)
+
     row = session.get(UserAvatar, user_id)
     if row:
-        row.content_type, row.data, row.updated_at = content_type, raw, datetime.utcnow()
+        row.content_type, row.data, row.updated_at = "image/jpeg", stored, datetime.utcnow()
     else:
-        row = UserAvatar(user_id=user_id, content_type=content_type, data=raw)
+        row = UserAvatar(user_id=user_id, content_type="image/jpeg", data=stored)
     session.add(row)
 
     stamp = int(row.updated_at.timestamp())
     user.avatar_url = f"{str(request.base_url).rstrip('/')}/users/{user_id}/avatar?v={stamp}"
     session.add(user)
     session.commit()
-    return {"avatar_url": user.avatar_url, "bytes": len(raw)}
+    return {"avatar_url": user.avatar_url, "bytes": len(stored), "received_bytes": len(raw)}
 
 
 @router.get("/{user_id}/avatar")
