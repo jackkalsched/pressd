@@ -11,11 +11,15 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { StatusBar } from 'expo-status-bar'
 import Svg, { Defs, Pattern, Rect } from 'react-native-svg'
 import { ArrowLeft } from 'lucide-react-native'
-import { fetchArtistDetail, fetchAlbumColor, fetchArtistImage } from '../../lib/api'
+import { fetchArtistDetail, fetchAlbumColor, fetchArtistImage, fetchSimilarArtistComparisons } from '../../lib/api'
 import type { ArtistPopulation } from '@pressd/shared/api'
 import { songScoreColor } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import ScoreHistogram from '../../components/ScoreHistogram'
+import SongGapChart from '../../components/SongGapChart'
+import ScoreKdeCompare from '../../components/ScoreKdeCompare'
+import Discography from '../../components/Discography'
+import SimilarArtistComparisons from '../../components/SimilarArtistComparisons'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 /** Which rating set the page is showing.
@@ -72,14 +76,24 @@ function fadeRamp(start: number): Ramp {
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 
+/** 1st, 2nd, 3rd, 4th — with the teens taking "th" regardless of last digit. */
+function ordinal(n: number): string {
+  const tens = n % 100
+  if (tens >= 11 && tens <= 13) return `${n}th`
+  return `${n}${['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`
+}
+
 export default function ArtistPage() {
-  const { name } = useLocalSearchParams<{ name: string }>()
+  const { name, mode: modeParam } = useLocalSearchParams<{ name: string; mode?: string }>()
   const artist = decodeURIComponent(name ?? '')
   const router = useRouter()
   const { user } = useAuth()
   const insets = useSafeAreaInsets()
 
-  const [mode, setMode] = useState<Mode>('mine')
+  // Arriving from a comparison card should land on the comparison, not on your
+  // own numbers — the card was showing a split, and the page it opens has to be
+  // the page that split lives on.
+  const [mode, setMode] = useState<Mode>(modeParam === 'compare' ? 'compare' : 'mine')
   const { data, isLoading } = useQuery({
     queryKey: ['artist', artist, user?.id, mode],
     queryFn: () => fetchArtistDetail(artist, user!.id, POPULATION[mode]),
@@ -108,6 +122,14 @@ export default function ArtistPage() {
     queryFn: () => fetchArtistImage(artist),
     enabled: !!artist,
     staleTime: Infinity,
+  })
+
+  // Only Compare reads this, so it's only fetched there.
+  const { data: similar = [] } = useQuery({
+    queryKey: ['artist-similar', artist, user?.id],
+    queryFn: () => fetchSimilarArtistComparisons(artist, user!.id),
+    enabled: !!user && !!artist && mode === 'compare',
+    staleTime: 5 * 60_000,
   })
 
   // The photo runs the full height of the hero and dissolves across its lower
@@ -238,12 +260,28 @@ export default function ArtistPage() {
             </Text>
           )}
           {mode === 'pressd' && (
-            <Text style={styles.scopeNote}>Averaged across every Pressd rating</Text>
+            // How much of the site's listening this artist accounts for says
+            // more about a pooled page than restating that it is pooled.
+            <View style={styles.scopeRanks}>
+              {data.popularity_rank != null && (
+                <Text style={styles.scopeNote}>
+                  <Text style={styles.scopeRank}>{ordinal(data.popularity_rank)}</Text>
+                  /{data.popularity_of} most rated artist on Pressd
+                </Text>
+              )}
+              {data.genre_popularity_rank != null && data.popularity_genre && (
+                <Text style={styles.scopeNote}>
+                  <Text style={styles.scopeRank}>{ordinal(data.genre_popularity_rank)}</Text>
+                  /{data.genre_popularity_of} in {data.popularity_genre}
+                </Text>
+              )}
+            </View>
           )}
 
           <View onLayout={(e) => setCatalogY(e.nativeEvent.layout.y)}>
             <CatalogStrip
               albums={albums}
+              catalog={(data.catalog_art ?? []).map((c) => ({ title: c.album_name, cover_url: c.album_art_url }))}
               onOpen={(id) => router.push({ pathname: '/album/[id]', params: { id: String(id) } })}
             />
           </View>
@@ -285,78 +323,100 @@ export default function ArtistPage() {
             <ScoreVersus mine={data.avg_song_score} theirs={data.global?.avg_song_score ?? null} />
           )}
 
-          {/* Percentile rankings — savant-style bars */}
-          <View style={styles.sectionHead}>
-            <Text style={styles.sectionLabel}>PERCENTILE RANKINGS</Text>
-            <View style={styles.legend}>
-              <Text style={[styles.legendItem, { color: barColor(0) }]}>POOR</Text>
-              <Text style={[styles.legendItem, { color: barColor(50) }]}>AVG</Text>
-              <Text style={[styles.legendItem, { color: barColor(100) }]}>GREAT</Text>
-            </View>
-          </View>
-          <PercentileBar label="Avg Song"     value={fmt2(data.avg_song_score)}   percentile={p.avg_song_score}   globalPercentile={gp?.avg_song_score}   smallSample={data.small_sample} />
-          <PercentileBar label="Song+"        value={plus(data.song_plus)}        percentile={p.song_plus}        globalPercentile={gp?.song_plus}        smallSample={data.small_sample} />
-          <PercentileBar label="wSong+"       value={plus(data.w_song_plus)}      percentile={p.w_song_plus}      globalPercentile={gp?.w_song_plus}      smallSample={data.small_sample} />
-          <PercentileBar label="Avg External" value={fmt2(data.avg_external)}     percentile={p.avg_external}     globalPercentile={gp?.avg_external}     smallSample={data.small_sample} />
-          <PercentileBar label="Bang%"        value={pctv(data.bang_pct)}         percentile={p.bang_pct}         globalPercentile={gp?.bang_pct}         smallSample={data.small_sample} />
-          <PercentileBar label="Skip%"        value={pctv(data.skip_pct)}         percentile={p.skip_pct}         globalPercentile={gp?.skip_pct}         smallSample={data.small_sample} invert />
-          <PercentileBar label="Consistency+" value={plus(data.consistency_plus)} percentile={p.consistency_plus} globalPercentile={gp?.consistency_plus} smallSample={data.small_sample} />
+          {/* Compare answers one question — which songs do I hear differently
+              — and the percentile bars answered a different one badly: seven
+              metrics, each a placement in a league table, none of them a track
+              you could name. The gap chart replaces them here. The other two
+              modes keep the bars, where they aren't pretending to compare. */}
+          {mode === 'compare' ? (
+            <>
+              <Text style={[styles.sectionLabel, styles.sectionSolo]}>WHERE YOU SPLIT</Text>
+              <SongGapChart
+                gaps={data.song_gaps ?? []}
+                artist={data.artist}
+                onSeeAll={() =>
+                  router.push({
+                    pathname: '/splits/[name]',
+                    params: { name: encodeURIComponent(data.artist) },
+                  })
+                }
+              />
+            </>
+          ) : (
+            <>
+              <View style={styles.sectionHead}>
+                <Text style={styles.sectionLabel}>PERCENTILE RANKINGS</Text>
+                <View style={styles.legend}>
+                  <Text style={[styles.legendItem, { color: barColor(0) }]}>POOR</Text>
+                  <Text style={[styles.legendItem, { color: barColor(50) }]}>AVG</Text>
+                  <Text style={[styles.legendItem, { color: barColor(100) }]}>GREAT</Text>
+                </View>
+              </View>
+              <PercentileBar label="Avg Song"     value={fmt2(data.avg_song_score)}   percentile={p.avg_song_score}   globalPercentile={gp?.avg_song_score}   smallSample={data.small_sample} />
+              <PercentileBar label="Song+"        value={plus(data.song_plus)}        percentile={p.song_plus}        globalPercentile={gp?.song_plus}        smallSample={data.small_sample} />
+              <PercentileBar label="wSong+"       value={plus(data.w_song_plus)}      percentile={p.w_song_plus}      globalPercentile={gp?.w_song_plus}      smallSample={data.small_sample} />
+              <PercentileBar label="Avg External" value={fmt2(data.avg_external)}     percentile={p.avg_external}     globalPercentile={gp?.avg_external}     smallSample={data.small_sample} />
+              <PercentileBar label="Bang%"        value={pctv(data.bang_pct)}         percentile={p.bang_pct}         globalPercentile={gp?.bang_pct}         smallSample={data.small_sample} />
+              <PercentileBar label="Skip%"        value={pctv(data.skip_pct)}         percentile={p.skip_pct}         globalPercentile={gp?.skip_pct}         smallSample={data.small_sample} invert />
+              <PercentileBar label="Consistency+" value={plus(data.consistency_plus)} percentile={p.consistency_plus} globalPercentile={gp?.consistency_plus} smallSample={data.small_sample} />
+            </>
+          )}
 
           {/* Distribution — same histogram as Profile → Stats */}
           {data.song_scores.length > 0 && (
             <>
               <Text style={[styles.sectionLabel, styles.sectionSolo]}>SCORE DISTRIBUTION</Text>
-              <ScoreHistogram scores={data.song_scores} />
+              {/* Compare wants both distributions on one pair of axes; the
+                  single-population modes keep the histogram, which is the right
+                  shape when there's only one set of scores to show. */}
+              {mode === 'compare' ? (
+                <ScoreKdeCompare
+                  mine={data.song_scores}
+                  theirs={data.global?.song_scores ?? []}
+                />
+              ) : (
+                <ScoreHistogram scores={data.song_scores} />
+              )}
             </>
           )}
 
-          {/* Albums */}
-          <Text style={[styles.sectionLabel, styles.sectionSolo]}>ALBUMS</Text>
-          {albums.map((a) => (
-            <Pressable
-              key={a.id}
-              style={styles.albumRow}
-              onPress={() => router.push({ pathname: '/album/[id]', params: { id: String(a.id) } })}
-            >
-              {/* Score-tinted rule, the same accent the album pages use */}
-              <View
-                style={[
-                  styles.albumAccent,
-                  { backgroundColor: a.score != null ? songScoreColor(a.score) : colors.border },
-                ]}
-              />
-              {a.album_art_url ? (
-                <Image source={{ uri: a.album_art_url }} style={styles.albumArt} contentFit="cover" />
-              ) : (
-                <LinearGradient
-                  colors={[hero[0], hero[2]]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[styles.albumArt, styles.artFallback]}
-                >
-                  <Text style={styles.artInitial}>{a.album_name[0]}</Text>
-                </LinearGradient>
-              )}
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.albumName} numberOfLines={2}>{a.album_name}</Text>
-                <Text style={styles.albumMeta} numberOfLines={1}>
-                  {[
-                    a.year ?? null,
-                    a.is_ep ? 'EP' : null,
-                    a.status !== 'rated' ? 'unrated' : null,
-                    a.avg_external != null ? `ext ${a.avg_external.toFixed(1)}` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </Text>
+          {/* Discography — the desktop grid's counterpart: your rated copies
+              in colour with their score, the rest of the catalog from
+              MusicBrainz knocked back, newest first. Replaces the flat list of
+              rated albums, which could only ever show what you'd already heard. */}
+          <View style={styles.sectionSolo}>
+            <Discography
+              albums={data.albums}
+              artist={data.artist}
+              onOpenAlbum={(id) => router.push({ pathname: '/album/[id]', params: { id: String(id) } })}
+              // The id segment is unused when name+artist are present, but the
+              // route requires one — same shape openPick uses on For You.
+              onPreviewAlbum={(albumName) =>
+                router.push({
+                  pathname: '/album/[id]',
+                  params: { id: '0', name: albumName, artist: data.artist },
+                })
+              }
+            />
+          </View>
+
+          {/* Neighbours worth comparing, only where a comparison exists. */}
+          {mode === 'compare' && similar.length > 0 && (
+            <View style={styles.sectionSolo}>
+              <Text style={styles.sectionLabel}>SEE MORE ARTIST COMPARISONS</Text>
+              <View style={{ marginTop: spacing.md }}>
+                <SimilarArtistComparisons
+                  rows={similar}
+                  onOpen={(a) =>
+                    router.push({
+                      pathname: '/artist/[name]',
+                      params: { name: encodeURIComponent(a), mode: 'compare' },
+                    })
+                  }
+                />
               </View>
-              {a.score != null && (
-                <Text style={[styles.albumScore, { color: songScoreColor(a.score) }]}>
-                  {a.score.toFixed(2)}
-                </Text>
-              )}
-            </Pressable>
-          ))}
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -437,14 +497,29 @@ const STRIP_WIDTH = Dimensions.get('window').width - spacing.lg * 2
 
 function CatalogStrip({
   albums,
+  catalog = [],
   onOpen,
 }: {
   albums: { id: number; album_name: string; album_art_url: string | null }[]
+  /** The artist's wider catalog, used to fill the fan when your own library
+   *  can't. An artist you've rated once still has a discography. */
+  catalog?: { title: string; cover_url: string | null }[]
   onOpen: (id: number) => void
 }) {
-  const shown = albums.filter((a) => a.album_art_url).slice(0, STRIP_MAX)
-  // A lone cover reads as a stray thumbnail rather than a catalog, and the
-  // ALBUMS list below is already showing it — most artists have exactly one.
+  const owned = albums
+    .filter((a) => a.album_art_url)
+    .map((a) => ({ id: a.id as number | null, name: a.album_name, art: a.album_art_url! }))
+
+  // Yours lead — they're the ones worth tapping — then the catalog tops the fan
+  // up. Matched on name so a record you own isn't drawn twice.
+  const have = new Set(owned.map((a) => a.name.trim().toLowerCase()))
+  const extra = catalog
+    .filter((c) => c.cover_url && !have.has(c.title.trim().toLowerCase()))
+    .map((c) => ({ id: null, name: c.title, art: c.cover_url! }))
+
+  const shown = [...owned, ...extra].slice(0, STRIP_MAX)
+  // One cover still reads as a stray thumbnail rather than a catalog; with the
+  // fallback that now only happens when the artist genuinely has one record.
   if (shown.length < 2) return null
 
   // Overlap only as much as the row needs to fit: small catalogs sit nearly
@@ -459,8 +534,11 @@ function CatalogStrip({
     <View style={styles.strip}>
       {shown.map((a, i) => (
         <Pressable
-          key={a.id}
-          onPress={() => onOpen(a.id)}
+          key={a.id != null ? `a${a.id}` : `c${a.name}`}
+          // A catalog cover is not a record you hold, so there is nothing to
+          // open behind it.
+          disabled={a.id == null}
+          onPress={() => a.id != null && onOpen(a.id)}
           // Highest-scoring album leads and sits on top of the fan.
           style={[
             styles.stripItem,
@@ -469,8 +547,8 @@ function CatalogStrip({
         >
           {/* Sits behind the cover, so a dead art URL (the library has some)
               shows the album's initial instead of an empty tile. */}
-          <Text style={styles.stripInitial}>{a.album_name[0]}</Text>
-          <Image source={{ uri: a.album_art_url! }} style={styles.stripImg} contentFit="cover" />
+          <Text style={styles.stripInitial}>{a.name[0]}</Text>
+          <Image source={{ uri: a.art }} style={styles.stripImg} contentFit="cover" />
         </Pressable>
       ))}
     </View>
@@ -775,12 +853,15 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.78)',
     marginTop: 4,
   },
+  scopeRanks: { marginTop: 2 },
   scopeNote: {
     fontFamily: fonts.bodyMedium,
     fontSize: 11.5,
     color: 'rgba(255,255,255,0.62)',
     marginTop: 4,
   },
+  // The placement is the figure worth reading; the denominator is context.
+  scopeRank: { fontFamily: fonts.bodyBold, color: 'rgba(255,255,255,0.92)' },
 
   // Absolute scores, not percentiles, so this row wears no track — it sits in
   // the bars' rhythm but shouldn't read as one of them.
@@ -867,23 +948,4 @@ const styles = StyleSheet.create({
   },
   sectionSolo: { marginTop: spacing.xl, marginBottom: spacing.sm },
 
-  albumRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.raised,
-    borderRadius: radii.lg,
-    paddingVertical: spacing.md,
-    paddingRight: spacing.lg,
-    paddingLeft: spacing.md + 4, // clears the accent rule
-    marginBottom: spacing.sm,
-    overflow: 'hidden',
-  },
-  albumAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
-  albumArt: { width: 62, height: 62, borderRadius: radii.md },
-  artFallback: { alignItems: 'center', justifyContent: 'center' },
-  artInitial: { fontFamily: fonts.display, fontSize: 24, color: 'rgba(255,255,255,0.9)' },
-  albumName: { fontFamily: fonts.display, fontSize: 17, lineHeight: 21, color: colors.ink },
-  albumMeta: { fontFamily: fonts.body, fontSize: 12.5, color: colors.inkTertiary, marginTop: 3 },
-  albumScore: { fontFamily: fonts.display, fontSize: 24 },
 })

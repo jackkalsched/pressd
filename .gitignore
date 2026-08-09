@@ -57,3 +57,7 @@ Pressd-Logo-Package/
 pressd_logos.zip
 *logo redesign.zip
 *-selection*.png
+
+# Run artefacts from the ingest/prediction scripts
+*.log
+*.nohup.out

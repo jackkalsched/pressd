@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select, func
 from sqlalchemy.orm import selectinload
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import date, timedelta
 from typing import Optional
 import statistics
@@ -10,7 +10,7 @@ import os
 
 from ..database import get_session
 from ..deps import current_user, viewable_user_id
-from ..models import Album, Song
+from ..models import Album, ArtistMeta, Song
 from ..trackkeys import _clean_album as _same_record
 from ..scoring import BANG_THRESHOLD, SKIP_THRESHOLD, compute_a_score, get_factor_stats
 
@@ -460,6 +460,35 @@ def _artist_payload(session: Session, artist_name: str, all_albums_any_status: l
             if scores:
                 by_artist_songs[a.artist].extend(scores)
 
+    # How much of this scope's listening the artist accounts for, overall and
+    # within their own genre. Ranked on songs rated rather than albums: an
+    # artist with three records everyone has played through outranks one with
+    # eight nobody finished, which is the sense of "most rated" people mean.
+    _genre_of: dict[str, str] = {}
+    for a in all_albums_any_status:
+        if a.artist and a.genre and a.artist not in _genre_of:
+            _genre_of[a.artist] = a.genre
+    _this_genre = _genre_of.get(artist_name) or next(
+        (a.genre for a in all_artist_albums if a.genre), None
+    )
+
+    def _rank_within(pool: list[str]) -> tuple[int | None, int]:
+        ordered = sorted(pool, key=lambda k: (-len(by_artist_songs[k]), k.lower()))
+        lowered = artist_name.strip().lower()
+        for i, k in enumerate(ordered):
+            if k.strip().lower() == lowered:
+                return i + 1, len(ordered)
+        return None, len(ordered)
+
+    _all_artists = [k for k, v in by_artist_songs.items() if v]
+    popularity_rank, popularity_of = _rank_within(_all_artists)
+    if _this_genre:
+        genre_rank, genre_rank_of = _rank_within(
+            [k for k in _all_artists if _genre_of.get(k) == _this_genre]
+        )
+    else:
+        genre_rank, genre_rank_of = None, 0
+
     by_artist_ext: dict[str, list[float]] = defaultdict(list)
     for a in all_albums:
         if (e := album_ext(a)) is not None:
@@ -628,6 +657,13 @@ def _artist_payload(session: Session, artist_name: str, all_albums_any_status: l
         "w_song_plus_rank_of": len(ranked_wsp),
         "percentiles": percentiles,
         "song_scores": song_scores,
+        # Ranked within whatever scope this payload was built over — the user's
+        # own library for population='me', the whole site for 'global'.
+        "popularity_rank": popularity_rank,
+        "popularity_of": popularity_of,
+        "genre_popularity_rank": genre_rank,
+        "genre_popularity_of": genre_rank_of,
+        "popularity_genre": _this_genre,
         "albums": _artist_album_rows(
             [a for a in all_artist_albums if a.status == "rated" or len(_album_scores.get(a.id, [])) <= 6],
             album_ext,
@@ -635,6 +671,217 @@ def _artist_payload(session: Session, artist_name: str, all_albums_any_status: l
         ),
         "all_artists": scatter_rows,
     }
+
+
+def _artist_track_scores(
+    session: Session, artist_name: str, albums: list[Album]
+) -> dict[object, dict]:
+    """Every scored track of this artist within a scope, keyed so the same song
+    lines up across libraries.
+
+    The key is track_id where the catalogs agreed on one and a normalised title
+    otherwise — the same rule global_rating.py uses to pool a record across
+    editions. Keeping the two identical is what stops "Money Trees" on a deluxe
+    reissue from being counted as a different song from the one on the original.
+    """
+    from .albums import artist_in_album
+
+    ids = [a.id for a in albums if artist_in_album(a, artist_name)]
+    if not ids:
+        return {}
+
+    rows = session.exec(
+        select(Song.title, Song.score, Song.track_id)
+        .where(Song.album_id.in_(ids))
+        .where(Song.score.is_not(None))
+    ).all()
+
+    out: dict[object, dict] = {}
+    for title, score, track_id in rows:
+        key = track_id if track_id is not None else ("t:" + (title or "").strip().lower())
+        slot = out.setdefault(key, {"title": title, "scores": []})
+        slot["scores"].append(score)
+    return out
+
+
+def _artist_song_gaps(
+    session: Session, artist_name: str, mine: list[Album], user_id: int
+) -> list[dict]:
+    """Per-song: your score against everyone else's for the same track.
+
+    Everyone *else* — the pooled figure excludes your own rating. Including it
+    would dilute the very gap the chart is drawing, and worst on the tracks that
+    matter most: with two raters your score is half the number you're being
+    compared against, so a real disagreement reads as half of itself.
+
+    Tracks nobody else has rated are dropped rather than shown at a gap of zero.
+    You are not a crowd to disagree with, and a row of zeroes would crowd out
+    the genuine splits.
+    """
+    mine_tracks = _artist_track_scores(session, artist_name, mine)
+    if not mine_tracks:
+        return []
+    others = _artist_track_scores(
+        session,
+        artist_name,
+        session.exec(select(Album).where(Album.user_id != user_id)).all(),
+    )
+
+    gaps = []
+    for key, m in mine_tracks.items():
+        pooled = others.get(key)
+        if not pooled:
+            continue
+        yours = sum(m["scores"]) / len(m["scores"])
+        theirs = sum(pooled["scores"]) / len(pooled["scores"])
+        gaps.append({
+            "title": m["title"],
+            "mine": round(yours, 2),
+            "theirs": round(theirs, 2),
+            "diff": round(yours - theirs, 2),
+            "raters": len(pooled["scores"]),
+        })
+    # Biggest disagreement first; the client decides how many to draw.
+    gaps.sort(key=lambda g: abs(g["diff"]), reverse=True)
+    return gaps
+
+
+def _artist_catalog_art(session: Session, artist_name: str, limit: int = 10) -> list[dict]:
+    """Cover art for this artist from anywhere in Press'd, newest first.
+
+    The header fan used to draw only from your own library, so an artist you'd
+    rated once — or hadn't rated at all — got no covers. Someone else almost
+    always holds the record, and its art is the same art.
+
+    Matched on the album's primary artist rather than artist_in_album: that
+    helper also walks featured credits, which would need every album in the
+    table loaded to answer. Cover art doesn't warrant a full scan, and a
+    record's own artist is who it's filed under anyway.
+    """
+    rows = session.exec(
+        select(Album.album_name, Album.album_art_url, Album.year)
+        # Contains rather than equals: the payload matches with artist_in_album,
+        # which also walks featured and extra credits, and an exact match on the
+        # primary artist column disagreed with it — an artist whose albums are
+        # filed under a joint credit came back with no covers at all.
+        .where(Album.artist.ilike(f"%{artist_name}%"))
+        .where(Album.album_art_url.is_not(None))
+    ).all()
+
+    seen: dict[str, dict] = {}
+    for name, art, year in rows:
+        key = (name or "").strip().lower()
+        if key and key not in seen:
+            seen[key] = {"album_name": name, "album_art_url": art, "year": year}
+    return sorted(seen.values(), key=lambda r: -(r["year"] or 0))[:limit]
+
+
+@router.get("/artist/{artist_name}/similar")
+def similar_artist_comparisons(
+    artist_name: str,
+    limit: int = Query(12, ge=1, le=40),
+    user_id: int = Depends(viewable_user_id),
+    session: Session = Depends(get_session),
+):
+    """Other artists in the same corner of your library, each with the one track
+    you and Press'd disagree about most.
+
+    "Cluster" here means shared canonical genre, ranked by how many subgenres
+    also overlap. genre_clustering.py exists but is an offline UMAP/HDBSCAN pass
+    over Essentia features that was never wired into the app — nothing persists
+    a cluster id, so genre is the closest thing the stored data supports. If
+    that script ever lands in the schema, this is the one place to repoint.
+
+    Built from two queries rather than per-artist ones: computing gaps for a
+    dozen artists a call at a time meant two round trips each, over the whole
+    album table.
+    """
+    from .albums import artist_in_album
+
+    mine = session.exec(select(Album).where(Album.user_id == user_id)).all()
+    target = [a for a in mine if artist_in_album(a, artist_name)]
+    if not target:
+        return []
+
+    def tags(albums: list[Album]) -> tuple[str | None, set[str]]:
+        genres = [a.genre for a in albums if a.genre]
+        subs = {s for a in albums for s in (a.sub_genre1, a.sub_genre2, a.sub_genre3) if s}
+        primary = Counter(genres).most_common(1)[0][0] if genres else None
+        return primary, subs
+
+    want_genre, want_subs = tags(target)
+    if not want_genre:
+        return []
+
+    # Candidates: your other artists sharing that genre.
+    by_artist: dict[str, list[Album]] = defaultdict(list)
+    for a in mine:
+        if a.artist and a.artist.lower() != artist_name.lower():
+            by_artist[a.artist].append(a)
+    candidates = {}
+    for name, albums in by_artist.items():
+        g, subs = tags(albums)
+        if g == want_genre:
+            candidates[name] = len(want_subs & subs)
+    if not candidates:
+        return []
+
+    def track_key(title: str | None, track_id) -> object:
+        return track_id if track_id is not None else ("t:" + (title or "").strip().lower())
+
+    # One pass for yours, one for everyone else's.
+    def scored(where_mine: bool):
+        q = (
+            select(Album.artist, Song.title, Song.score, Song.track_id)
+            .join(Song, Song.album_id == Album.id)
+            .where(Song.score.is_not(None))
+            .where(Album.artist.in_(list(candidates)))
+        )
+        q = q.where(Album.user_id == user_id) if where_mine else q.where(Album.user_id != user_id)
+        return session.exec(q).all()
+
+    mine_by: dict[tuple, list[float]] = defaultdict(list)
+    titles: dict[tuple, str] = {}
+    for artist, title, score, tid in scored(True):
+        k = (artist, track_key(title, tid))
+        mine_by[k].append(score)
+        titles.setdefault(k, title)
+
+    others_by: dict[tuple, list[float]] = defaultdict(list)
+    for artist, title, score, tid in scored(False):
+        others_by[(artist, track_key(title, tid))].append(score)
+
+    # Biggest split per artist.
+    best: dict[str, dict] = {}
+    for k, my_scores in mine_by.items():
+        theirs = others_by.get(k)
+        if not theirs:
+            continue
+        artist = k[0]
+        diff = (sum(my_scores) / len(my_scores)) - (sum(theirs) / len(theirs))
+        if artist not in best or abs(diff) > abs(best[artist]["diff"]):
+            best[artist] = {"title": titles[k], "diff": round(diff, 2)}
+
+    meta = {
+        m.artist: m.image_url
+        for m in session.exec(
+            select(ArtistMeta).where(ArtistMeta.artist.in_(list(best)))
+        ).all()
+    }
+
+    rows = [
+        {
+            "artist": name,
+            "image_url": meta.get(name),
+            "shared_subgenres": candidates[name],
+            "top_gap": gap,
+        }
+        for name, gap in best.items()
+    ]
+    # Closest neighbours first, then the loudest disagreement among them — the
+    # cell is only worth a tap if the note under it says something.
+    rows.sort(key=lambda r: (-r["shared_subgenres"], -abs(r["top_gap"]["diff"])))
+    return rows[:limit]
 
 
 @router.get("/artist/{artist_name}")
@@ -661,10 +908,14 @@ def artist_detail(
         return session.exec(select(Album)).all()
 
     if population == "global":
-        return _artist_payload(session, artist_name, scope_global())
+        g = _artist_payload(session, artist_name, scope_global())
+        g["catalog_art"] = _artist_catalog_art(session, artist_name)
+        return g
 
     mine = session.exec(select(Album).where(Album.user_id == user_id)).all()
     payload = _artist_payload(session, artist_name, mine)
+    # Every mode's header reads this, so it isn't gated on population.
+    payload["catalog_art"] = _artist_catalog_art(session, artist_name)
     if population == "both":
         g = _artist_payload(session, artist_name, scope_global())
         # Only what the comparison actually draws — the full global payload
@@ -685,6 +936,19 @@ def artist_detail(
             "genre": g["genre"],
             "subgenres": g["subgenres"],
         }
+        # Per-track splits, for the compare view's gap chart. Only computed for
+        # 'both' — it is the one view that reads it.
+        payload["song_gaps"] = _artist_song_gaps(session, artist_name, mine, user_id)
+        # Everyone else's raw song scores, so the compare view can lay their
+        # distribution under yours. Excludes you for the same reason the gaps
+        # do: two curves that both contain your ratings would overlap by
+        # construction, and the overlap is the thing being read.
+        others = _artist_track_scores(
+            session,
+            artist_name,
+            session.exec(select(Album).where(Album.user_id != user_id)).all(),
+        )
+        payload["global"]["song_scores"] = [s for t in others.values() for s in t["scores"]]
     return payload
 
 
