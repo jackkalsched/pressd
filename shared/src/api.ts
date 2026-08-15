@@ -805,8 +805,48 @@ export interface GenreStat {
   avg_score: number
 }
 
+/** The subgenre slots, aggregated the same way genres are. An album counts
+ *  once per distinct subgenre it carries. */
+export async function fetchSubgenreStats(userId = 1): Promise<GenreStat[]> {
+  const res = await apiFetch(`${BASE()}/stats/subgenres?user_id=${userId}`)
+  if (!res.ok) return []
+  return res.json()
+}
+
 export async function fetchGenreStats(userId = 1): Promise<GenreStat[]> {
   const res = await apiFetch(`${BASE()}/stats/genres?user_id=${userId}`)
+  return res.json()
+}
+
+export interface TagRecord {
+  rank: number
+  album_id: number
+  album_name: string
+  artist: string
+  album_art_url: string | null
+  year: number | null
+  score: number
+}
+
+export interface TagRecords {
+  tag: string
+  kind: 'genre' | 'subgenre'
+  count: number
+  avg_score: number | null
+  items: TagRecord[]
+}
+
+/** The albums behind one bar of the genre/subgenre breakdown, best first.
+ *  Readable for a friend, so their bar opens their board and not yours. */
+export async function fetchTagRecords(
+  tag: string,
+  kind: 'genre' | 'subgenre',
+  userId: number,
+): Promise<TagRecords> {
+  const res = await apiFetch(
+    `${BASE()}/stats/tag-records?tag=${encodeURIComponent(tag)}&kind=${kind}&user_id=${userId}`,
+  )
+  if (!res.ok) throw new Error('Failed to load records')
   return res.json()
 }
 

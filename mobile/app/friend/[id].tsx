@@ -306,7 +306,7 @@ export default function FriendProfile() {
               ))}
             </View>
 
-            {tab === 'stats' && <StatsView userId={fid} />}
+            {tab === 'stats' && <StatsView userId={fid} ownerName={person.name} />}
 
             {/* Albums/Artists pills + the metric menu — the same controls your
                 own Ratings tab has, so a friend's board sorts the same way. */}

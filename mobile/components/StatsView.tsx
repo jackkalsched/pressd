@@ -4,17 +4,27 @@
 //   3. song score distribution histogram (1–10, red→green)
 //   4. genres as horizontal count bars
 // plus the most-rated artists list linking into artist pages.
+import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { fetchArtistStats, fetchGenreStats, fetchSongs } from '../lib/api'
+import { ChevronDown, ChevronUp } from 'lucide-react-native'
+import { fetchArtistStats, fetchGenreStats, fetchSubgenreStats, fetchSongs } from '../lib/api'
 import { songScoreColor, BANG_THRESHOLD, SKIP_THRESHOLD } from '@pressd/shared/types'
+import type { GenreStat } from '@pressd/shared/api'
 import ScoreHistogram from './ScoreHistogram'
 import { colors, fonts, spacing } from '../theme/tokens'
 
+// Rows shown before the chart is expanded.
+const TAG_PREVIEW = 4
+
 const RED = '#c0392b'
 
-export default function StatsView({ userId }: { userId: number }) {
+/** @param ownerName  whose stats these are, when they aren't the reader's own.
+ *                    Only used to title the pages the bars open — a board
+ *                    headed "Your top records" on a friend's profile would be
+ *                    showing one person's ratings under another's name. */
+export default function StatsView({ userId, ownerName }: { userId: number; ownerName?: string }) {
   const router = useRouter()
   const { data: artists = [], isLoading } = useQuery({
     queryKey: ['artist-stats', userId],
@@ -33,6 +43,12 @@ export default function StatsView({ userId }: { userId: number }) {
     enabled: userId > 0,
     staleTime: 5 * 60_000,
   })
+  const { data: subgenres = [] } = useQuery({
+    queryKey: ['subgenre-stats', userId],
+    queryFn: () => fetchSubgenreStats(userId),
+    enabled: userId > 0,
+    staleTime: 5 * 60_000,
+  })
 
   const scored = songs.filter((s) => s.score != null).map((s) => s.score!)
   const bangs = scored.filter((s) => s >= BANG_THRESHOLD).length
@@ -40,8 +56,6 @@ export default function StatsView({ userId }: { userId: number }) {
   const bangPct = scored.length ? (bangs / scored.length) * 100 : null
   const skipPct = scored.length ? (skips / scored.length) * 100 : null
 
-  const topGenres = [...genres].sort((a, b) => b.count - a.count).slice(0, 4)
-  const maxGenre = Math.max(1, ...topGenres.map((g) => g.count))
   const topArtists = [...artists].sort((a, b) => b.count - a.count).slice(0, 15)
 
   return (
@@ -80,21 +94,8 @@ export default function StatsView({ userId }: { userId: number }) {
       <Text style={styles.sectionLabel}>SCORE DISTRIBUTION</Text>
       <ScoreHistogram scores={scored} />
 
-      {/* Genres */}
-      {topGenres.length > 0 && (
-        <>
-          <Text style={styles.sectionLabel}>GENRES</Text>
-          {topGenres.map((g) => (
-            <View key={g.genre} style={styles.genreRow}>
-              <Text style={styles.genreName} numberOfLines={1}>{g.genre}</Text>
-              <View style={styles.genreTrack}>
-                <View style={[styles.genreFill, { width: `${(g.count / maxGenre) * 100}%` }]} />
-              </View>
-              <Text style={styles.genreCount}>{g.count}</Text>
-            </View>
-          ))}
-        </>
-      )}
+      <TagBars label="GENRES" kind="genre" rows={genres} userId={userId} ownerName={ownerName} />
+      <TagBars label="SUBGENRES" kind="subgenre" rows={subgenres} userId={userId} ownerName={ownerName} />
 
       {/* Most rated artists */}
       <Text style={styles.sectionLabel}>MOST RATED ARTISTS</Text>
@@ -123,6 +124,83 @@ export default function StatsView({ userId }: { userId: number }) {
   )
 }
 
+/** A count-ranked bar chart that opens up, each bar a link to its records.
+ *
+ *  Four rows is enough to read the shape of someone's taste; the rest is a long
+ *  tail that would push everything below it off the page. Subgenres especially —
+ *  75 of them here against 11 genres.
+ *
+ *  Bars are scaled to the largest row currently shown, not to the largest
+ *  overall, so a collapsed chart uses its full width instead of leaving the top
+ *  bar short in anticipation of rows nobody can see yet.
+ */
+function TagBars({
+  label,
+  kind,
+  rows,
+  userId,
+  ownerName,
+}: {
+  label: string
+  kind: 'genre' | 'subgenre'
+  rows: GenreStat[]
+  userId: number
+  ownerName?: string
+}) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const ranked = useMemo(() => [...rows].sort((a, b) => b.count - a.count), [rows])
+  if (ranked.length === 0) return null
+
+  const shown = open ? ranked : ranked.slice(0, TAG_PREVIEW)
+  const max = Math.max(1, ...shown.map((g) => g.count))
+
+  return (
+    <>
+      <Text style={styles.sectionLabel}>{label}</Text>
+      {shown.map((g) => (
+        <Pressable
+          key={g.genre}
+          style={styles.genreRow}
+          accessibilityRole="button"
+          accessibilityLabel={`${g.genre}, ${g.count} records`}
+          onPress={() =>
+            router.push({
+              pathname: '/genre/[tag]',
+              params: {
+                tag: encodeURIComponent(g.genre),
+                kind,
+                userId: String(userId),
+                // Omitted for your own stats, which is what the board reads as
+                // "yours" — an empty string would title it "'s top records".
+                ...(ownerName ? { owner: encodeURIComponent(ownerName) } : {}),
+              },
+            })
+          }
+        >
+          <Text style={styles.genreName} numberOfLines={1}>{g.genre}</Text>
+          <View style={styles.genreTrack}>
+            <View style={[styles.genreFill, { width: `${(g.count / max) * 100}%` }]} />
+          </View>
+          <Text style={styles.genreCount}>{g.count}</Text>
+        </Pressable>
+      ))}
+      {ranked.length > TAG_PREVIEW && (
+        <Pressable style={styles.moreBtn} onPress={() => setOpen((v) => !v)} hitSlop={6}>
+          <Text style={styles.moreText}>
+            {open ? 'Show less' : `See all ${ranked.length}`}
+          </Text>
+          {open ? (
+            <ChevronUp size={14} color={colors.green} />
+          ) : (
+            <ChevronDown size={14} color={colors.green} />
+          )}
+        </Pressable>
+      )}
+    </>
+  )
+}
+
 const styles = StyleSheet.create({
   wrap: { marginTop: spacing.lg },
 
@@ -146,6 +224,14 @@ const styles = StyleSheet.create({
   },
 
 
+  moreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    paddingVertical: spacing.sm,
+  },
+  moreText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
   genreRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 7 },
   genreName: { width: 88, fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.ink },
   genreTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.inset, overflow: 'hidden' },

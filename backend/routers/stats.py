@@ -974,6 +974,99 @@ def genre_breakdown(user_id: int = Depends(viewable_user_id), session: Session =
     ]
 
 
+@router.get("/subgenres")
+def subgenre_breakdown(user_id: int = Depends(viewable_user_id), session: Session = Depends(get_session)):
+    """Same shape as /genres, over the three subgenre slots instead.
+
+    Its own endpoint rather than another field on /genres: that response is a
+    flat list and the desktop Stats page reads it as one, so widening it would
+    have broken a caller for no gain.
+
+    An album counts once per distinct subgenre it carries, so a record tagged
+    Indie Rock and Art Rock lands in both — that's the point of the slots. The
+    same tag twice on one album is still one album, or a sloppy tagging pass
+    would inflate its own count.
+    """
+    albums = session.exec(
+        select(Album).where(Album.status == "rated").where(Album.user_id == user_id)
+    ).all()
+
+    by_sub: dict[str, list[float]] = defaultdict(list)
+    for a in albums:
+        if a.score is None:
+            continue
+        for sub in {s for s in (a.sub_genre1, a.sub_genre2, a.sub_genre3) if s}:
+            by_sub[sub].append(a.score)
+
+    return [
+        {
+            "genre": sub,
+            "count": len(scores),
+            "avg_score": round(sum(scores) / len(scores), 4),
+        }
+        for sub, scores in sorted(by_sub.items(), key=lambda x: len(x[1]), reverse=True)
+    ]
+
+
+@router.get("/tag-records")
+def tag_records(
+    tag: str,
+    kind: str = "genre",
+    user_id: int = Depends(viewable_user_id),
+    session: Session = Depends(get_session),
+):
+    """One user's rated albums carrying a genre or subgenre, best first.
+
+    The board behind a bar in Stats. Matching is exactly what the breakdowns
+    count — the primary `genre` column for a genre, any of the three subgenre
+    slots for a subgenre — so a bar reading 63 opens 63 records and not some
+    near-miss of that. Tags are compared case-insensitively because they arrive
+    back from a URL, but they are otherwise the literal strings the breakdowns
+    emitted.
+    """
+    albums = session.exec(
+        select(Album)
+        .where(Album.status == "rated")
+        .where(Album.user_id == user_id)
+        .where(Album.score.is_not(None))
+    ).all()
+
+    want = tag.strip().lower()
+
+    def carries(a: Album) -> bool:
+        if kind == "subgenre":
+            # `s and` matters: an untagged slot is null, and coercing it to ""
+            # made every untagged record match an empty tag.
+            return any(s and s.lower() == want for s in (a.sub_genre1, a.sub_genre2, a.sub_genre3))
+        # "Unknown" is the bucket /genres files untagged albums under, so the
+        # bar it draws opens the records it counted.
+        return (a.genre or "Unknown").lower() == want
+
+    matched = [a for a in albums if carries(a)]
+    # Ties broken by title so the order is stable between fetches rather than
+    # reshuffling on every load, the way an unqualified sort on a float does.
+    matched.sort(key=lambda a: (-(a.score or 0), a.album_name.lower()))
+
+    return {
+        "tag": tag,
+        "kind": kind,
+        "count": len(matched),
+        "avg_score": round(sum(a.score for a in matched) / len(matched), 4) if matched else None,
+        "items": [
+            {
+                "rank": i + 1,
+                "album_id": a.id,
+                "album_name": a.album_name,
+                "artist": a.artist,
+                "album_art_url": a.album_art_url,
+                "year": a.year,
+                "score": a.score,
+            }
+            for i, a in enumerate(matched)
+        ],
+    }
+
+
 @router.get("/analysis")
 def analysis(user_id: int = Depends(viewable_user_id), session: Session = Depends(get_session)):
     import anthropic
