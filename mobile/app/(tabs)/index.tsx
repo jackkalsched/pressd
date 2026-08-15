@@ -34,6 +34,7 @@ import {
 import { songScoreColor, type Album } from '@pressd/shared/types'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import { useAuth } from '../../lib/auth'
+import { revealStyle } from '../../lib/scrollReveal'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
 
 const WINDOW_H = Dimensions.get('window').height
@@ -146,22 +147,36 @@ export default function ForYou() {
   const resumeDone = continueFull?.songs.filter((s) => s.score != null).length ?? 0
   const resumeTotal = continueFull?.songs.length ?? continueAlbum?.totalTracks ?? 0
 
-  // Rate this next: rotates once per day through the queue (recommended albums
-  // first when any exist), stable within the day.
+  // Rate this next: rotates once per day, stable within the day.
+  //
+  // Your queue and the catalog are one pool. The catalog half used to be a
+  // fallback shown only when To Listen was empty, which meant anyone who had
+  // queued a single album never saw a prediction again — and the predictions
+  // are the half that can surface a record you'd never have thought to queue.
+  // The nightly worker scores every album anyone has added, per user, so those
+  // exist whether or not you own the record.
   const dayIndex = Math.floor(Date.now() / 86_400_000)
-  const suggestion = useMemo(() => {
-    if (toListen.length === 0) return null
+  const daily = useMemo(() => {
+    // A friend asking still leads. That's a person waiting on an answer, not a
+    // model's guess, and it shouldn't queue behind the catalog.
     const recs = toListen.filter((a) => a.recommendedByName)
-    const pool = [...(recs.length ? recs : toListen)].sort((a, b) => a.id - b.id)
-    return pool[dayIndex % pool.length]
-  }, [toListen, dayIndex])
+    if (recs.length > 0) {
+      const pool = [...recs].sort((a, b) => a.id - b.id)
+      return { queued: pool[dayIndex % pool.length], pick: null }
+    }
+    const queued = [...toListen].sort((a, b) => a.id - b.id)
+    const total = queued.length + picks.length
+    if (total === 0) return { queued: null, pick: null }
+    // One index across both halves, so the rotation walks the whole pool
+    // instead of alternating between two clocks.
+    const i = dayIndex % total
+    return i < queued.length
+      ? { queued: queued[i], pick: null }
+      : { queued: null, pick: picks[i - queued.length] }
+  }, [toListen, picks, dayIndex])
 
-  // Nothing queued: offer the catalog instead. Rotates on the same daily clock
-  // as the queue suggestion so the whole section changes once a day, not twice.
-  const pick = useMemo(
-    () => (suggestion || picks.length === 0 ? null : picks[dayIndex % picks.length]),
-    [suggestion, picks, dayIndex],
-  )
+  const suggestion = daily.queued
+  const pick = daily.pick
 
   async function onRefresh() {
     setRefreshing(true)
@@ -522,7 +537,7 @@ function ReviewCell({ review, first, onOpen, onLike }: { review: TopReview; firs
   )
 }
 
-// A trending cell that fades, rises, and scales up as it scrolls into view.
+// A trending cell that rises, overshoots and settles as it scrolls into view.
 // `baseY` is the trending block's offset in the scroll content; combined with
 // the row's own offset within the block it gives an absolute content position
 // to interpolate the shared scrollY against. Native-driver friendly (opacity +
@@ -543,22 +558,10 @@ function TrendRow({
   onPress: () => void
 }) {
   const [localY, setLocalY] = useState(0)
-  const absY = baseY + localY
-  // Begin the pop once the row is ~100px up from the bottom edge; finish over
-  // the next 120px of scroll.
-  const start = absY - WINDOW_H + 100
-  const progress = scrollY.interpolate({
-    inputRange: [start, start + 120],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  })
-  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [18, 0] })
+  const reveal = revealStyle(scrollY, baseY + localY, rank, WINDOW_H)
 
   return (
-    <Animated.View
-      onLayout={(e) => setLocalY(e.nativeEvent.layout.y)}
-      style={{ opacity: progress, transform: [{ translateY }] }}
-    >
+    <Animated.View onLayout={(e) => setLocalY(e.nativeEvent.layout.y)} style={reveal}>
       <Pressable
         style={({ pressed }) => [styles.trendRow, rank > 1 && styles.hairline, pressed && styles.trendRowPressed]}
         onPress={onPress}
