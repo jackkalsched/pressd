@@ -3,9 +3,11 @@
 // with the #1 raised, then the ranked list out to 50, each row showing its
 // day-over-day movement. Defaults to This Week with no other filters.
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { StyleProp, ViewStyle } from 'react-native'
 import {
   ActivityIndicator,
   Animated,
+  Dimensions,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +23,7 @@ import { ChevronDown, Triangle, X } from 'lucide-react-native'
 import { fetchCharts, type ChartItem } from '../../lib/api'
 import { songScoreColor, avatarColor } from '@pressd/shared/types'
 import AnchoredMenu, { type MenuOption } from '../../components/AnchoredMenu'
+import { revealStyle } from '../../lib/scrollReveal'
 import { colors, contentWidth, fonts, radii, spacing } from '../../theme/tokens'
 
 const DOWN = '#c0392b'
@@ -45,6 +48,7 @@ const POD_CENTER = Math.floor(POD_AVAIL * 0.4)
 // past what the cap allows (a third digit, a wider glyph) takes the room it
 // needs and the flexible middle gives way, which is the one part of the row that
 // can afford to.
+const WINDOW_H = Dimensions.get('window').height
 const NUM_SCALE_CAP = 1.3
 
 const RANK_SIZE = 19
@@ -239,6 +243,15 @@ export default function Charts() {
           </View>
         }
         renderItem={({ item }) => <ChartRow item={item} onOpen={openAlbum} />}
+        // The reveal rides the cell rather than the row: inside a FlatList a
+        // row's own onLayout reports its position within its cell, which is
+        // always zero. The cell knows where it sits in the content, which is
+        // what the animation has to interpolate against.
+        CellRendererComponent={({ children, index, style, ...rest }) => (
+          <RevealCell index={index} scrollY={scrollY} style={style} {...rest}>
+            {children}
+          </RevealCell>
+        )}
       />
     </SafeAreaView>
   )
@@ -354,6 +367,34 @@ function Movement({ value }: { value: number | null }) {
         {Math.abs(value)}
       </Text>
     </View>
+  )
+}
+
+/** One board row, rising and settling into place as it scrolls in. */
+function RevealCell({
+  children,
+  index,
+  scrollY,
+  style,
+  ...rest
+}: {
+  children: React.ReactNode
+  index: number
+  scrollY: Animated.Value
+  style?: StyleProp<ViewStyle>
+}) {
+  const [y, setY] = useState<number | null>(null)
+  // Held flat until it has measured. Animating from a guessed position makes
+  // the first rows jump when the real offset arrives.
+  const reveal = y == null ? null : revealStyle(scrollY, y, index, WINDOW_H)
+  return (
+    <Animated.View
+      {...rest}
+      style={[style, reveal]}
+      onLayout={(e) => setY(e.nativeEvent.layout.y)}
+    >
+      {children}
+    </Animated.View>
   )
 }
 
