@@ -61,3 +61,4 @@ pressd_logos.zip
 # Run artefacts from the ingest/prediction scripts
 *.log
 *.nohup.out
+tags_backup_*.json
