@@ -7,6 +7,7 @@ punctuation. Pure stdlib — safe to import from the web service, the worker,
 and one-off scripts alike.
 """
 import re
+import unicodedata
 
 # Parenthetical/bracket segments that only carry credits: "(feat. X)", "[with Y]"
 _FEAT_PAREN = re.compile(
@@ -29,6 +30,28 @@ def _clean(s: str) -> str:
     if not s:  # title was nothing but stripped qualifiers — fall back to raw
         s = re.sub(r"[^a-z0-9]+", " ", raw.lower()).strip()
     return s
+
+
+def artist_key(s: str) -> str:
+    """Canonical identity for an artist credit — the unit artist clustering
+    groups on.
+
+    `_clean` alone is not enough here. It strips anything outside [a-z0-9] after
+    lowercasing, so a diacritic is deleted rather than folded: "Cafuné" becomes
+    "cafun" while "Cafune" becomes "cafune", and the two stay separate artists.
+    Decomposing to NFKD first and dropping the combining marks turns "é" into
+    "e" before that substitution ever runs.
+
+    Deliberately no "the"-prefix stripping: it would merge The Cure with Cure,
+    and there is no evidence of that particular disagreement in the data.
+
+    Not a stored key — this is a grouping key, computed on read, so it can be
+    tightened later without a migration.
+    """
+    raw = s or ""
+    folded = unicodedata.normalize("NFKD", raw.casefold())
+    folded = "".join(c for c in folded if not unicodedata.combining(c))
+    return _clean(folded)
 
 
 def track_key(artist: str, title: str) -> str:
