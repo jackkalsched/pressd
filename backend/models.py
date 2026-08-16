@@ -327,9 +327,38 @@ class AlbumPrediction(SQLModel, table=True):
     # Worth storing — a prediction from a 2%-personal blend deserves different
     # confidence in the UI than one from a settled personal model.
     model_source: Optional[str] = None
+    # Which tier of the artist-cluster hierarchy produced predicted_replay:
+    # 'mates' (mostly the user's own ratings of cluster-mates) | 'global'
+    # (mostly the calibrated userbase figure) | 'own' | 'genre'. A global-tier
+    # value is a much weaker claim, and without this there is no way to tell
+    # them apart once written.
+    replay_tier: Optional[str] = None
     # True when the user has already rated this album; kept rather than skipped
     # so predictions can be scored against outcomes.
     already_rated: bool = Field(default=False)
+    computed_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ArtistCluster(SQLModel, table=True):
+    """One artist's place in the global map, per KMeans seed.
+
+    A record of the nightly fit, not its source — the map is refit in memory on
+    every run and never loaded from here. It exists so the clustering can be
+    inspected and diffed without a 1–2 minute refit, and so the backend can read
+    neighbourhoods cheaply.
+    """
+    artist_key: str = Field(primary_key=True)
+    seed: int = Field(primary_key=True)
+    cluster_id: int
+    # Provenance: which ARTIST_K produced this row.
+    k: int
+    display_name: Optional[str] = None
+    # False when the artist was placed by nearest centroid after the fit —
+    # analyzed between nightly runs rather than present at fit time.
+    in_universe: bool = Field(default=True)
+    # The cluster's tier-3 mean replay in z-space, carried here so the table
+    # explains its own predictions.
+    global_z: Optional[float] = None
     computed_at: datetime = Field(default_factory=datetime.utcnow)
 
 

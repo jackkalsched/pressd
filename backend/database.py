@@ -135,6 +135,15 @@ def init_db():
             #    albums the user doesn't own.
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_albumprediction_user_album ON albumprediction (user_id, album_key)",
             "CREATE INDEX IF NOT EXISTS ix_albumprediction_user ON albumprediction (user_id)",
+            # ── The global artist map, recorded after each nightly fit. Written
+            #    only; the fit in memory stays authoritative. Its value is that
+            #    "what is the clustering, over how many artists, at what k?"
+            #    becomes a query rather than a code-reading exercise.
+            "CREATE INDEX IF NOT EXISTS ix_artistcluster_key ON artistcluster (artist_key)",
+            # Which tier answered a replay prediction — a global-tier value is a
+            # much weaker claim than one drawn from the user's own cluster-mates,
+            # and there was previously no way to tell them apart after the fact.
+            "ALTER TABLE albumprediction ADD COLUMN replay_tier VARCHAR",
         ]:
             _exec_migration(conn, stmt)
 
