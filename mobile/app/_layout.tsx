@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
@@ -19,11 +19,18 @@ import '../lib/api' // configure the shared client before anything fetches
 import { AuthProvider, useAuth } from '../lib/auth'
 import { loadSocialSeen } from '../lib/socialSeen'
 import { loadRecsSeen } from '../lib/recsSeen'
+import {
+  currentBuild, loadWhatsNewSeen, markWhatsNewSeen,
+  useWhatsNewHydrated, useWhatsNewSeen,
+} from '../lib/whatsNew'
+import { latestRelease, releaseFor } from '../lib/releaseNotes'
+import WhatsNewSheet from '../components/WhatsNewSheet'
 import { colors } from '../theme/tokens'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
 loadSocialSeen() // hydrate the Social "new activity" marker once at launch
 loadRecsSeen()   // and the watermark that keeps the recommendation banner to one showing
+loadWhatsNewSeen()  // and which build's release notes have already been read
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },
@@ -53,6 +60,8 @@ function RootNavigator() {
   if (!fontsLoaded || !ready) return null // splash stays up
 
   return (
+    <>
+    <WhatsNew signedIn={!!user} />
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Protected guard={!!user}>
         <Stack.Screen name="(tabs)" />
@@ -72,6 +81,47 @@ function RootNavigator() {
         <Stack.Screen name="sign-in" />
       </Stack.Protected>
     </Stack>
+    </>
+  )
+}
+
+/** The release notes, once per build, for signed-in users only.
+ *
+ *  Gated on `signedIn` because notes describing recommendations and profile
+ *  picks mean nothing to someone looking at the sign-in screen — and showing
+ *  them there would spend the one appearance before the reader has an account.
+ *
+ *  Held until the Keychain has answered, so it never flashes up on a build
+ *  whose notes were already read.
+ */
+function WhatsNew({ signedIn }: { signedIn: boolean }) {
+  const seen = useWhatsNewSeen()
+  const hydrated = useWhatsNewHydrated()
+  const build = currentBuild()
+  // Fall back to the newest notes we have when the binary reports a build we
+  // shipped none for — better than a silent nothing on a build that shipped.
+  const release = releaseFor(build) ?? latestRelease()
+
+  const [dismissed, setDismissed] = useState(false)
+  // Derived rather than pushed into state from an effect: the answer is a pure
+  // function of what's already known, and setting state in an effect would
+  // render once with the sheet closed and again with it open for no reason.
+  const due = signedIn && hydrated && !!release && build > seen
+  // Pinned the first time it comes due, so marking it read — which moves `seen`
+  // and makes `due` false — doesn't yank the sheet out mid-read.
+  const pinned = useRef(false)
+  if (due) pinned.current = true
+
+  if (!release) return null
+  return (
+    <WhatsNewSheet
+      release={release}
+      visible={pinned.current && !dismissed}
+      onClose={() => {
+        setDismissed(true)
+        markWhatsNewSeen(build)
+      }}
+    />
   )
 }
 
