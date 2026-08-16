@@ -21,6 +21,8 @@ import warnings
 from sqlalchemy import text
 warnings.filterwarnings("ignore")
 
+from backend.trackkeys import artist_key
+
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
@@ -53,7 +55,11 @@ except Exception:
 # ── 1. Load data ──────────────────────────────────────────────────────────────
 
 _META_COLS = [
-    "song_id", "title", "artist", "album_id", "album_name", "genre",
+    # `artist` is the song credit and `album_artist` the record's. They differ
+    # on 50 distinct values — featured guests, mostly — and the cluster map is
+    # keyed on the album artist so a guest's tracks fold into the record rather
+    # than spawning a one-track artist.
+    "song_id", "title", "artist", "album_artist", "album_id", "album_name", "genre",
     "sub_genre1", "sub_genre2", "sub_genre3", "year",
     "theme", "replay_value", "production", "distinctness",
 ]
@@ -77,6 +83,7 @@ _AF_SELECT = """
 
 _TRAINING_SQL = text(f"""
     SELECT s.id AS song_id, s.title, s.artist, s.score,
+           a.artist AS album_artist,
            a.id AS album_id, a.album_name, a.genre,
            a.sub_genre1, a.sub_genre2, a.sub_genre3, a.year,
            a.theme, a.replay_value, a.production, a.distinctness,
@@ -91,6 +98,7 @@ _TRAINING_SQL = text(f"""
 # user's ratings on a common scale before pooling them.
 _POOLED_SQL = text(f"""
     SELECT s.id AS song_id, s.title, s.artist, s.score,
+           a.artist AS album_artist,
            a.id AS album_id, a.album_name, a.genre,
            a.sub_genre1, a.sub_genre2, a.sub_genre3, a.year,
            a.theme, a.replay_value, a.production, a.distinctness,
@@ -103,6 +111,7 @@ _POOLED_SQL = text(f"""
 
 _ALBUM_SQL = text(f"""
     SELECT s.id AS song_id, s.title, s.artist,
+           a.artist AS album_artist,
            a.id AS album_id, a.album_name, a.genre,
            a.sub_genre1, a.sub_genre2, a.sub_genre3, a.year,
            a.theme, a.replay_value, a.production, a.distinctness,
@@ -233,6 +242,14 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
 def prepare_frame(df_raw: pd.DataFrame) -> pd.DataFrame:
     """Full raw→model-ready pipeline; positional indices align with iloc."""
     df = build_features(expand_mfcc(df_raw))
+    # The unit every artist-level quantity groups on. Derived from the album
+    # credit, not the song credit: a featured guest's tracks belong to the
+    # record's artist, and the two strings disagree on 50 values. Also folds
+    # case and diacritics, so 'Cafuné' and 'Cafune' stop being two artists.
+    if "album_artist" in df.columns:
+        df["artist_key"] = df["album_artist"].map(artist_key)
+    elif "artist" in df.columns:
+        df["artist_key"] = df["artist"].map(artist_key)
     if "score" in df.columns:
         df = df.dropna(subset=["bpm", "loudness_db", "danceability"])
     return df.reset_index(drop=True)
@@ -294,10 +311,18 @@ class TasteModel:
     training subset only, so CV stays leak-free.
     """
 
-    def __init__(self, artist_k: int = ARTIST_K, album_k: int = ALBUM_K,
+    def __init__(self, album_k: int = ALBUM_K, clusters=None,
                  random_state: int = 42, n_seeds: int = N_CLUSTER_SEEDS):
-        self.artist_k = artist_k
+        """`clusters` is a fitted worker.artist_clusters.ArtistClusters, shared
+        by every model in the run. This class no longer clusters artists at all:
+        it used to build a private map from whatever the caller's frame held, so
+        a user with eleven artists got a two-way split of eleven artists feeding
+        `similar_artist_mean`, and "similar artist" meant something different
+        for every user. Album clustering stays per-model — that matrix embeds
+        personal ratings (EXTERNAL_FACTORS) and cannot go global the same way.
+        """
         self.album_k = album_k
+        self.clusters = clusters
         self.random_state = random_state
         # Cluster-mean features are averaged over n_seeds independent KMeans
         # runs — single hard clusterings are noisy at cluster boundaries
@@ -306,39 +331,16 @@ class TasteModel:
     # ---- matrix construction (no names, no scores) ----
 
     def prepare(self, df: pd.DataFrame):
-        """Build the artist and album clustering matrices from the full frame."""
+        """Build the album clustering matrix from the full frame.
+
+        The artist half of this method is gone — it lives in ArtistClusters,
+        fit once per run over every artist with analyzed audio rather than once
+        per model over whoever the caller happened to have rated.
+        """
         self.genre_cats = sorted(df["genre"].dropna().unique().tolist())
-
-        # ── artist matrix
-        audio = df.groupby("artist")[AUDIO_FEATURES].mean()
-        self._artist_audio_median = audio.median()
-        audio = audio.fillna(self._artist_audio_median)
-        self.artists = audio.index.tolist()
-        self._artist_pos = {a: i for i, a in enumerate(self.artists)}
-
-        links = df[["artist", "album_id"]].drop_duplicates()
+        # One row per album — was built alongside the deleted artist block, and
+        # the album matrix below still needs it.
         alb_meta = df.drop_duplicates("album_id").set_index("album_id")
-
-        lg = links.join(alb_meta["genre"], on="album_id").dropna(subset=["genre"])
-        gmode = lg.groupby("artist")["genre"].agg(lambda s: s.mode().iloc[0])
-
-        tag_rows = []
-        for c in ("sub_genre1", "sub_genre2", "sub_genre3"):
-            t = links.join(alb_meta[c], on="album_id").rename(columns={c: "tag"})
-            tag_rows.append(t[["artist", "tag"]])
-        at = pd.concat(tag_rows)
-        at["tag"] = at["tag"].map(_norm_tag)
-        at = at.dropna().drop_duplicates()
-        freq = at.groupby("tag")["artist"].nunique()
-        self.artist_sub_vocab = sorted(freq[freq >= _SUBGENRE_MIN_ARTISTS].index)
-        artist_tags = at.groupby("artist")["tag"].agg(set)
-
-        self.artist_scaler = StandardScaler().fit(audio.values)
-        Xa = self.artist_scaler.transform(audio.values)
-        G = self._genre_block([gmode.get(a) for a in self.artists])
-        S = self._tag_block([artist_tags.get(a, set()) for a in self.artists],
-                            self.artist_sub_vocab)
-        self._X_artist = np.hstack([Xa, G, S])
 
         # ── album matrix
         mean_ = df.groupby("album_id")[AUDIO_FEATURES].mean()
@@ -396,20 +398,21 @@ class TasteModel:
     # ---- clustering ----
 
     def fit_clusters(self):
-        self.artist_kms, self.album_kms = [], []
-        self.artist_clusters, self.album_clusters = [], []
+        # A reference, not a copy: the ML feature and the replay heuristic now
+        # read the same single map, so `similar_artist_mean` and a replay
+        # prediction refer to the same neighbourhoods instead of two maps that
+        # happened to be built from different frames.
+        self.artist_clusters = self.clusters.maps if self.clusters else []
+
+        self.album_kms, self.album_clusters = [], []
         for i in range(self.n_seeds):
             seed = self.random_state + i * 101
-            akm = KMeans(n_clusters=self.artist_k, n_init=10,
-                         random_state=seed).fit(self._X_artist)
             bkm = KMeans(n_clusters=self.album_k, n_init=10,
                          random_state=seed).fit(self._X_album)
-            self.artist_kms.append(akm)
             self.album_kms.append(bkm)
-            self.artist_clusters.append(dict(zip(self.artists, akm.labels_)))
             self.album_clusters.append(dict(zip(self.album_ids, bkm.labels_)))
         # First seed's labels kept for inspection / membership printouts
-        self.artist_cluster = self.artist_clusters[0]
+        self.artist_cluster = self.artist_clusters[0] if self.artist_clusters else {}
         self.album_cluster = self.album_clusters[0]
         return self
 
@@ -417,12 +420,16 @@ class TasteModel:
 
     def fit_scores(self, train_df: pd.DataFrame):
         self.train_ids = set(train_df["song_id"])
-        self.a_sum = train_df.groupby("artist")["score"].sum()
-        self.a_cnt = train_df.groupby("artist")["score"].size()
+        # Grouped on the canonical album artist, matching the map. Previously
+        # the sums were keyed on the raw song credit while the cluster map was
+        # keyed on something else entirely, so featured-guest rows looked up a
+        # key that was never in it.
+        self.a_sum = train_df.groupby("artist_key")["score"].sum()
+        self.a_cnt = train_df.groupby("artist_key")["score"].size()
 
         self.ac_sums, self.ac_cnts = [], []
         for cmap in self.artist_clusters:
-            acl = train_df["artist"].map(cmap)
+            acl = train_df["artist_key"].map(cmap)
             self.ac_sums.append(train_df.groupby(acl)["score"].sum())
             self.ac_cnts.append(train_df.groupby(acl)["score"].size())
 
@@ -460,8 +467,8 @@ class TasteModel:
         score_f = score.fillna(0.0).values
         it = in_train.values.astype(float)
 
-        a_sum = df["artist"].map(self.a_sum).fillna(0.0).values
-        a_cnt = df["artist"].map(self.a_cnt).fillna(0).astype(float).values
+        a_sum = df["artist_key"].map(self.a_sum).fillna(0.0).values
+        a_cnt = df["artist_key"].map(self.a_cnt).fillna(0).astype(float).values
         loo_sum = a_sum - score_f * it
         loo_cnt = a_cnt - it
         loo_mean = np.divide(loo_sum, loo_cnt,
@@ -469,7 +476,7 @@ class TasteModel:
 
         # Averaged over the KMeans seed ensemble to smooth boundary noise
         sim_artist = self._ensemble_sim(
-            df["artist"], self.artist_clusters, self.ac_sums, self.ac_cnts,
+            df["artist_key"], self.artist_clusters, self.ac_sums, self.ac_cnts,
             a_sum, a_cnt)
 
         # Tiered artist mean: ≥15 songs → pure LOO; 8–14 → 0.4·LOO + 0.6·cluster;
@@ -494,29 +501,29 @@ class TasteModel:
     # ---- deployment: assign clusters for an unseen album / artist ----
 
     def extend(self, df_pred: pd.DataFrame):
-        """Map a prediction album (and any unseen artists on it) to the
-        nearest existing cluster so taste features stay available."""
-        meta = df_pred.iloc[0]
+        """Map any unseen albums in the frame to their nearest album cluster.
 
-        tags = {_norm_tag(meta.get(c)) for c in ("sub_genre1", "sub_genre2", "sub_genre3")}
-        tags = {t for t in tags if t}
+        Two bugs lived here, both from assuming `df_pred` is a single album —
+        `catalog_predict` calls this with the entire ~830-album catalog frame.
+        Only row 0's album ever got a cluster, so every other unseen album left
+        `similar_album_song_mean` NaN; and unseen *artists* were placed using
+        row 0's genre and tags, so two of the three blocks in the artist matrix
+        were wrong for all of them.
 
-        for artist in df_pred["artist"].dropna().unique():
-            if artist in self.artist_clusters[0]:
+        The artist half is gone entirely — placement now happens once, on the
+        shared ArtistClusters, with each artist's own genre and tags. That also
+        removes the order dependence: assignments no longer depend on which
+        user's model ran first.
+        """
+        for aid, rows in df_pred.groupby("album_id"):
+            if aid in self.album_clusters[0]:
                 continue
-            songs = df_pred[df_pred["artist"] == artist]
-            centroid = songs[AUDIO_FEATURES].mean().fillna(self._artist_audio_median)
-            Xa = self.artist_scaler.transform(centroid.values.reshape(1, -1))
-            G = self._genre_block([meta.get("genre")])
-            S = self._tag_block([tags], self.artist_sub_vocab)
-            X = np.hstack([Xa, G, S])
-            for km, cmap in zip(self.artist_kms, self.artist_clusters):
-                cmap[artist] = int(km.predict(X)[0])
-
-        aid = meta["album_id"]
-        if aid not in self.album_clusters[0]:
-            mean_ = df_pred[AUDIO_FEATURES].mean().fillna(self._album_audio_median)
-            std_ = df_pred[AUDIO_FEATURES].std().fillna(0.0)
+            meta = rows.iloc[0]
+            tags = {_norm_tag(meta.get(c))
+                    for c in ("sub_genre1", "sub_genre2", "sub_genre3")}
+            tags = {t for t in tags if t}
+            mean_ = rows[AUDIO_FEATURES].mean().fillna(self._album_audio_median)
+            std_ = rows[AUDIO_FEATURES].std().fillna(0.0)
             ext = pd.Series({f: meta.get(f) for f in EXTERNAL_FACTORS},
                             dtype=float).fillna(self.ext_medians)
             num = np.concatenate([mean_.values, std_.values, ext.values]).reshape(1, -1)
@@ -529,66 +536,41 @@ class TasteModel:
                 cmap[aid] = int(km.predict(X)[0])
         return self
 
+    def extend_artists(self, df_pred: pd.DataFrame):
+        """Place any artists in the frame that the global fit didn't cover —
+        analyzed between nightly runs. Each gets its own genre mode and tag
+        union, not whichever album happened to sort first."""
+        if self.clusters is None or "artist_key" not in df_pred.columns:
+            return self
+        for key, rows in df_pred.groupby("artist_key"):
+            if not key or key in self.clusters.maps[0]:
+                continue
+            meta = rows.iloc[0]
+            tags = set()
+            for c in ("sub_genre1", "sub_genre2", "sub_genre3"):
+                for t in rows[c].map(_norm_tag).dropna().unique():
+                    tags.add(t)
+            genres = rows["genre"].dropna()
+            self.clusters.assign(
+                key, rows[AUDIO_FEATURES].mean(),
+                genres.mode().iloc[0] if len(genres) else meta.get("genre"),
+                tags)
+        return self
 
-def fit_taste_full(df: pd.DataFrame, artist_k: int | None = None,
+
+def fit_taste_full(df: pd.DataFrame, clusters=None,
                    album_k: int | None = None) -> TasteModel:
-    """k=None auto-scales cluster counts to the library: the tuned (12, 55)
-    assumes a ~360-album library and would overfit a small user's data."""
-    if artist_k is None:
-        artist_k = int(np.clip(df["artist"].nunique() // 4, 2, ARTIST_K))
+    """album_k=None auto-scales to the library: the tuned 55 assumes a ~360-album
+    library and would overfit a small user's data.
+
+    `artist_k` is gone — artists are clustered once, globally, by ArtistClusters.
+    It used to scale to `nunique // 4`, which gave a user with eleven artists a
+    two-way split and fed that straight into their song predictions.
+    """
     if album_k is None:
         album_k = int(np.clip(df["album_id"].nunique() // 6, 2, ALBUM_K))
-    return TasteModel(artist_k, album_k).prepare(df).fit_clusters().fit_scores(df)
-
-
-def artist_cluster_replay_mean_for_user(taste: TasteModel, artist: str,
-                                        replay_by_artist: dict[str, float]) -> float | None:
-    """Mean replay of the artist's cluster-mates, using *this user's* ratings.
-
-    The clustering and the ratings come from deliberately different places. The
-    cluster map is fit over the whole artist dataset, so "similar artist" means
-    similar across everything the userbase has ever added — a new listener gets
-    the benefit of neighbourhoods their own library is far too small to
-    describe. The replay values averaged inside that neighbourhood are only
-    ever the user's own, so the answer is "how much do *I* replay artists like
-    this one", not "how much does the userbase replay them".
-
-    Averaged across the KMeans seeds, and the artist's own albums are excluded
-    so a caller can blend this with their own mean without double-counting.
-    """
-    if not replay_by_artist:
-        return None
-    vals = []
-    for cmap in taste.artist_clusters:
-        c = cmap.get(artist)
-        if c is None:
-            continue
-        mates = [r for a, r in replay_by_artist.items()
-                 if a != artist and cmap.get(a) == c]
-        if mates:
-            vals.append(sum(mates) / len(mates))
-    return float(np.mean(vals)) if vals else None
-
-
-def artist_cluster_replay_mean(df: pd.DataFrame, taste: TasteModel,
-                               artist: str) -> float | None:
-    """Mean replay_value of rated albums by the artist's cluster-mates,
-    ensemble-averaged across the KMeans seeds. The artist's own albums are
-    excluded so the 50/50 blend with their own mean stays independent.
-    Works for unseen artists after taste.extend() has mapped them."""
-    alb = (df.drop_duplicates("album_id")[["artist", "replay_value"]]
-             .dropna(subset=["replay_value"]))
-    if alb.empty:
-        return None
-    vals = []
-    for cmap in taste.artist_clusters:
-        c = cmap.get(artist)
-        if c is None:
-            continue
-        mates = alb[(alb["artist"].map(cmap) == c) & (alb["artist"] != artist)]
-        if len(mates):
-            vals.append(float(mates["replay_value"].mean()))
-    return float(np.mean(vals)) if vals else None
+    return (TasteModel(album_k, clusters=clusters)
+            .prepare(df).fit_clusters().fit_scores(df))
 
 
 def fold_features(df: pd.DataFrame, taste: TasteModel) -> pd.DataFrame:
@@ -630,7 +612,11 @@ def make_splits(df: pd.DataFrame) -> dict:
     return {
         "KFold (randomized)": list(KFold(5, shuffle=True, random_state=42).split(df)),
         "GroupKFold (album)": list(GroupKFold(5).split(df, groups=df["album_id"])),
-        "GroupKFold (artist)": list(GroupKFold(5).split(df, groups=df["artist"])),
+        # Grouped on the canonical key, not the raw song credit: a featured
+        # guest's row carries a different `artist` string for the same act, so
+        # grouping on it put the same artist in train and test and made the
+        # new-artist stress test easier than it should be.
+        "GroupKFold (artist)": list(GroupKFold(5).split(df, groups=df["artist_key"])),
     }
 
 
@@ -679,45 +665,40 @@ def evaluate(df: pd.DataFrame, target: pd.Series, taste: TasteModel,
 
 # ── 7. Clustering diagnostics ─────────────────────────────────────────────────
 
-def cluster_diagnostics(df: pd.DataFrame,
-                        artist_ks=(8, 10, 12, 15, 18, 20, 25),
-                        album_ks=(15, 20, 25, 30, 35, 40)):
+def cluster_diagnostics(df: pd.DataFrame, album_ks=(15, 20, 25, 30, 35, 40)):
+    """Album clustering only. The artist side moved to ArtistClusters, which
+    fits over the whole userbase rather than one frame — use its `diagnostics`.
+    """
     tm = TasteModel().prepare(df)
-    print("\n── Clustering diagnostics (silhouette ↑ better, Davies-Bouldin ↓ better) ──")
-    for label, X, ks in (("Artist", tm._X_artist, artist_ks),
-                         ("Album", tm._X_album, album_ks)):
-        print(f"\n{label} clusters ({X.shape[0]} entities × {X.shape[1]} dims):")
-        print(f"  {'k':>4} {'silhouette':>11} {'davies-bouldin':>15}")
-        for k in ks:
-            km = KMeans(n_clusters=k, n_init=10, random_state=42).fit(X)
-            sil = silhouette_score(X, km.labels_)
-            db = davies_bouldin_score(X, km.labels_)
-            print(f"  {k:>4} {sil:>11.4f} {db:>15.4f}")
+    print("\n── Album clustering (silhouette ↑ better, Davies-Bouldin ↓ better) ──")
+    X = tm._X_album
+    print(f"\n{X.shape[0]} albums × {X.shape[1]} dims:")
+    print(f"  {'k':>4} {'silhouette':>11} {'davies-bouldin':>15}")
+    for k in album_ks:
+        km = KMeans(n_clusters=k, n_init=10, random_state=42).fit(X)
+        print(f"  {k:>4} {silhouette_score(X, km.labels_):>11.4f}"
+              f" {davies_bouldin_score(X, km.labels_):>15.4f}")
     return tm
 
 
-def print_cluster_members(df: pd.DataFrame, taste: TasteModel, max_clusters=None):
-    """Sanity check: artist names per cluster with cluster mean song score."""
-    a_mean = df.groupby("artist")["score"].mean()
-    a_cnt = df.groupby("artist")["score"].size()
-    rows = pd.DataFrame({
-        "artist": taste.artists,
-        "cluster": [taste.artist_cluster[a] for a in taste.artists],
-    })
-    rows["mean"] = rows["artist"].map(a_mean)
-    rows["n"] = rows["artist"].map(a_cnt)
+def print_cluster_members(df: pd.DataFrame, clusters, max_clusters=None):
+    """Sanity check: artist names per cluster with the frame's mean song score.
 
-    print(f"\n── Artist cluster membership (k={taste.artist_k}) ──")
-    for c, grp in rows.groupby("cluster"):
+    Takes an ArtistClusters now, not a TasteModel — the map is global, so the
+    scores shown are just this frame's view of it.
+    """
+    a_mean = df.groupby("artist_key")["score"].mean()
+    a_cnt = df.groupby("artist_key")["score"].size()
+    print(f"\n── Artist cluster membership (k={clusters.k}) ──")
+    for c, names in clusters.members(seed=0, limit=10**6).items():
         if max_clusters is not None and c >= max_clusters:
             break
-        grp = grp.sort_values("n", ascending=False)
-        cluster_mean = (grp["mean"] * grp["n"]).sum() / grp["n"].sum()
-        names = ", ".join(
-            f"{r.artist} ({int(r.n)})" for r in grp.itertuples()
-        )
-        print(f"\n  Cluster {c} — {len(grp)} artists, song-weighted mean {cluster_mean:.2f}:")
-        print(f"    {names}")
+        keys = [k for k, v in clusters.maps[0].items() if v == c]
+        n = sum(int(a_cnt.get(k, 0)) for k in keys)
+        num = sum(float(a_mean.get(k, 0)) * int(a_cnt.get(k, 0)) for k in keys)
+        mean = num / n if n else float("nan")
+        print(f"\n  Cluster {c} — {len(keys)} artists, song-weighted mean {mean:.2f}:")
+        print(f"    {', '.join(names)}")
 
 
 # ── 8. Random Forest deep-dive ────────────────────────────────────────────────
@@ -875,7 +856,12 @@ class UserModel:
     def predict_frame(self, df_pred: pd.DataFrame) -> np.ndarray:
         """Per-song predictions for one album's frame, on this model's own
         output scale. The single point every model variant has to implement."""
-        self.taste.extend(df_pred)   # nearest-cluster assignment for unseen artist/album
+        # Albums are placed per-model; artists are placed once on the shared
+        # map, so every user sees the same assignment regardless of when their
+        # model runs. That ordering dependence is what made a rerun with the
+        # user list reversed produce different predictions.
+        self.taste.extend(df_pred)
+        self.taste.extend_artists(df_pred)
         return self.pipe.predict(fold_features(df_pred, self.taste))
 
     @property
@@ -957,14 +943,14 @@ class BlendedModel:
         return f"blend({self.weight:.2f} personal)"
 
 
-def fit_user_model(con, user_id: int = 1) -> UserModel | None:
+def fit_user_model(con, user_id: int = 1, clusters=None) -> UserModel | None:
     """Train the song score model on one user's rated+analyzed songs only."""
     df = prepare_frame(load_data(con, user_id))
     if len(df) < 20:
         print(f"[song_score_model] user {user_id}: only {len(df)} training songs — need ≥20")
         return None
 
-    taste = fit_taste_full(df)
+    taste = fit_taste_full(df, clusters=clusters)
     feats = fold_features(df, taste)
 
     models = get_models()
@@ -981,7 +967,7 @@ def fit_user_model(con, user_id: int = 1) -> UserModel | None:
     return None
 
 
-def fit_pooled_model(con) -> UserModel | None:
+def fit_pooled_model(con, clusters=None) -> UserModel | None:
     """One model over the whole userbase, trained on per-user z-scores.
 
     This is the cold-start prior: it cannot know a given user's taste, but it
@@ -993,7 +979,7 @@ def fit_pooled_model(con) -> UserModel | None:
         print(f"[song_score_model] pooled: only {len(df)} training songs — need ≥20")
         return None
 
-    taste = fit_taste_full(df)
+    taste = fit_taste_full(df, clusters=clusters)
     feats = fold_features(df, taste)
     for model_name in ("LightGBM", "XGBoost", "RandomForest"):
         models = get_models()
@@ -1015,7 +1001,8 @@ def fit_pooled_model(con) -> UserModel | None:
 FULL_PERSONAL_SONGS = 1300
 
 
-def fit_for_user(con, user_id: int, pooled: UserModel | None = None):
+def fit_for_user(con, user_id: int, pooled: UserModel | None = None,
+                 clusters=None):
     """The right song model for one user, whatever their library size.
 
       • enough songs to fit their own and past FULL_PERSONAL_SONGS → personal
@@ -1032,13 +1019,13 @@ def fit_for_user(con, user_id: int, pooled: UserModel | None = None):
         " WHERE a.user_id = :uid AND s.score IS NOT NULL AND ta.bpm IS NOT NULL"),
         {"uid": user_id}).scalar() or 0
 
-    personal = fit_user_model(con, user_id) if n >= 20 else None
+    personal = fit_user_model(con, user_id, clusters=clusters) if n >= 20 else None
     if personal is not None and n >= FULL_PERSONAL_SONGS:
         print(f"[song_score_model] user {user_id}: personal model ({n} songs)")
         return personal
 
     if pooled is None:
-        pooled = fit_pooled_model(con)
+        pooled = fit_pooled_model(con, clusters=clusters)
     if pooled is None:
         return personal  # nothing to blend with; personal or nothing
 
@@ -1064,6 +1051,7 @@ def train_model(con, user_id: int = 1):
 
 _ALBUMS_SQL = text(f"""
     SELECT s.id AS song_id, s.title, s.artist,
+           a.artist AS album_artist,
            a.id AS album_id, a.album_name, a.genre,
            a.sub_genre1, a.sub_genre2, a.sub_genre3, a.year,
            a.theme, a.replay_value, a.production, a.distinctness,

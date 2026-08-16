@@ -76,22 +76,22 @@ def catalog_albums(con) -> list[dict]:
 
 
 def _replay_lookup(con, user_id: int):
-    """(by_artist, by_artist_exact, by_genre, overall) replay means for one
-    user, in two queries instead of three per album.
+    """(by_artist, by_genre, overall) replay means for one user.
 
-    Two artist dictionaries because they are consumed by things that disagree
-    about case: the fallback chain matches on a normalised name, while the
-    KMeans cluster maps are keyed by the exact artist string as it appears in
-    the training frame.
+    One artist dictionary now, keyed canonically. There used to be two —
+    `by_artist` lowercased for the fallback chain and `by_artist_exact` for the
+    cluster map — precisely because the two sides disagreed about case. Both are
+    keyed on `artist_key` now, so the disagreement they worked around is gone.
     """
-    artist_rows = [
-        (r[0], float(r[1])) for r in con.execute(text(
-            "SELECT artist, AVG(replay_value) FROM album"
+    from backend.trackkeys import artist_key
+    acc: dict[str, list[float]] = {}
+    for r in con.execute(text(
+            "SELECT artist, replay_value FROM album"
             " WHERE status='rated' AND user_id=:u AND replay_value IS NOT NULL"
-            " GROUP BY artist"), {"u": user_id}).fetchall() if r[1] is not None
-    ]
-    by_artist = {(a or "").strip().lower(): v for a, v in artist_rows}
-    by_artist_exact = {a: v for a, v in artist_rows if a}
+            "   AND artist IS NOT NULL"), {"u": user_id}).fetchall():
+        if r[1] is not None:
+            acc.setdefault(artist_key(r[0]), []).append(float(r[1]))
+    by_artist = {k: sum(v) / len(v) for k, v in acc.items()}
     by_genre = {
         (r[0] or "").strip().lower(): float(r[1])
         for r in con.execute(text(
@@ -103,8 +103,7 @@ def _replay_lookup(con, user_id: int):
         "SELECT AVG(replay_value) FROM album"
         " WHERE status='rated' AND user_id=:u AND replay_value IS NOT NULL"),
         {"u": user_id}).scalar()
-    return (by_artist, by_artist_exact, by_genre,
-            float(overall) if overall is not None else None)
+    return (by_artist, by_genre, float(overall) if overall is not None else None)
 
 
 def _rated_keys(con, user_id: int) -> set[str]:
@@ -120,10 +119,11 @@ _UPSERT = text("""
     INSERT INTO albumprediction
         (user_id, album_key, artist, album_name, genre, year, album_art_url,
          predicted_song_mean, predicted_theme, predicted_distinctness,
-         predicted_replay, predicted_score, model_source, already_rated, computed_at)
+         predicted_replay, predicted_score, model_source, replay_tier,
+         already_rated, computed_at)
     VALUES (:user_id, :album_key, :artist, :album_name, :genre, :year, :album_art_url,
             :song_mean, :theme, :distinctness, :replay, :score, :model_source,
-            :already_rated, NOW())
+            :replay_tier, :already_rated, NOW())
     ON CONFLICT (user_id, album_key) DO UPDATE SET
         predicted_song_mean = EXCLUDED.predicted_song_mean,
         predicted_theme = EXCLUDED.predicted_theme,
@@ -131,6 +131,7 @@ _UPSERT = text("""
         predicted_replay = EXCLUDED.predicted_replay,
         predicted_score = EXCLUDED.predicted_score,
         model_source = EXCLUDED.model_source,
+        replay_tier = EXCLUDED.replay_tier,
         already_rated = EXCLUDED.already_rated,
         genre = EXCLUDED.genre,
         year = EXCLUDED.year,
@@ -140,11 +141,12 @@ _UPSERT = text("""
 
 
 def predict_catalog_for_user(con, session, user, catalog, frame, um, prior,
-                             predictor=None, taste=None) -> dict:
+                             predictor=None, clusters=None) -> dict:
     """Score the whole catalog for one user and upsert the rows."""
     from backend import scoring
+    from backend.trackkeys import artist_key
     from theme_predictor.personalize import FactorPredictor
-    from song_score_model import artist_cluster_replay_mean_for_user
+    from worker.artist_clusters import user_replay_scale
 
     # ── song means: one vectorised predict over the whole catalog frame ──
     work = frame.copy()
@@ -154,11 +156,13 @@ def predict_catalog_for_user(con, session, user, catalog, frame, um, prior,
     # ── per-user lookups, built once ──
     if predictor is None:
         predictor = FactorPredictor(con, user.id)
-    by_artist, by_artist_exact, by_genre, overall_replay = _replay_lookup(con, user.id)
+    by_artist, by_genre, overall_replay = _replay_lookup(con, user.id)
     rated = _rated_keys(con, user.id)
-    if taste is None:
-        taste = um.taste
-    cluster_cache: dict[str, float | None] = {}
+    if clusters is None:
+        clusters = getattr(um.taste, "clusters", None)
+    # Replay scale, not song-score scale — see user_replay_scale.
+    r_mu, r_sd = user_replay_scale(con, user.id)
+    cluster_cache: dict[str, tuple[float, str] | None] = {}
 
     factor_stats = scoring.get_factor_stats(session, user_id=user.id, prior=prior)
     weights = scoring.get_user_weights(user)
@@ -179,21 +183,25 @@ def predict_catalog_for_user(con, session, user, catalog, frame, um, prior,
         # Same rule as the queue path: the user's own mean for this artist,
         # blended with their own mean over the artist's cluster-mates, where
         # the clusters span the whole artist dataset.
-        artist = rec["artist"]
-        own = by_artist.get((artist or "").strip().lower())
-        if artist in cluster_cache:
-            cluster = cluster_cache[artist]
+        akey = artist_key(rec["artist"] or "")
+        own = by_artist.get(akey)
+        if akey in cluster_cache:
+            hit = cluster_cache[akey]
         else:
-            cluster = (artist_cluster_replay_mean_for_user(taste, artist, by_artist_exact)
-                       if taste is not None else None)
-            cluster_cache[artist] = cluster
+            hit = (clusters.cluster_value(akey, by_artist, r_mu, r_sd)
+                   if clusters is not None else None)
+            cluster_cache[akey] = hit
+        cluster, replay_tier = (hit if hit else (None, None))
 
         if own is not None and cluster is not None:
             replay = 0.5 * own + 0.5 * cluster
         else:
             replay = (own if own is not None else cluster)
+            if cluster is None and own is not None:
+                replay_tier = "own"
         if replay is None:
             replay = by_genre.get((genre or "").strip().lower()) or overall_replay
+            replay_tier = "genre"
 
         # Any missing factor falls back to the user's mean for it, so the term
         # contributes nothing rather than dragging the composite toward a clamp.
@@ -212,6 +220,9 @@ def predict_catalog_for_user(con, session, user, catalog, frame, um, prior,
             "theme": t, "distinctness": d,
             "replay": round(float(r), 2) if r is not None else None,
             "score": score, "model_source": um.source,
+            # Which tier of the cluster hierarchy answered — a 'global' replay
+            # is a far weaker claim than a 'mates' one.
+            "replay_tier": replay_tier,
             "already_rated": key in rated,
         })
 
@@ -227,7 +238,7 @@ def predict_catalog_for_user(con, session, user, catalog, frame, um, prior,
 
 
 def predict_catalog(only_user: int | None = None, pooled=None,
-                    dry_run: bool = False) -> dict:
+                    dry_run: bool = False, clusters=None) -> dict:
     from song_score_model import album_frames, fit_for_user, fit_pooled_model
     from backend import scoring
 
@@ -244,8 +255,15 @@ def predict_catalog(only_user: int | None = None, pooled=None,
         print(f"[catalog_predict] frame: {len(frame)} songs across "
               f"{frame['album_id'].nunique()} albums")
 
+        # Standalone entry point: fit the map here, since no nightly run has
+        # handed one down.
+        if clusters is None:
+            from worker.artist_clusters import ArtistClusters
+            clusters = ArtistClusters.fit(con)
+            clusters.persist(con)
+            print(f"[catalog_predict] artist map: {len(clusters.artists)} artists, k={clusters.k}")
         if pooled is None:
-            pooled = fit_pooled_model(con)
+            pooled = fit_pooled_model(con, clusters=clusters)
 
     out = {}
     with Session(engine) as session:
@@ -257,12 +275,13 @@ def predict_catalog(only_user: int | None = None, pooled=None,
         for user in users:
             try:
                 with engine.connect() as con:
-                    um = fit_for_user(con, user.id, pooled=pooled)
+                    um = fit_for_user(con, user.id, pooled=pooled, clusters=clusters)
                     if um is None:
                         print(f"[catalog_predict] user {user.id}: no model, skipped")
                         continue
                     out[user.id] = predict_catalog_for_user(
-                        con, session, user, catalog, frame, um, prior)
+                        con, session, user, catalog, frame, um, prior,
+                        clusters=clusters)
             except Exception as e:
                 print(f"[catalog_predict] user {user.id} failed: {e}")
                 out[user.id] = {"error": str(e)}

@@ -161,17 +161,24 @@ def score_missing_globally(con, user_id: int) -> int:
 
 
 def user_replay_by_artist(con, user_id: int) -> dict[str, float]:
-    """{artist: mean replay} over one user's rated albums, in a single query."""
-    return {
-        r[0]: float(r[1])
-        for r in con.execute(text(
-            "SELECT artist, AVG(replay_value) FROM album"
+    """{artist_key: mean replay} over one user's rated albums.
+
+    Keyed canonically so it lines up with the cluster map. It previously used
+    the raw `album.artist` string while the map was built from `song.artist`,
+    so every lookup where the two disagreed silently missed.
+    """
+    from backend.trackkeys import artist_key
+    out: dict[str, list[float]] = {}
+    for r in con.execute(text(
+            "SELECT artist, replay_value FROM album"
             " WHERE status='rated' AND user_id = :u AND replay_value IS NOT NULL"
-            " GROUP BY artist"), {"u": user_id}).fetchall() if r[1] is not None
-    }
+            "   AND artist IS NOT NULL"), {"u": user_id}).fetchall():
+        if r[1] is not None:
+            out.setdefault(artist_key(r[0]), []).append(float(r[1]))
+    return {k: sum(v) / len(v) for k, v in out.items()}
 
 
-def predict_replay_all(con, user_id: int, um, taste=None) -> int:
+def predict_replay_all(con, user_id: int, um, clusters=None) -> int:
     """Replay prediction for all unrated albums.
 
     0.5·(the user's own mean for that artist) + 0.5·(their mean over the
@@ -182,9 +189,12 @@ def predict_replay_all(con, user_id: int, um, taste=None) -> int:
     within that neighbourhood are strictly the user's own.
 
     Fallback chain when one side is missing: own mean alone, then cluster mean
-    alone, then their genre mean, then their overall mean.
+    alone, then their genre mean, then their overall mean. Tiers 2-4 of that
+    chain now live inside `clusters.cluster_value`, so what remains here is the
+    0.5/0.5 blend and the final guard.
     """
-    from song_score_model import artist_cluster_replay_mean_for_user
+    from backend.trackkeys import artist_key
+    from worker.artist_clusters import user_replay_scale
 
     albums = con.execute(text(
         "SELECT id, artist, genre FROM album"
@@ -203,29 +213,35 @@ def predict_replay_all(con, user_id: int, um, taste=None) -> int:
     }
 
     own_by_artist = user_replay_by_artist(con, user_id)
-    if taste is None and um is not None:
-        taste = um.taste
-    cluster_cache: dict[str, float | None] = {}
+    if clusters is None and um is not None:
+        clusters = getattr(um.taste, "clusters", None)
+    # The user's *replay* scale, not their song-score scale: tier 3 maps replay
+    # z-scores back, and the two distributions differ by up to 1.3 points.
+    r_mu, r_sd = user_replay_scale(con, user_id)
+    cluster_cache: dict[str, tuple[float, str] | None] = {}
 
     updated = 0
     for album_id, artist, genre in albums:
-        own = own_by_artist.get(artist)
-        if taste is None:
-            cluster = None
-        elif artist in cluster_cache:
-            cluster = cluster_cache[artist]
+        key = artist_key(artist or "")
+        own = own_by_artist.get(key)
+        if clusters is None:
+            hit = None
+        elif key in cluster_cache:
+            hit = cluster_cache[key]
         else:
-            cluster = artist_cluster_replay_mean_for_user(taste, artist, own_by_artist)
-            cluster_cache[artist] = cluster
+            hit = clusters.cluster_value(key, own_by_artist, r_mu, r_sd)
+            cluster_cache[key] = hit
+        cluster, tier = (hit if hit else (None, None))
 
         if own is not None and cluster is not None:
             replay = 0.5 * own + 0.5 * cluster
         elif own is not None:
-            replay = own
+            replay, tier = own, "own"
         elif cluster is not None:
             replay = cluster
         else:
             replay = by_genre.get((genre or "").strip().lower(), user_avg)
+            tier = "genre"
         if replay is None:
             continue
 
@@ -240,7 +256,7 @@ def predict_replay_all(con, user_id: int, um, taste=None) -> int:
 
 def run_user(user_id: int, skip_llm: bool = False, pooled=None,
              force: bool = False, catalog=None, frame=None,
-             theme_features=None, pooled_theme=None) -> dict:
+             theme_features=None, pooled_theme=None, clusters=None) -> dict:
     """Full pipeline for one user. Fresh connection per stage — a nightly run
     can span long enough for the Supabase pooler to drop idle connections.
 
@@ -289,7 +305,7 @@ def run_user(user_id: int, skip_llm: bool = False, pooled=None,
         #    sharing one constant song mean.
         um = None
         with engine.connect() as con:
-            um = fit_for_user(con, user_id, pooled=pooled)
+            um = fit_for_user(con, user_id, pooled=pooled, clusters=clusters)
             if um is not None:
                 detail["song_model"] = um.source
                 detail["song_means"] = repredict_all_song_means(
@@ -317,7 +333,7 @@ def run_user(user_id: int, skip_llm: bool = False, pooled=None,
         # 4 + 5. Replay, then composite (reads the stored replay; 10.0 cap)
         with engine.connect() as con:
             detail["replay_albums"] = predict_replay_all(
-                con, user_id, um, taste=(pooled.taste if pooled is not None else None))
+                con, user_id, um, clusters=clusters)
             _recompute_unrated(con, only_user=user_id, use_stored_replay=True)
             con.commit()
 
@@ -336,8 +352,7 @@ def run_user(user_id: int, skip_llm: bool = False, pooled=None,
                     with engine.connect() as con:
                         detail["catalog"] = predict_catalog_for_user(
                             con, session, user, catalog, frame, um, prior,
-                            predictor=predictor,
-                            taste=(pooled.taste if pooled is not None else None))
+                            predictor=predictor, clusters=clusters)
                 # Surface the fresh catalog numbers on the album rows the apps
                 # actually read.
                 with engine.connect() as con:
@@ -386,14 +401,23 @@ def main():
 
     # Everything userbase-wide is built once here: the pooled prior, the
     # catalog, and the song frame every user's model predicts over.
-    pooled, catalog, frame = None, None, None
+    pooled, catalog, frame, clusters = None, None, None, None
     theme_features, pooled_theme = None, None
     try:
         from song_score_model import fit_pooled_model, album_frames
+        from worker.artist_clusters import ArtistClusters
         from worker.catalog_predict import catalog_albums
         from theme_predictor.personalize import _features_by_key, fit_pooled_theme_model
         with engine.connect() as con:
-            pooled = fit_pooled_model(con)
+            # Before the pooled model, because every model in this run borrows
+            # it. One map, fit over every artist with analyzed audio and no
+            # ratings of any kind, so "similar artist" means the same thing for
+            # a user with 254 rated artists and one with three.
+            clusters = ArtistClusters.fit(con)
+            clusters.persist(con)
+            print(f"[nightly_predict] artist map: {len(clusters.artists)} artists, "
+                  f"k={clusters.k}, {len(clusters.maps)} seeds")
+            pooled = fit_pooled_model(con, clusters=clusters)
             catalog = catalog_albums(con)
             frame = album_frames(con, [r["album_id"] for r in catalog])
             # The semantic axes and the pooled theme ridge are the same for
@@ -410,7 +434,8 @@ def main():
     print(f"[nightly_predict] running for users: {user_ids}")
     results = [run_user(uid, skip_llm=args.skip_llm, pooled=pooled,
                         force=args.force, catalog=catalog, frame=frame,
-                        theme_features=theme_features, pooled_theme=pooled_theme)
+                        theme_features=theme_features, pooled_theme=pooled_theme,
+                        clusters=clusters)
                for uid in user_ids]
     n_ok = sum(1 for r in results if r["status"] == "ok")
     n_skip = sum(1 for r in results if r["status"] == "unchanged")
