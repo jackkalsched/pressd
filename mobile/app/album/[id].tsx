@@ -46,7 +46,6 @@ import CommentThread from '../../components/CommentThread'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
 import BangSkip from '../../components/BangSkip'
 import ShareCard from '../../components/ShareCard'
-import ScoreDial from '../../components/ScoreDial'
 import RecommendSheet from '../../components/RecommendSheet'
 import NoComparisonYet from '../../components/NoComparisonYet'
 import { confirmDeleteAlbum, useDeleteAlbum } from '../../lib/useDeleteAlbum'
@@ -575,14 +574,16 @@ export default function AlbumDetail() {
         </View>
 
         <View style={styles.scoreBlock}>
-          {/* A prediction reads as a dial, a settled score as the numeral —
-              so the two are never mistaken for each other. */}
+          {/* A prediction is drawn hollow and a settled score filled, so the two
+              are never mistaken for each other.
+
+              This used to be a dial here and a stroked numeral on the userbase
+              view, which meant the same album's prediction changed shape
+              depending on which copy you opened — the one place the encoding
+              most needs to hold still. The stroke wins because it can sit
+              beside a real score at the same size and baseline; a ring cannot. */}
           {scoreIsPredicted && showScore != null ? (
-            // The numeral's line-height supplies its own breathing room; the
-            // dial needs the gap added back before the label.
-            <View style={{ marginBottom: 6 }}>
-              <ScoreDial value={showScore} size={104} />
-            </View>
+            <OutlineScore value={showScore} />
           ) : (
             <Text
               style={[styles.bigScore, { color: showScore != null ? colors.green : colors.inkMuted }]}
