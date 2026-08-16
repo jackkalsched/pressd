@@ -67,9 +67,24 @@ def album_key(artist: str, album_name: str) -> str:
 # but not for album names — catalogs disagree on edition far more than on the
 # record itself, and "Ctrl (Deluxe)" has to match "Ctrl". Deliberately excludes
 # soundtrack/live: those are genuinely different releases.
+# `medley` earns its place the same way: one copy of Take Care spells a track
+# "Cameras / Good Ones Go Interlude" and another "… (Medley)". Safe because the
+# only other use of the word in the catalog is a prefix ("Medley: Pick A Bale
+# Of Cotton"), which no parenthetical rule touches. Deliberately not added to
+# _TRAIL_QUAL, which feeds _clean and therefore the stored track_key.
 _EDITION_PAREN = re.compile(
     r"[(\[][^)\]]*\b(deluxe|remaster(ed)?|expanded|edition|version|anniversary|"
-    r"explicit|bonus|mono|stereo|reissue|remix|mix)\b[^)\]]*[)\]]", re.I)
+    r"explicit|bonus|mono|stereo|reissue|remix|mix|medley)\b[^)\]]*[)\]]", re.I)
+
+
+# Straight and curly. Deleted rather than spaced, so "Marvin's" meets "Marvins".
+_APOSTROPHE = re.compile(r"['\u2019]")
+
+# The dash form of the qualifiers _TRAIL_QUAL misses. That regex feeds _clean
+# and therefore the stored track_key, so it cannot grow; this one is applied in
+# match_title alone. Take Care carries the same interlude three ways \u2014 bare,
+# "(Medley)", and "- Medley" \u2014 and only the middle one is a parenthetical.
+_TRAIL_QUAL_CMP = re.compile(r"\s-\s[^-]*\bmedley\b.*$", re.I)
 
 
 def match_title(title: str) -> str:
@@ -81,11 +96,19 @@ def match_title(title: str) -> str:
     alone only handles the first, so a bare `re.sub` on punctuation — or
     `_clean` on its own — splits one track into two rows on the community view.
 
-    Comparison only. `track_key` stays the stored key and must not change.
+    There is a third disagreement: whether the apostrophe is typed at all.
+    `_clean` turns every non-alphanumeric run into a space, so "Marvin's Room"
+    becomes "marvin s room" and "Marvins Room" becomes "marvins room" — one
+    track, two rows. Deleting apostrophes before that substitution closes it,
+    and generalises to "Don't"/"Dont".
+
+    Comparison only. `track_key` stays the stored key and must not change,
+    which is why the apostrophe handling lives here rather than in `_clean`.
     """
     raw = title or ""
-    stripped = _EDITION_PAREN.sub(" ", raw)
-    return _clean(stripped) or _clean(raw)
+    stripped = _TRAIL_QUAL_CMP.sub(" ", _EDITION_PAREN.sub(" ", raw))
+    stripped = _APOSTROPHE.sub("", stripped)
+    return _clean(stripped) or _clean(_APOSTROPHE.sub("", raw))
 
 
 def _clean_album(s: str) -> str:
