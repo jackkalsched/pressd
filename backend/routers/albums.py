@@ -14,9 +14,35 @@ from ..models import Album, Song, SongAudioFeatures, PressUser, Like, Comment
 from ..scoring import compute_a_score, recompute_all_scores, BANG_THRESHOLD, SKIP_THRESHOLD
 from ..global_rating import invalidate_cache as invalidate_global_ratings
 from ..genres import GENRES, canonical_genre, canonical_subgenre
-from ..trackkeys import match_title, same_album
+from ..trackkeys import _clean_album, match_title, same_album
 
 router = APIRouter(prefix="/albums", tags=["albums"])
+
+
+def _record_copies(session: Session, album_name: str, artist: str, *,
+                   rated_only: bool = False, with_songs: bool = False) -> list[Album]:
+    """Every user's copy of one record, matched on the same-recording key.
+
+    Catalogs disagree about edition far more than about the record. Three users
+    hold Drake's Take Care as 'Take Care', 'Take Care (Deluxe)' and 'Take Care
+    (Deluxe Version)'; matching raw names made that three community albums with
+    one rater each, none of which could offer a comparison. `_clean_album` is
+    the key the charts already collapse on, and the same idea `match_title`
+    applies to the tracks *inside* this payload — the album it hangs off was
+    the one level still being matched literally.
+
+    Filtered in Python because the key is a Python normalizer. The SQL prefilter
+    on artist keeps the candidate set to one artist's catalogue, so this reads
+    tens of rows rather than the table.
+    """
+    q = select(Album).where(
+        func.lower(func.trim(Album.artist)) == (artist or "").strip().lower())
+    if rated_only:
+        q = q.where(Album.status == "rated", Album.score.is_not(None))
+    if with_songs:
+        q = q.options(selectinload(Album.songs))
+    target = _clean_album(album_name)
+    return [a for a in session.exec(q).all() if _clean_album(a.album_name) == target]
 
 # Fields a client may set/change on an album; everything else (score, user_id,
 # predicted_*) is server-controlled and must never come from the request body.
@@ -99,14 +125,8 @@ def community_album_by_name(
 ):
     """Community view for an album identified by name + artist rather than by a
     copy's id — how new releases arrive, since they may not be in Pressd yet."""
-    source = session.exec(
-        select(Album)
-        .where(
-            func.lower(func.trim(Album.album_name)) == album_name.strip().lower(),
-            func.lower(func.trim(Album.artist)) == artist.strip().lower(),
-        )
-        .options(selectinload(Album.songs))
-    ).first()
+    source = next(iter(_record_copies(
+        session, album_name, artist, with_songs=True)), None)
     return _community_payload(session, user, album_name, artist, source)
 
 
@@ -123,15 +143,11 @@ def get_album(
     # Whether a comparison exists to make. Counted here rather than left to the
     # client, which would otherwise have to pull the whole pooled community
     # payload — tracks and all — just to learn whether the number is zero.
-    others = session.exec(
-        select(func.count(func.distinct(Album.user_id))).where(
-            func.lower(func.trim(Album.album_name)) == (album.album_name or "").strip().lower(),
-            func.lower(func.trim(Album.artist)) == (album.artist or "").strip().lower(),
-            Album.status == "rated",
-            Album.score.is_not(None),
-            Album.user_id != user.id,
-        )
-    ).one()
+    others = len({
+        a.user_id for a in _record_copies(
+            session, album.album_name or "", album.artist or "", rated_only=True)
+        if a.user_id is not None and a.user_id != user.id
+    })
     return {
         **album.model_dump(),
         "others_rater_count": others,
@@ -875,16 +891,8 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
     rated yet comes back with null averages and a zero rater count rather than
     a 404 — that's a valid state for a fresh release.
     """
-    copies = session.exec(
-        select(Album)
-        .where(
-            func.lower(func.trim(Album.album_name)) == album_name.strip().lower(),
-            func.lower(func.trim(Album.artist)) == artist.strip().lower(),
-            Album.status == "rated",
-            Album.score.is_not(None),
-        )
-        .options(selectinload(Album.songs))
-    ).all()
+    copies = _record_copies(session, album_name, artist,
+                            rated_only=True, with_songs=True)
 
     def avg(vals):
         vals = [v for v in vals if v is not None]
@@ -944,13 +952,9 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
     mine = next((c for c in copies if c.user_id == user.id), None)
     # Your copy at any status — an unrated one still supplies the id to rate
     # and the per-user prediction, neither of which live on the averages.
-    mine_any = mine or session.exec(
-        select(Album).where(
-            func.lower(func.trim(Album.album_name)) == album_name.strip().lower(),
-            func.lower(func.trim(Album.artist)) == artist.strip().lower(),
-            Album.user_id == user.id,
-        )
-    ).first()
+    mine_any = mine or next(
+        (a for a in _record_copies(session, album_name, artist)
+         if a.user_id == user.id), None)
     ref = source or mine_any or (copies[0] if copies else None)
     pick = lambda attr: next(
         (getattr(c, attr) for c in copies if getattr(c, attr)),
