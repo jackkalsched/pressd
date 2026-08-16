@@ -45,6 +45,9 @@ export interface Album {
   predictedScore: number | null
   recommendedBy: number | null
   recommendedByName: string | null
+  /** When it was sent. Ordering by this is what makes "newest recommendation"
+   *  mean the latest one rather than the highest row id. */
+  recommendedAt: string | null
   /** What the sender said when they passed it on, if anything. */
   recommendationNote: string | null
   /** People other than you who have rated this record. Zero means there is no

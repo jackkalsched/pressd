@@ -94,6 +94,7 @@ function transformAlbum(a: Record<string, unknown>): Album {
     predictedScore: a.predicted_score as number | null ?? null,
     recommendedBy: a.recommended_by as number | null ?? null,
     recommendedByName: a.recommended_by_name as string | null ?? null,
+    recommendedAt: a.recommended_at as string | null ?? null,
     recommendationNote: a.recommendation_note as string | null ?? null,
     review: a.review as string | null ?? null,
     reviewAt: a.review_at as string | null ?? null,

@@ -45,8 +45,8 @@ import { useAuth } from '../../lib/auth'
 import CommentThread from '../../components/CommentThread'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
 import BangSkip from '../../components/BangSkip'
-import ScoreDial from '../../components/ScoreDial'
 import ShareCard from '../../components/ShareCard'
+import ScoreDial from '../../components/ScoreDial'
 import RecommendSheet from '../../components/RecommendSheet'
 import NoComparisonYet from '../../components/NoComparisonYet'
 import { confirmDeleteAlbum, useDeleteAlbum } from '../../lib/useDeleteAlbum'
@@ -59,6 +59,19 @@ const WINDOW_H = Dimensions.get('window').height
 const DANGER = '#b91c1c'
 // The recommendation accent, shared with the star on a recommended cover.
 const RECOMMEND = '#f97316'
+
+/** "today" / "3 days ago" / "12 Mar". Prose rather than CommentThread's compact
+ *  "3d" — that one is a suffix on a timestamp line, this reads inside a
+ *  sentence about a person, and "sent 3d" is not how anyone says it. */
+function relativeDay(iso: string): string {
+  const then = new Date(iso)
+  if (Number.isNaN(then.getTime())) return ''
+  const days = Math.floor((Date.now() - then.getTime()) / 86_400_000)
+  if (days <= 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 30) return `${days} days ago`
+  return then.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
+}
 
 // The album average and the prediction are two readings of one thing, so they
 // are set at one size. Both the filled numeral and the stroked one read from
@@ -346,6 +359,18 @@ export default function AlbumDetail() {
   const owner = !isMine && album.userId != null ? friends.find((f) => f.id === album.userId) ?? null : null
   const ownerColor = owner ? avatarColor(owner.name) : colors.green
 
+  // The whole recommended presentation hangs off this one condition: it's your
+  // copy and somebody sent it. On a friend's copy the sender is their business,
+  // not yours, so the page stays ordinary.
+  const wasRecommended = isMine && !!album.recommendedByName
+  // Matched by id, not name — two friends can share a first name, and the id is
+  // what the sender was recorded as. Falls back to initials when they aren't in
+  // your friends list any more.
+  const recSender = album.recommendedBy != null
+    ? friends.find((f) => f.id === album.recommendedBy) ?? null
+    : null
+  const recWhen = album.recommendedAt ? relativeDay(album.recommendedAt) : null
+
   // Compare is offered wherever a comparison exists to make, so the control is
   // the same however you reached the record — your own copy from the library or
   // an artist page, or a friend's copy you've also rated. It needs a score of
@@ -512,13 +537,24 @@ export default function AlbumDetail() {
         scrollEventThrottle={16}
       >
         <View style={styles.head}>
-          {album.albumArtUrl ? (
-            <Image source={{ uri: album.albumArtUrl }} style={styles.art} contentFit="cover" />
-          ) : (
-            <View style={[styles.art, styles.artFallback]}>
-              <Text style={styles.artInitial}>{album.albumName[0]}</Text>
-            </View>
-          )}
+          {/* The glow lives on a wrapper, not on the artwork. iOS derives a
+              shadow path from the view's own background and corner radius, and
+              an Image has neither until its source loads — so the halo simply
+              never drew. The wrapper is opaque and the same shape, and it must
+              not clip, or it would cut off the light it is casting. */}
+          <View style={wasRecommended ? styles.artGlow : undefined}>
+            {album.albumArtUrl ? (
+              <Image
+                source={{ uri: album.albumArtUrl }}
+                style={styles.art}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={[styles.art, styles.artFallback]}>
+                <Text style={styles.artInitial}>{album.albumName[0]}</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.albumName} numberOfLines={2}>{album.albumName}</Text>
           <Text style={styles.artist} numberOfLines={1}>
             {[album.artist, ...album.extraArtists].map((n, i) => (
@@ -564,16 +600,46 @@ export default function AlbumDetail() {
         {/* Why it's on your shelf, from the person who put it there. Sits above
             the tracklist because it's the reason you're looking at this at all —
             and without somewhere to read it, the note the sender wrote would be
-            stored and never seen. */}
-        {album.recommendedByName && (
+            stored and never seen.
+
+            Presented as a message from them, avatar included, rather than as a
+            field on the record: a recommendation is a thing a person did, and
+            attributing it to a face is what separates this page from every
+            other album page in the app. */}
+        {wasRecommended && (
           <View style={styles.recCard}>
             <View style={styles.recHead}>
-              <Star size={13} color={RECOMMEND} fill={RECOMMEND} />
-              <Text style={styles.recFrom}>Recommended by {album.recommendedByName}</Text>
+              <View style={[styles.recPfp, { backgroundColor: avatarColor(album.recommendedByName!) }]}>
+                {recSender?.avatarUrl ? (
+                  <Image source={{ uri: recSender.avatarUrl }} style={styles.recPfpImg} contentFit="cover" />
+                ) : (
+                  <Text style={styles.recPfpInitial}>
+                    {album.recommendedByName![0]?.toUpperCase()}
+                  </Text>
+                )}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.recFrom} numberOfLines={1}>
+                  {album.recommendedByName} recommended this
+                </Text>
+                {recWhen && <Text style={styles.recWhen}>{recWhen}</Text>}
+              </View>
+              <Star size={15} color={RECOMMEND} fill={RECOMMEND} />
             </View>
             {album.recommendationNote ? (
               <Text style={styles.recNote}>“{album.recommendationNote}”</Text>
-            ) : null}
+            ) : (
+              // Without this the card is a header and nothing else, which reads
+              // as an empty field rather than as a message with no words in it.
+              <Text style={styles.recNoNote}>
+                No note — they just thought you should hear it.
+              </Text>
+            )}
+            {!isRated && (
+              <Text style={styles.recNudge}>
+                Rate it and {album.recommendedByName} will see what you thought.
+              </Text>
+            )}
           </View>
         )}
 
@@ -1620,6 +1686,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(45,106,79,0.38)',
   },
+  // A warm glow around the cover rather than a stroke on it. A border sits on
+  // the artwork and reads as a frame someone put there; light coming off the
+  // edges belongs to the record. Zero offset so it radiates evenly instead of
+  // falling to one side like a drop shadow.
+  //
+  // backgroundColor is load-bearing, not decoration: without an opaque
+  // background iOS has no path to cast from and draws nothing at all.
+  artGlow: {
+    width: 148,
+    height: 148,
+    borderRadius: radii.lg,
+    backgroundColor: colors.inset,
+    shadowColor: RECOMMEND,
+    shadowOpacity: 0.9,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 0 },
+    // Android has no shadow colour, so elevation would render a grey drop
+    // shadow rather than an orange halo — left off deliberately.
+  },
   recCard: {
     backgroundColor: '#fff7ed',
     borderWidth: 1,
@@ -1629,14 +1714,43 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     marginTop: spacing.lg,
   },
-  recHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  recFrom: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: '#c2410c' },
+  recHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  recPfp: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  recPfpImg: { width: '100%', height: '100%' },
+  recPfpInitial: { fontFamily: fonts.bodyBold, fontSize: 14, color: '#ffffff' },
+  recFrom: { fontFamily: fonts.bodySemiBold, fontSize: 13.5, color: '#c2410c' },
+  recWhen: { fontFamily: fonts.body, fontSize: 11.5, color: '#c2410c', opacity: 0.75, marginTop: 1 },
   recNote: {
     fontFamily: fonts.body,
     fontSize: 14,
     lineHeight: 21,
     color: colors.inkSecondary,
-    marginTop: 6,
+    marginTop: spacing.sm,
+  },
+  recNoNote: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    fontStyle: 'italic',
+    color: colors.inkTertiary,
+    marginTop: spacing.sm,
+  },
+  // Only while it's unrated — once you've scored it, telling you to score it is
+  // noise, and the sender can already see the result.
+  recNudge: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12.5,
+    color: '#c2410c',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(249,115,22,0.30)',
   },
   // Same shape as Share, in the recommendation orange rather than the brand
   // green, so the two read as siblings without reading as the same action.

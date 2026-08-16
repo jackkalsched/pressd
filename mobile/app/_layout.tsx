@@ -18,10 +18,12 @@ import {
 import '../lib/api' // configure the shared client before anything fetches
 import { AuthProvider, useAuth } from '../lib/auth'
 import { loadSocialSeen } from '../lib/socialSeen'
+import { loadRecsSeen } from '../lib/recsSeen'
 import { colors } from '../theme/tokens'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
 loadSocialSeen() // hydrate the Social "new activity" marker once at launch
+loadRecsSeen()   // and the watermark that keeps the recommendation banner to one showing
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },

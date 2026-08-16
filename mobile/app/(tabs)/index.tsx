@@ -2,7 +2,7 @@
 // this next" pick, new releases (with add actions), Pressd Trending, and "what
 // are pressers talking about" (userbase-wide top reviews for the day). No boxed
 // cards — sections are separated by whitespace and hairline rules.
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
@@ -33,6 +33,8 @@ import {
 } from '../../lib/api'
 import { songScoreColor, type Album } from '@pressd/shared/types'
 import AnchoredMenu from '../../components/AnchoredMenu'
+import RecommendationBanner from '../../components/RecommendationBanner'
+import { markRecsSeen, recTime, useRecsSeen } from '../../lib/recsSeen'
 import { useAuth } from '../../lib/auth'
 import { revealStyle } from '../../lib/scrollReveal'
 import { colors, fonts, radii, spacing } from '../../theme/tokens'
@@ -147,6 +149,42 @@ export default function ForYou() {
   const resumeDone = continueFull?.songs.filter((s) => s.score != null).length ?? 0
   const resumeTotal = continueFull?.songs.length ?? continueAlbum?.totalTracks ?? 0
 
+  // Everything a friend has sent that's still unrated, newest first. Sorted on
+  // recommendedAt rather than id: a friend can pass on a record that has sat in
+  // the catalog for months, and its row id says when the album was added, not
+  // when they sent it. Rows without a timestamp (sent before the column
+  // existed) fall to the back rather than jumping the queue.
+  const recommended = useMemo(
+    () =>
+      toListen
+        .filter((a) => a.recommendedByName)
+        .sort((a, b) => (b.recommendedAt ?? '').localeCompare(a.recommendedAt ?? '')),
+    [toListen],
+  )
+  const newestRec = recommended[0] ?? null
+
+  // The banner announces an arrival once — the first time the app is opened
+  // after a friend sends something — rather than living on For You until the
+  // record gets rated. Anything at or below the watermark has already been
+  // announced on a previous launch.
+  const seenTs = useRecsSeen()
+  const unseenRec =
+    newestRec && recTime(newestRec.recommendedAt) > seenTs ? newestRec : null
+
+  // Held for the rest of this session once it has been shown. Marking it seen
+  // writes the watermark forward, and without pinning the decision that write
+  // would re-render the page and pull the banner out from under the reader
+  // mid-scroll. It stays put until the app is next launched, which is what
+  // "the first time they open the app" means.
+  const shownRef = useRef<Album | null>(null)
+  if (unseenRec && !shownRef.current) shownRef.current = unseenRec
+  const bannerRec = shownRef.current
+
+  useEffect(() => {
+    if (!bannerRec) return
+    markRecsSeen(recTime(bannerRec.recommendedAt))
+  }, [bannerRec])
+
   // Rate this next: rotates once per day, stable within the day.
   //
   // Your queue and the catalog are one pool. The catalog half used to be a
@@ -159,9 +197,8 @@ export default function ForYou() {
   const daily = useMemo(() => {
     // A friend asking still leads. That's a person waiting on an answer, not a
     // model's guess, and it shouldn't queue behind the catalog.
-    const recs = toListen.filter((a) => a.recommendedByName)
-    if (recs.length > 0) {
-      const pool = [...recs].sort((a, b) => a.id - b.id)
+    if (recommended.length > 0) {
+      const pool = [...recommended].sort((a, b) => a.id - b.id)
       return { queued: pool[dayIndex % pool.length], pick: null }
     }
     const queued = [...toListen].sort((a, b) => a.id - b.id)
@@ -173,7 +210,7 @@ export default function ForYou() {
     return i < queued.length
       ? { queued: queued[i], pick: null }
       : { queued: null, pick: picks[i - queued.length] }
-  }, [toListen, picks, dayIndex])
+  }, [toListen, picks, recommended, dayIndex])
 
   const suggestion = daily.queued
   const pick = daily.pick
@@ -217,6 +254,12 @@ export default function ForYou() {
   }
   function openRate(id: number) {
     router.push({ pathname: '/rate/[id]', params: { id: String(id) } })
+  }
+  /** The banner opens your own copy rather than the averaged view: the sender
+   *  and their note live on your row, and the album page keys its recommended
+   *  treatment off exactly that. */
+  function openRecommendation(id: number) {
+    router.push({ pathname: '/album/[id]', params: { id: String(id) } })
   }
   /** Rate this next leads with recommendations, and a recommendation is someone
    *  else's pick — dropping straight into the scoring flow scores a record the
@@ -280,6 +323,20 @@ export default function ForYou() {
             {greeting()}{firstName ? ` ${firstName}` : ''}, here&rsquo;s what&rsquo;s moving this week.
           </Text>
         </Animated.View>
+
+        {/* Above everything else on the page, and above "pick up where you left
+            off" in particular: that's your own unfinished business and it will
+            keep, while this is a friend waiting on an answer. Absent entirely
+            when nobody has sent you anything — an empty state here would be a
+            permanent orange box advertising that you have no friends. */}
+        {bannerRec && (
+          <RecommendationBanner
+            from={bannerRec.recommendedByName!}
+            albumName={bannerRec.albumName}
+            count={recommended.length}
+            onPress={() => openRecommendation(bannerRec.id)}
+          />
+        )}
 
         {/* Pick up where you left off */}
         {continueAlbum && (
