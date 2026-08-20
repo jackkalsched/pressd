@@ -45,7 +45,7 @@ import ShareCard from '../../components/ShareCard'
 import TopSongTiebreak from '../../components/TopSongTiebreak'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
 import { useDeleteAlbum } from '../../lib/useDeleteAlbum'
-import { colors, fonts, radii, spacing } from '../../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 
 const DANGER = '#b91c1c'
 
@@ -511,7 +511,7 @@ export default function RatingScreen() {
                 <View style={styles.runTop}>
                   <View>
                     <Text style={styles.runLabel}>RUNNING AVG</Text>
-                    <Text style={styles.runValue}>{runningAvg != null ? runningAvg.toFixed(2) : '—'}</Text>
+                    <Text style={styles.runValue} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{runningAvg != null ? runningAvg.toFixed(2) : '—'}</Text>
                   </View>
                   <View style={styles.runNotes}>
                     <Text style={styles.runNote}>{bangs} bang{bangs === 1 ? '' : 's'} · {skips} skip{skips === 1 ? '' : 's'}</Text>
@@ -599,7 +599,7 @@ export default function RatingScreen() {
 
               {previewScore !== null && (
                 <View style={styles.previewBlock}>
-                  <Text style={[styles.previewScore, { color: colors.green }]}>{previewScore.toFixed(2)}</Text>
+                  <Text style={[styles.previewScore, { color: colors.green }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{previewScore.toFixed(2)}</Text>
                   <Text style={styles.previewLabel}>PROJECTED FINAL</Text>
                 </View>
               )}
@@ -798,7 +798,7 @@ function TrackSheet({
                     {s.title}
                   </Text>
                   {v != null ? (
-                    <Text style={[styles.sheetScore, { color: songScoreColor(v) }]}>{v.toFixed(1)}</Text>
+                    <Text style={[styles.sheetScore, { color: songScoreColor(v) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{v.toFixed(1)}</Text>
                   ) : isSkipped ? (
                     <Text style={styles.sheetMuted}>skipped</Text>
                   ) : i === current ? (

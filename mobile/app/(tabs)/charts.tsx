@@ -24,7 +24,7 @@ import { fetchCharts, type ChartItem } from '../../lib/api'
 import { songScoreColor, avatarColor } from '@pressd/shared/types'
 import AnchoredMenu, { type MenuOption } from '../../components/AnchoredMenu'
 import { revealStyle } from '../../lib/scrollReveal'
-import { colors, contentWidth, fonts, radii, spacing } from '../../theme/tokens'
+import { colors, contentWidth, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 
 const DOWN = '#c0392b'
 
@@ -49,7 +49,6 @@ const POD_CENTER = Math.floor(POD_AVAIL * 0.4)
 // needs and the flexible middle gives way, which is the one part of the row that
 // can afford to.
 const WINDOW_H = Dimensions.get('window').height
-const NUM_SCALE_CAP = 1.3
 
 const RANK_SIZE = 19
 // Playfair Black sets digits at roughly 0.62em. Sized to hold two of them at the
@@ -150,8 +149,30 @@ export default function Charts() {
             {/* Masthead */}
             <Animated.View style={{ opacity: mastheadOpacity, transform: [{ translateY: mastheadShift }] }}>
               <View style={styles.masthead}>
-                <Text style={styles.title}>Charts</Text>
-                <Text style={styles.week}>{period === 'week' ? weekLabel() : 'ALL TIME'}</Text>
+                {/* Capped: at 40pt it is already the largest thing on the
+                    screen, and letting it scale further left the week label no
+                    row to live in — the label was absorbing the entire squeeze
+                    and shrinking to something unreadable. */}
+                <Text
+                  style={styles.title}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  maxFontSizeMultiplier={NUM_SCALE_CAP}
+                >
+                  Charts
+                </Text>
+                {/* Capping the title is what fixed this, not shrinking the label.
+                    flexShrink had it squeezing to one character per line
+                    ("2026" stacked vertically) because the uncapped 40pt title
+                    took the whole row; adjustsFontSizeToFit then made it worse,
+                    shrinking type to fit a box flex had already collapsed. */}
+                <Text
+                  style={styles.week}
+                  numberOfLines={2}
+                  maxFontSizeMultiplier={NUM_SCALE_CAP}
+                >
+                  {period === 'week' ? weekLabel() : 'ALL TIME'}
+                </Text>
               </View>
               <View style={styles.rule} />
             </Animated.View>
@@ -455,9 +476,13 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: spacing.md,
   },
-  title: { flexShrink: 0, fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: 0.5 },
+  // The title is what gives way now, not the date. flexShrink sat on the week
+  // label, so at a large text setting it collapsed to one character per line
+  // while the title kept every point it asked for — the decoration winning a
+  // row against the only part carrying information.
+  title: { flexShrink: 1, fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: 0.5 },
   week: {
-    flexShrink: 1,
+    flexShrink: 0,
     textAlign: 'right',
     fontFamily: fonts.bodyBold,
     fontSize: 12,

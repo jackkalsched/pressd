@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import Slider from '@react-native-community/slider'
 import * as Haptics from 'expo-haptics'
 import { songScoreColor } from '@pressd/shared/types'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
 export default function ScoreSlider({
   value,
@@ -31,8 +31,13 @@ export default function ScoreSlider({
   return (
     <View style={[styles.wrap, disabled && styles.disabled]}>
       <View style={styles.readout}>
+        {/* Sits in a row beside the clear control; capped so a large setting
+            doesn't push "clear" off the edge mid-rating. */}
         <Text
           style={[styles.value, { color: value !== null ? songScoreColor(value) : colors.inkMuted }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          maxFontSizeMultiplier={NUM_SCALE_CAP}
         >
           {value !== null ? value.toFixed(1) : '—'}
         </Text>

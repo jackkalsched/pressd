@@ -20,7 +20,7 @@ import SongGapChart from '../../components/SongGapChart'
 import ScoreKdeCompare from '../../components/ScoreKdeCompare'
 import Discography from '../../components/Discography'
 import SimilarArtistComparisons from '../../components/SimilarArtistComparisons'
-import { colors, fonts, radii, spacing } from '../../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 
 /** Which rating set the page is showing.
  *   mine    — your ratings, ranked among your own artists
@@ -600,7 +600,12 @@ function ScoreVersus({ mine, theirs }: { mine: number | null; theirs: number | n
       <View style={styles.vsMiddle}>
         <Text style={styles.vsWord}>vs.</Text>
         {diff != null && (
-          <Text style={[styles.vsDiff, { color: diff >= 0 ? colors.green : VS_DOWN }]}>
+          <Text
+            style={[styles.vsDiff, { color: diff >= 0 ? colors.green : VS_DOWN }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            maxFontSizeMultiplier={NUM_SCALE_CAP}
+          >
             {diff >= 0 ? '+' : ''}{diff.toFixed(2)}
           </Text>
         )}

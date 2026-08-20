@@ -27,7 +27,7 @@ import { Apple, Check, ChevronRight, LogOut, Trash2, X } from 'lucide-react-nati
 import { fetchLinkedProviders, unlinkProvider, deleteOwnAccount } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useProfile } from '../lib/picks'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
 // The server owns the avatar's final shape — it crops, resizes to 512², strips
 // EXIF and re-encodes — so this only has to hand it something reasonable.
@@ -285,7 +285,7 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
                       recyclingKey={user.avatarUrl}
                     />
                   ) : (
-                    <Text style={styles.avatarInitial}>{user?.name[0]?.toUpperCase()}</Text>
+                    <Text style={styles.avatarInitial} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={NUM_SCALE_CAP}>{user?.name[0]?.toUpperCase()}</Text>
                   )}
                 </View>
               </Pressable>

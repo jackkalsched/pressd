@@ -4,13 +4,22 @@
 // `action` slot holds whatever control belongs to the viewer (settings on your
 // own page, add/remove friend on someone else's).
 import { useMemo, useState, type ReactNode } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { Image } from 'expo-image'
 import Svg, { Circle } from 'react-native-svg'
 import { useQuery } from '@tanstack/react-query'
 import type { Profile } from '@pressd/shared/api'
 import { fetchArtistImage } from '../lib/api'
 import { colors, fonts, radii, spacing } from '../theme/tokens'
+
+// How far type in this header is allowed to scale. The banner is a fixed-shape
+// composition — a ring, a round avatar, and four stat columns sharing one row —
+// so past this the pieces stop being able to give way to each other. Text that
+// hits the cap then shrinks to fit rather than clipping.
+const HEADER_SCALE_CAP = 1.3
+// The ring is the one piece that grows with the setting instead of capping the
+// type inside it, so it gets a little more room than flat text does.
+const RING_SCALE_CAP = 1.35
 
 export interface BannerStatItem {
   value: string
@@ -118,12 +127,31 @@ export default function ProfileBanner({
                 transition={120}
               />
             ) : (
-              <Text style={styles.avatarInitial}>{name[0]?.toUpperCase()}</Text>
+              // A letter in a fixed disc: capped and allowed to shrink, rather
+              // than growing the disc. Unlike the ring's number, nobody needs to
+              // *read* an initial at a larger size — it's identity, not data.
+              <Text
+                style={styles.avatarInitial}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                maxFontSizeMultiplier={HEADER_SCALE_CAP}
+              >
+                {name[0]?.toUpperCase()}
+              </Text>
             )}
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.name} numberOfLines={1}>{name}</Text>
-            {since ? <Text style={styles.since} numberOfLines={1}>Pressing since {since}</Text> : null}
+            {/* Capped because this is the column that gives way when the ring
+                and the avatar grow beside it — uncapped, a long name at a large
+                setting truncates to two or three characters. */}
+            <Text style={styles.name} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
+              {name}
+            </Text>
+            {since ? (
+              <Text style={styles.since} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
+                Pressing since {since}
+              </Text>
+            ) : null}
           </View>
           <AvgRing value={avg} />
           {action}
@@ -132,8 +160,27 @@ export default function ProfileBanner({
         <View style={styles.stats}>
           {stats.map((s) => (
             <View key={s.label} style={styles.statCol}>
-              <Text style={styles.statValue}>{s.value}</Text>
-              <Text style={styles.statLabel}>{s.label}</Text>
+              {/* Four columns splitting one row, so each gets a quarter of the
+                  screen however wide the glyphs get. Held to one line and
+                  allowed to shrink: unbounded, "5,692" wrapped to two lines and
+                  pushed its own label out of line with the other three. */}
+              <Text
+                style={styles.statValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                maxFontSizeMultiplier={HEADER_SCALE_CAP}
+              >
+                {s.value}
+              </Text>
+              {/* The label may take two lines — "TASTE CENTER" needs them at a
+                  large setting — but never more, or one column drags the row. */}
+              <Text
+                style={styles.statLabel}
+                numberOfLines={2}
+                maxFontSizeMultiplier={HEADER_SCALE_CAP}
+              >
+                {s.label}
+              </Text>
             </View>
           ))}
         </View>
@@ -347,8 +394,18 @@ function PickCard({
 
 /** Average-score gauge: a ring filled to score/10, value centered. */
 function AvgRing({ value }: { value: number | null }) {
-  const R = 24
-  const SW = 4.5
+  // The ring grows with the reader's text setting instead of holding a fixed
+  // 59pt while the numeral inside it scales — which is what pushed "7.22" and
+  // its AVG label out through the stroke at larger sizes.
+  //
+  // Circle and type scale by the *same* capped factor, so the numeral sits the
+  // same way inside the ring at every setting. Capped rather than unbounded
+  // because the ring shares a row with the name and the settings control, and
+  // past ~1.35 it starts eating the name it sits beside.
+  const { fontScale } = useWindowDimensions()
+  const k = Math.min(Math.max(fontScale, 1), RING_SCALE_CAP)
+  const R = 24 * k
+  const SW = 4.5 * k
   const SIZE = (R + SW) * 2 + 2
   const C = 2 * Math.PI * R
   const frac = value != null ? Math.max(0, Math.min(1, value / 10)) : 0
@@ -371,9 +428,25 @@ function AvgRing({ value }: { value: number | null }) {
           />
         )}
       </Svg>
-      <View style={styles.ringCenter}>
-        <Text style={styles.ringValue}>{value != null ? value.toFixed(2) : '—'}</Text>
-        <Text style={styles.ringLabel}>AVG</Text>
+      {/* Padded so the numeral can never touch the stroke, and allowed to
+          shrink inside that box — a three-digit score at the cap would
+          otherwise still reach the ring on the narrowest phones. */}
+      <View style={[styles.ringCenter, { padding: SW + 2 }]}>
+        <Text
+          style={[styles.ringValue, { fontSize: 13.5 * k }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          maxFontSizeMultiplier={RING_SCALE_CAP}
+        >
+          {value != null ? value.toFixed(2) : '—'}
+        </Text>
+        <Text
+          style={[styles.ringLabel, { fontSize: 7 * k }]}
+          numberOfLines={1}
+          maxFontSizeMultiplier={RING_SCALE_CAP}
+        >
+          AVG
+        </Text>
       </View>
     </View>
   )

@@ -21,7 +21,7 @@ import type { AlbumSearchResult } from '@pressd/shared/api'
 import { importAlbum, resolveAlbum } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import TracklistLoader from '../components/TracklistLoader'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
 /** "· 2016" when the year is known, "· 12 tracks" when it isn't (Deezer's
  *  search payload carries no release date), and nothing when neither is. */
@@ -172,7 +172,7 @@ export default function AddAlbum() {
                   <Image source={{ uri: item.cover_url }} style={styles.cover} contentFit="cover" />
                 ) : (
                   <View style={[styles.cover, styles.coverFallback]}>
-                    <Text style={styles.coverInitial}>{item.album_name[0]?.toUpperCase()}</Text>
+                    <Text style={styles.coverInitial} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={NUM_SCALE_CAP}>{item.album_name[0]?.toUpperCase()}</Text>
                   </View>
                 )}
                 <View style={styles.rowText}>

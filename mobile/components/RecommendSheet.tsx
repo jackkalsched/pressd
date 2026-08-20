@@ -26,7 +26,7 @@ import { Check, Star, X } from 'lucide-react-native'
 import { fetchFriends, recommendAlbum, RECOMMENDATION_NOTE_MAX } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { Album } from '@pressd/shared/types'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
 // The recommendation accent, matching the star the recipient sees on the cover.
 const REC = '#f97316'
@@ -143,7 +143,7 @@ export default function RecommendSheet({
                               cachePolicy="memory-disk"
                             />
                           ) : (
-                            <Text style={styles.avatarInitial}>{f.name[0]?.toUpperCase()}</Text>
+                            <Text style={styles.avatarInitial} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={NUM_SCALE_CAP}>{f.name[0]?.toUpperCase()}</Text>
                           )}
                         </View>
                         <Text style={[styles.friendName, on && styles.friendNameOn]} numberOfLines={1}>

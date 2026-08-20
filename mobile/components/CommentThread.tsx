@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { Send, Trash2 } from 'lucide-react-native'
 import { fetchComments, postComment, deleteComment } from '../lib/api'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
 function timeAgo(iso: string | null): string {
   if (!iso) return ''
@@ -82,7 +82,7 @@ export default function CommentThread({ albumId }: { albumId: number }) {
               <Image source={{ uri: c.author.avatar_url }} style={styles.avatar} contentFit="cover" />
             ) : (
               <View style={[styles.avatar, styles.avatarFallback]}>
-                <Text style={styles.avatarInitial}>{c.author.name[0]?.toUpperCase()}</Text>
+                <Text style={styles.avatarInitial} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={NUM_SCALE_CAP}>{c.author.name[0]?.toUpperCase()}</Text>
               </View>
             )}
             <View style={{ flex: 1, minWidth: 0 }}>

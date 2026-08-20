@@ -27,7 +27,7 @@ import { ArrowLeft } from 'lucide-react-native'
 import { fetchTagRecords, type TagRecord } from '../../lib/api'
 import { songScoreColor, avatarColor } from '@pressd/shared/types'
 import { revealStyle } from '../../lib/scrollReveal'
-import { colors, contentWidth, fonts, radii, spacing } from '../../theme/tokens'
+import { colors, contentWidth, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 
 // Podium proportions and numeral caps copied from Charts deliberately: the two
 // boards sit one tap apart and any drift between them would read as a bug.
@@ -38,7 +38,6 @@ const POD_SIDE = Math.floor(POD_AVAIL * 0.3)
 const POD_CENTER = Math.floor(POD_AVAIL * 0.4)
 
 const WINDOW_H = Dimensions.get('window').height
-const NUM_SCALE_CAP = 1.3
 const RANK_SIZE = 19
 const RANK_MIN_W = Math.ceil(RANK_SIZE * NUM_SCALE_CAP * 0.62 * 2)
 

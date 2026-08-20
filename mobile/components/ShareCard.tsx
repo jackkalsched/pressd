@@ -45,6 +45,12 @@ const HAIRLINE = '#e6ded2'
 // the ramp through black — AlbumBackdrop hit this too.
 const CREAM_CLEAR = 'rgba(250,248,245,0)'
 
+// Every Text in this file carries allowFontScaling={false}. The card is a
+// graphic, not an interface: it is composed on a 1080x1350 grid, every
+// dimension is derived from it by `u()`, and the whole thing is rasterised by
+// captureRef into a PNG someone sends to a friend. Letting the reader's text
+// setting into that means the exported image differs per device and, past a
+// couple of steps, the type runs out of boxes that cannot grow with it.
 const DESIGN_W = 1080
 const DESIGN_H = 1350
 const DIST_BINS = 22
@@ -173,7 +179,7 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Share card</Text>
+        <Text allowFontScaling={false} style={styles.headerTitle}>Share card</Text>
         <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Close">
           <X size={22} color={colors.inkTertiary} />
         </Pressable>
@@ -211,9 +217,9 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
             <View style={styles.row}>
               <View style={styles.brandRow}>
                 <Image source={require('../assets/icon.png')} style={styles.logo} contentFit="contain" />
-                <Text style={styles.brand}>Press’d</Text>
+                <Text allowFontScaling={false} style={styles.brand}>Press’d</Text>
               </View>
-              <Text style={styles.date}>{dateStr}</Text>
+              <Text allowFontScaling={false} style={styles.date}>{dateStr}</Text>
             </View>
 
             {/* album */}
@@ -222,33 +228,33 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
                 <Image source={{ uri: art }} style={styles.art} contentFit="cover" />
               ) : (
                 <View style={[styles.art, styles.artFallback]}>
-                  <Text style={styles.artInitial}>{album.albumName[0]}</Text>
+                  <Text allowFontScaling={false} style={styles.artInitial}>{album.albumName[0]}</Text>
                 </View>
               )}
               <View style={styles.albumText}>
-                <Text style={styles.albumName} numberOfLines={2}>{album.albumName}</Text>
-                <Text style={styles.artist} numberOfLines={1}>
+                <Text allowFontScaling={false} style={styles.albumName} numberOfLines={2}>{album.albumName}</Text>
+                <Text allowFontScaling={false} style={styles.artist} numberOfLines={1}>
                   {[album.artist, ...album.extraArtists].join(', ')}{album.year ? ` · ${album.year}` : ''}
                 </Text>
                 {album.genre && (
                   <View style={styles.genrePill}>
-                    <Text style={styles.genrePillText}>{album.genre.toUpperCase()}</Text>
+                    <Text allowFontScaling={false} style={styles.genrePillText}>{album.genre.toUpperCase()}</Text>
                   </View>
                 )}
                 {subGenres.length > 0 && (
-                  <Text style={styles.subGenres} numberOfLines={1}>{subGenres.join(' · ')}</Text>
+                  <Text allowFontScaling={false} style={styles.subGenres} numberOfLines={1}>{subGenres.join(' · ')}</Text>
                 )}
               </View>
             </View>
 
             {/* final score */}
             <View style={styles.scoreBlock}>
-              <Text style={styles.scoreLabel}>FINAL SCORE</Text>
+              <Text allowFontScaling={false} style={styles.scoreLabel}>FINAL SCORE</Text>
               <View style={styles.scoreLine}>
-                <Text style={[styles.bigScore, { color: scoreColor }]}>
+                <Text allowFontScaling={false} style={[styles.bigScore, { color: scoreColor }]}>
                   {album.score !== null ? album.score.toFixed(2) : '—'}
                 </Text>
-                <Text style={styles.outOf}> /10</Text>
+                <Text allowFontScaling={false} style={styles.outOf}> /10</Text>
               </View>
               <View style={styles.pills}>
                 <Pill label={`Ranked #${stats.rank} of ${stats.total}`} />
@@ -273,8 +279,8 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
                 ))}
               </View>
               <View style={styles.row}>
-                <Text style={styles.caption}>SCORE DISTRIBUTION</Text>
-                <Text style={styles.caption}>ALL RATED ALBUMS</Text>
+                <Text allowFontScaling={false} style={styles.caption}>SCORE DISTRIBUTION</Text>
+                <Text allowFontScaling={false} style={styles.caption}>ALL RATED ALBUMS</Text>
               </View>
             </View>
 
@@ -282,15 +288,15 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
             <View style={styles.section}>
               <View style={styles.vsRow}>
                 <View style={[styles.vsCard, { backgroundColor: 'rgba(45,106,79,0.10)', borderColor: 'rgba(45,106,79,0.4)' }]}>
-                  <Text style={[styles.vsPct, { color: GREEN }]}>{stats.bangPct}%</Text>
-                  <Text style={styles.vsLabel}>BANGS</Text>
-                  <Text style={styles.vsSub}>{stats.bangCount} {stats.bangCount === 1 ? 'song' : 'songs'} · 8.0+</Text>
+                  <Text allowFontScaling={false} style={[styles.vsPct, { color: GREEN }]}>{stats.bangPct}%</Text>
+                  <Text allowFontScaling={false} style={styles.vsLabel}>BANGS</Text>
+                  <Text allowFontScaling={false} style={styles.vsSub}>{stats.bangCount} {stats.bangCount === 1 ? 'song' : 'songs'} · 8.0+</Text>
                 </View>
-                <Text style={styles.vs}>vs</Text>
+                <Text allowFontScaling={false} style={styles.vs}>vs</Text>
                 <View style={[styles.vsCard, { backgroundColor: 'rgba(176,64,47,0.10)', borderColor: 'rgba(176,64,47,0.4)', alignItems: 'flex-end' }]}>
-                  <Text style={[styles.vsPct, { color: CORAL }]}>{stats.skipPct}%</Text>
-                  <Text style={styles.vsLabel}>SKIPS</Text>
-                  <Text style={styles.vsSub}>{stats.skipCount} {stats.skipCount === 1 ? 'song' : 'songs'} · under 6.5</Text>
+                  <Text allowFontScaling={false} style={[styles.vsPct, { color: CORAL }]}>{stats.skipPct}%</Text>
+                  <Text allowFontScaling={false} style={styles.vsLabel}>SKIPS</Text>
+                  <Text allowFontScaling={false} style={styles.vsSub}>{stats.skipCount} {stats.skipCount === 1 ? 'song' : 'songs'} · under 6.5</Text>
                 </View>
               </View>
               <View style={styles.bar}>
@@ -299,9 +305,9 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
                 <View style={{ flex: Math.max(stats.skipPct, 0.001), backgroundColor: CORAL, borderRadius: u(99) }} />
               </View>
               <View style={styles.row}>
-                <Text style={styles.caption}>{stats.bangCount} {stats.bangCount === 1 ? 'BANG' : 'BANGS'}</Text>
-                <Text style={styles.caption}>{stats.midCount} MIDS</Text>
-                <Text style={styles.caption}>{stats.skipCount} {stats.skipCount === 1 ? 'SKIP' : 'SKIPS'}</Text>
+                <Text allowFontScaling={false} style={styles.caption}>{stats.bangCount} {stats.bangCount === 1 ? 'BANG' : 'BANGS'}</Text>
+                <Text allowFontScaling={false} style={styles.caption}>{stats.midCount} MIDS</Text>
+                <Text allowFontScaling={false} style={styles.caption}>{stats.skipCount} {stats.skipCount === 1 ? 'SKIP' : 'SKIPS'}</Text>
               </View>
             </View>
 
@@ -312,25 +318,25 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
                   <View style={styles.trackHead}>
                     {/* Mirrors the least-favourite's ▽ rather than a star, so the
                         pair reads as one up/down comparison. */}
-                    <Text style={[styles.trackGlyph, { color: GREEN }]}>△</Text>
-                    <Text style={[styles.trackKind, { color: GREEN }]}>FAVORITE</Text>
+                    <Text allowFontScaling={false} style={[styles.trackGlyph, { color: GREEN }]}>△</Text>
+                    <Text allowFontScaling={false} style={[styles.trackKind, { color: GREEN }]}>FAVORITE</Text>
                   </View>
-                  <Text style={styles.trackName} numberOfLines={1}>{stats.favorite.title}</Text>
-                  <Text style={[styles.trackScore, { color: songScoreColor(stats.favorite.score!) }]}>
+                  <Text allowFontScaling={false} style={styles.trackName} numberOfLines={1}>{stats.favorite.title}</Text>
+                  <Text allowFontScaling={false} style={[styles.trackScore, { color: songScoreColor(stats.favorite.score!) }]}>
                     {stats.favorite.score!.toFixed(1)}
-                    <Text style={styles.trackOutOf}> /10</Text>
+                    <Text allowFontScaling={false} style={styles.trackOutOf}> /10</Text>
                   </Text>
                 </View>
                 {stats.least && (
                   <View style={[styles.trackCard, { borderColor: 'rgba(176,64,47,0.3)' }]}>
                     <View style={styles.trackHead}>
-                      <Text style={[styles.trackGlyph, { color: CORAL }]}>▽</Text>
-                      <Text style={[styles.trackKind, { color: CORAL }]}>LEAST FAVORITE</Text>
+                      <Text allowFontScaling={false} style={[styles.trackGlyph, { color: CORAL }]}>▽</Text>
+                      <Text allowFontScaling={false} style={[styles.trackKind, { color: CORAL }]}>LEAST FAVORITE</Text>
                     </View>
-                    <Text style={styles.trackName} numberOfLines={1}>{stats.least.title}</Text>
-                    <Text style={[styles.trackScore, { color: songScoreColor(stats.least.score!) }]}>
+                    <Text allowFontScaling={false} style={styles.trackName} numberOfLines={1}>{stats.least.title}</Text>
+                    <Text allowFontScaling={false} style={[styles.trackScore, { color: songScoreColor(stats.least.score!) }]}>
                       {stats.least.score!.toFixed(1)}
-                      <Text style={styles.trackOutOf}> /10</Text>
+                      <Text allowFontScaling={false} style={styles.trackOutOf}> /10</Text>
                     </Text>
                   </View>
                 )}
@@ -342,8 +348,8 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
               <View style={styles.factorRow}>
                 {factors.map((f) => (
                   <View key={f.label} style={styles.factorCell}>
-                    <Text style={styles.factorValue}>{f.value !== null ? Math.round(f.value) : '—'}</Text>
-                    <Text style={styles.factorLabel}>{f.label.toUpperCase()}</Text>
+                    <Text allowFontScaling={false} style={styles.factorValue}>{f.value !== null ? Math.round(f.value) : '—'}</Text>
+                    <Text allowFontScaling={false} style={styles.factorLabel}>{f.label.toUpperCase()}</Text>
                   </View>
                 ))}
               </View>
@@ -353,14 +359,14 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
 
             {/* footer */}
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Rate your albums on</Text>
+              <Text allowFontScaling={false} style={styles.footerText}>Rate your albums on</Text>
               <Image source={require('../assets/icon.png')} style={styles.footerLogo} contentFit="contain" />
-              <Text style={styles.footerBrand}>Press’d</Text>
+              <Text allowFontScaling={false} style={styles.footerBrand}>Press’d</Text>
             </View>
           </View>
         </View>
 
-        {error && <Text style={styles.error}>{error}</Text>}
+        {error && <Text allowFontScaling={false} style={styles.error}>{error}</Text>}
       </ScrollView>
 
       {/* Share sits directly under the card, so what you're sending and the
@@ -377,12 +383,12 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
           ) : (
             <>
               <Share2 size={17} color="#fff" />
-              <Text style={styles.shareBtnText}>Share</Text>
+              <Text allowFontScaling={false} style={styles.shareBtnText}>Share</Text>
             </>
           )}
         </Pressable>
         <Pressable style={styles.doneBtn} onPress={onClose}>
-          <Text style={styles.doneBtnText}>Done</Text>
+          <Text allowFontScaling={false} style={styles.doneBtnText}>Done</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -400,7 +406,7 @@ function Pill({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | '
           : { color: '#4a423a', backgroundColor: 'transparent', borderColor: HAIRLINE }
   return (
     <View style={[styles.pill, { backgroundColor: toneStyle.backgroundColor, borderColor: toneStyle.borderColor }]}>
-      <Text style={[styles.pillText, { color: toneStyle.color }]}>{label}</Text>
+      <Text allowFontScaling={false} style={[styles.pillText, { color: toneStyle.color }]}>{label}</Text>
     </View>
   )
 }

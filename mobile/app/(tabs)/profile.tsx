@@ -33,7 +33,7 @@ import StatsView from '../../components/StatsView'
 import ProfileBanner, { type PickKind } from '../../components/ProfileBanner'
 import SettingsSheet from '../../components/SettingsSheet'
 import AnchoredMenu from '../../components/AnchoredMenu'
-import { colors, fonts, radii, spacing } from '../../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 
 const GAP = 10
 // The recommendation accent, shared with the Recommend control on album detail.
@@ -72,7 +72,6 @@ const QUALIFIED = 15 // artists need ≥15 rated songs to rank
 // chart board: cap how far the numeral scales, then give it a floor wide
 // enough for three digits at that ceiling, and let it grow past it if a
 // library ever runs to four.
-const NUM_SCALE_CAP = 1.3
 const RANK_NUM_SIZE = 15
 // Playfair sets digits at roughly 0.55em.
 const RANK_NUM_MIN_W = Math.ceil(RANK_NUM_SIZE * NUM_SCALE_CAP * 0.55 * 3)
@@ -356,7 +355,13 @@ export default function Profile() {
             <View style={styles.tabBar}>
               {TABS.map(({ key, label }) => (
                 <Pressable key={key} style={styles.tab} onPress={() => setTab(key)}>
-                  <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
+                  <Text
+                    style={[styles.tabText, tab === key && styles.tabTextActive]}
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={NUM_SCALE_CAP}
+                  >
+                    {label}
+                  </Text>
                   <View style={[styles.tabUnderline, tab === key && styles.tabUnderlineActive]} />
                 </Pressable>
               ))}
@@ -372,7 +377,14 @@ export default function Profile() {
                       style={[styles.chip, libStatus === key && styles.chipActive]}
                       onPress={() => setLibStatus(key)}
                     >
-                      <Text style={[styles.chipText, libStatus === key && styles.chipTextActive]}>
+                      {/* Three chips sharing one non-scrolling row; capped and
+                          held to a line so "To Listen" cannot push the row
+                          past the screen edge. */}
+                      <Text
+                        style={[styles.chipText, libStatus === key && styles.chipTextActive]}
+                        numberOfLines={1}
+                        maxFontSizeMultiplier={NUM_SCALE_CAP}
+                      >
                         {label}
                       </Text>
                     </Pressable>
@@ -576,11 +588,23 @@ function AlbumCell({
         {/* Rated: desktop-style white pill, colored text + border (top-right) */}
         {showScore ? (
           <View style={[styles.scoreBadge, { borderColor: badge! }]}>
-            <Text style={[styles.scoreBadgeText, { color: badge! }]}>{album.score!.toFixed(2)}</Text>
+            {/* A pill pinned to the corner of a cover whose width comes from the
+                grid, so the numeral inside it has nowhere to grow. Capped and
+                held to one line: uncapped, it widened past the artwork and
+                "9.63" wrapped inside its own badge. */}
+            <Text
+              style={[styles.scoreBadgeText, { color: badge! }]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={NUM_SCALE_CAP}
+            >
+              {album.score!.toFixed(2)}
+            </Text>
           </View>
         ) : album.status === 'to_listen' && album.predictedScore != null ? (
           <View style={styles.predBadge}>
-            <Text style={styles.predText}>~{album.predictedScore.toFixed(2)}</Text>
+            <Text style={styles.predText} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+              ~{album.predictedScore.toFixed(2)}
+            </Text>
           </View>
         ) : null}
       </View>

@@ -12,7 +12,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensio
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Sparkles } from 'lucide-react-native'
 import type { Release } from '../lib/releaseNotes'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
 export default function WhatsNewSheet({
   release,
@@ -35,7 +35,7 @@ export default function WhatsNewSheet({
           <View style={styles.head}>
             <View style={styles.badge}>
               <Sparkles size={13} color={colors.green} />
-              <Text style={styles.badgeText}>BUILD {release.build}</Text>
+              <Text style={styles.badgeText} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={NUM_SCALE_CAP}>BUILD {release.build}</Text>
             </View>
             <Text style={styles.title}>What&rsquo;s New</Text>
             <Text style={styles.sub}>Here&rsquo;s what changed in this update.</Text>
@@ -51,7 +51,7 @@ export default function WhatsNewSheet({
             {release.notes.map((n, i) => (
               <View key={n.title} style={styles.note}>
                 <View style={styles.num}>
-                  <Text style={styles.numText}>{i + 1}</Text>
+                  <Text style={styles.numText} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={NUM_SCALE_CAP}>{i + 1}</Text>
                 </View>
                 <View style={styles.noteText}>
                   <Text style={styles.noteTitle}>{n.title}</Text>

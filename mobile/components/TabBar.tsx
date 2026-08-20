@@ -8,7 +8,7 @@ import { ListMusic, BarChart3, Users, CircleUser, Plus } from 'lucide-react-nati
 import { fetchFeed } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useSocialSeen, latestFeedTime } from '../lib/socialSeen'
-import { colors, fonts, radii } from '../theme/tokens'
+import { colors, fonts, radii, NUM_SCALE_CAP } from '../theme/tokens'
 
 // Minimal structural slice of react-navigation's BottomTabBarProps — the
 // vendored expo-router copy and the standalone package disagree on exact
@@ -68,7 +68,16 @@ export default function TabBar({ state, navigation }: TabBarProps) {
           <meta.Icon size={22} color={color} strokeWidth={focused ? 2.4 : 2} />
           {showDot && <View style={styles.dot} />}
         </View>
-        <Text style={[styles.label, { color, fontFamily: focused ? fonts.bodyBold : fonts.bodyMedium }]}>
+        {/* Four labels in a floating pill of fixed height, each in a flex:1
+            column beside a 72pt FAB gap — so there is no room to grow into and
+            nowhere to wrap to. Uncapped, "Social" and "Charts" broke across two
+            lines and spilled out through the bottom of the bar. */}
+        <Text
+          style={[styles.label, { color, fontFamily: focused ? fonts.bodyBold : fonts.bodyMedium }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          maxFontSizeMultiplier={NUM_SCALE_CAP}
+        >
           {meta.label}
         </Text>
       </Pressable>

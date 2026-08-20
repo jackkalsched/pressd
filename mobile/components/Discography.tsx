@@ -13,7 +13,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { fetchAotyAlbums } from '../lib/api'
 import { songScoreColor } from '@pressd/shared/types'
 import type { ArtistDetail } from '@pressd/shared/api'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
 const GAP = 10
 // Three across is the target. A narrow screen — or a large Display Zoom, which
@@ -141,7 +141,14 @@ export default function Discography({
                     recyclingKey={e.art}
                   />
                 ) : (
-                  <Text style={styles.initial}>{e.name[0]?.toUpperCase()}</Text>
+                  <Text
+                    style={styles.initial}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    maxFontSizeMultiplier={NUM_SCALE_CAP}
+                  >
+                    {e.name[0]?.toUpperCase()}
+                  </Text>
                 )}
                 {/* Greyscale isn't available to expo-image here, so an unrated
                     cover is knocked back with a scrim instead — same read at a
@@ -149,7 +156,11 @@ export default function Discography({
                 {!rated && <View style={styles.dim} pointerEvents="none" />}
                 {rated && e.score != null && (
                   <View style={[styles.scorePill, { borderColor: songScoreColor(e.score) }]}>
-                    <Text style={[styles.scoreText, { color: songScoreColor(e.score) }]}>
+                    <Text
+                      style={[styles.scoreText, { color: songScoreColor(e.score) }]}
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={NUM_SCALE_CAP}
+                    >
                       {e.score.toFixed(2)}
                     </Text>
                   </View>

@@ -12,7 +12,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import type { SongGap } from '@pressd/shared/api'
 import NoComparisonYet from './NoComparisonYet'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
 const UP = '#2d6a4f'    // you rate it higher
 const DOWN = '#b5432f'  // you rate it lower
@@ -84,7 +84,7 @@ export function GapList({ rows }: { rows: SongGap[] }) {
                     },
                   ]}
                 >
-                  <Text style={styles.barValue}>
+                  <Text style={styles.barValue} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>
                     {isZero ? '' : positive ? '+' : '−'}{Math.abs(r.diff).toFixed(1)}
                   </Text>
                 </View>
@@ -142,7 +142,7 @@ export default function SongGapChart({
     <View>
       <View style={styles.tiles}>
         <View style={styles.tile}>
-          <Text style={[styles.tileValue, { color: summary.mean >= 0 ? UP : DOWN }]}>
+          <Text style={[styles.tileValue, { color: summary.mean >= 0 ? UP : DOWN }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>
             {summary.mean >= 0 ? '+' : ''}{summary.mean.toFixed(2)}
           </Text>
           <Text style={styles.tileLabel}>AVG GAP VS PRESS&apos;D</Text>

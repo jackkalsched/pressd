@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
-import { colors, fonts } from '../theme/tokens'
+import { colors, fonts, NUM_SCALE_CAP } from '../theme/tokens'
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
@@ -78,7 +78,18 @@ export default function ScoreDial({
         />
       </Svg>
       <View style={styles.center} pointerEvents="none">
-        <Text style={[styles.value, { fontSize: size * 0.27 }]}>{value.toFixed(decimals)}</Text>
+        {/* The dial's diameter comes from the caller, who has budgeted room for
+            it in their layout — so the numeral inside honours the reader's text
+            setting up to the cap and then shrinks, rather than growing out
+            through the arc. */}
+        <Text
+          style={[styles.value, { fontSize: size * 0.27 }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          maxFontSizeMultiplier={NUM_SCALE_CAP}
+        >
+          {value.toFixed(decimals)}
+        </Text>
       </View>
     </View>
   )

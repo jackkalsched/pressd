@@ -8,7 +8,7 @@
 import { StyleSheet, Text, View, Pressable, ScrollView } from 'react-native'
 import { Image } from 'expo-image'
 import type { SimilarArtistComparison } from '@pressd/shared/api'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
 const UP = '#2d6a4f'
 const DOWN = '#b5432f'
@@ -57,7 +57,10 @@ export default function SimilarArtistComparisons({
               ) : null}
             </View>
             <Text style={styles.name} numberOfLines={1}>{r.artist}</Text>
-            <Text style={styles.note} numberOfLines={3}>
+            {/* Prose inside a fixed square tile, so the line budget is the
+                constraint rather than the width — capped to keep the sentence
+                inside three lines at a large setting. */}
+            <Text style={styles.note} numberOfLines={3} maxFontSizeMultiplier={NUM_SCALE_CAP}>
               You rate <Text style={styles.noteSong}>{r.top_gap.title}</Text>{' '}
               <Text style={[styles.noteDiff, { color: higher ? UP : DOWN }]}>
                 {Math.abs(r.top_gap.diff).toFixed(1)} {higher ? 'higher' : 'lower'}

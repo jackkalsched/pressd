@@ -38,7 +38,7 @@ import {
   type ArtistRank, type RankDir, type RankMode,
 } from '../../lib/rankings'
 import ProfileBanner from '../../components/ProfileBanner'
-import { colors, fonts, radii, spacing } from '../../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 
 const GAP = 10
 
@@ -397,7 +397,7 @@ function AlbumCell({ album, mu, sd, onPress }: { album: Album; mu: number; sd: n
         )}
         {badge && (
           <View style={[styles.scoreBadge, { borderColor: badge }]}>
-            <Text style={[styles.scoreBadgeText, { color: badge }]}>{album.score!.toFixed(2)}</Text>
+            <Text style={[styles.scoreBadgeText, { color: badge }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{album.score!.toFixed(2)}</Text>
           </View>
         )}
       </View>

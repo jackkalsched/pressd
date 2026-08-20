@@ -23,7 +23,7 @@ import { useAuth } from '../lib/auth'
 import { setFirstAlbumPick, useFirstAlbumPick } from '../lib/firstAlbumPick'
 import { skipOnboarding } from '../lib/onboarding'
 import TracklistLoader from '../components/TracklistLoader'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
 const TILE = 84
 const GAP = 10
@@ -174,7 +174,7 @@ export default function Welcome() {
                 <Image source={{ uri: selected.cover_url }} style={styles.pickedCover} contentFit="cover" />
               ) : (
                 <View style={[styles.pickedCover, styles.coverFallback]}>
-                  <Text style={styles.coverInitial}>{selected.album_name[0]?.toUpperCase()}</Text>
+                  <Text style={styles.coverInitial} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={NUM_SCALE_CAP}>{selected.album_name[0]?.toUpperCase()}</Text>
                 </View>
               )}
               <View style={{ flex: 1, minWidth: 0 }}>

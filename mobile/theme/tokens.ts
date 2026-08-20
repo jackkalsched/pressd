@@ -90,3 +90,18 @@ export function fitType(max: number, available: number, em: number = SCORE_EM_WI
 export function contentWidth(pad: number = spacing.lg): number {
   return screenWidth - pad * 2
 }
+
+/**
+ * How far type is allowed to grow past the reader's own setting before it is
+ * held and shrunk to fit instead.
+ *
+ * Most of this app's numbers live somewhere they cannot grow — a score pinned
+ * to the corner of a cover, a numeral in one of four columns splitting a row, a
+ * value centred in a ring. Those places honour the setting up to here and then
+ * stop, because past it the composition stops being able to give way and the
+ * text clips rather than reflows.
+ *
+ * Prose is different and should generally be left uncapped: a paragraph can
+ * take another line, so a reader who asked for larger text should get it.
+ */
+export const NUM_SCALE_CAP = 1.3

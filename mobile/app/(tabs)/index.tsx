@@ -37,7 +37,7 @@ import RecommendationBanner from '../../components/RecommendationBanner'
 import { markRecsSeen, recTime, useRecsSeen } from '../../lib/recsSeen'
 import { useAuth } from '../../lib/auth'
 import { revealStyle } from '../../lib/scrollReveal'
-import { colors, fonts, radii, spacing } from '../../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 
 const WINDOW_H = Dimensions.get('window').height
 
@@ -543,7 +543,7 @@ function ReviewCell({ review, first, onOpen, onLike }: { review: TopReview; firs
             <Text style={styles.reviewOn} numberOfLines={1}>reviewed {review.album_name}</Text>
           </View>
           {review.score != null && (
-            <Text style={[styles.reviewScore, { color: songScoreColor(review.score) }]}>{review.score.toFixed(2)}</Text>
+            <Text style={[styles.reviewScore, { color: songScoreColor(review.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{review.score.toFixed(2)}</Text>
           )}
         </View>
 
@@ -555,7 +555,7 @@ function ReviewCell({ review, first, onOpen, onLike }: { review: TopReview; firs
               <View style={styles.songNote}>
                 <Triangle size={11} color={colors.green} fill={colors.green} />
                 <Text style={styles.songNoteText} numberOfLines={1}>{review.top_song.title}</Text>
-                <Text style={[styles.songNoteScore, { color: songScoreColor(review.top_song.score) }]}>{review.top_song.score.toFixed(1)}</Text>
+                <Text style={[styles.songNoteScore, { color: songScoreColor(review.top_song.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{review.top_song.score.toFixed(1)}</Text>
               </View>
             )}
             {review.bottom_song && (
@@ -564,7 +564,7 @@ function ReviewCell({ review, first, onOpen, onLike }: { review: TopReview; firs
                   <Triangle size={11} color="#e0492b" fill="#e0492b" />
                 </View>
                 <Text style={styles.songNoteText} numberOfLines={1}>{review.bottom_song.title}</Text>
-                <Text style={[styles.songNoteScore, { color: songScoreColor(review.bottom_song.score) }]}>{review.bottom_song.score.toFixed(1)}</Text>
+                <Text style={[styles.songNoteScore, { color: songScoreColor(review.bottom_song.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{review.bottom_song.score.toFixed(1)}</Text>
               </View>
             )}
           </View>
@@ -634,7 +634,7 @@ function TrendRow({
         </View>
         {item.avg_score != null && (
           <View style={[styles.scorePill, { backgroundColor: scoreTint(item.avg_score) }]}>
-            <Text style={[styles.scorePillText, { color: songScoreColor(item.avg_score) }]}>{item.avg_score.toFixed(2)}</Text>
+            <Text style={[styles.scorePillText, { color: songScoreColor(item.avg_score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{item.avg_score.toFixed(2)}</Text>
           </View>
         )}
       </Pressable>

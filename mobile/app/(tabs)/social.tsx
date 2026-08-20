@@ -46,7 +46,7 @@ import {
 import { useAuth } from '../../lib/auth'
 import { markSocialSeen, latestFeedTime } from '../../lib/socialSeen'
 import { songScoreColor, avatarColor } from '@pressd/shared/types'
-import { colors, fonts, radii, spacing } from '../../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 
 const DOWN = '#c0392b'
 const CONTENT_W = Dimensions.get('window').width - spacing.lg * 2
@@ -431,7 +431,7 @@ function ActivityRow({
             </Pressable>
           ) : item.score != null ? (
             <>
-              <Text style={[styles.score, { color: songScoreColor(item.score) }]}>{item.score.toFixed(2)}</Text>
+              <Text style={[styles.score, { color: songScoreColor(item.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{item.score.toFixed(2)}</Text>
               {gap != null && (
                 <Text style={[styles.gap, { color: gap >= 0 ? colors.green : DOWN }]}>
                   {gap >= 0 ? '+' : '−'}{Math.abs(gap).toFixed(2)} vs you
@@ -488,7 +488,7 @@ function ReviewRow({
         </View>
         {item.score != null && (
           <View style={styles.rowRight}>
-            <Text style={[styles.score, { color: songScoreColor(item.score) }]}>{item.score.toFixed(2)}</Text>
+            <Text style={[styles.score, { color: songScoreColor(item.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{item.score.toFixed(2)}</Text>
           </View>
         )}
       </View>
@@ -756,7 +756,7 @@ function CompareCard({
             ) : (
               <View style={{ flex: 1 }} />
             )}
-            <Text style={[styles.stackScore, { color: songScoreColor(r.score) }]}>{r.score.toFixed(2)}</Text>
+            <Text style={[styles.stackScore, { color: songScoreColor(r.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{r.score.toFixed(2)}</Text>
           </View>
         ))}
       </View>
