@@ -45,9 +45,42 @@ import ShareCard from '../../components/ShareCard'
 import TopSongTiebreak from '../../components/TopSongTiebreak'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
 import { useDeleteAlbum } from '../../lib/useDeleteAlbum'
+import { useRecalibrationMessage } from '@pressd/shared/hooks/useRecalibration'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 
 const DANGER = '#b91c1c'
+
+/**
+ * Covers the screen while a submitted rating settles.
+ *
+ * Rendered only while the submit is in flight, so the message sequence starts
+ * from the top each time. Not dismissible: the album is mid-recompute and there
+ * is nothing useful to go back to until it lands.
+ */
+function RecalibratingOverlay() {
+  const message = useRecalibrationMessage()
+  // Held in state rather than a ref: reading `.current` during render to build
+  // the style is exactly what the refs lint rule rejects, and a lazy useState
+  // initializer gives the same single instance per mount.
+  const [fade] = useState(() => new Animated.Value(0))
+
+  useEffect(() => {
+    fade.setValue(0)
+    Animated.timing(fade, { toValue: 1, duration: 320, useNativeDriver: true }).start()
+  }, [message, fade])
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={() => {}}>
+      <View style={styles.recalRoot}>
+        <ActivityIndicator size="large" color={colors.green} />
+        <Animated.Text style={[styles.recalMessage, { opacity: fade }]}>{message}</Animated.Text>
+        <Text style={styles.recalSub}>
+          Your score is being set against your library and the rest of Press&rsquo;d.
+        </Text>
+      </View>
+    </Modal>
+  )
+}
 
 const FACTORS = [
   { key: 'theme', label: 'Theme / Cohesion', desc: 'Strength and cohesion of the central idea' },
@@ -437,6 +470,7 @@ export default function RatingScreen() {
 
   return (
     <View style={styles.root}>
+      {submit.isPending && <RecalibratingOverlay />}
       <AlbumBackdrop albumArtUrl={album.albumArtUrl} album={album.albumName} artist={album.artist} subtle />
       <SafeAreaView style={styles.screen} edges={['top']}>
         {/* Header: album identity + save draft */}
@@ -1012,6 +1046,29 @@ const styles = StyleSheet.create({
   previewLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.4, color: colors.inkMuted },
 
   error: { fontFamily: fonts.bodyMedium, fontSize: 13, color: '#b91c1c', textAlign: 'center', marginTop: spacing.md },
+  recalRoot: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    backgroundColor: 'rgba(249, 248, 246, 0.96)',
+  },
+  recalMessage: {
+    marginTop: spacing.lg,
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 17,
+    color: colors.ink,
+    textAlign: 'center',
+  },
+  recalSub: {
+    marginTop: spacing.sm,
+    fontFamily: fonts.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.inkMuted,
+    textAlign: 'center',
+    maxWidth: 300,
+  },
   submit: {
     flexDirection: 'row',
     alignItems: 'center',

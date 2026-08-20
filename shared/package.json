@@ -9,7 +9,8 @@
     "./types": "./src/types.ts",
     "./api": "./src/api.ts",
     "./albumSearch": "./src/albumSearch.ts",
-    "./hooks/useAlbumSearch": "./src/hooks/useAlbumSearch.ts"
+    "./hooks/useAlbumSearch": "./src/hooks/useAlbumSearch.ts",
+    "./hooks/useRecalibration": "./src/hooks/useRecalibration.ts"
   },
   "peerDependencies": {
     "react": ">=18"

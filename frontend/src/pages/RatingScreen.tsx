@@ -8,6 +8,53 @@ import type { Song, Album } from '../types'
 import clsx from 'clsx'
 import ShareCardModal from '../components/ShareCard'
 import { useUser } from '../context/UserContext'
+import { useRecalibrationMessage } from '@pressd/shared/hooks/useRecalibration'
+
+/**
+ * Covers the screen while a submitted rating settles.
+ *
+ * Mounted only for the duration of the wait, so the message sequence restarts
+ * cleanly each submit. The album's own scores are already stale behind this —
+ * the sticky card is mid-recompute — which is the other reason to cover them
+ * rather than leave the old number sitting there looking final.
+ */
+function RecalibratingOverlay() {
+  const message = useRecalibrationMessage()
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center px-8"
+      style={{ background: 'rgba(255,255,255,.94)', backdropFilter: 'blur(3px)' }}
+      role="status"
+      aria-live="polite"
+    >
+      <div className="relative flex items-center justify-center mb-7" style={{ width: 74, height: 74 }}>
+        <span className="absolute inset-0 rounded-full border-2 border-[#e3ebe6]" />
+        <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#2d6a4f] animate-spin" />
+        <Check size={26} className="text-[#2d6a4f]" strokeWidth={2.5} />
+      </div>
+      <p
+        key={message}
+        className="m-0 text-center text-[17px] font-bold text-[#1c1917] recalibrate-swap"
+        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+      >
+        {message}
+      </p>
+      <p className="m-0 mt-2 text-center text-[12.5px] text-[#8a7f72] max-w-[300px] leading-snug">
+        Your score is being set against your library and the rest of Press&rsquo;d.
+      </p>
+      <style>{`
+        @keyframes recalibrateSwap {
+          from { opacity: 0; transform: translateY(4px); }
+          to   { opacity: 1; transform: none; }
+        }
+        .recalibrate-swap { animation: recalibrateSwap .32s ease-out; }
+        @media (prefers-reduced-motion: reduce) {
+          .recalibrate-swap { animation: none; }
+        }
+      `}</style>
+    </div>
+  )
+}
 
 function useCountUp(target: number | null, duration = 550) {
   const [display, setDisplay] = useState(0)
@@ -245,6 +292,7 @@ export default function RatingScreen() {
 
   return (
     <div className="flex min-h-screen bg-white">
+      {isSubmitting && <RecalibratingOverlay />}
       {/* Main content */}
       <div className="flex-1 p-4 md:p-8">
         <div className="flex items-center justify-between mb-6">
