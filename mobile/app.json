@@ -11,6 +11,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.pressd.app",
       "buildNumber": "3",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
