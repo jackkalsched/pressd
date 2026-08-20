@@ -70,7 +70,16 @@ def analyze_album(con, album_id: int, artist: str, album_name: str) -> int:
             out_tmpl = os.path.join(tmpdir, f"{(track_number or 0):03d}_%(title)s.%(ext)s")
             try:
                 subprocess.run(
-                    ["yt-dlp", "--default-search", "ytsearch", "--no-playlist",
+                    # --js-runtimes node is load-bearing, not a tuning flag.
+                    # YouTube now gates the media URL behind a JavaScript
+                    # challenge; without a runtime to solve it every download
+                    # returns 403 while *search* still succeeds, so the job
+                    # reports "no audio downloaded" per track and looks like a
+                    # matching problem rather than a broken one. yt-dlp only
+                    # enables deno by default, and node is what this machine
+                    # has.
+                    ["yt-dlp", "--js-runtimes", "node",
+                     "--default-search", "ytsearch", "--no-playlist",
                      "-x", "--audio-format", "mp3", "--audio-quality", "0",
                      "-o", out_tmpl, search],
                     capture_output=True, text=True, timeout=90,
