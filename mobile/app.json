@@ -55,6 +55,22 @@
           "photosPermission": "Pressd uses your photos so you can set a profile picture.",
           "cameraPermission": false
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ],
+      [
+        "@react-native-firebase/app",
+        {
+          "ios": {
+            "disableSPM": true
+          }
+        }
       ]
     ],
     "experiments": {
