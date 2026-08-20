@@ -71,7 +71,10 @@
             "disableSPM": true
           }
         }
-      ]
+      ],
+      "@react-native-firebase/messaging",
+      "@react-native-firebase/auth",
+      "@react-native-firebase/analytics"
     ],
     "experiments": {
       "typedRoutes": true
