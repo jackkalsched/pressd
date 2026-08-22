@@ -62,3 +62,9 @@ pressd_logos.zip
 *.log
 *.nohup.out
 tags_backup_*.json
+
+# APNs auth key. Unlike GoogleService-Info.plist — whose API key is a client
+# identifier scoped to the bundle id — this one is a real credential: it can
+# send push to every app on the team, it never expires, and Apple lets you
+# download it exactly once.
+*.p8
