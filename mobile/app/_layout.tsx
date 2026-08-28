@@ -24,6 +24,8 @@ import {
   useWhatsNewHydrated, useWhatsNewSeen,
 } from '../lib/whatsNew'
 import { latestRelease, releaseFor } from '../lib/releaseNotes'
+import { attachPushListeners, syncPushToken } from '../lib/push'
+import { getMessaging, setBackgroundMessageHandler } from '@react-native-firebase/messaging'
 import WhatsNewSheet from '../components/WhatsNewSheet'
 import { colors } from '../theme/tokens'
 
@@ -31,6 +33,12 @@ SplashScreen.preventAutoHideAsync().catch(() => {})
 loadSocialSeen() // hydrate the Social "new activity" marker once at launch
 loadRecsSeen()   // and the watermark that keeps the recommendation banner to one showing
 loadWhatsNewSeen()  // and which build's release notes have already been read
+
+// Registered at module scope, deliberately: iOS runs this in a fresh JS context
+// with no React tree, so anything inside a component would never be reached.
+// Returning a resolved promise is enough — the notification is displayed by the
+// system, and this exists so the app can do work alongside it later.
+setBackgroundMessageHandler(getMessaging(), async () => {})
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },
@@ -56,6 +64,16 @@ function RootNavigator() {
   useEffect(() => {
     if (fontsLoaded && ready) SplashScreen.hideAsync().catch(() => {})
   }, [fontsLoaded, ready])
+
+  // Re-register on every signed-in launch. FCM rotates a token after a
+  // reinstall, a restore, or a long silence, and a stale one on the server
+  // fails silently — the send succeeds and nothing arrives. No-ops when
+  // permission has not been granted, so it is not a back-door prompt.
+  useEffect(() => {
+    if (!user) return
+    syncPushToken().catch(() => {})
+    return attachPushListeners()
+  }, [user])
 
   if (!fontsLoaded || !ready) return null // splash stays up
 

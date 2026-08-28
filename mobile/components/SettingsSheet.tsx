@@ -11,6 +11,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -25,6 +26,7 @@ import { useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Apple, Check, ChevronRight, LogOut, Trash2, X } from 'lucide-react-native'
 import { fetchLinkedProviders, unlinkProvider, deleteOwnAccount } from '../lib/api'
+import { currentPushToken, enablePush, pushPermissionStatus } from '../lib/push'
 import { useAuth } from '../lib/auth'
 import { useProfile } from '../lib/picks'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
@@ -67,6 +69,28 @@ function GoogleConnectButton({
 
 export default function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { user, signOut, linkGoogleToken, linkAppleToken, updateProfile, uploadAvatarImage, removeAvatar } = useAuth()
+  const [pushState, setPushState] = useState<'granted' | 'denied' | 'undetermined'>('undetermined')
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushToken, setPushToken] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!visible) return
+    pushPermissionStatus().then((st) => {
+      setPushState(st)
+      setPushToken(currentPushToken())
+    })
+  }, [visible])
+
+  async function turnOnPush() {
+    setPushBusy(true)
+    try {
+      const ok = await enablePush()
+      setPushState(ok ? 'granted' : 'denied')
+      setPushToken(currentPushToken())
+    } finally {
+      setPushBusy(false)
+    }
+  }
   const router = useRouter()
   const qc = useQueryClient()
   const [busy, setBusy] = useState<'google' | 'apple' | null>(null)
@@ -382,6 +406,37 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
               </>
             )}
 
+            <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
+            <Text style={styles.sectionHint}>
+              Get told when a friend sends you a record. iOS only asks once, so if you
+              turn this down you&rsquo;ll have to re-enable it in the Settings app.
+            </Text>
+            <View style={styles.pushRow}>
+              <Text style={styles.pushLabel}>
+                {pushState === 'granted'
+                  ? 'On'
+                  : pushState === 'denied'
+                    ? 'Blocked in iOS Settings'
+                    : 'Off'}
+              </Text>
+              {pushBusy ? (
+                <ActivityIndicator color={colors.green} />
+              ) : pushState === 'undetermined' ? (
+                <Pressable onPress={turnOnPush} hitSlop={8}>
+                  <Text style={styles.linkAction}>Turn on</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {__DEV__ && pushToken ? (
+              // Dev only. Reading a token out of a log is miserable, and this is
+              // the value a Firebase test send needs.
+              <Pressable onPress={() => Share.share({ message: pushToken })}>
+                <Text style={styles.sectionHint} numberOfLines={2}>
+                  tap to send FCM token: {pushToken.slice(0, 24)}…
+                </Text>
+              </Pressable>
+            ) : null}
+
             <Text style={styles.sectionLabel}>SIGN-IN METHODS</Text>
             <Text style={styles.sectionHint}>
               Connect both and you can sign back in with either one. With only one connected,
@@ -581,6 +636,22 @@ const styles = StyleSheet.create({
     color: colors.inkTertiary,
     marginBottom: spacing.sm,
   },
+
+  // Matches providerRow's shape so the two sections read as siblings.
+  pushRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    backgroundColor: colors.raised,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  pushLabel: { flex: 1, minWidth: 0, fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.ink },
 
   providerRow: {
     flexDirection: 'row',

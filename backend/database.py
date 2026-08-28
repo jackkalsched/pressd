@@ -144,6 +144,9 @@ def init_db():
             # much weaker claim than one drawn from the user's own cluster-mates,
             # and there was previously no way to tell them apart after the fact.
             "ALTER TABLE albumprediction ADD COLUMN replay_tier VARCHAR",
+            # ── Device push tokens. create_all builds the table on fresh DBs;
+            #    the index is what an existing one needs.
+            "CREATE INDEX IF NOT EXISTS ix_pushtoken_user ON pushtoken (user_id)",
         ]:
             _exec_migration(conn, stmt)
 

@@ -1582,3 +1582,32 @@ export async function fetchAnalysis(userId: number): Promise<{ insights: string[
   if (!res.ok) throw new Error('Failed to fetch analysis')
   return res.json()
 }
+
+/** Bind this device's push token to the signed-in user.
+ *
+ *  Upserted server-side on the token, so calling this on every launch is
+ *  correct and cheap — FCM reissues tokens after a reinstall or a restore, and
+ *  the only way to notice is to re-register.
+ */
+export async function registerPushToken(
+  token: string,
+  platform: 'ios' | 'android' = 'ios',
+): Promise<boolean> {
+  const res = await apiFetch(`${BASE()}/users/push-token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, platform }),
+  })
+  return res.ok
+}
+
+/** Drop a token on sign-out, so the next account on this phone does not
+ *  inherit the previous one's notifications. */
+export async function unregisterPushToken(token: string): Promise<boolean> {
+  const res = await apiFetch(
+    `${BASE()}/users/push-token?token=${encodeURIComponent(token)}`,
+    { method: 'DELETE' },
+  )
+  return res.ok
+}
+

@@ -393,3 +393,25 @@ class ArtistMeta(SQLModel, table=True):
     deezer_artist_id: Optional[int] = None
     image_url: Optional[str] = None
     image_checked_at: Optional[datetime] = None
+
+
+class PushToken(SQLModel, table=True):
+    """One device's FCM registration token.
+
+    Keyed on the token rather than on (user, device) because that is how FCM
+    behaves: a token identifies an *app install*, not a person. The same phone
+    hands back the same token after a different account signs in, so binding it
+    to whoever most recently registered — and letting a later registration move
+    it — is what stops a notification going to the person who used the phone
+    before. A user can hold several (phone, tablet, a reinstall), so there is no
+    unique constraint on user_id.
+
+    Tokens rotate on their own: FCM reissues after a reinstall, a restore, or
+    long disuse, which is why last_seen_at exists. A token nobody has refreshed
+    in months is almost certainly dead, and sends to it fail silently.
+    """
+    token: str = Field(primary_key=True)
+    user_id: int = Field(foreign_key="pressuser.id", index=True)
+    platform: str = Field(default="ios")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_seen_at: datetime = Field(default_factory=datetime.utcnow)

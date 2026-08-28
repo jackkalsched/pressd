@@ -18,6 +18,7 @@ from ..database import get_session
 from ..deps import current_user, optional_user, authorize_view, auth_response
 from ..models import (
     PressUser,
+    PushToken,
     Invite,
     Friendship,
     Album,
@@ -422,6 +423,12 @@ def delete_own_account(
             select(SongAudioFeatures).where(SongAudioFeatures.song_id.in_(song_ids))
         ).all():
             session.delete(row)
+
+    # Push tokens go with the account. A device left registered would keep
+    # receiving anything addressed to a user id that no longer exists, and the
+    # next person to sign in on that phone would inherit it.
+    for row in session.exec(select(PushToken).where(PushToken.user_id == uid)).all():
+        session.delete(row)
 
     # Comments and likes are deleted both ways: the ones this user wrote, and
     # everyone else's on the albums about to disappear (they would dangle).
@@ -831,4 +838,52 @@ def remove_friend(
         raise HTTPException(status_code=404, detail="Friendship not found")
     session.delete(friendship)
     session.commit()
+    return {"ok": True}
+
+@router.post("/push-token")
+def register_push_token(
+    data: dict,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Bind this device's FCM token to the signed-in user.
+
+    Upsert on the token, not on the user: a token identifies an app install,
+    so the same phone returns the same token after a different account signs
+    in. Reassigning user_id on re-registration is what stops the previous
+    account's notifications following the device.
+    """
+    token = (data.get("token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="token is required")
+    platform = (data.get("platform") or "ios").strip().lower()
+    if platform not in ("ios", "android"):
+        raise HTTPException(status_code=400, detail="platform must be ios or android")
+
+    row = session.get(PushToken, token)
+    if row is None:
+        row = PushToken(token=token, user_id=user.id, platform=platform)
+    else:
+        row.user_id = user.id
+        row.platform = platform
+        row.last_seen_at = datetime.utcnow()
+    session.add(row)
+    session.commit()
+    return {"ok": True}
+
+
+@router.delete("/push-token")
+def unregister_push_token(
+    token: str = Query(...),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Drop a token on sign-out, so the next person on this phone does not
+    inherit the last one's notifications. Scoped to the caller's own rows: a
+    token is guessable-adjacent, and without the check anyone holding one
+    could unregister someone else's device."""
+    row = session.get(PushToken, token)
+    if row is not None and row.user_id == user.id:
+        session.delete(row)
+        session.commit()
     return {"ok": True}
