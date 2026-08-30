@@ -8,9 +8,11 @@
 //   - backend/models.py           what is stored per user
 //   - backend/routers/auth.py     what Google / Apple hand over
 //   - theme_predictor/predictor.py what is sent to Anthropic (album text only)
+//   - mobile/lib/push.ts           the device token sent for notifications
+//   - mobile/app.json              which Firebase SDKs are bundled
 import { Link } from 'react-router-dom'
 
-const UPDATED = 'July 31, 2026'
+const UPDATED = 'August 30, 2026'
 const CONTACT = 'jackkalsched@gmail.com'
 
 export default function Privacy() {
@@ -164,10 +166,30 @@ export default function Privacy() {
           <li>Your friend connections, and any invitations you send (including the email address you send them to).</li>
         </ul>
 
+        <h3>How the app is used</h3>
+        <p>
+          The iOS app includes Google's Firebase Analytics, which records how the app itself is
+          used — which screens are opened, how long a session lasts, and basic device details
+          like model and iOS version. It also assigns your installation a random
+          identifier, and derives an approximate location (country or region) from your IP
+          address. This is about the app, not about music: it is what tells us a screen is broken
+          or that nobody can find a feature. It is never joined to your ratings or reviews.
+        </p>
+
+        <h3>Notifications</h3>
+        <p>
+          If you turn on notifications, Apple issues your device a <strong>push token</strong> and
+          we store it against your account so we can tell you when a friend sends you a record.
+          It identifies a device, not a person, and it is deleted when you turn notifications off,
+          sign out, or delete your account. If you never turn notifications on, no token is ever
+          created.
+        </p>
+
         <h3>What we do not collect</h3>
         <ul>
-          <li>No advertising or tracking identifiers, and no cross-app or cross-site tracking.</li>
-          <li>No analytics SDK, behavioral profiling, or location data.</li>
+          <li>No advertising identifiers, no ads, and no tracking of you across other companies' apps or websites.</li>
+          <li>No precise location. The analytics described above infer a country or region from your IP address and nothing finer.</li>
+          <li>No selling of your data, and no sharing of it with data brokers.</li>
           <li>No contacts, photos, microphone, or camera access beyond a profile photo you deliberately choose.</li>
           <li>No payment information — Pressd is free and does not process payments.</li>
         </ul>
@@ -203,6 +225,11 @@ export default function Privacy() {
         </p>
         <ul>
           <li><strong>Google</strong> and <strong>Apple</strong> — sign-in. They tell us who you are; we do not send them your ratings.</li>
+          <li>
+            <strong>Google Firebase</strong> — analytics, and the delivery of push notifications
+            through Apple. Firebase sees how the app is used and the device token your phone was
+            issued. It does not see your library, your ratings, or anything you have written.
+          </li>
           <li><strong>Supabase</strong> — the hosted PostgreSQL database where your account and library are stored.</li>
           <li><strong>Render</strong> — hosts the backend API.</li>
           <li><strong>Vercel</strong> — hosts this website.</li>

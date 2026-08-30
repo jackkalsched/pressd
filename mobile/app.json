@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.pressd.app",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "googleServicesFile": "./GoogleService-Info.plist",
       "usesAppleSignIn": true,
       "infoPlist": {
@@ -80,7 +80,14 @@
       ],
       "@react-native-firebase/messaging",
       "@react-native-firebase/auth",
-      "@react-native-firebase/analytics"
+      [
+        "@react-native-firebase/analytics",
+        {
+          "ios": {
+            "withoutAdIdSupport": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
