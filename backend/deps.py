@@ -106,3 +106,65 @@ def viewable_user_id(
     target = user_id if user_id is not None else user.id
     authorize_view(user, target, session)
     return target
+
+
+# ── Discussion access (PLAN_discussions.md §4.1) ─────────────────────────────
+# A thread is a room of people who have actually heard the thing. Reading and
+# posting carry the same requirement, deliberately: a thread on a record the
+# viewer is halfway through is the most spoiler-prone surface in the app, and
+# the whole point of the gate is that walking in means you have finished.
+#
+# One function, asked by every thread endpoint. Inlining the condition is how
+# `isEP` ended up duplicated across the rating screens, and a gate that
+# disagrees with itself is a privacy bug rather than a cosmetic one.
+
+def thread_access(
+    session: Session, user_id: int, subject_type: str, subject_key: str
+) -> tuple[bool, str | None]:
+    """(allowed, reason_when_locked) for one user against one subject.
+
+    Non-raising, because the resolve endpoint has to describe a locked thread
+    to draw the lock rather than 403 at it. `authorize_thread` is the raising
+    form every other endpoint uses.
+    """
+    from sqlalchemy import text as _sql
+
+    if subject_type == "album":
+        hit = session.execute(_sql(
+            "SELECT 1 FROM album WHERE user_id = :u AND subject_key = :k"
+            " AND status = 'rated' LIMIT 1"), {"u": user_id, "k": subject_key}).first()
+        return (True, None) if hit else (False, "rate_album")
+
+    if subject_type == "track":
+        # A skip stores a NULL score, indistinguishable from "not reached yet"
+        # while the album is in progress — but once the album is rated, a NULL
+        # means the user heard the track and chose to skip it, which is a
+        # deliberate act and earns the room. So the album's status answers the
+        # question the song's score cannot.
+        hit = session.execute(_sql(
+            "SELECT 1 FROM song s JOIN album a ON a.id = s.album_id"
+            " WHERE a.user_id = :u AND s.track_id = :t"
+            "   AND (s.score IS NOT NULL OR a.status = 'rated') LIMIT 1"),
+            {"u": user_id, "t": subject_key}).first()
+        return (True, None) if hit else (False, "rate_track")
+
+    if subject_type == "artist":
+        # subject_key for an album is "<artist_key>||<clean album>", so the
+        # artist's own key is a prefix match — and an indexed one.
+        hit = session.execute(_sql(
+            "SELECT 1 FROM album WHERE user_id = :u AND status = 'rated'"
+            " AND subject_key LIKE :p LIMIT 1"),
+            {"u": user_id, "p": f"{subject_key}||%"}).first()
+        return (True, None) if hit else (False, "rate_artist")
+
+    return (False, "unknown_subject")
+
+
+def authorize_thread(
+    session: Session, user_id: int, subject_type: str, subject_key: str
+) -> None:
+    """403 unless the caller has earned this room. The client's lock UI is a
+    courtesy; this is the thing that actually holds."""
+    allowed, reason = thread_access(session, user_id, subject_type, subject_key)
+    if not allowed:
+        raise HTTPException(status_code=403, detail=f"Thread locked: {reason}")
