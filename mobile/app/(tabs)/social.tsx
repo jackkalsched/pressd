@@ -23,7 +23,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { Heart, Search, UserPlus, X } from 'lucide-react-native'
+import { Search, UserPlus, X } from 'lucide-react-native'
 import {
   fetchFeed,
   fetchFriendReviews,
@@ -43,6 +43,8 @@ import {
   type UserInfo,
   type UserSearchResult,
 } from '../../lib/api'
+import LikeButton from '../../components/LikeButton'
+import { useRefreshOnFocus } from '../../lib/refresh'
 import { useAuth } from '../../lib/auth'
 import { markSocialSeen, latestFeedTime } from '../../lib/socialSeen'
 import { songScoreColor, avatarColor } from '@pressd/shared/types'
@@ -140,11 +142,14 @@ export default function Social() {
   const [findOpen, setFindOpen] = useState(false)
   const [queued, setQueued] = useState<Set<number>>(new Set())
 
-  const { data: feed = [], isLoading: feedLoading } = useQuery({
+  const { data: feed = [], isLoading: feedLoading, refetch: refetchFeed } = useQuery({
     queryKey: ['feed', user?.id],
     queryFn: () => fetchFeed(user!.id),
     enabled: !!user,
   })
+  // Opening the tab pulls fresh activity. Before this, the feed you saw was
+  // whatever had loaded the first time the tab mounted, however long ago.
+  useRefreshOnFocus(refetchFeed)
   // Opening Social clears the tab bar's "new activity" dot. Keyed on the newest
   // feed timestamp, so activity that lands while you're already on this screen
   // is marked seen too rather than leaving the dot behind when you navigate off.
@@ -446,10 +451,7 @@ function ActivityRow({
         <View style={styles.reviewBlock}>
           <Text style={styles.reviewQuote}>“{item.review_excerpt}”</Text>
           <View style={styles.reviewActions}>
-            <Pressable style={styles.actionBtn} onPress={onLike} hitSlop={6}>
-              <Heart size={15} color={item.liked_by_me ? DOWN : colors.inkTertiary} fill={item.liked_by_me ? DOWN : 'transparent'} />
-              <Text style={styles.actionText}>{item.like_count ?? 0}</Text>
-            </Pressable>
+            <LikeButton liked={!!item.liked_by_me} count={item.like_count ?? 0} onToggle={onLike} />
             <Pressable onPress={() => onOpenAlbum(item.album_id)} hitSlop={6}>
               <Text style={styles.actionText}>{item.comment_count ?? 0} replies</Text>
             </Pressable>
@@ -495,10 +497,7 @@ function ReviewRow({
       <View style={styles.reviewBlock}>
         <Text style={styles.reviewQuote}>“{item.review}”</Text>
         <View style={styles.reviewActions}>
-          <Pressable style={styles.actionBtn} onPress={onLike} hitSlop={6}>
-            <Heart size={15} color={item.liked_by_me ? DOWN : colors.inkTertiary} fill={item.liked_by_me ? DOWN : 'transparent'} />
-            <Text style={styles.actionText}>{item.like_count}</Text>
-          </Pressable>
+          <LikeButton liked={!!item.liked_by_me} count={item.like_count} onToggle={onLike} />
           <Pressable onPress={() => onOpenAlbum(item.album_id)} hitSlop={6}>
             <Text style={styles.actionText}>{item.comment_count} replies</Text>
           </Pressable>

@@ -25,6 +25,7 @@ import {
 } from '../lib/whatsNew'
 import { latestRelease, releaseFor } from '../lib/releaseNotes'
 import { attachPushListeners, syncPushToken } from '../lib/push'
+import { wireAppStateFocus } from '../lib/refresh'
 import { getMessaging, setBackgroundMessageHandler } from '@react-native-firebase/messaging'
 import WhatsNewSheet from '../components/WhatsNewSheet'
 import { colors } from '../theme/tokens'
@@ -33,6 +34,9 @@ SplashScreen.preventAutoHideAsync().catch(() => {})
 loadSocialSeen() // hydrate the Social "new activity" marker once at launch
 loadRecsSeen()   // and the watermark that keeps the recommendation banner to one showing
 loadWhatsNewSeen()  // and which build's release notes have already been read
+// Without this React Query never learns the app came back to the foreground —
+// refetchOnWindowFocus is a browser concept and no-ops in React Native.
+wireAppStateFocus()
 
 // Registered at module scope, deliberately: iOS runs this in a fresh JS context
 // with no React tree, so anything inside a component would never be reached.

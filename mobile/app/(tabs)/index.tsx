@@ -2,7 +2,7 @@
 // this next" pick, new releases (with add actions), Pressd Trending, and "what
 // are pressers talking about" (userbase-wide top reviews for the day). No boxed
 // cards — sections are separated by whitespace and hairline rules.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
@@ -18,7 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { ArrowRight, ChevronDown, Heart, MessageCircle, Triangle } from 'lucide-react-native'
+import { ArrowRight, ChevronDown, MessageCircle, Triangle } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchPredictedPicks,
@@ -34,6 +34,8 @@ import {
 import { songScoreColor, type Album } from '@pressd/shared/types'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import RecommendationBanner from '../../components/RecommendationBanner'
+import LikeButton from '../../components/LikeButton'
+import { useRefreshOnFocus } from '../../lib/refresh'
 import { markRecsSeen, recTime, useRecsSeen } from '../../lib/recsSeen'
 import { useAuth } from '../../lib/auth'
 import { revealStyle } from '../../lib/scrollReveal'
@@ -214,6 +216,18 @@ export default function ForYou() {
 
   const suggestion = daily.queued
   const pick = daily.pick
+
+  // Coming back to For You pulls the same set pull-to-refresh does, so a
+  // recommendation that arrived while you were on another tab shows up without
+  // the user having to think about it.
+  const refreshAll = useCallback(() => {
+    refetchListening()
+    refetchToListen()
+    refetchNew()
+    refetchTrending()
+    refetchTopReviews()
+  }, [refetchListening, refetchToListen, refetchNew, refetchTrending, refetchTopReviews])
+  useRefreshOnFocus(refreshAll)
 
   async function onRefresh() {
     setRefreshing(true)
@@ -581,10 +595,7 @@ function ReviewCell({ review, first, onOpen, onLike }: { review: TopReview; firs
       </Pressable>
 
       <View style={styles.reviewActions}>
-        <Pressable style={styles.reviewAction} onPress={onLike} hitSlop={8}>
-          <Heart size={15} color={review.liked_by_me ? '#c0392b' : colors.inkMuted} fill={review.liked_by_me ? '#c0392b' : 'transparent'} />
-          <Text style={styles.reviewActionText}>{review.like_count}</Text>
-        </Pressable>
+        <LikeButton liked={!!review.liked_by_me} count={review.like_count} onToggle={onLike} />
         <Pressable style={styles.reviewAction} onPress={onOpen} hitSlop={8}>
           <MessageCircle size={15} color={colors.inkMuted} />
           <Text style={styles.reviewActionText}>{review.comment_count}</Text>
