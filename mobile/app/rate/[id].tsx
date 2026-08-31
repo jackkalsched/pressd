@@ -101,6 +101,21 @@ function parseScore(text: string): number | null {
   return Math.max(0, Math.min(10, n))
 }
 
+/** Which tracks the user may jump to.
+ *
+ *  Songs unlock one at a time in track order, so a track the user has not
+ *  reached yet stays out of reach — that first-pass constraint is the product.
+ *  Anything already scored or skipped is fair game to revisit, and so is the
+ *  track they are standing on.
+ *
+ *  Both the progress chips and the track sheet ask this one function rather
+ *  than each testing the condition themselves, so the two can never disagree
+ *  about what is reachable.
+ */
+function canJumpTo(i: number, scores: (number | null)[], skipped: Set<number>, current: number): boolean {
+  return scores[i] != null || skipped.has(i) || i === current
+}
+
 /** Keep only digits and a single decimal point, capped at 10. */
 function cleanScoreText(text: string): string {
   let t = text.replace(/[^0-9.]/g, '')
@@ -558,18 +573,40 @@ export default function RatingScreen() {
                 <View style={styles.chipRow}>
                   {sortedSongs.map((s, i) => {
                     const v = scores[i]
+                    const open = canJumpTo(i, scores, skipped, idx)
                     return (
-                      <View
+                      <Pressable
                         key={s.id}
-                        style={[
+                        onPress={() => open && jumpTo(i)}
+                        disabled={!open}
+                        // Vertical only, and half the 4px gap horizontally: a
+                        // wider slop would overlap its neighbour and hand the
+                        // tap to the wrong track.
+                        hitSlop={{ top: 14, bottom: 14, left: 2, right: 2 }}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: !open, selected: i === idx }}
+                        accessibilityLabel={
+                          `Track ${s.trackNumber ?? i + 1}, ${s.title}` +
+                          (v != null ? `, scored ${v.toFixed(1)}`
+                            : skipped.has(i) ? ', skipped'
+                            : i === idx ? ', rating now'
+                            : ', locked')
+                        }
+                        style={({ pressed }) => [
                           styles.chip,
                           { backgroundColor: v != null ? songScoreColor(v) : colors.inset },
                           i === idx && styles.chipCurrent,
+                          pressed && open && styles.chipPressed,
                         ]}
                       />
                     )
                   })}
                 </View>
+                {/* The chips were previously decoration, so say once that they
+                    are not — only when there is somewhere back to go. */}
+                {ratedIdx.some((i) => i !== idx) && (
+                  <Text style={styles.chipHint}>Tap a track to go back</Text>
+                )}
               </View>
 
               {/* Up next */}
@@ -817,12 +854,13 @@ function TrackSheet({
               const v = scores[i]
               const isSkipped = skipped.has(i)
               const visited = v != null || isSkipped
+              const open = canJumpTo(i, scores, skipped, current)
               return (
                 <Pressable
                   key={s.id}
                   style={[styles.sheetRow, i === current && styles.sheetRowCurrent]}
-                  onPress={() => (visited || i === current ? onPick(i) : null)}
-                  disabled={!visited && i !== current}
+                  onPress={() => open && onPick(i)}
+                  disabled={!open}
                 >
                   <Text style={styles.sheetNum}>{s.trackNumber}</Text>
                   <Text
@@ -983,6 +1021,8 @@ const styles = StyleSheet.create({
   chipRow: { flexDirection: 'row', gap: 4, marginTop: spacing.md },
   chip: { flex: 1, height: 28, borderRadius: 5 },
   chipCurrent: { borderWidth: 2, borderColor: colors.ink },
+  chipPressed: { opacity: 0.55 },
+  chipHint: { fontFamily: fonts.body, fontSize: 11, color: colors.inkTertiary, marginTop: spacing.sm, textAlign: 'center' },
 
   sectionLabel: {
     fontFamily: fonts.bodyBold,
