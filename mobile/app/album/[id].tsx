@@ -1,7 +1,7 @@
 // Album detail — read view for any album, and the entry into the rating screen:
 // "Rate" (to-listen), "Continue" (listening), or "Edit rating" (rated). Shows
 // the final or predicted score, factor breakdown, and per-track scores.
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
@@ -171,12 +171,22 @@ export default function AlbumDetail() {
     compare?: string
   }>()
   const albumId = Number(id)
+
   // New releases arrive by name+artist (they may not exist in Pressd yet);
   // everything else arrives with a copy's id.
   const byName = !!name && !!artist
   const isCommunity = community === '1' || byName
   const deezerId = deezer ? Number(deezer) : null
   const router = useRouter()
+  // Onboarding reaches this screen with an empty stack: welcome replaces itself
+  // with the rating flow, which replaces itself with this page, so a new user
+  // finishing their first album had a Back button that did nothing. Falling
+  // through to the tabs is what "back to the app" means when there is no
+  // history to pop.
+  const leave = useCallback(() => {
+    if (router.canGoBack()) router.back()
+    else router.replace('/(tabs)')
+  }, [router])
   const queryClient = useQueryClient()
   const { user } = useAuth()
 
@@ -269,7 +279,7 @@ export default function AlbumDetail() {
   const { confirmDelete, deleting } = useDeleteAlbum({
     albumId,
     albumName: album?.albumName ?? '',
-    onDeleted: () => router.back(),
+    onDeleted: leave,
   })
 
   // Above the early returns for the same reason useDeleteAlbum is.
@@ -285,7 +295,7 @@ export default function AlbumDetail() {
       )
     }
     if (communityError || !communityData) {
-      return <LoadFailed onBack={() => router.back()} />
+      return <LoadFailed onBack={leave} />
     }
     // Fill in from the resolved release when Pressd has no copy of it yet.
     const shown: CommunityAlbumData = resolvedAlbum
@@ -318,13 +328,13 @@ export default function AlbumDetail() {
                 })
             : undefined
         }
-        onBack={() => router.back()}
+        onBack={leave}
         onOpenArtist={(n) =>
           router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent(n) } })
         }
         onRate={() => startRating(shown)}
         onQueue={() => queueAlbum(shown)}
-        onDeleted={() => router.back()}
+        onDeleted={leave}
       />
     )
   }
@@ -339,7 +349,7 @@ export default function AlbumDetail() {
   // Personal copies are friends-only; without this an unauthorized album left
   // the screen spinning forever.
   if (isError || !album) {
-    return <LoadFailed onBack={() => router.back()} />
+    return <LoadFailed onBack={leave} />
   }
 
   const sorted = [...album.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
@@ -431,7 +441,7 @@ export default function AlbumDetail() {
         mine={myAlbum}
         owner={owner}
         color={ownerColor}
-        onBack={() => router.back()}
+        onBack={leave}
         onOpenMine={() => router.push({ pathname: '/album/[id]', params: { id: String(myAlbum.id) } })}
         onOpenAverage={() =>
           router.push({ pathname: '/album/[id]', params: { id: String(albumId), community: '1' } })
@@ -455,7 +465,7 @@ export default function AlbumDetail() {
       <AlbumBackdrop albumArtUrl={album.albumArtUrl} album={album.albumName} artist={album.artist} />
       <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.topBar}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.backBtn}>
+        <Pressable onPress={leave} hitSlop={10} style={styles.backBtn}>
           <ArrowLeft size={18} color={colors.inkSecondary} />
           <Text style={styles.backText}>Back</Text>
         </Pressable>
