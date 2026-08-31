@@ -532,6 +532,20 @@ export default function RatingScreen() {
               />
               <ScoreScale value={scores[idx]} />
 
+              {/* Offered, never prefilled. Writing the score straight into the
+                  draft would make scores[i] non-null, which unlocks jumping to
+                  that track and hands the user a number they never agreed to.
+                  One tap is the whole saving, and it keeps both properties. */}
+              {song.carriedScore != null && song.score == null && !drafts[idx] && (
+                <Pressable style={styles.carryRow} onPress={() => setDraftAt(idx, String(song.carriedScore))}>
+                  <Text style={styles.carryText} numberOfLines={2}>
+                    You rated this {song.carriedScore.toFixed(1)} on{' '}
+                    <Text style={styles.carryAlbum}>{song.carriedFromAlbumName}</Text>
+                  </Text>
+                  <Text style={styles.carryUse}>Use it</Text>
+                </Pressable>
+              )}
+
               <View style={styles.actions}>
                 <Pressable style={styles.listBtn} onPress={() => setListOpen(true)} accessibilityLabel="Jump to a track">
                   <ListMusic size={20} color={colors.inkSecondary} />
@@ -1022,6 +1036,13 @@ const styles = StyleSheet.create({
   chip: { flex: 1, height: 28, borderRadius: 5 },
   chipCurrent: { borderWidth: 2, borderColor: colors.ink },
   chipPressed: { opacity: 0.55 },
+  carryRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: spacing.sm, marginTop: spacing.md,
+  },
+  carryText: { fontFamily: fonts.body, fontSize: 12, color: colors.inkSecondary, flexShrink: 1 },
+  carryAlbum: { fontFamily: fonts.bodySemiBold, color: colors.ink },
+  carryUse: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },
   chipHint: { fontFamily: fonts.body, fontSize: 11, color: colors.inkTertiary, marginTop: spacing.sm, textAlign: 'center' },
 
   sectionLabel: {

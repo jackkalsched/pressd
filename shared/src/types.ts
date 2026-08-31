@@ -15,6 +15,12 @@ export interface Song {
   bpm: number | null
   musicalKey: string | null
   loudnessDb: number | null
+  /** A score this user already gave the same recording on a single or EP,
+   *  offered as a prefill. Server-side only for the album's owner, and only
+   *  while something is unscored. Null when nothing carries. */
+  carriedScore: number | null
+  carriedFromAlbumId: number | null
+  carriedFromAlbumName: string | null
 }
 
 export interface Album {

@@ -393,6 +393,23 @@ export default function RatingScreen() {
                       skipped
                     </button>
                   )}
+                  {/* Offered on the active row, never prefilled: writing it
+                      into `scores` would mark the track done and unlock the
+                      next one, letting the user past a record they have not
+                      heard. One click is the whole saving. */}
+                  {isActive && song.carriedScore != null && (
+                    <button
+                      onClick={() => {
+                        const next = [...scores]
+                        next[i] = song.carriedScore
+                        setScores(next)
+                      }}
+                      className="text-[10px] font-semibold uppercase tracking-wide text-[#2d6a4f] hover:underline shrink-0"
+                      title={`You rated this ${song.carriedScore.toFixed(1)} on ${song.carriedFromAlbumName}`}
+                    >
+                      use {song.carriedScore.toFixed(1)}
+                    </button>
+                  )}
                   <ScoreInput
                     value={scores[i] ?? null}
                     disabled={!prevPassed && !isSkipped}

@@ -60,6 +60,9 @@ function transformSong(s: Record<string, unknown>): Song {
     bpm: s.bpm as number | null,
     musicalKey: s.musical_key as string | null,
     loudnessDb: s.loudness_db as number | null,
+    carriedScore: (s.carried_score as number | null) ?? null,
+    carriedFromAlbumId: (s.carried_from_album_id as number | null) ?? null,
+    carriedFromAlbumName: (s.carried_from_album_name as string | null) ?? null,
   }
 }
 

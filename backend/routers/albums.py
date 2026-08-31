@@ -15,6 +15,7 @@ from ..scoring import compute_a_score, recompute_all_scores, BANG_THRESHOLD, SKI
 from ..global_rating import invalidate_cache as invalidate_global_ratings
 from ..genres import GENRES, canonical_genre, canonical_subgenre
 from ..trackkeys import _clean_album, match_title, same_album
+from ..carryover import carryover_for_album
 
 router = APIRouter(prefix="/albums", tags=["albums"])
 
@@ -148,10 +149,24 @@ def get_album(
             session, album.album_name or "", album.artist or "", rated_only=True)
         if a.user_id is not None and a.user_id != user.id
     })
+    songs = [s.model_dump() for s in album.songs]
+    # A score this user already gave the same recording on a single or an EP,
+    # offered as a prefill for the rating flow. Only computed for the owner —
+    # a friend viewing the album has no use for it — and only when something is
+    # still unscored, which keeps it off the hot path for finished records.
+    # See backend/carryover.py for why a shared track_id alone is not enough.
+    if album.user_id == user.id and any(s["score"] is None for s in songs):
+        carried = carryover_for_album(session, album_id, user.id)
+        for s in songs:
+            hit = carried.get(s["id"])
+            if hit:
+                s["carried_score"] = hit["score"]
+                s["carried_from_album_id"] = hit["from_album_id"]
+                s["carried_from_album_name"] = hit["from_album_name"]
     return {
         **album.model_dump(),
         "others_rater_count": others,
-        "songs": [s.model_dump() for s in album.songs],
+        "songs": songs,
     }
 
 
