@@ -147,6 +147,25 @@ def init_db():
             # ── Device push tokens. create_all builds the table on fresh DBs;
             #    the index is what an existing one needs.
             "CREATE INDEX IF NOT EXISTS ix_pushtoken_user ON pushtoken (user_id)",
+            # ── Discussions (PLAN_discussions.md §2.3, §3). Which record a copy
+            #    is, across every user's spelling of it. Backfilled once by
+            #    backend/backfill_subject_keys.py — a migration string cannot do
+            #    it, since the value comes from Python normalisation.
+            "ALTER TABLE album ADD COLUMN subject_key VARCHAR",
+            "CREATE INDEX IF NOT EXISTS ix_album_subject_key ON album (subject_key)",
+            #    create_all builds the four tables on fresh DBs; existing ones
+            #    need the constraints and indexes.
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_thread_subject ON thread (subject_type, subject_key)",
+            "CREATE INDEX IF NOT EXISTS ix_thread_last_post ON thread (last_post_at DESC)",
+            #    Single-column indexes on post.thread_id/user_id/parent_id come
+            #    from the models' index=True and are created by create_all —
+            #    repeating them here only bought a second copy to maintain.
+            #    The Popular sort counts likes and replies inside a 7-day
+            #    window, so both need (target, created_at) to stay a range scan.
+            "CREATE INDEX IF NOT EXISTS ix_postlike_post_created ON postlike (post_id, created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_post_parent_created ON post (parent_id, created_at)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_postlike ON postlike (user_id, post_id)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_postreport ON postreport (user_id, post_id)",
         ]:
             _exec_migration(conn, stmt)
 

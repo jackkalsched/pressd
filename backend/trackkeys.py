@@ -142,3 +142,27 @@ def same_album(want_name: str, want_artist: str, got_name: str, got_artist: str)
     return _clean_album(want_name) == _clean_album(got_name) and artist_matches(
         want_artist, got_artist
     )
+
+
+# ── Discussion subject keys (PLAN_discussions.md §2.2) ───────────────────────
+# One thread per record, per artist, per recording. The grouping question here
+# is the opposite of `album_key`'s: that one is a *stored* unique key on
+# albumfactors/albumprediction and must stay byte-stable, so it cannot strip
+# edition qualifiers. A thread has to do the reverse — every copy of a record
+# has to land in one room, or "Take Care", "(Deluxe)" and "(Deluxe Version)"
+# become three rooms with one poster each.
+
+def subject_key_album(artist: str, album_name: str) -> str:
+    """Grouping key for a discussion thread about a record.
+
+    `artist_key` rather than `_clean` on the artist side so diacritics fold
+    (Cafuné/Cafune), and `_clean_album` on the name side so editions collapse.
+    Computed on read, never stored on the factors tables — it can be tightened
+    later without a migration, which is exactly what `album_key` cannot do.
+    """
+    return f"{artist_key(artist)}||{_clean_album(album_name)}"
+
+
+def subject_key_artist(artist: str) -> str:
+    """Grouping key for a discussion thread about an artist."""
+    return artist_key(artist)

@@ -1,7 +1,9 @@
 from typing import Optional
 from datetime import date, datetime
-from sqlalchemy import Column, LargeBinary, UniqueConstraint
+from sqlalchemy import Column, LargeBinary, UniqueConstraint, event
 from sqlmodel import Field, Relationship, SQLModel
+
+from .trackkeys import subject_key_album
 
 
 class PressUser(SQLModel, table=True):
@@ -134,8 +136,33 @@ class Album(SQLModel, table=True):
     date_added: Optional[date] = Field(default_factory=date.today)
     date_rated: Optional[date] = None
 
+    # Which record this copy is, across every user's spelling of it —
+    # trackkeys.subject_key_album. Stored rather than computed on read because
+    # a discussion post has to resolve its author's copy of the subject on
+    # every read (PLAN_discussions.md §2.3), and that join needs an index.
+    # Nullable: rows predating the backfill, and any insert that forgets, read
+    # as "unresolved" rather than silently joining to the wrong record.
+    subject_key: Optional[str] = Field(default=None, index=True)
+
     user: Optional["PressUser"] = Relationship(back_populates="albums")
     songs: list["Song"] = Relationship(back_populates="album")
+
+
+@event.listens_for(Album, "before_insert")
+@event.listens_for(Album, "before_update")
+def _sync_album_subject_key(mapper, connection, target: "Album") -> None:
+    """Keep album.subject_key in step with the name and artist it derives from.
+
+    A mapper event rather than an assignment at each call site, deliberately:
+    albums are constructed in four places and PATCH /albums/{id} writes
+    arbitrary fields through setattr, so an explicit line would be correct in
+    all of them right up until the fifth path is added. A stale subject_key is
+    worse than a missing one — it silently files a copy under the wrong record.
+
+    Pure string work (PLAN_discussions.md §2.2), so running it on every write
+    costs nothing worth optimising away.
+    """
+    target.subject_key = subject_key_album(target.artist or "", target.album_name or "")
 
 
 class Song(SQLModel, table=True):
@@ -415,3 +442,91 @@ class PushToken(SQLModel, table=True):
     platform: str = Field(default="ios")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_seen_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# ── Discussions (PLAN_discussions.md §3) ─────────────────────────────────────
+
+class Thread(SQLModel, table=True):
+    """One room per subject: a record, an artist, or a single recording.
+
+    Created lazily on first read, never seeded in bulk — most subjects will
+    never be discussed, and a table with one empty row per album in the catalog
+    would make "is anyone talking about this?" a scan instead of a lookup.
+
+    `subject_key` is trackkeys.subject_key_album / subject_key_artist for the
+    first two kinds and the global `track.id` as a string for the third. The
+    server computes it; a client never supplies one, or a client-side
+    normalisation drift silently forks a room.
+    """
+    __table_args__ = (UniqueConstraint("subject_type", "subject_key",
+                                       name="uq_thread_subject"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    subject_type: str = Field(index=True)          # 'album' | 'artist' | 'track'
+    subject_key: str = Field(index=True)
+
+    # Denormalised for list rendering. The Social feed and the divisive rail
+    # draw rows for subjects the viewer may not own a copy of, and resolving a
+    # title through four tables per row is not worth the normalisation.
+    title: str
+    subtitle: Optional[str] = None                 # artist for an album, album for a track
+    art_url: Optional[str] = None
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_post_at: Optional[datetime] = None
+    post_count: int = Field(default=0)
+
+
+class Post(SQLModel, table=True):
+    """One message in a thread.
+
+    Replies are one level deep: `parent_id` on a reply points at a top-level
+    post, and a reply to a reply points at that same top-level post. Enforced
+    server-side — arbitrary nesting is unreadable at phone width and there is
+    no design for it.
+
+    `user_id` is nullable because a seeded Press'd post (§5.1) has no author.
+    Deletes are soft: a removed parent still has to anchor its replies.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    thread_id: int = Field(foreign_key="thread.id", index=True)
+    user_id: Optional[int] = Field(default=None, foreign_key="pressuser.id", index=True)
+    parent_id: Optional[int] = Field(default=None, foreign_key="post.id", index=True)
+
+    body: str
+    kind: str = Field(default="user")   # 'user' | 'system' | 'review' | 'track_note'
+    is_spoiler: bool = Field(default=False)
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    edited_at: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
+
+    # Denormalised counters. They answer the All-time sort directly; the 7-day
+    # Popular window still has to count rows, because a counter cannot be
+    # windowed after the fact.
+    like_count: int = Field(default=0)
+    reply_count: int = Field(default=0)
+
+
+class PostLike(SQLModel, table=True):
+    """created_at earns its place here: the Popular sort is a 7-day window, so
+    the like has to carry when it happened, not just that it did."""
+    __table_args__ = (UniqueConstraint("user_id", "post_id", name="uq_postlike"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="pressuser.id", index=True)
+    post_id: int = Field(foreign_key="post.id", index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class PostReport(SQLModel, table=True):
+    """One person's report of one post. Unique per (user, post) so a repeated
+    tap cannot manufacture the count that auto-hides a post (§4.3)."""
+    __table_args__ = (UniqueConstraint("user_id", "post_id", name="uq_postreport"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    post_id: int = Field(foreign_key="post.id", index=True)
+    user_id: int = Field(foreign_key="pressuser.id", index=True)
+    reason: str                                     # 'abuse' | 'off_subject' | 'spoiler'
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    resolved_at: Optional[datetime] = None
