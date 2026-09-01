@@ -22,7 +22,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as Haptics from 'expo-haptics'
 import Svg, { Text as SvgText } from 'react-native-svg'
-import { ArrowLeft, Check, ChevronRight, Heart, MessageCircle, Pencil, Share2, Star, Trash2 } from 'lucide-react-native'
+import { ArrowLeft, Check, ChevronRight, Heart, Pencil, Share2, Star, Trash2 } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchAlbums,
@@ -36,7 +36,6 @@ import {
   saveReview,
   deleteReview,
   toggleLike,
-  resolveThread,
   type CommunityAlbum as CommunityAlbumData,
   type CommunityTrack,
 } from '../../lib/api'
@@ -48,7 +47,7 @@ import AlbumBackdrop from '../../components/AlbumBackdrop'
 import BangSkip from '../../components/BangSkip'
 import ShareCard from '../../components/ShareCard'
 import RecommendSheet from '../../components/RecommendSheet'
-import { threadKey } from '../../lib/refresh'
+import AlbumThoughts from '../../components/AlbumThoughts'
 import NoComparisonYet from '../../components/NoComparisonYet'
 import { confirmDeleteAlbum, useDeleteAlbum } from '../../lib/useDeleteAlbum'
 import { colors, contentWidth, fitType, fonts, radii, spacing } from '../../theme/tokens'
@@ -679,6 +678,8 @@ export default function AlbumDetail() {
           <Text style={styles.ctaText}>{cta}</Text>
         </Pressable>
         )}
+
+        <AlbumThoughts album={album.albumName} artist={album.artist} />
 
         <Text style={styles.sectionLabel}>TRACKS</Text>
         {sorted.map((s) => (
@@ -1412,25 +1413,6 @@ function ForkBtn({ label, onPress }: { label: string; onPress: () => void }) {
 }
 
 function ReviewSection({ album, editable }: { album: Album; editable: boolean }) {
-  // Whether this record already has a discussion. Same query key as
-  // AlbumThoughts, so the two share one cached answer rather than two requests.
-  const { data: thread } = useQuery({
-    queryKey: threadKey('album', album.artist, album.albumName),
-    queryFn: () => resolveThread({ subjectType: 'album', artist: album.artist, album: album.albumName }),
-    retry: false,
-  })
-  // Once people are talking, writing is joining them rather than filing a
-  // review into an empty page — the review is mirrored into the thread either
-  // way, so the label is the only thing that should change.
-  const router = useRouter()
-  const reviews = thread?.reviewCount ?? 0
-  const others = thread?.raterCount ?? 0
-  const started = reviews > 0
-  // The one way into the record's discussion now that the card above the
-  // tracklist is gone. It belongs here: this section is already where you say
-  // what you think, and the thread is the rest of that same conversation.
-  const notes = thread?.postCount ?? 0
-  const canOpenThread = !!thread?.canRead && notes > 0
 
   const queryClient = useQueryClient()
   // A Modal renders in its own native hierarchy, outside the SafeAreaProvider,
@@ -1469,8 +1451,10 @@ function ReviewSection({ album, editable }: { album: Album; editable: boolean })
     }
   }
 
-  // Not mine and no review → nothing to show.
-  if (!editable && !album.review) return null
+  // Writing a review happens in the rating flow, and saying something about
+  // the record happens in its thread — so with no review there is nothing
+  // for this section to be.
+  if (!album.review) return null
 
   function cancel() {
     setDraft(album.review ?? '')
@@ -1479,7 +1463,7 @@ function ReviewSection({ album, editable }: { album: Album; editable: boolean })
 
   return (
     <View>
-      <Text style={styles.sectionLabel}>{started ? 'YOUR THOUGHTS' : 'REVIEW'}</Text>
+      <Text style={styles.sectionLabel}>REVIEW</Text>
       {album.review ? (
         <View>
           <Text style={styles.reviewBody}>{album.review}</Text>
@@ -1490,39 +1474,7 @@ function ReviewSection({ album, editable }: { album: Album; editable: boolean })
             </Pressable>
           )}
         </View>
-      ) : editable ? (
-        <Pressable style={styles.reviewWrite} onPress={() => setEditing(true)}>
-          <Pencil size={14} color={colors.green} />
-          <Text style={styles.reviewWriteText}>
-            {started ? 'Give your thoughts' : 'Write a review'}
-          </Text>
-        </Pressable>
       ) : null}
-      {/* Only worth saying when there is company to name. */}
-      {editable && !album.review && started && others > 0 && (
-        <Text style={styles.reviewWriteSub}>
-          Review alongside {others}{' '}
-          {others === 1 ? 'presser who\u2019s' : 'pressers who\u2019ve'} rated this record
-        </Text>
-      )}
-
-      {canOpenThread && (
-        <Pressable
-          style={({ pressed }) => [styles.threadLink, pressed && { opacity: 0.7 }]}
-          onPress={() =>
-            router.push({
-              pathname: '/thread/[subject]',
-              params: { subject: 'album', artist: album.artist, album: album.albumName },
-            })
-          }
-        >
-          <MessageCircle size={15} color={colors.green} />
-          <Text style={styles.threadLinkText}>
-            {notes} {notes === 1 ? 'note' : 'notes'} on this record
-          </Text>
-          <ChevronRight size={15} color={colors.green} />
-        </Pressable>
-      )}
 
       {/* Writing happens on its own surface, over the album page. Inline, the
           box sat near the bottom of a long scroll and the keyboard covered the
@@ -1968,20 +1920,4 @@ const styles = StyleSheet.create({
   reviewCancelText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkTertiary },
   reviewEdit: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.sm },
   reviewEditText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary },
-  reviewWrite: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.greenSoft,
-    paddingVertical: 11,
-    borderRadius: radii.md,
-    justifyContent: 'center',
-  },
-  reviewWriteText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
-  reviewWriteSub: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary,
-    marginTop: spacing.sm, textAlign: 'center' },
-  threadLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: spacing.sm, marginTop: spacing.lg, paddingVertical: spacing.md,
-    borderRadius: radii.md, backgroundColor: colors.greenSoft },
-  threadLinkText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
 })
