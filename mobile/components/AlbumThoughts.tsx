@@ -8,7 +8,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, Lock, MessageCircle, Pencil } from 'lucide-react-native'
+import { ChevronRight, Lock, MessageCircle, MessageCirclePlus } from 'lucide-react-native'
 import { resolveThread } from '../lib/api'
 import { threadKey } from '../lib/refresh'
 import { colors, fonts, spacing } from '../theme/tokens'
@@ -62,7 +62,10 @@ export default function AlbumThoughts({
       ) : hasReview ? (
         <MessageCircle size={17} color={colors.green} />
       ) : (
-        <Pencil size={16} color={colors.green} />
+        // Not a pencil: the rating button directly above already uses one, and
+        // two identical icons stacked read as the same action twice. This row
+        // is always about the conversation, so it keeps to that family.
+        <MessageCirclePlus size={17} color={colors.green} />
       )}
       <Text style={[styles.label, locked && styles.labelLocked]} numberOfLines={1}>
         {label}
