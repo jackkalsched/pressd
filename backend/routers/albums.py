@@ -4,7 +4,7 @@ from collections import defaultdict
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
-from sqlalchemy import func
+from sqlalchemy import func, text as _sql
 from sqlalchemy.orm import selectinload
 from datetime import date, datetime
 
@@ -1111,6 +1111,61 @@ def save_review(
     return {
         "review": album.review,
         "review_at": album.review_at.isoformat() if album.review_at else None,
+    }
+
+
+@router.get("/{album_id}/track-threads")
+def track_threads(
+    album_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Note counts and a one-line preview for every track on the album, in one
+    call (PLAN_discussions.md §10).
+
+    Deliberately not a request per track: a 25-track record would fire 25 on
+    mount, and the tracklist wants all of it at once or none of it.
+
+    `locked` is the same gate `deps.thread_access` applies — a track the viewer
+    has not rated is not previewed, since the preview is the spoiler.
+    """
+    album = session.get(Album, album_id)
+    if not album:
+        raise HTTPException(status_code=404, detail="Album not found")
+    authorize_view(user, album.user_id, session)
+
+    rows = session.execute(_sql("""
+        SELECT s.id, s.track_id,
+               COALESCE(cnt.n, 0) AS notes,
+               top.body,
+               (s.score IS NOT NULL OR :rated) AS unlocked
+        FROM song s
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*) AS n FROM post p JOIN thread t ON t.id = p.thread_id
+            WHERE t.subject_type = 'track' AND t.subject_key = s.track_id::text
+              AND p.deleted_at IS NULL AND p.kind <> 'system'
+        ) cnt ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT p.body FROM post p JOIN thread t ON t.id = p.thread_id
+            WHERE t.subject_type = 'track' AND t.subject_key = s.track_id::text
+              AND p.deleted_at IS NULL AND p.kind <> 'system' AND NOT p.is_spoiler
+            ORDER BY (p.like_count - p.dislike_count) DESC, p.created_at DESC
+            LIMIT 1
+        ) top ON TRUE
+        WHERE s.album_id = :aid AND s.track_id IS NOT NULL
+    """), {"aid": album_id, "rated": album.status == "rated"}).fetchall()
+
+    return {
+        str(r[0]): {
+            "track_id": r[1],
+            "note_count": r[2] or 0,
+            # Withheld behind the gate, not merely dimmed: a preview of what
+            # people said about a track you have not reached is the spoiler the
+            # whole rule exists to prevent.
+            "preview": (r[3] if r[4] else None),
+            "locked": not r[4],
+        }
+        for r in rows
     }
 
 

@@ -1816,3 +1816,32 @@ export async function publishThoughts(
     failed: (d.failed ?? []) as number[],
   }
 }
+
+export interface TrackThreadInfo {
+  trackId: number
+  noteCount: number
+  /** Withheld — not merely dimmed — on a track the viewer has not rated: a
+   *  preview of what people said about it is the spoiler the gate exists for. */
+  preview: string | null
+  locked: boolean
+}
+
+/** Note counts and previews for every track on an album, in one call. Never
+ *  fetch these per row: a 25-track record would issue 25 requests on mount. */
+export async function fetchTrackThreads(
+  albumId: number,
+): Promise<Record<number, TrackThreadInfo>> {
+  const res = await apiFetch(`${BASE()}/albums/${albumId}/track-threads`)
+  if (!res.ok) throw new Error('Failed to fetch track notes')
+  const d = (await res.json()) as Record<string, Record<string, unknown>>
+  const out: Record<number, TrackThreadInfo> = {}
+  for (const [songId, v] of Object.entries(d)) {
+    out[Number(songId)] = {
+      trackId: v.track_id as number,
+      noteCount: (v.note_count as number) ?? 0,
+      preview: (v.preview as string | null) ?? null,
+      locked: !!v.locked,
+    }
+  }
+  return out
+}
