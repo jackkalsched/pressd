@@ -31,6 +31,12 @@ export default function AlbumThoughts({
   const open = meta.canRead
   const count = meta.postCount
 
+  // Nothing to point at yet. The review cell below the tracklist is already the
+  // invitation to speak first, and two prompts to say the same thing on one
+  // screen read as two different features. A locked card still earns its place:
+  // it is the only thing that explains what would open the room.
+  if (open && count === 0) return null
+
   return (
     <>
       <Text style={styles.sectionLabel}>ALBUM THOUGHTS</Text>
@@ -58,16 +64,12 @@ export default function AlbumThoughts({
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.title}>
             {open
-              ? count > 0
-                ? `${count} ${count === 1 ? 'note' : 'notes'} on this record`
-                : 'Start the conversation'
+              ? `${count} ${count === 1 ? 'note' : 'notes'} on this record`
               : 'Notes open when you finish rating'}
           </Text>
           <Text style={styles.body} numberOfLines={2}>
             {open
-              ? count > 0
-                ? 'Reviews and replies from everyone who finished this record.'
-                : 'What everyone who finished this record had to say about it.'
+              ? 'Reviews and replies from everyone who finished this record.'
               : 'Rate every track and the album to read and post here.'}
           </Text>
         </View>

@@ -101,7 +101,9 @@ def maybe_seed(session: Session, thread: Thread) -> None:
         ORDER BY AVG(s.score) DESC LIMIT 1
     """), {"k": thread.subject_key}).first()
 
-    bits = [f"{raters} people have rated this, averaging {mean:.1f}."]
+    # Two places for the album mean, one for the track: a final album score is
+    # shown to two everywhere in the app, and a song score to one.
+    bits = [f"{raters} people have rated this, averaging {mean:.2f}."]
     if top:
         bits.append(f"Most-loved track: {top[0]} ({float(top[1]):.1f}).")
     bits.append("Opinion is split." if spread >= 1.0 else "They mostly agree.")

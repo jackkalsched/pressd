@@ -36,6 +36,7 @@ import {
   saveReview,
   deleteReview,
   toggleLike,
+  resolveThread,
   type CommunityAlbum as CommunityAlbumData,
   type CommunityTrack,
 } from '../../lib/api'
@@ -48,6 +49,7 @@ import BangSkip from '../../components/BangSkip'
 import ShareCard from '../../components/ShareCard'
 import RecommendSheet from '../../components/RecommendSheet'
 import AlbumThoughts from '../../components/AlbumThoughts'
+import { threadKey } from '../../lib/refresh'
 import NoComparisonYet from '../../components/NoComparisonYet'
 import { confirmDeleteAlbum, useDeleteAlbum } from '../../lib/useDeleteAlbum'
 import { colors, contentWidth, fitType, fonts, radii, spacing } from '../../theme/tokens'
@@ -1413,6 +1415,18 @@ function ForkBtn({ label, onPress }: { label: string; onPress: () => void }) {
 }
 
 function ReviewSection({ album, editable }: { album: Album; editable: boolean }) {
+  // Whether this record already has a discussion. Same query key as
+  // AlbumThoughts, so the two share one cached answer rather than two requests.
+  const { data: thread } = useQuery({
+    queryKey: threadKey('album', album.artist, album.albumName),
+    queryFn: () => resolveThread({ subjectType: 'album', artist: album.artist, album: album.albumName }),
+    retry: false,
+  })
+  // Once people are talking, writing is joining them rather than filing a
+  // review into an empty page — the review is mirrored into the thread either
+  // way, so the label is the only thing that should change.
+  const started = (thread?.postCount ?? 0) > 0
+
   const queryClient = useQueryClient()
   // A Modal renders in its own native hierarchy, outside the SafeAreaProvider,
   // so SafeAreaView is inert in there — the bar drew straight under the status
@@ -1460,7 +1474,7 @@ function ReviewSection({ album, editable }: { album: Album; editable: boolean })
 
   return (
     <View>
-      <Text style={styles.sectionLabel}>REVIEW</Text>
+      <Text style={styles.sectionLabel}>{started ? 'YOUR THOUGHTS' : 'REVIEW'}</Text>
       {album.review ? (
         <View>
           <Text style={styles.reviewBody}>{album.review}</Text>
@@ -1474,7 +1488,9 @@ function ReviewSection({ album, editable }: { album: Album; editable: boolean })
       ) : editable ? (
         <Pressable style={styles.reviewWrite} onPress={() => setEditing(true)}>
           <Pencil size={14} color={colors.green} />
-          <Text style={styles.reviewWriteText}>Write a review</Text>
+          <Text style={styles.reviewWriteText}>
+            {started ? 'Give your thoughts' : 'Write a review'}
+          </Text>
         </Pressable>
       ) : null}
 

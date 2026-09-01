@@ -307,7 +307,7 @@ function PostRow({
               style={[styles.postScore, { color: songScoreColor(post.author.score) }]}
               maxFontSizeMultiplier={NUM_SCALE_CAP}
             >
-              {post.author.score.toFixed(1)}
+              {post.author.score.toFixed(2)}
             </Text>
           )}
           <Text style={styles.postAuthor} numberOfLines={1}>{post.author?.name ?? 'Unknown'}</Text>
