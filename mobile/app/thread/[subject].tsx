@@ -3,10 +3,11 @@
 // who have heard the same thing argue about it. Reading and posting need the
 // same thing (you finished it), so a locked thread shows the lock instead of
 // its contents. PLAN_discussions.md §4, §5, §6.
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,7 +18,7 @@ import {
   View,
   type View as RNView,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
@@ -69,6 +70,18 @@ export default function ThreadScreen() {
   }>()
   const router = useRouter()
   const queryClient = useQueryClient()
+  const insets = useSafeAreaInsets()
+  // The composer has to clear the home indicator, but only while the keyboard
+  // is down — KeyboardAvoidingView already lifts the bar by the keyboard's
+  // height, and the inset on top of that leaves a strip of background floating
+  // above the keys.
+  const [keyboardUp, setKeyboardUp] = useState(false)
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardWillShow', () => setKeyboardUp(true))
+    const hide = Keyboard.addListener('keyboardWillHide', () => setKeyboardUp(false))
+    return () => { show.remove(); hide.remove() }
+  }, [])
+  const composerPad = keyboardUp ? spacing.md : Math.max(insets.bottom, spacing.md)
   const [sort, setSort] = useState<ThreadSort>('popular')
   const [draft, setDraft] = useState('')
   const [replyTo, setReplyTo] = useState<DiscussionPost | null>(null)
@@ -189,7 +202,7 @@ export default function ThreadScreen() {
             </ScrollView>
 
             {meta?.canPost && (
-              <View style={styles.composer}>
+              <View style={[styles.composer, { paddingBottom: composerPad }]}>
                 {replyTo && (
                   <View style={styles.replyBanner}>
                     <Text style={styles.replyBannerText} numberOfLines={1}>
