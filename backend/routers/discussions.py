@@ -167,9 +167,9 @@ def resolve_thread(
     }
 
 
-def _serialize(row, viewer_id: int, scores: dict[int, float], liked: set[int]) -> dict:
+def _serialize(row, viewer_id: int, scores: dict[int, float], votes: dict[int, int]) -> dict:
     (pid, uid, parent_id, body, kind, is_spoiler, created_at, edited_at, deleted_at,
-     like_count, reply_count, name, avatar, spoiler_flags) = row
+     like_count, dislike_count, reply_count, name, avatar, spoiler_flags) = row
     removed = deleted_at is not None
     return {
         "id": pid,
@@ -181,8 +181,9 @@ def _serialize(row, viewer_id: int, scores: dict[int, float], liked: set[int]) -
         "created_at": created_at.isoformat() if created_at else None,
         "edited_at": edited_at.isoformat() if edited_at else None,
         "like_count": like_count or 0,
+        "dislike_count": dislike_count or 0,
+        "my_vote": votes.get(pid, 0),
         "reply_count": reply_count or 0,
-        "liked_by_me": pid in liked,
         "author": None if uid is None else {
             "id": uid, "name": name or "Unknown", "avatar_url": avatar,
             "score": scores.get(uid),
@@ -211,10 +212,10 @@ def list_posts(
         order = "p.created_at DESC, p.id DESC"
         rank = "0"
     elif sort == "all":
-        order = "(p.like_count + p.reply_count) DESC, p.created_at DESC, p.id DESC"
+        order = "(p.like_count - p.dislike_count + p.reply_count) DESC, p.created_at DESC, p.id DESC"
         rank = "0"
     else:
-        rank = ("(SELECT COUNT(*) FROM postlike pl WHERE pl.post_id = p.id"
+        rank = ("(SELECT COALESCE(SUM(pl.value), 0) FROM postlike pl WHERE pl.post_id = p.id"
                 "   AND pl.created_at > NOW() - INTERVAL '7 days')"
                 " + (SELECT COUNT(*) FROM post r WHERE r.parent_id = p.id"
                 "   AND r.created_at > NOW() - INTERVAL '7 days')")
@@ -240,7 +241,7 @@ def list_posts(
 
     rows = session.execute(_sql(f"""
         SELECT p.id, p.user_id, p.parent_id, p.body, p.kind, p.is_spoiler,
-               p.created_at, p.edited_at, p.deleted_at, p.like_count, p.reply_count,
+               p.created_at, p.edited_at, p.deleted_at, p.like_count, p.dislike_count, p.reply_count,
                u.name, u.avatar_url,
                (SELECT COUNT(*) FROM postreport pr
                  WHERE pr.post_id = p.id AND pr.reason = 'spoiler') AS spoiler_flags
@@ -262,10 +263,10 @@ def list_posts(
     ids = [r[0] for r in rows]
     authors = [r[1] for r in rows if r[1] is not None]
     scores = _author_scores(session, thread, authors)
-    liked: set[int] = set()
+    votes: dict[int, int] = {}
     if ids:
-        liked = {r[0] for r in session.execute(_sql(
-            "SELECT post_id FROM postlike WHERE user_id = :u AND post_id IN :ids"),
+        votes = {r[0]: r[1] for r in session.execute(_sql(
+            "SELECT post_id, value FROM postlike WHERE user_id = :u AND post_id IN :ids"),
             {"u": user.id, "ids": tuple(ids)}).fetchall()}
 
     next_cursor = None
@@ -274,7 +275,7 @@ def list_posts(
     return {
         "thread_id": thread_id,
         "sort": sort,
-        "posts": [_serialize(r, user.id, scores, liked) for r in rows],
+        "posts": [_serialize(r, user.id, scores, votes) for r in rows],
         "next_cursor": next_cursor,
     }
 
@@ -356,7 +357,7 @@ def list_replies(
     authorize_thread(session, user.id, thread.subject_type, thread.subject_key)
     rows = session.execute(_sql("""
         SELECT p.id, p.user_id, p.parent_id, p.body, p.kind, p.is_spoiler,
-               p.created_at, p.edited_at, p.deleted_at, p.like_count, p.reply_count,
+               p.created_at, p.edited_at, p.deleted_at, p.like_count, p.dislike_count, p.reply_count,
                u.name, u.avatar_url,
                (SELECT COUNT(*) FROM postreport pr WHERE pr.post_id = p.id
                   AND pr.reason = 'spoiler') AS spoiler_flags
@@ -365,12 +366,12 @@ def list_replies(
     """), {"p": post_id}).fetchall()
     authors = [r[1] for r in rows if r[1] is not None]
     scores = _author_scores(session, thread, authors)
-    liked: set[int] = set()
+    votes: dict[int, int] = {}
     if rows:
-        liked = {r[0] for r in session.execute(_sql(
-            "SELECT post_id FROM postlike WHERE user_id = :u AND post_id IN :ids"),
+        votes = {r[0]: r[1] for r in session.execute(_sql(
+            "SELECT post_id, value FROM postlike WHERE user_id = :u AND post_id IN :ids"),
             {"u": user.id, "ids": tuple(r[0] for r in rows)}).fetchall()}
-    return [_serialize(r, user.id, scores, liked) for r in rows]
+    return [_serialize(r, user.id, scores, votes) for r in rows]
 
 
 class EditPost(BaseModel):
@@ -420,48 +421,58 @@ def delete_post(
     return {"ok": True}
 
 
-@router.post("/posts/{post_id}/like")
-def like_post(
+class Vote(BaseModel):
+    value: int = PydField(ge=-1, le=1)   # 1 up, -1 down, 0 clears
+
+
+@router.post("/posts/{post_id}/vote")
+def vote_post(
     post_id: int,
+    payload: Vote,
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
+    """Up, down, or neither. Voting the same way twice clears the vote, which is
+    what tapping a pressed button should do.
+
+    One row per (user, post) with a direction, so changing your mind is an
+    update and the unique constraint keeps you from being both for and against.
+    The two counters are recomputed from the rows rather than nudged — a vote
+    can be added, flipped or removed, and three separate increments would have
+    to agree forever.
+    """
     post = session.get(Post, post_id)
     if not post or post.deleted_at:
         raise HTTPException(404, "Post not found")
     if post.kind == "system":
-        raise HTTPException(400, "Cannot like a Press'd post")
+        raise HTTPException(400, "Cannot vote on a Press'd post")
     thread = session.get(Thread, post.thread_id)
     authorize_thread(session, user.id, thread.subject_type, thread.subject_key)
-    existing = session.execute(_sql(
-        "SELECT 1 FROM postlike WHERE user_id = :u AND post_id = :p"),
-        {"u": user.id, "p": post_id}).first()
-    if existing:
-        return {"liked": True, "like_count": post.like_count}
-    session.add(PostLike(user_id=user.id, post_id=post_id))
-    post.like_count = (post.like_count or 0) + 1
+
+    current = session.execute(_sql(
+        "SELECT value FROM postlike WHERE user_id = :u AND post_id = :p"),
+        {"u": user.id, "p": post_id}).scalar()
+    want = payload.value
+    if want == 0 or want == current:
+        session.execute(_sql("DELETE FROM postlike WHERE user_id = :u AND post_id = :p"),
+                        {"u": user.id, "p": post_id})
+        want = 0
+    elif current is None:
+        session.add(PostLike(user_id=user.id, post_id=post_id, value=want))
+    else:
+        session.execute(_sql(
+            "UPDATE postlike SET value = :v, created_at = NOW()"
+            " WHERE user_id = :u AND post_id = :p"),
+            {"v": want, "u": user.id, "p": post_id})
+    session.commit()
+
+    up, down = session.execute(_sql(
+        "SELECT COUNT(*) FILTER (WHERE value = 1), COUNT(*) FILTER (WHERE value = -1)"
+        " FROM postlike WHERE post_id = :p"), {"p": post_id}).first()
+    post.like_count, post.dislike_count = up or 0, down or 0
     session.add(post)
     session.commit()
-    return {"liked": True, "like_count": post.like_count}
-
-
-@router.delete("/posts/{post_id}/like")
-def unlike_post(
-    post_id: int,
-    user: PressUser = Depends(current_user),
-    session: Session = Depends(get_session),
-):
-    post = session.get(Post, post_id)
-    if not post:
-        raise HTTPException(404, "Post not found")
-    removed = session.execute(_sql(
-        "DELETE FROM postlike WHERE user_id = :u AND post_id = :p"),
-        {"u": user.id, "p": post_id}).rowcount
-    if removed:
-        post.like_count = max(0, (post.like_count or 1) - 1)
-        session.add(post)
-    session.commit()
-    return {"liked": False, "like_count": post.like_count}
+    return {"my_vote": want, "like_count": post.like_count, "dislike_count": post.dislike_count}
 
 
 class Report(BaseModel):

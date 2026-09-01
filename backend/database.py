@@ -171,6 +171,12 @@ def init_db():
             #    takes the other with it. Nullable and never backfilled — older
             #    comments were written friends-only and stay that way.
             "ALTER TABLE comment ADD COLUMN post_id INTEGER",
+            #    Votes carry a direction. Existing rows were all likes, which is
+            #    what the default says.
+            "ALTER TABLE postlike ADD COLUMN value INTEGER DEFAULT 1",
+            "UPDATE postlike SET value = 1 WHERE value IS NULL",
+            "ALTER TABLE post ADD COLUMN dislike_count INTEGER DEFAULT 0",
+            "UPDATE post SET dislike_count = 0 WHERE dislike_count IS NULL",
             "CREATE INDEX IF NOT EXISTS ix_comment_post_id ON comment (post_id)",
         ]:
             _exec_migration(conn, stmt)

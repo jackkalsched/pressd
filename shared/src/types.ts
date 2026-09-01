@@ -235,8 +235,10 @@ export interface DiscussionPost {
   createdAt: string | null
   editedAt: string | null
   likeCount: number
+  dislikeCount: number
   replyCount: number
-  likedByMe: boolean
+  /** This viewer's own vote: 1 up, -1 down, 0 none. */
+  myVote: number
   author: PostAuthor | null
   canDelete: boolean
   canEdit: boolean

@@ -509,17 +509,28 @@ class Post(SQLModel, table=True):
     # Popular window still has to count rows, because a counter cannot be
     # windowed after the fact.
     like_count: int = Field(default=0)
+    dislike_count: int = Field(default=0)
     reply_count: int = Field(default=0)
 
 
 class PostLike(SQLModel, table=True):
-    """created_at earns its place here: the Popular sort is a 7-day window, so
-    the like has to carry when it happened, not just that it did."""
+    """One person's vote on one post: +1 up, -1 down.
+
+    A direction on a single row rather than two tables, because the unique
+    constraint then enforces the rule for free — you cannot be both for and
+    against a post, and changing your mind is an update instead of a delete and
+    an insert into somewhere else. Rows written before dislikes existed default
+    to +1, which is what they were.
+
+    created_at earns its place here: the Popular sort is a 7-day window, so the
+    vote has to carry when it happened, not just that it did.
+    """
     __table_args__ = (UniqueConstraint("user_id", "post_id", name="uq_postlike"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="pressuser.id", index=True)
     post_id: int = Field(foreign_key="post.id", index=True)
+    value: int = Field(default=1)   # +1 | -1
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

@@ -24,7 +24,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as Clipboard from 'expo-clipboard'
 import * as Haptics from 'expo-haptics'
-import { ArrowLeft, Lock, Send } from 'lucide-react-native'
+import { ArrowLeft, ChevronDown, ChevronUp, Lock, Send } from 'lucide-react-native'
 import {
   createThreadPost,
   fetchThreadPosts,
@@ -32,7 +32,7 @@ import {
   reportPost,
   replyToPost,
   resolveThread,
-  togglePostLike,
+  fetchReplies,
 } from '../../lib/api'
 import {
   songScoreColor,
@@ -42,7 +42,7 @@ import {
   type ThreadSort,
 } from '@pressd/shared/types'
 import AnchoredMenu from '../../components/AnchoredMenu'
-import LikeButton from '../../components/LikeButton'
+import VoteButtons from '../../components/VoteButtons'
 import { threadKey } from '../../lib/refresh'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 
@@ -257,8 +257,14 @@ function PostRow({
   // A blurred spoiler is revealed per reader and stays revealed only for this
   // screen — the flag protects everyone else's first read, not this one's.
   const [revealed, setRevealed] = useState(false)
-  const [liked, setLiked] = useState(post.likedByMe)
-  const [likes, setLikes] = useState(post.likeCount)
+  // Replies are fetched only when someone asks to see them: most posts have
+  // none, and a thread of thirty would otherwise issue thirty requests on mount.
+  const [open, setOpen] = useState(false)
+  const { data: replies = [], isLoading: repliesLoading } = useQuery({
+    queryKey: ['replies', post.id],
+    queryFn: () => fetchReplies(post.id),
+    enabled: open,
+  })
 
   const system = post.kind === 'system'
   const hidden = post.isSpoiler && !revealed && !system
@@ -287,20 +293,6 @@ function PostRow({
           },
         },
       ])
-    }
-  }
-
-  async function toggleLike() {
-    const next = !liked
-    setLiked(next)
-    setLikes((n) => n + (next ? 1 : -1))
-    try {
-      const r = await togglePostLike(post.id, liked)
-      setLiked(r.liked)
-      setLikes(r.likeCount)
-    } catch {
-      setLiked(!next)
-      setLikes((n) => n + (next ? -1 : 1))
     }
   }
 
@@ -339,12 +331,67 @@ function PostRow({
 
       {!system && (
         <View style={styles.postActions}>
-          <LikeButton liked={liked} count={likes} onToggle={toggleLike} />
+          <VoteButtons
+            postId={post.id}
+            likes={post.likeCount}
+            dislikes={post.dislikeCount}
+            myVote={post.myVote}
+          />
           <Pressable onPress={() => onReply(post)} hitSlop={8}>
-            <Text style={styles.replyText}>
-              {post.replyCount > 0 ? `${post.replyCount} ${post.replyCount === 1 ? 'reply' : 'replies'}` : 'Reply'}
-            </Text>
+            <Text style={styles.replyText}>Reply</Text>
           </Pressable>
+          {post.replyCount > 0 && (
+            <Pressable onPress={() => setOpen((v) => !v)} hitSlop={8} style={styles.disclosure}>
+              <Text style={styles.replyToggle}>
+                {post.replyCount} {post.replyCount === 1 ? 'reply' : 'replies'}
+              </Text>
+              {open
+                ? <ChevronUp size={13} color={colors.green} />
+                : <ChevronDown size={13} color={colors.green} />}
+            </Pressable>
+          )}
+        </View>
+      )}
+
+      {open && (
+        <View style={styles.replies}>
+          {repliesLoading ? (
+            <ActivityIndicator color={colors.green} style={{ marginVertical: spacing.sm }} />
+          ) : (
+            replies.map((r) => (
+              <View key={r.id} style={styles.reply}>
+                {r.deleted ? (
+                  <Text style={styles.tombstone}>This reply was removed.</Text>
+                ) : (
+                  <>
+                    <View style={styles.postHead}>
+                      {r.author?.score != null && (
+                        <Text
+                          style={[styles.replyScore, { color: songScoreColor(r.author.score) }]}
+                          maxFontSizeMultiplier={NUM_SCALE_CAP}
+                        >
+                          {r.author.score.toFixed(2)}
+                        </Text>
+                      )}
+                      <Text style={styles.postAuthor} numberOfLines={1}>
+                        {r.author?.name ?? 'Unknown'}
+                      </Text>
+                    </View>
+                    <Text style={styles.replyBody}>{r.body}</Text>
+                    <View style={styles.replyActions}>
+                      <VoteButtons
+                        postId={r.id}
+                        likes={r.likeCount}
+                        dislikes={r.dislikeCount}
+                        myVote={r.myVote}
+                        compact
+                      />
+                    </View>
+                  </>
+                )}
+              </View>
+            ))
+          )}
         </View>
       )}
 
@@ -405,6 +452,18 @@ const styles = StyleSheet.create({
   postHidden: { color: colors.inkMuted, fontStyle: 'italic' },
   postActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginTop: spacing.sm },
   replyText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkTertiary },
+  disclosure: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  replyToggle: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },
+  // Indented and ruled on the left so a reply reads as hanging off the post
+  // above it rather than as another post in the thread.
+  replies: {
+    marginTop: spacing.sm, marginLeft: spacing.md, paddingLeft: spacing.md,
+    borderLeftWidth: 2, borderLeftColor: colors.border,
+  },
+  reply: { paddingVertical: spacing.sm },
+  replyScore: { fontFamily: fonts.display, fontSize: 15 },
+  replyBody: { fontFamily: fonts.body, fontSize: 14, color: colors.ink, lineHeight: 20 },
+  replyActions: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   tombstone: {
     fontFamily: fonts.body, fontSize: 13, color: colors.inkMuted, fontStyle: 'italic',
     paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border,

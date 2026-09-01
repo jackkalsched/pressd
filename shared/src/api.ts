@@ -1632,8 +1632,9 @@ function transformPost(p: Record<string, unknown>): DiscussionPost {
     createdAt: (p.created_at as string | null) ?? null,
     editedAt: (p.edited_at as string | null) ?? null,
     likeCount: (p.like_count as number) ?? 0,
+    dislikeCount: (p.dislike_count as number) ?? 0,
     replyCount: (p.reply_count as number) ?? 0,
-    likedByMe: !!p.liked_by_me,
+    myVote: (p.my_vote as number) ?? 0,
     author: a
       ? {
           id: a.id as number,
@@ -1753,16 +1754,20 @@ export async function deletePost(postId: number): Promise<void> {
   if (!res.ok) throw new Error('Failed to delete post')
 }
 
-export async function togglePostLike(
+/** Vote on a post: 1 up, -1 down. Sending the vote already held clears it, so
+ *  the caller can pass the button that was tapped and let the server decide. */
+export async function votePost(
   postId: number,
-  liked: boolean,
-): Promise<{ liked: boolean; likeCount: number }> {
-  const res = await apiFetch(`${BASE()}/posts/${postId}/like`, {
-    method: liked ? 'DELETE' : 'POST',
+  value: 1 | -1 | 0,
+): Promise<{ myVote: number; likeCount: number; dislikeCount: number }> {
+  const res = await apiFetch(`${BASE()}/posts/${postId}/vote`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value }),
   })
-  if (!res.ok) throw new Error('Failed to like post')
+  if (!res.ok) throw new Error('Failed to vote')
   const d = await res.json()
-  return { liked: !!d.liked, likeCount: d.like_count ?? 0 }
+  return { myVote: d.my_vote ?? 0, likeCount: d.like_count ?? 0, dislikeCount: d.dislike_count ?? 0 }
 }
 
 export async function reportPost(
