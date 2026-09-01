@@ -166,6 +166,12 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS ix_post_parent_created ON post (parent_id, created_at)",
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_postlike ON postlike (user_id, post_id)",
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_postreport ON postreport (user_id, post_id)",
+            #    A comment on a friend's rating is mirrored into the record's
+            #    thread as a reply; this remembers which post, so deleting one
+            #    takes the other with it. Nullable and never backfilled — older
+            #    comments were written friends-only and stay that way.
+            "ALTER TABLE comment ADD COLUMN post_id INTEGER",
+            "CREATE INDEX IF NOT EXISTS ix_comment_post_id ON comment (post_id)",
         ]:
             _exec_migration(conn, stmt)
 

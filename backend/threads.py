@@ -187,3 +187,84 @@ def sync_review_post(session: Session, album) -> None:
     except Exception as e:  # pragma: no cover
         session.rollback()
         print(f"[sync_review_post] album {getattr(album, 'id', '?')} failed: {e}")
+
+
+def sync_comment_post(session: Session, comment, album) -> None:
+    """Mirror a comment on someone's rating into the record's thread, as a reply
+    to their review.
+
+    A comment on a friend's album is a reply to what they wrote about it, and
+    the thing they wrote is now a post. Leaving the two apart means the same
+    exchange reads as a conversation on one screen and silence on the other.
+
+    Two conditions, and both matter:
+
+      There has to be a review post to answer. A comment is a response to what
+      the owner said; with nothing said, a mirrored reply would dangle from
+      nothing, so it stays a comment and nothing is lost.
+
+      The commenter has to have earned the room. `thread_access` is the whole
+      product argument — a thread is people who finished the record — and a
+      friend can comment on your rating without having heard the album. Their
+      words stay on your page rather than entering a room they cannot read.
+
+    Only ever called for *new* comments. The existing rows were written under a
+    friends-only expectation and are never backfilled: publishing them after the
+    fact would be a privacy regression, not a feature (PLAN_discussions.md §3.1).
+    """
+    from .deps import thread_access
+
+    try:
+        key = getattr(album, "subject_key", None)
+        if not key or album.user_id == comment.user_id:
+            return
+        allowed, _ = thread_access(session, comment.user_id, "album", key)
+        if not allowed:
+            return
+
+        review = session.execute(_sql("""
+            SELECT p.id FROM post p JOIN thread t ON t.id = p.thread_id
+            WHERE t.subject_type = 'album' AND t.subject_key = :k
+              AND p.user_id = :owner AND p.kind = 'review' AND p.deleted_at IS NULL
+            LIMIT 1"""), {"k": key, "owner": album.user_id}).first()
+        if not review:
+            return
+
+        root = session.get(Post, review[0])
+        reply = Post(thread_id=root.thread_id, user_id=comment.user_id,
+                     parent_id=root.id, body=comment.body)
+        session.add(reply)
+        session.commit()
+        session.refresh(reply)
+
+        comment.post_id = reply.id
+        root.reply_count = (root.reply_count or 0) + 1
+        session.add_all([comment, root])
+        session.commit()
+        _recount(session, root.thread_id)
+    except Exception as e:  # pragma: no cover
+        session.rollback()
+        print(f"[sync_comment_post] comment {getattr(comment, 'id', '?')} failed: {e}")
+
+
+def remove_comment_post(session: Session, comment) -> None:
+    """Take the mirrored reply with the comment. Soft, like every other delete
+    here, so anything hanging off it still has an anchor."""
+    try:
+        if not getattr(comment, "post_id", None):
+            return
+        post = session.get(Post, comment.post_id)
+        if not post or post.deleted_at:
+            return
+        post.deleted_at = datetime.utcnow()
+        session.add(post)
+        if post.parent_id:
+            root = session.get(Post, post.parent_id)
+            if root:
+                root.reply_count = max(0, (root.reply_count or 1) - 1)
+                session.add(root)
+        session.commit()
+        _recount(session, post.thread_id)
+    except Exception as e:  # pragma: no cover
+        session.rollback()
+        print(f"[remove_comment_post] comment {getattr(comment, 'id', '?')} failed: {e}")

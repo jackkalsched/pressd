@@ -4,6 +4,7 @@ from sqlmodel import Session, select, func
 from ..database import get_session
 from ..deps import current_user, authorize_view
 from ..models import Album, Comment, PressUser
+from ..threads import remove_comment_post, sync_comment_post
 
 router = APIRouter(tags=["comments"])
 
@@ -72,6 +73,10 @@ def create_comment(
     session.add(comment)
     session.commit()
     session.refresh(comment)
+    # A comment on someone's rating is a reply to what they wrote about the
+    # record, so it belongs in the record's thread too. Conditional — see
+    # threads.sync_comment_post for when it does not mirror.
+    sync_comment_post(session, comment, album)
     return _serialize(comment, user, user.id, album.user_id)
 
 
@@ -89,6 +94,7 @@ def delete_comment(
     # Only the comment's author or the album's owner can delete it.
     if user.id != comment.user_id and user.id != album_owner_id:
         raise HTTPException(status_code=403, detail="Not allowed to delete this comment")
+    remove_comment_post(session, comment)
     session.delete(comment)
     session.commit()
     return {"ok": True}

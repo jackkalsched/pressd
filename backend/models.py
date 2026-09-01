@@ -406,6 +406,10 @@ class Comment(SQLModel, table=True):
     user_id: int = Field(foreign_key="pressuser.id", index=True)
     body: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    # The thread reply this comment was mirrored into, when it was. Null for
+    # every comment written before discussions existed and for any whose author
+    # had not earned the room — see threads.sync_comment_post.
+    post_id: Optional[int] = Field(default=None, foreign_key="post.id", index=True)
 
 
 class ArtistMeta(SQLModel, table=True):
