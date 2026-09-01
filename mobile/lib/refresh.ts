@@ -44,3 +44,19 @@ export function useRefreshOnFocus(refetch: () => unknown): void {
     }, [refetch]),
   )
 }
+
+/** The React Query key for one discussion subject.
+ *
+ *  Built in one place because two callers derive it — the Album thoughts card
+ *  and the thread screen — and a key that differs by an absent `undefined`
+ *  looks identical while caching separately, so posting would leave the card's
+ *  note count stale.
+ */
+export function threadKey(
+  subjectType: string,
+  artist?: string,
+  album?: string,
+  trackId?: number,
+): (string | number)[] {
+  return ['thread', subjectType, artist ?? '', album ?? '', trackId ?? 0]
+}

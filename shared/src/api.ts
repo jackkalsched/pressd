@@ -1,4 +1,7 @@
-import type { Album, Song, ArtistStats, FactorStats, FactorPoints } from './types'
+import type {
+  Album, Song, ArtistStats, FactorStats, FactorPoints,
+  DiscussionPost, SubjectRef, ThreadMeta, ThreadPage, ThreadSort,
+} from './types'
 
 // ── Runtime configuration ─────────────────────────────────────────────────────
 // The shared client is platform-agnostic: each app (web, mobile) injects its own
@@ -1614,3 +1617,166 @@ export async function unregisterPushToken(token: string): Promise<boolean> {
   return res.ok
 }
 
+
+// ── Discussions (PLAN_discussions.md §5) ─────────────────────────────────────
+
+function transformPost(p: Record<string, unknown>): DiscussionPost {
+  const a = p.author as Record<string, unknown> | null
+  return {
+    id: p.id as number,
+    parentId: (p.parent_id as number | null) ?? null,
+    kind: (p.kind as DiscussionPost['kind']) ?? 'user',
+    body: (p.body as string) ?? '',
+    deleted: !!p.deleted,
+    isSpoiler: !!p.is_spoiler,
+    createdAt: (p.created_at as string | null) ?? null,
+    editedAt: (p.edited_at as string | null) ?? null,
+    likeCount: (p.like_count as number) ?? 0,
+    replyCount: (p.reply_count as number) ?? 0,
+    likedByMe: !!p.liked_by_me,
+    author: a
+      ? {
+          id: a.id as number,
+          name: (a.name as string) ?? 'Unknown',
+          avatarUrl: (a.avatar_url as string | null) ?? null,
+          score: (a.score as number | null) ?? null,
+        }
+      : null,
+    canDelete: !!p.can_delete,
+    canEdit: !!p.can_edit,
+  }
+}
+
+/** Query string for a subject. The server turns these into the key; sending a
+ *  key from the client is what forks a room. */
+function subjectQuery(ref: SubjectRef): string {
+  const q = new URLSearchParams({ subject_type: ref.subjectType })
+  if (ref.artist) q.set('artist', ref.artist)
+  if (ref.album) q.set('album', ref.album)
+  if (ref.trackId != null) q.set('track_id', String(ref.trackId))
+  return q.toString()
+}
+
+function subjectBody(ref: SubjectRef): Record<string, unknown> {
+  return {
+    subject_type: ref.subjectType,
+    ...(ref.artist ? { artist: ref.artist } : {}),
+    ...(ref.album ? { album: ref.album } : {}),
+    ...(ref.trackId != null ? { track_id: ref.trackId } : {}),
+  }
+}
+
+/** Thread metadata and whether this viewer is allowed in. Does not throw on a
+ *  locked subject — the caller has to draw the lock and say what opens it. */
+export async function resolveThread(ref: SubjectRef): Promise<ThreadMeta> {
+  const res = await apiFetch(`${BASE()}/threads/resolve?${subjectQuery(ref)}`)
+  if (!res.ok) throw new Error('Failed to resolve thread')
+  const d = await res.json()
+  return {
+    subjectType: d.subject_type,
+    subjectKey: d.subject_key,
+    threadId: d.thread_id ?? null,
+    title: d.title ?? '',
+    subtitle: d.subtitle ?? null,
+    artUrl: d.art_url ?? null,
+    postCount: d.post_count ?? 0,
+    lastPostAt: d.last_post_at ?? null,
+    canRead: !!d.can_read,
+    canPost: !!d.can_post,
+    lockedReason: d.locked_reason ?? null,
+  }
+}
+
+export async function fetchThreadPosts(
+  threadId: number,
+  sort: ThreadSort = 'popular',
+  cursor?: string | null,
+): Promise<ThreadPage> {
+  const q = new URLSearchParams({ sort })
+  if (cursor) q.set('cursor', cursor)
+  const res = await apiFetch(`${BASE()}/threads/${threadId}/posts?${q.toString()}`)
+  if (!res.ok) throw new Error('Failed to fetch posts')
+  const d = await res.json()
+  return {
+    threadId: d.thread_id,
+    sort: d.sort,
+    posts: (d.posts as Record<string, unknown>[]).map(transformPost),
+    nextCursor: d.next_cursor ?? null,
+  }
+}
+
+export async function createThreadPost(
+  ref: SubjectRef,
+  body: string,
+  isSpoiler = false,
+): Promise<{ id: number; threadId: number }> {
+  const res = await apiFetch(`${BASE()}/threads/posts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...subjectBody(ref), body, is_spoiler: isSpoiler }),
+  })
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? 'Failed to post')
+  const d = await res.json()
+  return { id: d.id, threadId: d.thread_id }
+}
+
+export async function fetchReplies(postId: number): Promise<DiscussionPost[]> {
+  const res = await apiFetch(`${BASE()}/posts/${postId}/replies`)
+  if (!res.ok) throw new Error('Failed to fetch replies')
+  return ((await res.json()) as Record<string, unknown>[]).map(transformPost)
+}
+
+export async function replyToPost(postId: number, body: string): Promise<{ id: number }> {
+  const res = await apiFetch(`${BASE()}/posts/${postId}/replies`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ body }),
+  })
+  if (!res.ok) throw new Error('Failed to reply')
+  return res.json()
+}
+
+export async function editPost(postId: number, body: string): Promise<void> {
+  const res = await apiFetch(`${BASE()}/posts/${postId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ body }),
+  })
+  if (!res.ok) throw new Error('Failed to edit post')
+}
+
+export async function deletePost(postId: number): Promise<void> {
+  const res = await apiFetch(`${BASE()}/posts/${postId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to delete post')
+}
+
+export async function togglePostLike(
+  postId: number,
+  liked: boolean,
+): Promise<{ liked: boolean; likeCount: number }> {
+  const res = await apiFetch(`${BASE()}/posts/${postId}/like`, {
+    method: liked ? 'DELETE' : 'POST',
+  })
+  if (!res.ok) throw new Error('Failed to like post')
+  const d = await res.json()
+  return { liked: !!d.liked, likeCount: d.like_count ?? 0 }
+}
+
+export async function reportPost(
+  postId: number,
+  reason: 'abuse' | 'off_subject' | 'spoiler',
+): Promise<void> {
+  const res = await apiFetch(`${BASE()}/posts/${postId}/report`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  })
+  if (!res.ok) throw new Error('Failed to report post')
+}
+
+export async function flagSpoiler(postId: number): Promise<{ blurred: boolean }> {
+  const res = await apiFetch(`${BASE()}/posts/${postId}/spoiler`, { method: 'POST' })
+  if (!res.ok) throw new Error('Failed to flag post')
+  const d = await res.json()
+  return { blurred: !!d.blurred }
+}

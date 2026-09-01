@@ -94,6 +94,7 @@ function RootNavigator() {
         <Stack.Screen name="album/[id]" />
         <Stack.Screen name="friend/[id]" />
         <Stack.Screen name="artist/[name]" />
+        <Stack.Screen name="thread/[subject]" />
         <Stack.Screen name="splits/[name]" />
         <Stack.Screen name="favorite/song" />
         <Stack.Screen name="favorite/album" />

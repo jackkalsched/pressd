@@ -47,6 +47,7 @@ import AlbumBackdrop from '../../components/AlbumBackdrop'
 import BangSkip from '../../components/BangSkip'
 import ShareCard from '../../components/ShareCard'
 import RecommendSheet from '../../components/RecommendSheet'
+import AlbumThoughts from '../../components/AlbumThoughts'
 import NoComparisonYet from '../../components/NoComparisonYet'
 import { confirmDeleteAlbum, useDeleteAlbum } from '../../lib/useDeleteAlbum'
 import { colors, contentWidth, fitType, fonts, radii, spacing } from '../../theme/tokens'
@@ -677,6 +678,8 @@ export default function AlbumDetail() {
           <Text style={styles.ctaText}>{cta}</Text>
         </Pressable>
         )}
+
+        <AlbumThoughts album={album.albumName} artist={album.artist} />
 
         <Text style={styles.sectionLabel}>TRACKS</Text>
         {sorted.map((s) => (

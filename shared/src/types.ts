@@ -197,3 +197,71 @@ export function computeAlbumScore(
   // promised a 10.4 and then saved the 10 the server had clamped it to.
   return Math.round(Math.min(10, Math.max(1, composite)) * 10_000) / 10_000
 }
+
+// ── Discussions (PLAN_discussions.md §5) ─────────────────────────────────────
+
+export type SubjectType = 'album' | 'artist' | 'track'
+export type ThreadSort = 'newest' | 'popular' | 'all'
+
+/** What a subject reference looks like on the wire. The server derives the
+ *  subject key from these — a client never sends one, or a normalisation drift
+ *  silently forks the room. */
+export interface SubjectRef {
+  subjectType: SubjectType
+  artist?: string
+  album?: string
+  trackId?: number
+}
+
+export interface PostAuthor {
+  id: number
+  name: string
+  avatarUrl: string | null
+  /** The author's own current score for this subject, live rather than frozen
+   *  at post time. Null when they have not scored it (a reply on an artist
+   *  thread from someone with no rated album by them). */
+  score: number | null
+}
+
+export interface DiscussionPost {
+  id: number
+  parentId: number | null
+  /** 'system' is the seeded Press'd post: no author, not likeable, not
+   *  replyable, and always first. */
+  kind: 'user' | 'system' | 'review' | 'track_note'
+  body: string
+  deleted: boolean
+  isSpoiler: boolean
+  createdAt: string | null
+  editedAt: string | null
+  likeCount: number
+  replyCount: number
+  likedByMe: boolean
+  author: PostAuthor | null
+  canDelete: boolean
+  canEdit: boolean
+}
+
+/** The thread plus whether this viewer has earned it. `threadId` is null until
+ *  someone posts — threads are created lazily. */
+export interface ThreadMeta {
+  subjectType: SubjectType
+  subjectKey: string
+  threadId: number | null
+  title: string
+  subtitle: string | null
+  artUrl: string | null
+  postCount: number
+  lastPostAt: string | null
+  canRead: boolean
+  canPost: boolean
+  /** 'rate_album' | 'rate_track' | 'rate_artist' when locked, else null. */
+  lockedReason: string | null
+}
+
+export interface ThreadPage {
+  threadId: number
+  sort: ThreadSort
+  posts: DiscussionPost[]
+  nextCursor: string | null
+}
