@@ -127,6 +127,22 @@ def resolve_thread(
         "SELECT id, title, subtitle, art_url, post_count, last_post_at FROM thread"
         " WHERE subject_type = :s AND subject_key = :k"), {"s": subject_type, "k": key}).first()
     title, subtitle, art = display_for(session, subject_type, key)
+
+    # How many reviews stand, and how many other people have rated the record.
+    # Both are what the album page needs to decide whether writing is joining a
+    # conversation or starting one, and it should not have to pull the whole
+    # thread to find out. Excludes the caller: "alongside N pressers" counts the
+    # company you would be keeping, not you.
+    review_count = rater_count = 0
+    if subject_type == "album":
+        review_count, rater_count = session.execute(_sql("""
+            SELECT
+              (SELECT COUNT(*) FROM post p JOIN thread t ON t.id = p.thread_id
+                WHERE t.subject_type = 'album' AND t.subject_key = :k
+                  AND p.kind = 'review' AND p.deleted_at IS NULL),
+              (SELECT COUNT(DISTINCT a.user_id) FROM album a
+                WHERE a.subject_key = :k AND a.status = 'rated' AND a.user_id <> :me)
+        """), {"k": key, "me": user.id}).first()
     return {
         "subject_type": subject_type,
         "subject_key": key,
@@ -135,6 +151,8 @@ def resolve_thread(
         "subtitle": row[2] if row else subtitle,
         "art_url": row[3] if row else art,
         "post_count": row[4] if row else 0,
+        "review_count": review_count,
+        "rater_count": rater_count,
         "last_post_at": row[5].isoformat() if row and row[5] else None,
         "can_read": allowed,
         "can_post": allowed,

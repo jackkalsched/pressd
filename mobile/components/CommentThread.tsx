@@ -17,7 +17,17 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(s / 86400)}d`
 }
 
-export default function CommentThread({ albumId }: { albumId: number }) {
+export default function CommentThread({
+  albumId,
+  canComment = true,
+}: {
+  albumId: number
+  /** False on your own album. Replying to your own review is talking to
+   *  yourself — the review is already yours to edit, and a thread of you
+   *  answering you is not a conversation. Existing comments stay readable,
+   *  and stay deletable, since moderating your own page is the owner's job. */
+  canComment?: boolean
+}) {
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
@@ -53,6 +63,7 @@ export default function CommentThread({ albumId }: { albumId: number }) {
     <View>
       <Text style={styles.sectionLabel}>COMMENTS{comments.length > 0 ? ` · ${comments.length}` : ''}</Text>
 
+      {canComment && (
       <View style={styles.composer}>
         <TextInput
           style={styles.input}
@@ -70,11 +81,14 @@ export default function CommentThread({ albumId }: { albumId: number }) {
           {busy ? <ActivityIndicator size="small" color="#fff" /> : <Send size={16} color="#fff" />}
         </Pressable>
       </View>
+      )}
 
       {isLoading ? (
         <ActivityIndicator color={colors.green} style={{ marginTop: spacing.md }} />
       ) : comments.length === 0 ? (
-        <Text style={styles.empty}>No comments yet. Start the conversation.</Text>
+        <Text style={styles.empty}>
+          {canComment ? 'No comments yet. Start the conversation.' : 'No comments yet.'}
+        </Text>
       ) : (
         comments.map((c) => (
           <View key={c.id} style={styles.comment}>

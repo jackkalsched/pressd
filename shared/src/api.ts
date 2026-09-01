@@ -1680,6 +1680,8 @@ export async function resolveThread(ref: SubjectRef): Promise<ThreadMeta> {
     subtitle: d.subtitle ?? null,
     artUrl: d.art_url ?? null,
     postCount: d.post_count ?? 0,
+    reviewCount: d.review_count ?? 0,
+    raterCount: d.rater_count ?? 0,
     lastPostAt: d.last_post_at ?? null,
     canRead: !!d.can_read,
     canPost: !!d.can_post,

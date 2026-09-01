@@ -695,7 +695,7 @@ export default function AlbumDetail() {
 
         <ReviewSection album={album} editable={isMine} />
 
-        <CommentThread albumId={albumId} />
+        <CommentThread albumId={albumId} canComment={!isMine} />
       </Animated.ScrollView>
       </SafeAreaView>
 
@@ -1425,7 +1425,9 @@ function ReviewSection({ album, editable }: { album: Album; editable: boolean })
   // Once people are talking, writing is joining them rather than filing a
   // review into an empty page — the review is mirrored into the thread either
   // way, so the label is the only thing that should change.
-  const started = (thread?.postCount ?? 0) > 0
+  const reviews = thread?.reviewCount ?? 0
+  const others = thread?.raterCount ?? 0
+  const started = reviews > 0
 
   const queryClient = useQueryClient()
   // A Modal renders in its own native hierarchy, outside the SafeAreaProvider,
@@ -1493,6 +1495,13 @@ function ReviewSection({ album, editable }: { album: Album; editable: boolean })
           </Text>
         </Pressable>
       ) : null}
+      {/* Only worth saying when there is company to name. */}
+      {editable && !album.review && started && others > 0 && (
+        <Text style={styles.reviewWriteSub}>
+          Review alongside {others}{' '}
+          {others === 1 ? 'presser who\u2019s' : 'pressers who\u2019ve'} rated this record
+        </Text>
+      )}
 
       {/* Writing happens on its own surface, over the album page. Inline, the
           box sat near the bottom of a long scroll and the keyboard covered the
@@ -1948,4 +1957,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   reviewWriteText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
+  reviewWriteSub: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary,
+    marginTop: spacing.sm, textAlign: 'center' },
 })

@@ -252,6 +252,12 @@ export interface ThreadMeta {
   subtitle: string | null
   artUrl: string | null
   postCount: number
+  /** Reviews standing on this record, and how many *other* people have rated
+   *  it — enough for the album page to tell whether writing is joining a
+   *  conversation or starting one, without pulling the thread. Album threads
+   *  only; 0 for artist and track. */
+  reviewCount: number
+  raterCount: number
   lastPostAt: string | null
   canRead: boolean
   canPost: boolean
