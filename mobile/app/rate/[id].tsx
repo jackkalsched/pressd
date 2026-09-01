@@ -305,12 +305,13 @@ export default function RatingScreen() {
 
   // ── Swipe between tracks ───────────────────────────────────────────────────
   // The responder is built once and would otherwise close over the first
-  // render's state, so the values it needs are read from a ref that every
-  // render refreshes.
-  // Lazy useState rather than a ref: both are created once, and reading a
-  // ref's .current during render is the pattern ScoreScale below is already
-  // flagged for. `swipe` is a plain object with a stable identity, so mutating
-  // it here is visible to the responder without re-creating the responder.
+  // render's state, so what it needs lives in `swipe` — a plain object with a
+  // stable identity that every render writes into, which the handlers read at
+  // gesture time rather than at build time.
+  //
+  // Lazy useState rather than useRef for all three: they are created once
+  // either way, and reading a ref's .current during render is exactly what
+  // ScoreScale further down is already flagged for.
   const [slideX] = useState(() => new Animated.Value(0))
   const [swipe] = useState(() => ({
     canFwd: false, canBack: false, fwd: () => {}, back: () => {},
