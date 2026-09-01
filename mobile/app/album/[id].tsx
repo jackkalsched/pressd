@@ -286,6 +286,9 @@ export default function AlbumDetail() {
   // Above the early returns for the same reason useDeleteAlbum is.
   const [sharing, setSharing] = useState(false)
   const [recommending, setRecommending] = useState(false)
+  // Held here rather than inside ReviewSection: the button that opens the
+  // composer now sits beside the rating CTA, well above that section.
+  const [reviewEditing, setReviewEditing] = useState(false)
 
   if (isCommunity) {
     if (communityLoading) {
@@ -670,16 +673,22 @@ export default function AlbumDetail() {
             rating too, and an ungated CTA offered to "edit" it — the server
             refuses the write, so nothing could be overwritten, but you'd have
             re-rated the whole record before finding that out. */}
-        {isMine && (
-        <Pressable
-          style={({ pressed }) => [styles.cta, pressed && { backgroundColor: colors.greenPressed }]}
-          onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(albumId) } })}
-        >
-          <Text style={styles.ctaText}>{cta}</Text>
-        </Pressable>
-        )}
-
-        <AlbumThoughts album={album.albumName} artist={album.artist} />
+        <View style={styles.actionRow}>
+          {isMine && (
+            <Pressable
+              style={({ pressed }) => [styles.cta, pressed && { backgroundColor: colors.greenPressed }]}
+              onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(albumId) } })}
+            >
+              <Text style={styles.ctaText} numberOfLines={2}>{cta}</Text>
+            </Pressable>
+          )}
+          <AlbumThoughts
+            album={album.albumName}
+            artist={album.artist}
+            hasReview={!!album.review}
+            onWriteReview={() => setReviewEditing(true)}
+          />
+        </View>
 
         <Text style={styles.sectionLabel}>TRACKS</Text>
         {sorted.map((s) => (
@@ -691,7 +700,12 @@ export default function AlbumDetail() {
           />
         ))}
 
-        <ReviewSection album={album} editable={isMine} />
+        <ReviewSection
+          album={album}
+          editable={isMine}
+          editing={reviewEditing}
+          onEditingChange={setReviewEditing}
+        />
 
         <CommentThread albumId={albumId} canComment={!isMine} />
       </Animated.ScrollView>
@@ -1412,14 +1426,23 @@ function ForkBtn({ label, onPress }: { label: string; onPress: () => void }) {
   )
 }
 
-function ReviewSection({ album, editable }: { album: Album; editable: boolean }) {
+function ReviewSection({
+  album,
+  editable,
+  editing,
+  onEditingChange,
+}: {
+  album: Album
+  editable: boolean
+  editing: boolean
+  onEditingChange: (v: boolean) => void
+}) {
 
   const queryClient = useQueryClient()
   // A Modal renders in its own native hierarchy, outside the SafeAreaProvider,
   // so SafeAreaView is inert in there — the bar drew straight under the status
   // bar. Read the insets from the app's tree and apply them by hand.
   const insets = useSafeAreaInsets()
-  const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(album.review ?? '')
   const [busy, setBusy] = useState(false)
 
@@ -1433,7 +1456,7 @@ function ReviewSection({ album, editable }: { album: Album; editable: boolean })
     setBusy(true)
     try {
       await saveReview(album.id, draft.trim())
-      setEditing(false)
+      onEditingChange(false)
       invalidate()
     } finally {
       setBusy(false)
@@ -1444,36 +1467,35 @@ function ReviewSection({ album, editable }: { album: Album; editable: boolean })
     try {
       await deleteReview(album.id)
       setDraft('')
-      setEditing(false)
+      onEditingChange(false)
       invalidate()
     } finally {
       setBusy(false)
     }
   }
 
-  // Writing a review happens in the rating flow, and saying something about
-  // the record happens in its thread — so with no review there is nothing
-  // for this section to be.
-  if (!album.review) return null
+  // Nothing to *show* without a review, but the component stays mounted so the
+  // composer it owns can still be opened from the button beside the rating CTA.
+  if (!editable && !album.review) return null
 
   function cancel() {
     setDraft(album.review ?? '')
-    setEditing(false)
+    onEditingChange(false)
   }
 
   return (
     <View>
-      <Text style={styles.sectionLabel}>REVIEW</Text>
       {album.review ? (
-        <View>
+        <>
+          <Text style={styles.sectionLabel}>REVIEW</Text>
           <Text style={styles.reviewBody}>{album.review}</Text>
           {editable && (
-            <Pressable style={styles.reviewEdit} onPress={() => { setDraft(album.review ?? ''); setEditing(true) }}>
+            <Pressable style={styles.reviewEdit} onPress={() => { setDraft(album.review ?? ''); onEditingChange(true) }}>
               <Pencil size={13} color={colors.inkTertiary} />
               <Text style={styles.reviewEditText}>Edit review</Text>
             </Pressable>
           )}
-        </View>
+        </>
       ) : null}
 
       {/* Writing happens on its own surface, over the album page. Inline, the
@@ -1837,24 +1859,30 @@ const styles = StyleSheet.create({
   ctaRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xl },
   // The standalone button — Edit rating on a finished album. Owns its own top
   // margin, since nothing wraps it.
+  actionRow: {
+    flexDirection: 'row', alignItems: 'stretch', gap: spacing.sm,
+    // The top margin moves here from the CTA: with two buttons sharing the
+    // line, a margin on one of them offsets it from its neighbour.
+    marginTop: spacing.xl,
+  },
   cta: {
+    flex: 1,
     backgroundColor: colors.green,
     borderRadius: radii.md,
     // Horizontal padding as well as vertical: at half width the label would
     // otherwise sit hard against the edges of its own button.
-    paddingVertical: 15,
+    paddingVertical: 12,
     paddingHorizontal: spacing.md,
     minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: spacing.xl,
   },
   // Paired inside ctaRow, which supplies the margin for both.
   ctaInRow: { flex: 1, marginTop: 0 },
   // Shelved: holds the button's shape so the row doesn't reflow under the tap,
   // but stops reading as something still to press.
   ctaDone: { backgroundColor: colors.inkMuted },
-  ctaText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: '#fff' },
+  ctaText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: '#fff', textAlign: 'center' },
 
   sectionLabel: {
     fontFamily: fonts.bodyBold,
