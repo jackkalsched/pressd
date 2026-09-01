@@ -7,7 +7,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
+  Dimensions,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -98,6 +100,12 @@ const AUTOSAVE_DELAY_MS = 1200
 // A line about a song, not a review of one. Long enough for a real thought and
 // short enough that nobody writes their album review here by mistake.
 const TRACK_NOTE_MAX = 280
+
+// How far a horizontal drag has to travel before it counts as moving a track.
+// Generous, because the gesture shares a screen with a vertical scroll and a
+// text field, and an accidental advance costs a track you meant to sit with.
+const SWIPE_MIN = 64
+const SCREEN_W = Dimensions.get('window').width
 
 function parseScore(text: string): number | null {
   if (!text.trim()) return null
@@ -294,6 +302,70 @@ export default function RatingScreen() {
     if (parseScore(drafts[idx] ?? '') === null) return
     advance()
   }
+
+  // ── Swipe between tracks ───────────────────────────────────────────────────
+  // The responder is built once and would otherwise close over the first
+  // render's state, so the values it needs are read from a ref that every
+  // render refreshes.
+  // Lazy useState rather than a ref: both are created once, and reading a
+  // ref's .current during render is the pattern ScoreScale below is already
+  // flagged for. `swipe` is a plain object with a stable identity, so mutating
+  // it here is visible to the responder without re-creating the responder.
+  const [slideX] = useState(() => new Animated.Value(0))
+  const [swipe] = useState(() => ({
+    canFwd: false, canBack: false, fwd: () => {}, back: () => {},
+  }))
+  Object.assign(swipe, {
+    // Forward is the same gate the Next button uses: the track needs a score.
+    // Songs unlock in order, so there is nothing to swipe ahead to.
+    canFwd: parseScore(drafts[idx] ?? '') !== null,
+    canBack: idx > 0,
+    fwd: onNext,
+    back: () => setIdx(idx - 1),
+  })
+
+  const [pan] = useState(() =>
+    PanResponder.create({
+      // Claim horizontal drags only, so the vertical scroll underneath keeps
+      // working and a mostly-vertical flick never counts as a swipe.
+      onMoveShouldSetPanResponder: (_e, g) =>
+        Math.abs(g.dx) > 14 && Math.abs(g.dx) > Math.abs(g.dy) * 1.6,
+      onPanResponderMove: (_e, g) => {
+        const { canFwd, canBack } = swipe
+        // A drag with nowhere to go still moves, but heavily damped: the end of
+        // the record and an unscored track should feel like walls rather than
+        // dead pixels.
+        const blocked = (g.dx < 0 && !canFwd) || (g.dx > 0 && !canBack)
+        slideX.setValue(blocked ? g.dx * 0.22 : g.dx)
+      },
+      onPanResponderRelease: (_e, g) => {
+        const { canFwd, canBack, fwd, back } = swipe
+        const leave = (dir: -1 | 1, act: () => void) => {
+          Animated.timing(slideX, {
+            toValue: dir * SCREEN_W,
+            duration: 130,
+            useNativeDriver: true,
+          }).start(() => {
+            act()
+            // Re-enter from the far side, so the new track reads as having come
+            // from the direction you swiped rather than appearing in place.
+            slideX.setValue(-dir * SCREEN_W)
+            Animated.spring(slideX, {
+              toValue: 0, useNativeDriver: true, speed: 18, bounciness: 4,
+            }).start()
+          })
+        }
+        if (g.dx < -SWIPE_MIN && canFwd) return leave(-1, fwd)
+        if (g.dx > SWIPE_MIN && canBack) return leave(1, back)
+        Animated.spring(slideX, {
+          toValue: 0, useNativeDriver: true, speed: 20, bounciness: 6,
+        }).start()
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(slideX, { toValue: 0, useNativeDriver: true, speed: 20 }).start()
+      },
+    }),
+  )
 
   function onSkip() {
     setSkipped((prev) => new Set(prev).add(idx))
@@ -547,7 +619,10 @@ export default function RatingScreen() {
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {phase === 'tracks' && song ? (
-            <>
+            <Animated.View
+              {...pan.panHandlers}
+              style={{ transform: [{ translateX: slideX }] }}
+            >
               <Text style={styles.trackEyebrow}>TRACK {song.trackNumber ?? idx + 1}</Text>
               <Text style={styles.trackTitle}>{song.title}</Text>
               {runtime(song.durationMs) && <Text style={styles.trackMeta}>{runtime(song.durationMs)}</Text>}
@@ -683,7 +758,7 @@ export default function RatingScreen() {
                   ))}
                 </>
               )}
-            </>
+            </Animated.View>
           ) : phase === 'factors' ? (
             /* Factors */
             <>
