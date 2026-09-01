@@ -133,15 +133,21 @@ def resolve_thread(
     # conversation or starting one, and it should not have to pull the whole
     # thread to find out. Excludes the caller: "alongside N pressers" counts the
     # company you would be keeping, not you.
-    review_count = rater_count = 0
+    review_count = rater_count = participant_count = 0
     if subject_type == "album":
-        review_count, rater_count = session.execute(_sql("""
+        review_count, rater_count, participant_count = session.execute(_sql("""
             SELECT
               (SELECT COUNT(*) FROM post p JOIN thread t ON t.id = p.thread_id
                 WHERE t.subject_type = 'album' AND t.subject_key = :k
                   AND p.kind = 'review' AND p.deleted_at IS NULL),
               (SELECT COUNT(DISTINCT a.user_id) FROM album a
-                WHERE a.subject_key = :k AND a.status = 'rated' AND a.user_id <> :me)
+                WHERE a.subject_key = :k AND a.status = 'rated' AND a.user_id <> :me),
+              -- People, not posts: "N pressers weighed in" counts voices in the
+              -- room, so someone who wrote a review and three replies is one.
+              -- Includes the caller, who is one of the voices.
+              (SELECT COUNT(DISTINCT p.user_id) FROM post p JOIN thread t ON t.id = p.thread_id
+                WHERE t.subject_type = 'album' AND t.subject_key = :k
+                  AND p.kind <> 'system' AND p.deleted_at IS NULL AND p.user_id IS NOT NULL)
         """), {"k": key, "me": user.id}).first()
     return {
         "subject_type": subject_type,
@@ -153,6 +159,7 @@ def resolve_thread(
         "post_count": row[4] if row else 0,
         "review_count": review_count,
         "rater_count": rater_count,
+        "participant_count": participant_count,
         "last_post_at": row[5].isoformat() if row and row[5] else None,
         "can_read": allowed,
         "can_post": allowed,

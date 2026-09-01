@@ -258,6 +258,8 @@ export interface ThreadMeta {
    *  only; 0 for artist and track. */
   reviewCount: number
   raterCount: number
+  /** Distinct people who have posted in the thread — voices, not posts. */
+  participantCount: number
   lastPostAt: string | null
   canRead: boolean
   canPost: boolean

@@ -673,22 +673,21 @@ export default function AlbumDetail() {
             rating too, and an ungated CTA offered to "edit" it — the server
             refuses the write, so nothing could be overwritten, but you'd have
             re-rated the whole record before finding that out. */}
-        <View style={styles.actionRow}>
-          {isMine && (
-            <Pressable
-              style={({ pressed }) => [styles.cta, pressed && { backgroundColor: colors.greenPressed }]}
-              onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(albumId) } })}
-            >
-              <Text style={styles.ctaText} numberOfLines={2}>{cta}</Text>
-            </Pressable>
-          )}
-          <AlbumThoughts
-            album={album.albumName}
-            artist={album.artist}
-            hasReview={!!album.review}
-            onWriteReview={() => setReviewEditing(true)}
-          />
-        </View>
+        {isMine && (
+          <Pressable
+            style={({ pressed }) => [styles.cta, pressed && { backgroundColor: colors.greenPressed }]}
+            onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(albumId) } })}
+          >
+            <Pencil size={17} color="#fff" />
+            <Text style={styles.ctaText}>{cta}</Text>
+          </Pressable>
+        )}
+        <AlbumThoughts
+          album={album.albumName}
+          artist={album.artist}
+          hasReview={!!album.review}
+          onWriteReview={() => setReviewEditing(true)}
+        />
 
         <Text style={styles.sectionLabel}>TRACKS</Text>
         {sorted.map((s) => (
@@ -1859,23 +1858,17 @@ const styles = StyleSheet.create({
   ctaRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xl },
   // The standalone button — Edit rating on a finished album. Owns its own top
   // margin, since nothing wraps it.
-  actionRow: {
-    flexDirection: 'row', alignItems: 'stretch', gap: spacing.sm,
-    // The top margin moves here from the CTA: with two buttons sharing the
-    // line, a margin on one of them offsets it from its neighbour.
-    marginTop: spacing.xl,
-  },
   cta: {
-    flex: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
     backgroundColor: colors.green,
-    borderRadius: radii.md,
-    // Horizontal padding as well as vertical: at half width the label would
-    // otherwise sit hard against the edges of its own button.
-    paddingVertical: 12,
+    borderRadius: radii.lg,
+    paddingVertical: 15,
     paddingHorizontal: spacing.md,
     minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: spacing.xl,
   },
   // Paired inside ctaRow, which supplies the margin for both.
   ctaInRow: { flex: 1, marginTop: 0 },
