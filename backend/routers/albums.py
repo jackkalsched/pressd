@@ -16,7 +16,7 @@ from ..global_rating import invalidate_cache as invalidate_global_ratings
 from ..genres import GENRES, canonical_genre, canonical_subgenre
 from ..trackkeys import _clean_album, match_title, same_album
 from ..carryover import carryover_for_album
-from ..threads import sync_review_post
+from ..threads import post_track_note, sync_review_post
 
 router = APIRouter(prefix="/albums", tags=["albums"])
 
@@ -1112,6 +1112,62 @@ def save_review(
         "review": album.review,
         "review_at": album.review_at.isoformat() if album.review_at else None,
     }
+
+
+@router.post("/{album_id}/thoughts")
+def publish_thoughts(
+    album_id: int,
+    data: dict,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Publish what was written during the rating flow: a review, and a note on
+    any number of tracks (PLAN_discussions.md §7.3).
+
+    One request, and the fan-out happens here. The client must not loop over
+    tracks firing a post each: a dropped connection halfway through would lose
+    writing the user cannot get back, and there is no sensible way to resume it.
+
+    Deliberately separate from the rating write, and called after it. A note is
+    a consequence of a rating, never a condition of one — if every post in here
+    failed, the rating would still stand, and the response says exactly what did
+    not land so the client can offer it back rather than silently dropping it.
+    """
+    album = session.get(Album, album_id)
+    if not album:
+        raise HTTPException(status_code=404, detail="Album not found")
+    if album.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not your album")
+
+    review = (data.get("review") or "").strip()
+    review_posted = False
+    if review or album.review:
+        if review:
+            if not album.review or not album.review_at:
+                album.review_at = datetime.utcnow()   # first write only
+            album.review = review[:MAX_REVIEW_LEN]
+        else:
+            album.review, album.review_at = None, None
+        session.add(album)
+        session.commit()
+        sync_review_post(session, album)
+        review_posted = bool(review)
+
+    songs = {s.id: s for s in album.songs}
+    posted, failed = 0, []
+    for note in data.get("notes") or []:
+        song = songs.get(note.get("song_id"))
+        if not song:
+            failed.append(note.get("song_id"))
+            continue
+        if post_track_note(session, user.id, song, note.get("body") or ""):
+            posted += 1
+        elif (note.get("body") or "").strip():
+            # Only a note that had something in it and still did not land counts
+            # as a failure; an empty one was a deletion and did its job.
+            failed.append(song.id)
+
+    return {"review_posted": review_posted, "notes_posted": posted, "failed": failed}
 
 
 @router.delete("/{album_id}/review")

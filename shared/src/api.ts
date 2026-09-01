@@ -1788,3 +1788,31 @@ export async function flagSpoiler(postId: number): Promise<{ blurred: boolean }>
   const d = await res.json()
   return { blurred: !!d.blurred }
 }
+
+/** Publish what was written during the rating flow — the review and any track
+ *  notes — in one request. The server fans out to the threads; the client must
+ *  not loop, since a dropped connection mid-loop loses writing outright.
+ *
+ *  Call it *after* the rating has landed. A note is a consequence of a rating,
+ *  never a condition of one, and `failed` names anything to offer back. */
+export async function publishThoughts(
+  albumId: number,
+  review: string | null,
+  notes: { songId: number; body: string }[],
+): Promise<{ reviewPosted: boolean; notesPosted: number; failed: number[] }> {
+  const res = await apiFetch(`${BASE()}/albums/${albumId}/thoughts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      review,
+      notes: notes.map((n) => ({ song_id: n.songId, body: n.body })),
+    }),
+  })
+  if (!res.ok) throw new Error('Failed to publish thoughts')
+  const d = await res.json()
+  return {
+    reviewPosted: !!d.review_posted,
+    notesPosted: d.notes_posted ?? 0,
+    failed: (d.failed ?? []) as number[],
+  }
+}

@@ -25,6 +25,7 @@ import {
   fetchAlbum,
   fetchAlbums,
   batchRateSongs,
+  publishThoughts,
   updateAlbum,
   fetchFactorStats,
   fetchFactorWeights,
@@ -93,6 +94,10 @@ const FACTORS = [
 // Long enough that typing "8.5" is one write rather than three, short enough
 // that putting the phone down mid-album has already saved.
 const AUTOSAVE_DELAY_MS = 1200
+
+// A line about a song, not a review of one. Long enough for a real thought and
+// short enough that nobody writes their album review here by mistake.
+const TRACK_NOTE_MAX = 280
 
 function parseScore(text: string): number | null {
   if (!text.trim()) return null
@@ -179,9 +184,15 @@ export default function RatingScreen() {
   const isEditing = album?.status === 'rated'
 
   const [drafts, setDrafts] = useState<string[]>([])
+  // A note per track, indexed the same way drafts are so it survives jumping
+  // between tracks. Nothing is published until the album is submitted — a note
+  // on a half-rated record is a spoiler waiting to happen, and the score it
+  // sits next to may still change.
+  const [notes, setNotes] = useState<string[]>([])
+  const [review, setReview] = useState('')
   const [skipped, setSkipped] = useState<Set<number>>(new Set())
   const [idx, setIdx] = useState(0)
-  const [phase, setPhase] = useState<'tracks' | 'factors'>('tracks')
+  const [phase, setPhase] = useState<'tracks' | 'factors' | 'review'>('tracks')
   const [factorText, setFactorText] = useState<Record<string, string>>({
     theme: '', replay: '', production: '', distinctness: '',
   })
@@ -198,6 +209,8 @@ export default function RatingScreen() {
   if (album && !initialized) {
     const seeded = sortedSongs.map((s) => (s.score != null ? String(s.score) : ''))
     setDrafts(seeded)
+    setNotes(sortedSongs.map(() => ''))
+    setReview(album.review ?? '')
     setFactorText({
       theme: album.theme != null ? String(album.theme) : '',
       replay: album.replayValue != null ? String(album.replayValue) : '',
@@ -233,6 +246,7 @@ export default function RatingScreen() {
     isEP || (factorVals.theme !== null && factorVals.replay !== null &&
              factorVals.production !== null && factorVals.distinctness !== null)
   const canSubmit = songsComplete && factorsComplete
+  const noteCount = notes.filter((n) => n.trim()).length
 
   const previewScore =
     songsComplete && factorsComplete && (isEP || factorStats)
@@ -316,7 +330,21 @@ export default function RatingScreen() {
   }
 
   const submit = useMutation({
-    mutationFn: () => persist('rated'),
+    mutationFn: async () => {
+      await persist('rated')
+      // After the rating, never as part of it: a note is a consequence of
+      // having rated the record, and a thread that refuses a post must not be
+      // able to cost someone the rating they just spent an album on. One
+      // request, because a client-side loop would lose writing outright if the
+      // connection dropped halfway through.
+      await publishThoughts(
+        albumId,
+        review.trim() || null,
+        sortedSongs
+          .map((song, i) => ({ songId: song.id, body: (notes[i] ?? '').trim() }))
+          .filter((n) => n.body),
+      ).catch(() => {})
+    },
     onSuccess: async () => {
       setError(null)
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
@@ -546,6 +574,25 @@ export default function RatingScreen() {
                 </Pressable>
               )}
 
+              {/* Optional, and short on purpose: this is a line about the song,
+                  not a review of it. Held per track like the score is, and
+                  published only when the album is submitted. */}
+              <TextInput
+                style={styles.noteInput}
+                value={notes[idx] ?? ''}
+                onChangeText={(t) =>
+                  setNotes((prev) => {
+                    const next = [...prev]
+                    next[idx] = t.slice(0, TRACK_NOTE_MAX)
+                    return next
+                  })
+                }
+                placeholder="Add a note about this track (optional)"
+                placeholderTextColor={colors.inkMuted}
+                multiline
+                maxLength={TRACK_NOTE_MAX}
+              />
+
               <View style={styles.actions}>
                 <Pressable style={styles.listBtn} onPress={() => setListOpen(true)} accessibilityLabel="Jump to a track">
                   <ListMusic size={20} color={colors.inkSecondary} />
@@ -637,7 +684,7 @@ export default function RatingScreen() {
                 </>
               )}
             </>
-          ) : (
+          ) : phase === 'factors' ? (
             /* Factors */
             <>
               <Text style={styles.trackEyebrow}>{isEP ? 'FINISH' : 'THE ALBUM'}</Text>
@@ -693,23 +740,67 @@ export default function RatingScreen() {
 
               <Pressable
                 style={[styles.submit, (!canSubmit || busy) && styles.submitOff]}
-                onPress={() => submit.mutate()}
+                onPress={() => setPhase('review')}
                 disabled={!canSubmit || busy}
+              >
+                <ArrowRight size={16} color={canSubmit ? '#fff' : colors.inkMuted} />
+                <Text style={[styles.submitText, !canSubmit && { color: colors.inkMuted }]}>
+                  Next: your review
+                </Text>
+              </Pressable>
+
+              <Pressable style={styles.backToTracks} onPress={() => { setPhase('tracks'); setIdx(0) }}>
+                <Text style={styles.backToTracksText}>Back to tracks</Text>
+              </Pressable>
+            </>
+          ) : (
+            /* Review — the last thing before submitting, because you have just
+               finished the record and this is when you have something to say.
+               Optional: an empty box submits the rating and posts nothing. */
+            <>
+              <Text style={styles.trackEyebrow}>YOUR REVIEW</Text>
+              <Text style={styles.trackTitle}>{album.albumName}</Text>
+              <Text style={styles.trackMeta}>
+                {previewScore != null ? `${previewScore.toFixed(2)} · ` : ''}
+                {noteCount > 0
+                  ? `${noteCount} track ${noteCount === 1 ? 'note' : 'notes'} to post`
+                  : 'Optional — skip it if you would rather not'}
+              </Text>
+
+              <TextInput
+                style={styles.reviewInput}
+                value={review}
+                onChangeText={setReview}
+                placeholder="What did you make of it?"
+                placeholderTextColor={colors.inkMuted}
+                multiline
+                textAlignVertical="top"
+              />
+
+              {error && <Text style={styles.error}>{error}</Text>}
+
+              <Pressable
+                style={[styles.submit, busy && styles.submitOff]}
+                onPress={() => submit.mutate()}
+                disabled={busy}
               >
                 {submit.isPending ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <>
-                    <Check size={16} color={canSubmit ? '#fff' : colors.inkMuted} />
-                    <Text style={[styles.submitText, !canSubmit && { color: colors.inkMuted }]}>
+                    <Check size={16} color="#fff" />
+                    <Text style={styles.submitText}>
                       {isEditing ? 'Update rating' : 'Submit rating'}
                     </Text>
                   </>
                 )}
               </Pressable>
 
-              <Pressable style={styles.backToTracks} onPress={() => { setPhase('tracks'); setIdx(0) }}>
-                <Text style={styles.backToTracksText}>Back to tracks</Text>
+              <Pressable
+                style={styles.backToTracks}
+                onPress={() => setPhase(isEP ? 'tracks' : 'factors')}
+              >
+                <Text style={styles.backToTracksText}>Back</Text>
               </Pressable>
             </>
           )}
@@ -989,6 +1080,16 @@ const styles = StyleSheet.create({
   scaleLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   scaleLabel: { fontFamily: fonts.bodyMedium, fontSize: 10, color: colors.inkMuted },
 
+  reviewInput: {
+    minHeight: 180, borderRadius: radii.md, backgroundColor: colors.inset,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.md, marginTop: spacing.lg,
+    fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: colors.ink,
+  },
+  noteInput: {
+    minHeight: 44, maxHeight: 96, borderRadius: radii.md,
+    backgroundColor: colors.inset, paddingHorizontal: spacing.md, paddingVertical: 10,
+    marginTop: spacing.lg, fontFamily: fonts.body, fontSize: 14, color: colors.ink,
+  },
   actions: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.sm, marginTop: spacing.xl },
   nextBtn: {
     flex: 1,
