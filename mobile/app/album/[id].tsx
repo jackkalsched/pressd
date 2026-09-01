@@ -22,7 +22,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as Haptics from 'expo-haptics'
 import Svg, { Text as SvgText } from 'react-native-svg'
-import { ArrowLeft, Check, ChevronRight, Heart, Pencil, Share2, Star, Trash2 } from 'lucide-react-native'
+import { ArrowLeft, Check, ChevronRight, Heart, MessageCircle, Pencil, Share2, Star, Trash2 } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchAlbums,
@@ -48,7 +48,6 @@ import AlbumBackdrop from '../../components/AlbumBackdrop'
 import BangSkip from '../../components/BangSkip'
 import ShareCard from '../../components/ShareCard'
 import RecommendSheet from '../../components/RecommendSheet'
-import AlbumThoughts from '../../components/AlbumThoughts'
 import { threadKey } from '../../lib/refresh'
 import NoComparisonYet from '../../components/NoComparisonYet'
 import { confirmDeleteAlbum, useDeleteAlbum } from '../../lib/useDeleteAlbum'
@@ -680,8 +679,6 @@ export default function AlbumDetail() {
           <Text style={styles.ctaText}>{cta}</Text>
         </Pressable>
         )}
-
-        <AlbumThoughts album={album.albumName} artist={album.artist} />
 
         <Text style={styles.sectionLabel}>TRACKS</Text>
         {sorted.map((s) => (
@@ -1425,9 +1422,15 @@ function ReviewSection({ album, editable }: { album: Album; editable: boolean })
   // Once people are talking, writing is joining them rather than filing a
   // review into an empty page — the review is mirrored into the thread either
   // way, so the label is the only thing that should change.
+  const router = useRouter()
   const reviews = thread?.reviewCount ?? 0
   const others = thread?.raterCount ?? 0
   const started = reviews > 0
+  // The one way into the record's discussion now that the card above the
+  // tracklist is gone. It belongs here: this section is already where you say
+  // what you think, and the thread is the rest of that same conversation.
+  const notes = thread?.postCount ?? 0
+  const canOpenThread = !!thread?.canRead && notes > 0
 
   const queryClient = useQueryClient()
   // A Modal renders in its own native hierarchy, outside the SafeAreaProvider,
@@ -1501,6 +1504,24 @@ function ReviewSection({ album, editable }: { album: Album; editable: boolean })
           Review alongside {others}{' '}
           {others === 1 ? 'presser who\u2019s' : 'pressers who\u2019ve'} rated this record
         </Text>
+      )}
+
+      {canOpenThread && (
+        <Pressable
+          style={({ pressed }) => [styles.threadLink, pressed && { opacity: 0.7 }]}
+          onPress={() =>
+            router.push({
+              pathname: '/thread/[subject]',
+              params: { subject: 'album', artist: album.artist, album: album.albumName },
+            })
+          }
+        >
+          <MessageCircle size={15} color={colors.green} />
+          <Text style={styles.threadLinkText}>
+            {notes} {notes === 1 ? 'note' : 'notes'} on this record
+          </Text>
+          <ChevronRight size={15} color={colors.green} />
+        </Pressable>
       )}
 
       {/* Writing happens on its own surface, over the album page. Inline, the
@@ -1959,4 +1980,8 @@ const styles = StyleSheet.create({
   reviewWriteText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
   reviewWriteSub: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary,
     marginTop: spacing.sm, textAlign: 'center' },
+  threadLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: spacing.sm, marginTop: spacing.lg, paddingVertical: spacing.md,
+    borderRadius: radii.md, backgroundColor: colors.greenSoft },
+  threadLinkText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
 })

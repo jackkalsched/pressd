@@ -82,16 +82,6 @@ export default function CommentThread({
         </Pressable>
       </View>
       )}
-      {/* Said plainly because it changes who can read this. A comment used to
-          reach the album's owner and their friends and stop there; if the
-          writer has finished the record it now also lands in a thread the whole
-          userbase can see. Worded to cover both cases, since this component
-          cannot tell which applies. */}
-      {canComment && (
-        <Text style={styles.mirrorNote}>
-          If you&rsquo;ve rated this record, your comment joins its discussion too.
-        </Text>
-      )}
 
       {isLoading ? (
         <ActivityIndicator color={colors.green} style={{ marginTop: spacing.md }} />
@@ -138,7 +128,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
-  mirrorNote: { fontFamily: fonts.body, fontSize: 11, color: colors.inkTertiary, marginTop: spacing.sm },
   input: {
     flex: 1,
     minHeight: 42,
