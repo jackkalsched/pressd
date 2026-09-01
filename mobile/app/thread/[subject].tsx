@@ -301,6 +301,7 @@ function PostRow({
         <Text style={styles.systemLabel}>PRESS&rsquo;D</Text>
       ) : (
         <View style={styles.postHead}>
+          {post.kind === 'review' && <Text style={styles.reviewTag}>REVIEW</Text>}
           {post.author?.score != null && (
             <Text
               style={[styles.postScore, { color: songScoreColor(post.author.score) }]}
@@ -386,6 +387,7 @@ const styles = StyleSheet.create({
   postHead: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm, marginBottom: 4 },
   postScore: { fontFamily: fonts.display, fontSize: 19 },
   postAuthor: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.inkSecondary, flexShrink: 1 },
+  reviewTag: { fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 0.9, color: colors.green },
   postBody: { fontFamily: fonts.body, fontSize: 15, color: colors.ink, lineHeight: 22 },
   postHidden: { color: colors.inkMuted, fontStyle: 'italic' },
   postActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginTop: spacing.sm },

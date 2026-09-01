@@ -16,6 +16,7 @@ from ..global_rating import invalidate_cache as invalidate_global_ratings
 from ..genres import GENRES, canonical_genre, canonical_subgenre
 from ..trackkeys import _clean_album, match_title, same_album
 from ..carryover import carryover_for_album
+from ..threads import sync_review_post
 
 router = APIRouter(prefix="/albums", tags=["albums"])
 
@@ -1104,6 +1105,9 @@ def save_review(
         album.review = body[:MAX_REVIEW_LEN]
     session.add(album)
     session.commit()
+    # A review is the record's discussion starting, so it belongs in the thread
+    # rather than only on this copy of the album. See backend/threads.py.
+    sync_review_post(session, album)
     return {
         "review": album.review,
         "review_at": album.review_at.isoformat() if album.review_at else None,
@@ -1125,6 +1129,7 @@ def delete_review(
     album.review_at = None
     session.add(album)
     session.commit()
+    sync_review_post(session, album)
     return {"ok": True}
 
 

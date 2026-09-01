@@ -65,7 +65,9 @@ export default function AlbumThoughts({
           </Text>
           <Text style={styles.body} numberOfLines={2}>
             {open
-              ? 'What everyone who finished this record had to say about it.'
+              ? count > 0
+                ? 'Reviews and replies from everyone who finished this record.'
+                : 'What everyone who finished this record had to say about it.'
               : 'Rate every track and the album to read and post here.'}
           </Text>
         </View>

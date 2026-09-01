@@ -30,7 +30,9 @@ from sqlmodel import Session
 from ..database import get_session
 from ..deps import authorize_thread, current_user, thread_access
 from ..models import Post, PostLike, PostReport, PressUser, Thread
+from ..threads import display_for, get_or_create_thread
 from ..trackkeys import subject_key_album, subject_key_artist
+from ..threads import SPOILER_FLAGS_TO_BLUR
 
 router = APIRouter(tags=["discussions"])
 
@@ -40,7 +42,6 @@ PAGE_SIZE = 25
 # Flags needed before a post is blurred / hidden for everyone. Low enough to
 # work at this userbase's size, and both are per-person by unique constraint so
 # one determined tapper cannot reach them alone (§4.3).
-SPOILER_FLAGS_TO_BLUR = 3
 REPORTS_TO_HIDE = 5
 
 SUBJECT_TYPES = ("album", "artist", "track")
@@ -70,90 +71,6 @@ def _resolve_key(ref: SubjectRef) -> str:
             raise HTTPException(400, "track threads need track_id")
         return str(ref.track_id)
     raise HTTPException(400, f"unknown subject_type {ref.subject_type!r}")
-
-
-def _display(session: Session, subject_type: str, key: str) -> tuple[str, str | None, str | None]:
-    """Title, subtitle and art for a thread, denormalised at creation (§3).
-
-    Prefers a copy that actually has cover art — the row that happens to sort
-    first is often a stub someone imported without one.
-    """
-    if subject_type == "album":
-        row = session.execute(_sql(
-            "SELECT album_name, artist, album_art_url FROM album WHERE subject_key = :k"
-            " ORDER BY (album_art_url IS NULL), id LIMIT 1"), {"k": key}).first()
-        return (row[0], row[1], row[2]) if row else (key.split("||")[-1], None, None)
-    if subject_type == "artist":
-        row = session.execute(_sql(
-            "SELECT a.artist, m.image_url FROM album a"
-            " LEFT JOIN artistmeta m ON m.artist = a.artist"
-            " WHERE a.subject_key LIKE :p ORDER BY (m.image_url IS NULL), a.id LIMIT 1"),
-            {"p": f"{key}||%"}).first()
-        return (row[0], None, row[1]) if row else (key, None, None)
-    row = session.execute(_sql(
-        "SELECT s.title, a.album_name, a.album_art_url FROM song s"
-        " JOIN album a ON a.id = s.album_id WHERE s.track_id = :t"
-        " ORDER BY (a.album_art_url IS NULL), s.id LIMIT 1"), {"t": key}).first()
-    return (row[0], row[1], row[2]) if row else (f"track {key}", None, None)
-
-
-def _get_or_create_thread(session: Session, subject_type: str, key: str) -> Thread:
-    """Lazily, on first use. Most subjects are never discussed, and a row per
-    album in the catalogue would turn "is anyone talking about this?" into a
-    scan (§3)."""
-    t = session.execute(_sql(
-        "SELECT id FROM thread WHERE subject_type = :s AND subject_key = :k"),
-        {"s": subject_type, "k": key}).first()
-    if t:
-        return session.get(Thread, t[0])
-    title, subtitle, art = _display(session, subject_type, key)
-    thread = Thread(subject_type=subject_type, subject_key=key,
-                    title=title, subtitle=subtitle, art_url=art)
-    session.add(thread)
-    session.commit()
-    session.refresh(thread)
-    _maybe_seed(session, thread)
-    return thread
-
-
-# ── The seeded Press'd post (§5.1) ───────────────────────────────────────────
-
-def _maybe_seed(session: Session, thread: Thread) -> None:
-    """Open a room with something true about the record, so nobody walks into
-    an empty one.
-
-    Skipped below three raters: "the room agrees" is not a sentence two people
-    can support, and a seed that overclaims is worse than no seed.
-    """
-    if thread.subject_type != "album":
-        return
-    stats = session.execute(_sql("""
-        SELECT COUNT(DISTINCT a.user_id) AS raters,
-               AVG(a.score) AS mean,
-               STDDEV_POP(a.score) AS spread
-        FROM album a WHERE a.subject_key = :k AND a.status = 'rated' AND a.score IS NOT NULL
-    """), {"k": thread.subject_key}).first()
-    if not stats or (stats[0] or 0) < 3:
-        return
-    raters, mean, spread = stats[0], float(stats[1] or 0), float(stats[2] or 0)
-
-    top = session.execute(_sql("""
-        SELECT s.title, AVG(s.score) AS m
-        FROM song s JOIN album a ON a.id = s.album_id
-        WHERE a.subject_key = :k AND s.score IS NOT NULL AND s.track_id IS NOT NULL
-        GROUP BY s.track_id, s.title
-        HAVING COUNT(*) > 1
-        ORDER BY m DESC LIMIT 1
-    """), {"k": thread.subject_key}).first()
-
-    bits = [f"{raters} people have rated this, averaging {mean:.1f}."]
-    if top:
-        bits.append(f"Most-loved track: {top[0]} ({float(top[1]):.1f}).")
-    # A whole point of spread means two listeners routinely land a grade apart.
-    bits.append("Opinion is split." if spread >= 1.0 else "They mostly agree.")
-
-    session.add(Post(thread_id=thread.id, user_id=None, kind="system", body=" ".join(bits)))
-    session.commit()
 
 
 # ── Author scores (§4.2) ─────────────────────────────────────────────────────
@@ -209,7 +126,7 @@ def resolve_thread(
     row = session.execute(_sql(
         "SELECT id, title, subtitle, art_url, post_count, last_post_at FROM thread"
         " WHERE subject_type = :s AND subject_key = :k"), {"s": subject_type, "k": key}).first()
-    title, subtitle, art = _display(session, subject_type, key)
+    title, subtitle, art = display_for(session, subject_type, key)
     return {
         "subject_type": subject_type,
         "subject_key": key,
@@ -354,7 +271,7 @@ def create_post(
 ):
     key = _resolve_key(SubjectRef(**payload.model_dump(exclude={"body", "is_spoiler"})))
     authorize_thread(session, user.id, payload.subject_type, key)
-    thread = _get_or_create_thread(session, payload.subject_type, key)
+    thread = get_or_create_thread(session, payload.subject_type, key)
     post = Post(thread_id=thread.id, user_id=user.id,
                 body=payload.body.strip(), is_spoiler=payload.is_spoiler)
     session.add(post)
