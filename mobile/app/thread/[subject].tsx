@@ -507,8 +507,13 @@ const styles = StyleSheet.create({
 
   summary: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.lg,
-    backgroundColor: colors.greenSoft, borderRadius: radii.lg,
-    padding: spacing.md, marginTop: spacing.sm, marginBottom: spacing.md,
+    paddingTop: spacing.sm, paddingBottom: spacing.lg, marginBottom: spacing.sm,
+    // A rule instead of a filled card: these are the record's numbers, not
+    // another voice in the room, and a green panel made them read as one. The
+    // line still has to be there — without it the average runs straight into
+    // the first post and looks like somebody's score.
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   summaryValue: { fontFamily: fonts.display, fontSize: 30 },
   summaryTracks: { flex: 1, minWidth: 0, gap: 6 },
