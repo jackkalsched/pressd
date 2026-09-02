@@ -27,6 +27,7 @@ import { Search, UserPlus, X } from 'lucide-react-native'
 import {
   fetchFeed,
   fetchFriendReviews,
+  fetchFriendPosts,
   fetchFriends,
   fetchAlbums,
   fetchCompare,
@@ -44,6 +45,7 @@ import {
   type UserSearchResult,
 } from '../../lib/api'
 import LikeButton from '../../components/LikeButton'
+import { type FriendPost } from '@pressd/shared/types'
 import { useRefreshOnFocus } from '../../lib/refresh'
 import { useAuth } from '../../lib/auth'
 import { markSocialSeen, latestFeedTime } from '../../lib/socialSeen'
@@ -54,11 +56,12 @@ const DOWN = '#c0392b'
 const CONTENT_W = Dimensions.get('window').width - spacing.lg * 2
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
-type Tab = 'activity' | 'compare' | 'reviews' | 'friends'
+type Tab = 'activity' | 'compare' | 'reviews' | 'discussions' | 'friends'
 const TABS: { key: Tab; label: string }[] = [
   { key: 'activity', label: 'Activity' },
   { key: 'compare', label: 'Compare' },
   { key: 'reviews', label: 'Reviews' },
+  { key: 'discussions', label: 'Discussions' },
   { key: 'friends', label: 'Friends' },
 ]
 
@@ -150,6 +153,16 @@ export default function Social() {
   // Opening the tab pulls fresh activity. Before this, the feed you saw was
   // whatever had loaded the first time the tab mounted, however long ago.
   useRefreshOnFocus(refetchFeed)
+  // What friends have said in any thread. Friends-scoped by design, and worth
+  // saying out loud: the threads themselves are userbase-wide, so this is a
+  // lens on public writing rather than a privacy boundary.
+  const { data: friendPosts } = useQuery({
+    queryKey: ['friendPosts'],
+    queryFn: () => fetchFriendPosts(),
+    enabled: !!user && tab === 'discussions',
+    retry: false,
+  })
+
   // Opening Social clears the tab bar's "new activity" dot. Keyed on the newest
   // feed timestamp, so activity that lands while you're already on this screen
   // is marked seen too rather than leaving the dot behind when you navigate off.
@@ -336,6 +349,40 @@ export default function Social() {
             )
           }
         />
+      ) : tab === 'discussions' ? (
+        <Animated.FlatList
+          data={friendPosts?.posts ?? []}
+          keyExtractor={(p) => String(p.id)}
+          style={styles.fill}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          renderItem={({ item }) => (
+            <FriendPostRow
+              item={item}
+              onOpen={() =>
+                router.push({
+                  pathname: '/thread/[subject]',
+                  params:
+                    item.thread.subjectType === 'track'
+                      ? { subject: 'track', trackId: item.thread.subjectKey, title: item.thread.title }
+                      : {
+                          subject: item.thread.subjectType,
+                          artist: item.thread.subtitle ?? '',
+                          album: item.thread.title,
+                          title: item.thread.title,
+                        },
+                })
+              }
+            />
+          )}
+          ListEmptyComponent={
+            <Text style={styles.empty}>
+              Nothing from your friends yet. When they weigh in on a record, it lands here.
+            </Text>
+          }
+        />
       ) : tab === 'reviews' ? (
         <Animated.FlatList
           data={reviews}
@@ -461,6 +508,50 @@ function ActivityRow({
           </View>
         </View>
       ) : null}
+    </Pressable>
+  )
+}
+
+/** One friend's post from any thread. Leads with the record, because a line of
+ *  someone's opinion means little until you know what it is about. */
+function FriendPostRow({ item, onOpen }: { item: FriendPost; onOpen: () => void }) {
+  return (
+    <Pressable style={({ pressed }) => [styles.fpRow, pressed && { opacity: 0.7 }]} onPress={onOpen}>
+      <View style={styles.fpHead}>
+        {item.thread.artUrl ? (
+          <Image source={{ uri: item.thread.artUrl }} style={styles.fpArt} contentFit="cover" />
+        ) : (
+          <View style={[styles.fpArt, { backgroundColor: colors.inset }]} />
+        )}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.fpTitle} numberOfLines={1}>{item.thread.title}</Text>
+          {!!item.thread.subtitle && (
+            <Text style={styles.fpSub} numberOfLines={1}>{item.thread.subtitle}</Text>
+          )}
+        </View>
+      </View>
+
+      <View style={styles.fpBody}>
+        {item.author.score != null && (
+          <Text
+            style={[styles.fpScore, { color: songScoreColor(item.author.score) }]}
+            maxFontSizeMultiplier={NUM_SCALE_CAP}
+          >
+            {item.author.score.toFixed(2)}
+          </Text>
+        )}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.fpWho}>
+            {item.author.name}
+            <Text style={styles.fpKind}>
+              {item.isReply ? ' replied' : item.kind === 'review' ? ' reviewed it' : ' posted'}
+            </Text>
+          </Text>
+          <Text style={styles.fpText} numberOfLines={3}>
+            {item.isSpoiler ? 'Marked as a spoiler — open the thread to read it' : item.body}
+          </Text>
+        </View>
+      </View>
     </Pressable>
   )
 }
@@ -779,6 +870,17 @@ function FriendAction({ u, onRequest, onAccept }: { u: UserSearchResult; onReque
 }
 
 const styles = StyleSheet.create({
+  fpRow: { paddingVertical: spacing.lg, borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border },
+  fpHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  fpArt: { width: 38, height: 38, borderRadius: radii.sm },
+  fpTitle: { fontFamily: fonts.display, fontSize: 15, color: colors.ink },
+  fpSub: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary },
+  fpBody: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.md, alignItems: 'flex-start' },
+  fpScore: { fontFamily: fonts.display, fontSize: 20, minWidth: 44 },
+  fpWho: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink },
+  fpKind: { fontFamily: fonts.body, color: colors.inkTertiary },
+  fpText: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.ink, marginTop: 3 },
   screen: { flex: 1, backgroundColor: colors.bg },
   fill: { flex: 1 },
   header: {

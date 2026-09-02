@@ -1,6 +1,7 @@
 import type {
   Album, Song, ArtistStats, FactorStats, FactorPoints,
   DiscussionPost, SubjectRef, ThreadMeta, ThreadPage, ThreadSort,
+  DivisiveRecord, FriendPost, SubjectType,
 } from './types'
 
 // ── Runtime configuration ─────────────────────────────────────────────────────
@@ -1844,4 +1845,66 @@ export async function fetchTrackThreads(
     }
   }
   return out
+}
+
+export async function fetchDivisive(
+  window: 'week' | 'all' = 'all',
+  limit = 10,
+): Promise<DivisiveRecord[]> {
+  const res = await apiFetch(`${BASE()}/discover/divisive?window=${window}&limit=${limit}`)
+  if (!res.ok) throw new Error('Failed to fetch divisive records')
+  return ((await res.json()) as Record<string, unknown>[]).map((d) => ({
+    subjectKey: d.subject_key as string,
+    albumName: d.album_name as string,
+    artist: (d.artist as string | null) ?? null,
+    albumArtUrl: (d.album_art_url as string | null) ?? null,
+    raters: (d.raters as number) ?? 0,
+    spread: (d.spread as number) ?? 0,
+    meanScore: (d.mean_score as number) ?? 0,
+    hot: (d.hot as number) ?? 0,
+    cold: (d.cold as number) ?? 0,
+    hotPct: (d.hot_pct as number) ?? 0,
+    coldPct: (d.cold_pct as number) ?? 0,
+  }))
+}
+
+export async function fetchFriendPosts(
+  cursor?: string | null,
+): Promise<{ posts: FriendPost[]; nextCursor: string | null }> {
+  const q = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
+  const res = await apiFetch(`${BASE()}/discussions/friends${q}`)
+  if (!res.ok) throw new Error('Failed to fetch friends’ posts')
+  const d = await res.json()
+  return {
+    posts: (d.posts as Record<string, unknown>[]).map((p) => {
+      const a = p.author as Record<string, unknown>
+      const t = p.thread as Record<string, unknown>
+      return {
+        id: p.id as number,
+        isReply: !!p.is_reply,
+        kind: p.kind as FriendPost['kind'],
+        body: (p.body as string) ?? '',
+        isSpoiler: !!p.is_spoiler,
+        createdAt: (p.created_at as string | null) ?? null,
+        likeCount: (p.like_count as number) ?? 0,
+        dislikeCount: (p.dislike_count as number) ?? 0,
+        replyCount: (p.reply_count as number) ?? 0,
+        author: {
+          id: a.id as number,
+          name: (a.name as string) ?? 'Unknown',
+          avatarUrl: (a.avatar_url as string | null) ?? null,
+          score: (a.score as number | null) ?? null,
+        },
+        thread: {
+          id: t.id as number,
+          subjectType: t.subject_type as SubjectType,
+          subjectKey: t.subject_key as string,
+          title: (t.title as string) ?? '',
+          subtitle: (t.subtitle as string | null) ?? null,
+          artUrl: (t.art_url as string | null) ?? null,
+        },
+      }
+    }),
+    nextCursor: (d.next_cursor as string | null) ?? null,
+  }
 }

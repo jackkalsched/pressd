@@ -561,3 +561,113 @@ async def resolve_deezer_album(
         "total_tracks": album.get("nb_tracks") or len(tracks),
         "tracks": tracks,
     }
+
+
+# ── Most divisive (PLAN_discussions.md §8) ───────────────────────────────────
+# You already hold every user's score for a record, so disagreement is a
+# `stddev` away — and it is the one discovery signal here that no competitor
+# can compute, because nobody else has the per-user distributions.
+
+# §8.1 asks for 5. Measured against the live database on 2026-09-02 the whole
+# userbase produced exactly one record with 4 raters and seven with 3, so a
+# floor of 5 would render an empty rail forever. Three is what this data can
+# support; raise it toward 5 as the userbase grows, because at three a single
+# contrarian is the entire "division".
+MIN_DIVISIVE_RATERS = 3
+
+# Two tracks or fewer is a single. Kept off this rail for the same reason
+# charts keep it off theirs: a one-track release rated 10 and 2 by two people
+# is noise wearing the shape of a controversy.
+DIVISIVE_MIN_TRACKS = 3
+
+
+@router.get("/divisive")
+def divisive(
+    window: str = Query("all", pattern="^(week|all)$"),
+    limit: int = Query(10, ge=1, le=30),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Records the userbase most disagrees about.
+
+    The hot/cold split is measured against **each rater's own library mean**,
+    not an absolute cutoff (§8.2). Everyone's scores sit on their own
+    distribution — that is the premise of `backend.scoring` — so "60% flame"
+    means 60% liked it more than they like their own library, which is a real
+    claim. A flat 7.0 line would mostly measure who rates generously.
+
+    `window=week` narrows to records someone rated in the last seven days.
+    Defaults to `all` because at this userbase's size the weekly set is
+    routinely empty, and an empty rail teaches people to stop looking.
+    """
+    recent = "AND EXISTS (SELECT 1 FROM album w WHERE w.subject_key = a.subject_key" \
+             "   AND w.status = 'rated' AND w.date_rated > CURRENT_DATE - 7)" if window == "week" else ""
+
+    rows = session.execute(text(f"""
+        WITH means AS (
+            SELECT user_id, AVG(score) AS mean FROM album
+            WHERE status = 'rated' AND score IS NOT NULL GROUP BY user_id
+        ),
+        sizes AS (
+            SELECT a.subject_key, MAX(c.n) AS tracks
+            FROM album a
+            JOIN (SELECT album_id, COUNT(*) n FROM song GROUP BY album_id) c ON c.album_id = a.id
+            GROUP BY a.subject_key
+        ),
+        rated AS (
+            SELECT a.subject_key, a.user_id, a.score, m.mean
+            FROM album a
+            JOIN means m ON m.user_id = a.user_id
+            WHERE a.status = 'rated' AND a.score IS NOT NULL AND a.subject_key IS NOT NULL
+              {recent}
+        )
+        SELECT r.subject_key,
+               COUNT(*)                                        AS raters,
+               STDDEV_POP(r.score)                              AS spread,
+               COUNT(*) FILTER (WHERE r.score >  r.mean)        AS hot,
+               COUNT(*) FILTER (WHERE r.score <= r.mean)        AS cold,
+               AVG(r.score)                                     AS mean_score
+        FROM rated r
+        JOIN sizes z ON z.subject_key = r.subject_key
+        WHERE z.tracks >= :mintracks
+        GROUP BY r.subject_key
+        HAVING COUNT(*) >= :minraters
+        ORDER BY STDDEV_POP(r.score) DESC NULLS LAST, COUNT(*) DESC
+        LIMIT :lim
+    """), {"minraters": MIN_DIVISIVE_RATERS, "mintracks": DIVISIVE_MIN_TRACKS,
+           "lim": limit}).fetchall()
+    if not rows:
+        return []
+
+    keys = tuple(r[0] for r in rows)
+    # One lookup for every record's display fields, preferring a copy that has
+    # cover art — the row that sorts first is often a stub imported without one.
+    meta = {
+        m[0]: (m[1], m[2], m[3])
+        for m in session.execute(text("""
+            SELECT DISTINCT ON (subject_key) subject_key, album_name, artist, album_art_url
+            FROM album WHERE subject_key IN :keys
+            ORDER BY subject_key, (album_art_url IS NULL), id
+        """), {"keys": keys}).fetchall()
+    }
+
+    out = []
+    for key, raters, spread, hot, cold, mean_score in rows:
+        name, artist, art = meta.get(key, (key.split("||")[-1], None, None))
+        total = (hot or 0) + (cold or 0)
+        out.append({
+            "subject_key": key,
+            "album_name": name,
+            "artist": artist,
+            "album_art_url": art,
+            "raters": raters,
+            "spread": round(float(spread or 0), 2),
+            "mean_score": round(float(mean_score or 0), 2),
+            "hot": hot or 0,
+            "cold": cold or 0,
+            # Percentages so the client draws a bar without re-deriving them,
+            # and so the two always sum to 100 rather than 99 or 101.
+            "hot_pct": round(100 * (hot or 0) / total) if total else 0,
+            "cold_pct": 100 - round(100 * (hot or 0) / total) if total else 0,
+        })
+    return out

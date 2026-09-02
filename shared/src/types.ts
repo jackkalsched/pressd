@@ -275,3 +275,43 @@ export interface ThreadPage {
   posts: DiscussionPost[]
   nextCursor: string | null
 }
+
+/** A record the userbase disagrees about (PLAN_discussions.md §8).
+ *  `hotPct`/`coldPct` are measured against each rater's own library mean, not
+ *  an absolute cutoff — "60% hot" means 60% liked it more than they like their
+ *  own library. They always sum to 100. */
+export interface DivisiveRecord {
+  subjectKey: string
+  albumName: string
+  artist: string | null
+  albumArtUrl: string | null
+  raters: number
+  spread: number
+  meanScore: number
+  hot: number
+  cold: number
+  hotPct: number
+  coldPct: number
+}
+
+/** One friend's post, with enough of its thread to draw a row. */
+export interface FriendPost {
+  id: number
+  isReply: boolean
+  kind: DiscussionPost['kind']
+  body: string
+  isSpoiler: boolean
+  createdAt: string | null
+  likeCount: number
+  dislikeCount: number
+  replyCount: number
+  author: PostAuthor
+  thread: {
+    id: number
+    subjectType: SubjectType
+    subjectKey: string
+    title: string
+    subtitle: string | null
+    artUrl: string | null
+  }
+}
