@@ -536,33 +536,46 @@ def flag_spoiler(
     return {"ok": True, "blurred": flags >= SPOILER_FLAGS_TO_BLUR}
 
 
-@router.get("/discussions/friends")
-def friends_posts(
+@router.get("/discussions/feed")
+def discussion_feed(
     cursor: str | None = None,
     limit: int = Query(25, ge=1, le=50),
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
-    """What the people you follow have been saying, across every thread.
+    """Everything worth knowing about from the threads: what the people you
+    follow have written, and anything anyone wrote back to you.
 
-    Note the asymmetry, because it will be misread otherwise: the *threads* are
-    userbase-wide, and this feed is friends-scoped. It is a lens on public data,
-    not a privacy boundary — nothing here is hidden from anyone who opens the
-    thread itself. Only accepted friendships count, matching `are_friends`;
-    a pending request grants nothing.
+    Two different reasons for a row to be here, deliberately in one feed. A
+    friend's post is something you might want to read; a reply to your own post
+    is something addressed to you, and burying that behind a separate screen is
+    how people stop answering each other.
 
-    Deleted and system posts are left out: one has nothing to read, and the
-    other was written by the app rather than by anyone you follow.
+    The two halves have different scopes on purpose. Friends' posts are
+    friends-scoped — note the asymmetry, because it will be misread otherwise:
+    the *threads* are userbase-wide, so this is a lens on public writing rather
+    than a privacy boundary. Replies to you are **not** friend-filtered: a
+    stranger who has rated the record can answer your review, and hiding that
+    would leave you looking like you ignored them.
+
+    Deleted and system posts are left out — one has nothing to read, the other
+    was written by the app rather than by a person.
     """
     friend_ids = [r[0] for r in session.execute(_sql("""
         SELECT CASE WHEN user_id_a = :me THEN user_id_b ELSE user_id_a END
         FROM friendship
         WHERE status = 'accepted' AND (user_id_a = :me OR user_id_b = :me)
     """), {"me": user.id}).fetchall()]
-    if not friend_ids:
-        return {"posts": [], "next_cursor": None}
 
-    where_extra, params = "", {"ids": tuple(friend_ids), "lim": limit + 1}
+    params: dict = {"me": user.id, "lim": limit + 1}
+    # An empty IN () is a syntax error, so the friends branch drops out entirely
+    # for someone with no friends rather than being handed an empty tuple.
+    friends_clause = ""
+    if friend_ids:
+        friends_clause = "p.user_id IN :ids OR "
+        params["ids"] = tuple(friend_ids)
+
+    where_extra = ""
     if cursor:
         try:
             params["cid"] = int(cursor)
@@ -574,21 +587,26 @@ def friends_posts(
         SELECT p.id, p.user_id, p.parent_id, p.kind, p.body, p.is_spoiler,
                p.created_at, p.like_count, p.dislike_count, p.reply_count,
                u.name, u.avatar_url,
-               t.id, t.subject_type, t.subject_key, t.title, t.subtitle, t.art_url
+               t.id, t.subject_type, t.subject_key, t.title, t.subtitle, t.art_url,
+               (parent.user_id = :me) AS to_me
         FROM post p
         JOIN thread t ON t.id = p.thread_id
         JOIN pressuser u ON u.id = p.user_id
-        WHERE p.user_id IN :ids AND p.deleted_at IS NULL AND p.kind <> 'system'
+        LEFT JOIN post parent ON parent.id = p.parent_id
+        WHERE p.deleted_at IS NULL AND p.kind <> 'system' AND p.user_id <> :me
+          AND ({friends_clause}parent.user_id = :me)
           {where_extra}
         ORDER BY p.id DESC
         LIMIT :lim
-    """), {**params}).fetchall()
+    """), params).fetchall()
 
     more = len(rows) > limit
     rows = rows[:limit]
+    if not rows:
+        return {"posts": [], "next_cursor": None}
 
     # The author's score for the subject, resolved per thread rather than per
-    # post — a feed of ten posts across three records is three lookups, not ten.
+    # post — ten posts across three records is three lookups, not ten.
     scores: dict[tuple[int, int], float] = {}
     for tid in {r[12] for r in rows}:
         thread = session.get(Thread, tid)
@@ -600,6 +618,7 @@ def friends_posts(
         "posts": [{
             "id": r[0],
             "is_reply": r[2] is not None,
+            "to_me": bool(r[18]),
             "kind": r[3],
             "body": r[4],
             "is_spoiler": bool(r[5]),
@@ -612,5 +631,5 @@ def friends_posts(
             "thread": {"id": r[12], "subject_type": r[13], "subject_key": r[14],
                        "title": r[15], "subtitle": r[16], "art_url": r[17]},
         } for r in rows],
-        "next_cursor": str(rows[-1][0]) if more and rows else None,
+        "next_cursor": str(rows[-1][0]) if more else None,
     }

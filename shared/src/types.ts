@@ -297,10 +297,14 @@ export interface HeatedRecord {
   isNew: boolean
 }
 
-/** One friend's post, with enough of its thread to draw a row. */
-export interface FriendPost {
+/** One row of the discussion feed, with enough of its thread to draw it. */
+export interface FeedPost {
   id: number
   isReply: boolean
+  /** This is a reply to something *you* wrote. Not friend-scoped — anyone who
+   *  has rated the record can answer you, and hiding that would leave you
+   *  looking like you ignored them. */
+  toMe: boolean
   kind: DiscussionPost['kind']
   body: string
   isSpoiler: boolean

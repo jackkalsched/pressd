@@ -26,8 +26,7 @@ import { useFocusEffect, useRouter } from 'expo-router'
 import { Search, UserPlus, X } from 'lucide-react-native'
 import {
   fetchFeed,
-  fetchFriendReviews,
-  fetchFriendPosts,
+  fetchDiscussionFeed,
   fetchFriends,
   fetchAlbums,
   fetchCompare,
@@ -39,13 +38,12 @@ import {
   acceptFriendRequest,
   declineFriendRequest,
   type FeedItem,
-  type FriendReview,
   type CompareItem,
   type UserInfo,
   type UserSearchResult,
 } from '../../lib/api'
 import LikeButton from '../../components/LikeButton'
-import { type FriendPost } from '@pressd/shared/types'
+import { type FeedPost } from '@pressd/shared/types'
 import { useRefreshOnFocus } from '../../lib/refresh'
 import { useAuth } from '../../lib/auth'
 import { markSocialSeen, latestFeedTime } from '../../lib/socialSeen'
@@ -56,11 +54,10 @@ const DOWN = '#c0392b'
 const CONTENT_W = Dimensions.get('window').width - spacing.lg * 2
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
-type Tab = 'activity' | 'compare' | 'reviews' | 'discussions' | 'friends'
+type Tab = 'activity' | 'compare' | 'discussions' | 'friends'
 const TABS: { key: Tab; label: string }[] = [
   { key: 'activity', label: 'Activity' },
   { key: 'compare', label: 'Compare' },
-  { key: 'reviews', label: 'Reviews' },
   { key: 'discussions', label: 'Discussions' },
   { key: 'friends', label: 'Friends' },
 ]
@@ -156,9 +153,9 @@ export default function Social() {
   // What friends have said in any thread. Friends-scoped by design, and worth
   // saying out loud: the threads themselves are userbase-wide, so this is a
   // lens on public writing rather than a privacy boundary.
-  const { data: friendPosts } = useQuery({
-    queryKey: ['friendPosts'],
-    queryFn: () => fetchFriendPosts(),
+  const { data: discussion } = useQuery({
+    queryKey: ['discussionFeed'],
+    queryFn: () => fetchDiscussionFeed(),
     enabled: !!user && tab === 'discussions',
     retry: false,
   })
@@ -173,11 +170,6 @@ export default function Social() {
     }, [latestActivity]),
   )
 
-  const { data: reviews = [], isLoading: reviewsLoading } = useQuery({
-    queryKey: ['reviews', 'recent'],
-    queryFn: () => fetchFriendReviews('recent'),
-    enabled: tab === 'reviews',
-  })
   const { data: friends = [], isLoading: friendsLoading } = useQuery({
     queryKey: ['friends', user?.id],
     queryFn: () => fetchFriends(user!.id),
@@ -351,7 +343,7 @@ export default function Social() {
         />
       ) : tab === 'discussions' ? (
         <Animated.FlatList
-          data={friendPosts?.posts ?? []}
+          data={discussion?.posts ?? []}
           keyExtractor={(p) => String(p.id)}
           style={styles.fill}
           contentContainerStyle={styles.list}
@@ -359,7 +351,7 @@ export default function Social() {
           onScroll={onScroll}
           scrollEventThrottle={16}
           renderItem={({ item }) => (
-            <FriendPostRow
+            <FeedPostRow
               item={item}
               onOpen={() =>
                 router.push({
@@ -381,26 +373,6 @@ export default function Social() {
             <Text style={styles.empty}>
               Nothing from your friends yet. When they weigh in on a record, it lands here.
             </Text>
-          }
-        />
-      ) : tab === 'reviews' ? (
-        <Animated.FlatList
-          data={reviews}
-          keyExtractor={(item, i) => `${item.album_id}-${item.friend.id}-${i}`}
-          style={styles.fill}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          renderItem={({ item, index }) => (
-            <ReviewRow item={item} first={index === 0} onOpenAlbum={openAlbum} onLike={() => like(item.album_id)} />
-          )}
-          ListEmptyComponent={
-            reviewsLoading ? (
-              <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
-            ) : (
-              <Text style={styles.empty}>No reviews from friends yet.</Text>
-            )
           }
         />
       ) : (
@@ -514,9 +486,12 @@ function ActivityRow({
 
 /** One friend's post from any thread. Leads with the record, because a line of
  *  someone's opinion means little until you know what it is about. */
-function FriendPostRow({ item, onOpen }: { item: FriendPost; onOpen: () => void }) {
+function FeedPostRow({ item, onOpen }: { item: FeedPost; onOpen: () => void }) {
   return (
-    <Pressable style={({ pressed }) => [styles.fpRow, pressed && { opacity: 0.7 }]} onPress={onOpen}>
+    <Pressable
+      style={({ pressed }) => [styles.fpRow, item.toMe && styles.fpToMe, pressed && { opacity: 0.7 }]}
+      onPress={onOpen}
+    >
       <View style={styles.fpHead}>
         {item.thread.artUrl ? (
           <Image source={{ uri: item.thread.artUrl }} style={styles.fpArt} contentFit="cover" />
@@ -544,54 +519,18 @@ function FriendPostRow({ item, onOpen }: { item: FriendPost; onOpen: () => void 
           <Text style={styles.fpWho}>
             {item.author.name}
             <Text style={styles.fpKind}>
-              {item.isReply ? ' replied' : item.kind === 'review' ? ' reviewed it' : ' posted'}
+              {item.toMe
+                ? ' replied to you'
+                : item.isReply
+                  ? ' replied'
+                  : item.kind === 'review'
+                    ? ' reviewed it'
+                    : ' posted'}
             </Text>
           </Text>
           <Text style={styles.fpText} numberOfLines={3}>
             {item.isSpoiler ? 'Marked as a spoiler — open the thread to read it' : item.body}
           </Text>
-        </View>
-      </View>
-    </Pressable>
-  )
-}
-
-function ReviewRow({
-  item,
-  first,
-  onOpenAlbum,
-  onLike,
-}: {
-  item: FriendReview
-  first: boolean
-  onOpenAlbum: (id: number) => void
-  onLike: () => void
-}) {
-  return (
-    <Pressable style={[styles.row, !first && styles.divider]} onPress={() => onOpenAlbum(item.album_id)}>
-      <View style={styles.rowMain}>
-        <Cluster item={item} />
-        <View style={styles.rowText}>
-          <Text style={styles.line1}>
-            <Text style={styles.bold}>{item.friend.name}</Text>
-            <Text style={styles.reg}> reviewed </Text>
-            <Text style={styles.bold}>{item.album_name}</Text>
-          </Text>
-          <Text style={styles.line2} numberOfLines={1}>{item.artist}</Text>
-        </View>
-        {item.score != null && (
-          <View style={styles.rowRight}>
-            <Text style={[styles.score, { color: songScoreColor(item.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{item.score.toFixed(2)}</Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.reviewBlock}>
-        <Text style={styles.reviewQuote}>“{item.review}”</Text>
-        <View style={styles.reviewActions}>
-          <LikeButton liked={!!item.liked_by_me} count={item.like_count} onToggle={onLike} />
-          <Pressable onPress={() => onOpenAlbum(item.album_id)} hitSlop={6}>
-            <Text style={styles.actionText}>{item.comment_count} replies</Text>
-          </Pressable>
         </View>
       </View>
     </Pressable>
@@ -872,6 +811,9 @@ function FriendAction({ u, onRequest, onAccept }: { u: UserSearchResult; onReque
 const styles = StyleSheet.create({
   fpRow: { paddingVertical: spacing.lg, borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border },
+  // A reply to you is the one row on this screen addressed to you rather than
+  // merely visible to you, so it carries a rule the others do not.
+  fpToMe: { borderLeftWidth: 2, borderLeftColor: colors.green, paddingLeft: spacing.md },
   fpHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   fpArt: { width: 38, height: 38, borderRadius: radii.sm },
   fpTitle: { fontFamily: fonts.display, fontSize: 15, color: colors.ink },

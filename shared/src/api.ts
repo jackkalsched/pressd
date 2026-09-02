@@ -1,7 +1,7 @@
 import type {
   Album, Song, ArtistStats, FactorStats, FactorPoints,
   DiscussionPost, SubjectRef, ThreadMeta, ThreadPage, ThreadSort,
-  FriendPost, HeatedRecord, SubjectType,
+  FeedPost, HeatedRecord, SubjectType,
 } from './types'
 
 // ── Runtime configuration ─────────────────────────────────────────────────────
@@ -1867,12 +1867,12 @@ export async function fetchHeated(limit = 10): Promise<HeatedRecord[]> {
   }))
 }
 
-export async function fetchFriendPosts(
+export async function fetchDiscussionFeed(
   cursor?: string | null,
-): Promise<{ posts: FriendPost[]; nextCursor: string | null }> {
+): Promise<{ posts: FeedPost[]; nextCursor: string | null }> {
   const q = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
-  const res = await apiFetch(`${BASE()}/discussions/friends${q}`)
-  if (!res.ok) throw new Error('Failed to fetch friends’ posts')
+  const res = await apiFetch(`${BASE()}/discussions/feed${q}`)
+  if (!res.ok) throw new Error('Failed to fetch the discussion feed')
   const d = await res.json()
   return {
     posts: (d.posts as Record<string, unknown>[]).map((p) => {
@@ -1881,7 +1881,8 @@ export async function fetchFriendPosts(
       return {
         id: p.id as number,
         isReply: !!p.is_reply,
-        kind: p.kind as FriendPost['kind'],
+        toMe: !!p.to_me,
+        kind: p.kind as FeedPost['kind'],
         body: (p.body as string) ?? '',
         isSpoiler: !!p.is_spoiler,
         createdAt: (p.created_at as string | null) ?? null,
