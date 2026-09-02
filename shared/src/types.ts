@@ -276,10 +276,7 @@ export interface ThreadPage {
   nextCursor: string | null
 }
 
-/** A record the userbase disagrees about (PLAN_discussions.md §8).
- *  `hotPct`/`coldPct` are measured against each rater's own library mean, not
- *  an absolute cutoff — "60% hot" means 60% liked it more than they like their
- *  own library. They always sum to 100. */
+/** A record the userbase disagrees about (PLAN_discussions.md §8). */
 export interface DivisiveRecord {
   subjectKey: string
   albumName: string
@@ -288,10 +285,15 @@ export interface DivisiveRecord {
   raters: number
   spread: number
   meanScore: number
-  hot: number
-  cold: number
-  hotPct: number
-  coldPct: number
+  /** The three buckets the app already uses for songs: a skip below
+   *  SKIP_THRESHOLD, a bang at or above BANG_THRESHOLD, middling in between.
+   *  The percentages always sum to 100. */
+  bangs: number
+  middling: number
+  skips: number
+  bangPct: number
+  midPct: number
+  skipPct: number
 }
 
 /** One friend's post, with enough of its thread to draw a row. */

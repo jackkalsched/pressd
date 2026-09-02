@@ -19,6 +19,7 @@ from sqlmodel import Session, select
 from ..database import get_session
 from ..deps import current_user
 from ..global_rating import compute_global_ratings, is_single
+from ..scoring import BANG_THRESHOLD, SKIP_THRESHOLD
 from ..models import Album, PressUser
 from ..trackkeys import same_album
 from ..aoty_releases import AOTY_THIS_WEEK, AOTY_UA, parse_releases
@@ -581,6 +582,7 @@ MIN_DIVISIVE_RATERS = 3
 DIVISIVE_MIN_TRACKS = 3
 
 
+
 @router.get("/divisive")
 def divisive(
     window: str = Query("all", pattern="^(week|all)$"),
@@ -590,11 +592,18 @@ def divisive(
 ):
     """Records the userbase most disagrees about.
 
-    The hot/cold split is measured against **each rater's own library mean**,
-    not an absolute cutoff (§8.2). Everyone's scores sit on their own
-    distribution — that is the premise of `backend.scoring` — so "60% flame"
-    means 60% liked it more than they like their own library, which is a real
-    claim. A flat 7.0 line would mostly measure who rates generously.
+    Each rater's score falls into the three buckets the app already uses for
+    songs: a **skip** below `SKIP_THRESHOLD`, a **bang** at or above
+    `BANG_THRESHOLD`, and nothing in between. Those constants are imported
+    rather than restated — a reader who knows what a bang is on the tracklist
+    already knows what this bar means, and one vocabulary is the point.
+
+    §8.2 originally split each rater against their own library mean, on the
+    argument that everyone's scores sit on their own distribution. Jack chose
+    the fixed thresholds on 2026-09-02. They are far more legible — "two banged
+    it, one skipped it" is a sentence — at the cost of a generous rater landing
+    in the bang bucket more often than a stingy one. The spread that drives the
+    *ranking* is unaffected either way.
 
     `window=week` narrows to records someone rated in the last seven days.
     Defaults to `all` because at this userbase's size the weekly set is
@@ -604,28 +613,25 @@ def divisive(
              "   AND w.status = 'rated' AND w.date_rated > CURRENT_DATE - 7)" if window == "week" else ""
 
     rows = session.execute(text(f"""
-        WITH means AS (
-            SELECT user_id, AVG(score) AS mean FROM album
-            WHERE status = 'rated' AND score IS NOT NULL GROUP BY user_id
-        ),
-        sizes AS (
+        WITH sizes AS (
             SELECT a.subject_key, MAX(c.n) AS tracks
             FROM album a
             JOIN (SELECT album_id, COUNT(*) n FROM song GROUP BY album_id) c ON c.album_id = a.id
             GROUP BY a.subject_key
         ),
         rated AS (
-            SELECT a.subject_key, a.user_id, a.score, m.mean
+            SELECT a.subject_key, a.user_id, a.score
             FROM album a
-            JOIN means m ON m.user_id = a.user_id
             WHERE a.status = 'rated' AND a.score IS NOT NULL AND a.subject_key IS NOT NULL
               {recent}
         )
         SELECT r.subject_key,
                COUNT(*)                                        AS raters,
                STDDEV_POP(r.score)                              AS spread,
-               COUNT(*) FILTER (WHERE r.score >  r.mean)        AS hot,
-               COUNT(*) FILTER (WHERE r.score <= r.mean)        AS cold,
+               COUNT(*) FILTER (WHERE r.score >= :bang)         AS bangs,
+               COUNT(*) FILTER (WHERE r.score <  :skip)         AS skips,
+               COUNT(*) FILTER (WHERE r.score >= :skip
+                                  AND r.score <  :bang)         AS middling,
                AVG(r.score)                                     AS mean_score
         FROM rated r
         JOIN sizes z ON z.subject_key = r.subject_key
@@ -635,7 +641,7 @@ def divisive(
         ORDER BY STDDEV_POP(r.score) DESC NULLS LAST, COUNT(*) DESC
         LIMIT :lim
     """), {"minraters": MIN_DIVISIVE_RATERS, "mintracks": DIVISIVE_MIN_TRACKS,
-           "lim": limit}).fetchall()
+           "bang": BANG_THRESHOLD, "skip": SKIP_THRESHOLD, "lim": limit}).fetchall()
     if not rows:
         return []
 
@@ -652,9 +658,16 @@ def divisive(
     }
 
     out = []
-    for key, raters, spread, hot, cold, mean_score in rows:
+    for key, raters, spread, bangs, skips, middling, mean_score in rows:
         name, artist, art = meta.get(key, (key.split("||")[-1], None, None))
-        total = (hot or 0) + (cold or 0)
+        b, m_, k = bangs or 0, middling or 0, skips or 0
+        total = b + m_ + k
+        # Percentages here so the client draws the bar without re-deriving them,
+        # and so the three always sum to 100 rather than 99 or 101 — the middle
+        # absorbs the rounding because it is the segment nobody reads a number
+        # off.
+        bang_pct = round(100 * b / total) if total else 0
+        skip_pct = round(100 * k / total) if total else 0
         out.append({
             "subject_key": key,
             "album_name": name,
@@ -663,11 +676,11 @@ def divisive(
             "raters": raters,
             "spread": round(float(spread or 0), 2),
             "mean_score": round(float(mean_score or 0), 2),
-            "hot": hot or 0,
-            "cold": cold or 0,
-            # Percentages so the client draws a bar without re-deriving them,
-            # and so the two always sum to 100 rather than 99 or 101.
-            "hot_pct": round(100 * (hot or 0) / total) if total else 0,
-            "cold_pct": 100 - round(100 * (hot or 0) / total) if total else 0,
+            "bangs": b,
+            "middling": m_,
+            "skips": k,
+            "bang_pct": bang_pct,
+            "skip_pct": skip_pct,
+            "mid_pct": max(0, 100 - bang_pct - skip_pct),
         })
     return out

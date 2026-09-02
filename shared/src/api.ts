@@ -1861,10 +1861,12 @@ export async function fetchDivisive(
     raters: (d.raters as number) ?? 0,
     spread: (d.spread as number) ?? 0,
     meanScore: (d.mean_score as number) ?? 0,
-    hot: (d.hot as number) ?? 0,
-    cold: (d.cold as number) ?? 0,
-    hotPct: (d.hot_pct as number) ?? 0,
-    coldPct: (d.cold_pct as number) ?? 0,
+    bangs: (d.bangs as number) ?? 0,
+    middling: (d.middling as number) ?? 0,
+    skips: (d.skips as number) ?? 0,
+    bangPct: (d.bang_pct as number) ?? 0,
+    midPct: (d.mid_pct as number) ?? 0,
+    skipPct: (d.skip_pct as number) ?? 0,
   }))
 }
 

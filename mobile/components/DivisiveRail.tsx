@@ -27,7 +27,6 @@ export default function DivisiveRail() {
   return (
     <View style={styles.section}>
       <Text style={styles.heading}>MOST DIVISIVE</Text>
-      <Text style={styles.sub}>Records pressers can&rsquo;t agree on.</Text>
 
       <ScrollView
         horizontal
@@ -62,26 +61,26 @@ export default function DivisiveRail() {
             <Text style={styles.album} numberOfLines={1}>{r.albumName}</Text>
             <Text style={styles.artist} numberOfLines={1}>{r.artist ?? ''}</Text>
 
-            {/* Split against each rater's own library mean, not a fixed line —
-                "67% flame" means two thirds liked it more than they like their
-                own library. An absolute cutoff would mostly measure who rates
-                generously. */}
+            {/* The same three buckets the tracklist uses for songs, so the bar
+                needs no key: bang, middling, skip. A segment with nobody in it
+                collapses rather than showing a sliver that reads as one vote. */}
             <View style={styles.bar}>
-              <View style={[styles.barCold, { flex: Math.max(r.coldPct, 1) }]} />
-              <View style={[styles.barHot, { flex: Math.max(r.hotPct, 1) }]} />
+              {r.bangPct > 0 && <View style={[styles.seg, { flex: r.bangPct, backgroundColor: BANG }]} />}
+              {r.midPct > 0 && <View style={[styles.seg, { flex: r.midPct, backgroundColor: MID }]} />}
+              {r.skipPct > 0 && <View style={[styles.seg, { flex: r.skipPct, backgroundColor: SKIP }]} />}
             </View>
             <View style={styles.legend}>
               <View style={styles.legendSide}>
-                <Snowflake size={12} color={COLD} />
-                <Text style={[styles.legendText, { color: COLD }]} maxFontSizeMultiplier={NUM_SCALE_CAP}>
-                  {r.coldPct}%
+                <Flame size={12} color={BANG} />
+                <Text style={[styles.legendText, { color: BANG }]} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+                  {r.bangs}
                 </Text>
               </View>
               <View style={styles.legendSide}>
-                <Text style={[styles.legendText, { color: HOT }]} maxFontSizeMultiplier={NUM_SCALE_CAP}>
-                  {r.hotPct}%
+                <Text style={[styles.legendText, { color: SKIP }]} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+                  {r.skips}
                 </Text>
-                <Flame size={12} color={HOT} />
+                <Snowflake size={12} color={SKIP} />
               </View>
             </View>
 
@@ -95,8 +94,11 @@ export default function DivisiveRail() {
   )
 }
 
-const COLD = '#4a6fa5'
-const HOT = '#c0563a'
+// Green for a bang, grey for the middle, red for a skip — the app's own
+// good/indifferent/bad reading, so the bar needs no legend to be understood.
+const BANG = colors.green
+const MID = '#c8c2b8'
+const SKIP = '#c0392b'
 const CARD_W = 168
 
 const styles = StyleSheet.create({
@@ -105,7 +107,6 @@ const styles = StyleSheet.create({
   // heading: this rail sits among that page's sections and has no business
   // looking like a different kind of thing.
   heading: { fontFamily: fonts.bodyBold, fontSize: 13, letterSpacing: 0.6, color: colors.ink },
-  sub: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkTertiary, marginTop: 2 },
   // The page already pads its content, so the rail bleeds back out to the edge
   // and re-pads itself — the same trick the New & Popular rail uses, so cards
   // scroll off the screen edge instead of stopping short of it.
@@ -121,8 +122,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', height: 5, borderRadius: 3, overflow: 'hidden',
     marginTop: spacing.sm, backgroundColor: colors.inset,
   },
-  barCold: { backgroundColor: COLD },
-  barHot: { backgroundColor: HOT },
+  seg: { height: '100%' },
   legend: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
   legendSide: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   legendText: { fontFamily: fonts.bodySemiBold, fontSize: 11 },
