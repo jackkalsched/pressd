@@ -1702,9 +1702,20 @@ export async function fetchThreadPosts(
   const res = await apiFetch(`${BASE()}/threads/${threadId}/posts?${q.toString()}`)
   if (!res.ok) throw new Error('Failed to fetch posts')
   const d = await res.json()
+  const sm = d.summary as Record<string, unknown> | null
+  const track = (t: Record<string, unknown> | null) =>
+    t ? { title: t.title as string, score: t.score as number } : null
   return {
     threadId: d.thread_id,
     sort: d.sort,
+    summary: sm
+      ? {
+          meanScore: sm.mean_score as number,
+          raters: sm.raters as number,
+          topTrack: track(sm.top_track as Record<string, unknown> | null),
+          bottomTrack: track(sm.bottom_track as Record<string, unknown> | null),
+        }
+      : null,
     posts: (d.posts as Record<string, unknown>[]).map(transformPost),
     nextCursor: d.next_cursor ?? null,
   }

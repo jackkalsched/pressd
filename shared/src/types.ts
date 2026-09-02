@@ -269,9 +269,20 @@ export interface ThreadMeta {
   lockedReason: string | null
 }
 
+/** The record's numbers, recomputed on every read. Null for artist and track
+ *  threads, and for an album nobody has rated yet. */
+export interface ThreadSummary {
+  meanScore: number
+  raters: number
+  topTrack: { title: string; score: number } | null
+  /** Null when the record has one track — there is no worst of one. */
+  bottomTrack: { title: string; score: number } | null
+}
+
 export interface ThreadPage {
   threadId: number
   sort: ThreadSort
+  summary: ThreadSummary | null
   posts: DiscussionPost[]
   nextCursor: string | null
 }

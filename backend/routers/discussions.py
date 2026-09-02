@@ -30,7 +30,7 @@ from sqlmodel import Session
 from ..database import get_session
 from ..deps import authorize_thread, current_user, thread_access
 from ..models import Post, PostLike, PostReport, PressUser, Thread
-from ..threads import display_for, get_or_create_thread
+from ..threads import display_for, get_or_create_thread, thread_summary
 from ..trackkeys import subject_key_album, subject_key_artist
 from ..threads import SPOILER_FLAGS_TO_BLUR
 
@@ -275,6 +275,10 @@ def list_posts(
     return {
         "thread_id": thread_id,
         "sort": sort,
+        # Computed per read rather than stored: the numbers move every time
+        # someone rates the record, and a sentence written into a post row is
+        # wrong by the next morning. See threads.thread_summary.
+        "summary": thread_summary(session, thread),
         "posts": [_serialize(r, user.id, scores, votes) for r in rows],
         "next_cursor": next_cursor,
     }
