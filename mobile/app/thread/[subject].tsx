@@ -174,17 +174,26 @@ export default function ThreadScreen() {
             keyboardVerticalOffset={8}
           >
             <View style={styles.sortRow}>
-              {SORTS.map((s) => (
-                <Pressable
-                  key={s.key}
-                  onPress={() => setSort(s.key)}
-                  style={[styles.sortChip, sort === s.key && styles.sortChipOn]}
-                >
-                  <Text style={[styles.sortText, sort === s.key && styles.sortTextOn]}>
-                    {s.label}
-                  </Text>
-                </Pressable>
-              ))}
+              <View style={styles.sortChips}>
+                {SORTS.map((s) => (
+                  <Pressable
+                    key={s.key}
+                    onPress={() => setSort(s.key)}
+                    style={[styles.sortChip, sort === s.key && styles.sortChipOn]}
+                  >
+                    <Text style={[styles.sortText, sort === s.key && styles.sortTextOn]}>
+                      {s.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              {/* Sits out here rather than in the summary card: it describes the
+                  room, not the record, and the card is for the record. */}
+              {!!page?.summary && (
+                <Text style={styles.raterCount} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+                  {page.summary.raters} {page.summary.raters === 1 ? 'rater' : 'raters'}
+                </Text>
+              )}
             </View>
 
             <ScrollView
@@ -257,17 +266,12 @@ export default function ThreadScreen() {
 function Summary({ summary }: { summary: ThreadSummary }) {
   return (
     <View style={styles.summary}>
-      <View style={styles.summaryScore}>
-        <Text
-          style={[styles.summaryValue, { color: songScoreColor(summary.meanScore) }]}
-          maxFontSizeMultiplier={NUM_SCALE_CAP}
-        >
-          {summary.meanScore.toFixed(2)}
-        </Text>
-        <Text style={styles.summaryLabel}>
-          {summary.raters} {summary.raters === 1 ? 'RATER' : 'RATERS'}
-        </Text>
-      </View>
+      <Text
+        style={[styles.summaryValue, { color: songScoreColor(summary.meanScore) }]}
+        maxFontSizeMultiplier={NUM_SCALE_CAP}
+      >
+        {summary.meanScore.toFixed(2)}
+      </Text>
 
       <View style={styles.summaryTracks}>
         {summary.topTrack && <SummaryTrack best track={summary.topTrack} />}
@@ -487,7 +491,12 @@ const styles = StyleSheet.create({
   lockedTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   lockedBody: { fontFamily: fonts.body, fontSize: 14, color: colors.inkTertiary, textAlign: 'center', lineHeight: 21 },
 
-  sortRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
+  sortRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.md,
+  },
+  sortChips: { flexDirection: 'row', gap: spacing.sm, flexShrink: 1 },
+  raterCount: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary },
   sortChip: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radii.pill, backgroundColor: colors.inset },
   sortChipOn: { backgroundColor: colors.ink },
   sortText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary },
@@ -501,9 +510,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.greenSoft, borderRadius: radii.lg,
     padding: spacing.md, marginTop: spacing.sm, marginBottom: spacing.md,
   },
-  summaryScore: { alignItems: 'center' },
   summaryValue: { fontFamily: fonts.display, fontSize: 30 },
-  summaryLabel: { fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 0.8, color: colors.inkTertiary },
   summaryTracks: { flex: 1, minWidth: 0, gap: 6 },
   summaryTrack: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   summaryTrackTitle: { flex: 1, minWidth: 0, fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.ink },
