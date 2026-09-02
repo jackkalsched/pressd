@@ -24,7 +24,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as Clipboard from 'expo-clipboard'
 import * as Haptics from 'expo-haptics'
-import { ArrowLeft, ChevronDown, ChevronUp, Lock, Send } from 'lucide-react-native'
+import { ArrowLeft, ChevronDown, ChevronUp, Lock, Send, Triangle } from 'lucide-react-native'
 import {
   createThreadPost,
   fetchThreadPosts,
@@ -46,6 +46,9 @@ import AnchoredMenu from '../../components/AnchoredMenu'
 import VoteButtons from '../../components/VoteButtons'
 import { threadKey } from '../../lib/refresh'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+
+// Matches the red For You uses for a worst track.
+const DOWN = '#e0492b'
 
 const SORTS: { key: ThreadSort; label: string }[] = [
   { key: 'popular', label: 'Popular' },
@@ -267,21 +270,23 @@ function Summary({ summary }: { summary: ThreadSummary }) {
       </View>
 
       <View style={styles.summaryTracks}>
-        {summary.topTrack && (
-          <SummaryTrack label="FAVOURITE" track={summary.topTrack} />
-        )}
-        {summary.bottomTrack && (
-          <SummaryTrack label="LEAST" track={summary.bottomTrack} />
-        )}
+        {summary.topTrack && <SummaryTrack best track={summary.topTrack} />}
+        {summary.bottomTrack && <SummaryTrack best={false} track={summary.bottomTrack} />}
       </View>
     </View>
   )
 }
 
-function SummaryTrack({ label, track }: { label: string; track: { title: string; score: number } }) {
+/** The app already marks a best and worst track with a green triangle up and a
+ *  red one down (For You's review cells do it). Same shapes and colours here so
+ *  the mark means one thing everywhere — outlined rather than filled, since
+ *  these are the room's picks and not the reader's own. */
+function SummaryTrack({ best, track }: { best: boolean; track: { title: string; score: number } }) {
   return (
     <View style={styles.summaryTrack}>
-      <Text style={styles.summaryTrackLabel}>{label}</Text>
+      <View style={best ? undefined : { transform: [{ rotate: '180deg' }] }}>
+        <Triangle size={11} color={best ? colors.green : DOWN} />
+      </View>
       <Text style={styles.summaryTrackTitle} numberOfLines={1}>{track.title}</Text>
       <Text
         style={[styles.summaryTrackScore, { color: songScoreColor(track.score) }]}
@@ -501,8 +506,6 @@ const styles = StyleSheet.create({
   summaryLabel: { fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 0.8, color: colors.inkTertiary },
   summaryTracks: { flex: 1, minWidth: 0, gap: 6 },
   summaryTrack: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  summaryTrackLabel: { fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 0.7,
-    color: colors.inkTertiary, width: 62 },
   summaryTrackTitle: { flex: 1, minWidth: 0, fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.ink },
   summaryTrackScore: { fontFamily: fonts.display, fontSize: 15 },
   post: { paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
