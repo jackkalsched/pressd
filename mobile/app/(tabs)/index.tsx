@@ -34,7 +34,7 @@ import {
 import { songScoreColor, type Album } from '@pressd/shared/types'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import RecommendationBanner from '../../components/RecommendationBanner'
-import DivisiveRail from '../../components/DivisiveRail'
+import HeatedDiscussions from '../../components/HeatedDiscussions'
 import LikeButton from '../../components/LikeButton'
 import { useRefreshOnFocus } from '../../lib/refresh'
 import { markRecsSeen, recTime, useRecsSeen } from '../../lib/recsSeen'
@@ -485,10 +485,10 @@ export default function ForYou() {
           </View>
         )}
 
-        {/* Most divisive — the one discovery signal that points at a record
-            *because* nobody agrees on it, which is when its thread is worth
-            reading. Sits above the reviews for that reason. */}
-        <DivisiveRail />
+        {/* Heated discussions — records people are writing about right now,
+            which is when their threads are worth opening. Sits above the
+            reviews for that reason. */}
+        <HeatedDiscussions />
 
         {/* What are pressers talking about — userbase-wide reviews for the day */}
         {topReviews && (

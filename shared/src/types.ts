@@ -276,24 +276,25 @@ export interface ThreadPage {
   nextCursor: string | null
 }
 
-/** A record the userbase disagrees about (PLAN_discussions.md §8). */
-export interface DivisiveRecord {
+/** A record people are actively writing about (PLAN_discussions.md §8).
+ *  The tag booleans are decided server-side so the two clients cannot drift
+ *  apart on what "controversial" means. */
+export interface HeatedRecord {
   subjectKey: string
   albumName: string
   artist: string | null
   albumArtUrl: string | null
+  reviewCount: number
+  recentReviews: number
   raters: number
+  meanScore: number | null
   spread: number
-  meanScore: number
-  /** The three buckets the app already uses for songs: a skip below
-   *  SKIP_THRESHOLD, a bang at or above BANG_THRESHOLD, middling in between.
-   *  The percentages always sum to 100. */
-  bangs: number
-  middling: number
-  skips: number
-  bangPct: number
-  midPct: number
-  skipPct: number
+  controversial: boolean
+  loved: boolean
+  hated: boolean
+  /** False for anything imported before release dates were stored, rather than
+   *  guessed from the year — see backend/routers/discover.py. */
+  isNew: boolean
 }
 
 /** One friend's post, with enough of its thread to draw a row. */

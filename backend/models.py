@@ -133,6 +133,13 @@ class Album(SQLModel, table=True):
     # own songs on read, which covers a track deleted out from under it.
     top_song_id: Optional[int] = None
 
+    # When the record came out, as opposed to `year`, which is all the import
+    # kept before. Needed to say whether something is new in weeks rather than
+    # in years. Null on everything imported before 2026-09-02 — the search
+    # results carried the date and the import dropped it, and it cannot be
+    # recovered without re-fetching, so old rows simply never read as new.
+    release_date: Optional[date] = None
+
     date_added: Optional[date] = Field(default_factory=date.today)
     date_rated: Optional[date] = None
 

@@ -405,6 +405,7 @@ def import_album(
         album_name=data["album_name"],
         artist=data["artist"],
         year=data.get("year"),
+        release_date=_parse_release_date(data.get("release_date")),
         status=data.get("status", "to_listen"),
         album_art_url=data.get("cover_url"),
         spotify_id=data.get("spotify_id"),
@@ -444,6 +445,21 @@ def import_album(
         "songs": [s.model_dump() for s in album.songs],
         "already_existed": False,
     }
+
+
+def _parse_release_date(v) -> date | None:
+    """Accept the ISO date the catalogues hand back, ignore anything else.
+
+    Sources are inconsistent — some send "2024-03-01", some "2024", some
+    nothing. A year alone cannot answer "released this fortnight", so it is
+    dropped rather than guessed into January 1st.
+    """
+    if not isinstance(v, str) or len(v) < 10:
+        return None
+    try:
+        return date.fromisoformat(v[:10])
+    except ValueError:
+        return None
 
 
 def _link_tracks(session: Session, album_id: int):

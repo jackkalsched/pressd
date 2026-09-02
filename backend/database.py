@@ -173,6 +173,9 @@ def init_db():
             "ALTER TABLE comment ADD COLUMN post_id INTEGER",
             #    Votes carry a direction. Existing rows were all likes, which is
             #    what the default says.
+            #    Release date, for "new in the last fortnight" — `year` cannot
+            #    answer that. Backfilled by nothing: the value was never stored.
+            "ALTER TABLE album ADD COLUMN release_date DATE",
             "ALTER TABLE postlike ADD COLUMN value INTEGER DEFAULT 1",
             "UPDATE postlike SET value = 1 WHERE value IS NULL",
             "ALTER TABLE post ADD COLUMN dislike_count INTEGER DEFAULT 0",

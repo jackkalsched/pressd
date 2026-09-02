@@ -564,90 +564,78 @@ async def resolve_deezer_album(
     }
 
 
-# ── Most divisive (PLAN_discussions.md §8) ───────────────────────────────────
-# You already hold every user's score for a record, so disagreement is a
-# `stddev` away — and it is the one discovery signal here that no competitor
-# can compute, because nobody else has the per-user distributions.
+# ── Heated discussions (PLAN_discussions.md §8) ──────────────────────────────
+# Records people are actively writing about, ranked by review activity rather
+# than by disagreement. Disagreement survives as a *tag* rather than the sort:
+# spread is a real signal but a slow-moving one, and a section that never
+# changes stops being looked at.
 
-# §8.1 asks for 5. Measured against the live database on 2026-09-02 the whole
-# userbase produced exactly one record with 4 raters and seven with 3, so a
-# floor of 5 would render an empty rail forever. Three is what this data can
-# support; raise it toward 5 as the userbase grows, because at three a single
-# contrarian is the entire "division".
-MIN_DIVISIVE_RATERS = 3
+# Recent means the last three days. Used to *order* the section, not to filter
+# it — measured on 2026-09-02 the whole userbase wrote 0 reviews in three days
+# and 1 in seven, so filtering would have shipped a section that never renders.
+# Records with recent reviews float up; the rest still show beneath them.
+HEATED_WINDOW_DAYS = 3
 
-# Two tracks or fewer is a single. Kept off this rail for the same reason
-# charts keep it off theirs: a one-track release rated 10 and 2 by two people
-# is noise wearing the shape of a controversy.
-DIVISIVE_MIN_TRACKS = 3
+# A whole point of standard deviation means two listeners routinely land a
+# grade apart on the same record. Below that it is rounding, not a controversy.
+CONTROVERSIAL_SPREAD = 1.0
+
+# The ends of the scale, well clear of the 6.5/8.0 lines a single album crosses,
+# so a tag says something about the room rather than about one generous rater.
+LOVED_MEAN = 8.5
+HATED_MEAN = 6.0
+
+# "New" in the sense a listener means it, not a chart's.
+NEW_RELEASE_DAYS = 14
 
 
-
-@router.get("/divisive")
-def divisive(
-    window: str = Query("all", pattern="^(week|all)$"),
+@router.get("/heated")
+def heated(
     limit: int = Query(10, ge=1, le=30),
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
-    """Records the userbase most disagrees about.
+    """Records with the most review activity, newest first.
 
-    Each rater's score falls into the three buckets the app already uses for
-    songs: a **skip** below `SKIP_THRESHOLD`, a **bang** at or above
-    `BANG_THRESHOLD`, and nothing in between. Those constants are imported
-    rather than restated — a reader who knows what a bang is on the tracklist
-    already knows what this bar means, and one vocabulary is the point.
+    The tags are computed here rather than in the client so the thresholds live
+    in one place and both platforms cannot drift apart on what "controversial"
+    means. They are deliberately arbitrary — see the constants above for what
+    each one is trying to say.
 
-    §8.2 originally split each rater against their own library mean, on the
-    argument that everyone's scores sit on their own distribution. Jack chose
-    the fixed thresholds on 2026-09-02. They are far more legible — "two banged
-    it, one skipped it" is a sentence — at the cost of a generous rater landing
-    in the bang bucket more often than a stingy one. The spread that drives the
-    *ranking* is unaffected either way.
-
-    `window=week` narrows to records someone rated in the last seven days.
-    Defaults to `all` because at this userbase's size the weekly set is
-    routinely empty, and an empty rail teaches people to stop looking.
+    `is_new` is null-safe by design: `release_date` was never stored before
+    2026-09-02, so anything imported earlier simply never reads as new rather
+    than guessing from `year` and calling a twelve-month-old record fresh.
     """
-    recent = "AND EXISTS (SELECT 1 FROM album w WHERE w.subject_key = a.subject_key" \
-             "   AND w.status = 'rated' AND w.date_rated > CURRENT_DATE - 7)" if window == "week" else ""
-
-    rows = session.execute(text(f"""
-        WITH sizes AS (
-            SELECT a.subject_key, MAX(c.n) AS tracks
-            FROM album a
-            JOIN (SELECT album_id, COUNT(*) n FROM song GROUP BY album_id) c ON c.album_id = a.id
-            GROUP BY a.subject_key
+    rows = session.execute(text("""
+        WITH reviews AS (
+            SELECT t.subject_key,
+                   COUNT(*) AS total,
+                   COUNT(*) FILTER (
+                       WHERE p.created_at > NOW() - make_interval(days => :win)
+                   ) AS recent,
+                   MAX(p.created_at) AS last_at
+            FROM post p JOIN thread t ON t.id = p.thread_id
+            WHERE t.subject_type = 'album' AND p.kind = 'review' AND p.deleted_at IS NULL
+            GROUP BY t.subject_key
         ),
-        rated AS (
-            SELECT a.subject_key, a.user_id, a.score
-            FROM album a
-            WHERE a.status = 'rated' AND a.score IS NOT NULL AND a.subject_key IS NOT NULL
-              {recent}
+        scores AS (
+            SELECT subject_key, AVG(score) AS mean, STDDEV_POP(score) AS spread,
+                   COUNT(*) AS raters, MAX(release_date) AS release_date
+            FROM album
+            WHERE status = 'rated' AND score IS NOT NULL AND subject_key IS NOT NULL
+            GROUP BY subject_key
         )
-        SELECT r.subject_key,
-               COUNT(*)                                        AS raters,
-               STDDEV_POP(r.score)                              AS spread,
-               COUNT(*) FILTER (WHERE r.score >= :bang)         AS bangs,
-               COUNT(*) FILTER (WHERE r.score <  :skip)         AS skips,
-               COUNT(*) FILTER (WHERE r.score >= :skip
-                                  AND r.score <  :bang)         AS middling,
-               AVG(r.score)                                     AS mean_score
-        FROM rated r
-        JOIN sizes z ON z.subject_key = r.subject_key
-        WHERE z.tracks >= :mintracks
-        GROUP BY r.subject_key
-        HAVING COUNT(*) >= :minraters
-        ORDER BY STDDEV_POP(r.score) DESC NULLS LAST, COUNT(*) DESC
+        SELECT r.subject_key, r.total, r.recent, r.last_at,
+               s.mean, s.spread, s.raters, s.release_date
+        FROM reviews r
+        JOIN scores s ON s.subject_key = r.subject_key
+        ORDER BY r.recent DESC, r.total DESC, r.last_at DESC
         LIMIT :lim
-    """), {"minraters": MIN_DIVISIVE_RATERS, "mintracks": DIVISIVE_MIN_TRACKS,
-           "bang": BANG_THRESHOLD, "skip": SKIP_THRESHOLD, "lim": limit}).fetchall()
+    """), {"win": HEATED_WINDOW_DAYS, "lim": limit}).fetchall()
     if not rows:
         return []
 
     keys = tuple(r[0] for r in rows)
-    # One lookup for every record's display fields, preferring a copy that has
-    # cover art — the row that sorts first is often a stub imported without one.
     meta = {
         m[0]: (m[1], m[2], m[3])
         for m in session.execute(text("""
@@ -657,30 +645,25 @@ def divisive(
         """), {"keys": keys}).fetchall()
     }
 
+    today = date.today()
     out = []
-    for key, raters, spread, bangs, skips, middling, mean_score in rows:
+    for key, total, recent, last_at, mean, spread, raters, release_date in rows:
         name, artist, art = meta.get(key, (key.split("||")[-1], None, None))
-        b, m_, k = bangs or 0, middling or 0, skips or 0
-        total = b + m_ + k
-        # Percentages here so the client draws the bar without re-deriving them,
-        # and so the three always sum to 100 rather than 99 or 101 — the middle
-        # absorbs the rounding because it is the segment nobody reads a number
-        # off.
-        bang_pct = round(100 * b / total) if total else 0
-        skip_pct = round(100 * k / total) if total else 0
+        mean_f = float(mean) if mean is not None else None
+        spread_f = float(spread) if spread is not None else 0.0
         out.append({
             "subject_key": key,
             "album_name": name,
             "artist": artist,
             "album_art_url": art,
+            "review_count": total,
+            "recent_reviews": recent,
             "raters": raters,
-            "spread": round(float(spread or 0), 2),
-            "mean_score": round(float(mean_score or 0), 2),
-            "bangs": b,
-            "middling": m_,
-            "skips": k,
-            "bang_pct": bang_pct,
-            "skip_pct": skip_pct,
-            "mid_pct": max(0, 100 - bang_pct - skip_pct),
+            "mean_score": round(mean_f, 2) if mean_f is not None else None,
+            "spread": round(spread_f, 2),
+            "controversial": spread_f >= CONTROVERSIAL_SPREAD,
+            "loved": mean_f is not None and mean_f >= LOVED_MEAN,
+            "hated": mean_f is not None and mean_f <= HATED_MEAN,
+            "is_new": bool(release_date and (today - release_date).days <= NEW_RELEASE_DAYS),
         })
     return out

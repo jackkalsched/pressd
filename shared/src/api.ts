@@ -1,7 +1,7 @@
 import type {
   Album, Song, ArtistStats, FactorStats, FactorPoints,
   DiscussionPost, SubjectRef, ThreadMeta, ThreadPage, ThreadSort,
-  DivisiveRecord, FriendPost, SubjectType,
+  FriendPost, HeatedRecord, SubjectType,
 } from './types'
 
 // ── Runtime configuration ─────────────────────────────────────────────────────
@@ -1847,26 +1847,23 @@ export async function fetchTrackThreads(
   return out
 }
 
-export async function fetchDivisive(
-  window: 'week' | 'all' = 'all',
-  limit = 10,
-): Promise<DivisiveRecord[]> {
-  const res = await apiFetch(`${BASE()}/discover/divisive?window=${window}&limit=${limit}`)
-  if (!res.ok) throw new Error('Failed to fetch divisive records')
+export async function fetchHeated(limit = 10): Promise<HeatedRecord[]> {
+  const res = await apiFetch(`${BASE()}/discover/heated?limit=${limit}`)
+  if (!res.ok) throw new Error('Failed to fetch heated discussions')
   return ((await res.json()) as Record<string, unknown>[]).map((d) => ({
     subjectKey: d.subject_key as string,
     albumName: d.album_name as string,
     artist: (d.artist as string | null) ?? null,
     albumArtUrl: (d.album_art_url as string | null) ?? null,
+    reviewCount: (d.review_count as number) ?? 0,
+    recentReviews: (d.recent_reviews as number) ?? 0,
     raters: (d.raters as number) ?? 0,
+    meanScore: (d.mean_score as number | null) ?? null,
     spread: (d.spread as number) ?? 0,
-    meanScore: (d.mean_score as number) ?? 0,
-    bangs: (d.bangs as number) ?? 0,
-    middling: (d.middling as number) ?? 0,
-    skips: (d.skips as number) ?? 0,
-    bangPct: (d.bang_pct as number) ?? 0,
-    midPct: (d.mid_pct as number) ?? 0,
-    skipPct: (d.skip_pct as number) ?? 0,
+    controversial: !!d.controversial,
+    loved: !!d.loved,
+    hated: !!d.hated,
+    isNew: !!d.is_new,
   }))
 }
 
