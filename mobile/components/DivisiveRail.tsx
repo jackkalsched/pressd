@@ -26,12 +26,13 @@ export default function DivisiveRail() {
 
   return (
     <View style={styles.section}>
-      <Text style={styles.heading}>Most divisive</Text>
+      <Text style={styles.heading}>MOST DIVISIVE</Text>
       <Text style={styles.sub}>Records pressers can&rsquo;t agree on.</Text>
 
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.rail}
         contentContainerStyle={styles.row}
       >
         {records.map((r) => (
@@ -85,7 +86,7 @@ export default function DivisiveRail() {
             </View>
 
             <Text style={styles.meta}>
-              {r.raters} raters · spread {r.spread.toFixed(2)}
+              {r.raters} {r.raters === 1 ? 'rater' : 'raters'}
             </Text>
           </Pressable>
         ))}
@@ -100,15 +101,16 @@ const CARD_W = 168
 
 const styles = StyleSheet.create({
   section: { marginTop: spacing.xxl },
-  heading: {
-    fontFamily: fonts.display, fontSize: 22, color: colors.ink,
-    paddingHorizontal: spacing.lg,
-  },
-  sub: {
-    fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary,
-    paddingHorizontal: spacing.lg, marginTop: 2,
-  },
+  // Mirrors For You's own sectionLabel/sectionMeta rather than inventing a
+  // heading: this rail sits among that page's sections and has no business
+  // looking like a different kind of thing.
+  heading: { fontFamily: fonts.bodyBold, fontSize: 13, letterSpacing: 0.6, color: colors.ink },
+  sub: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkTertiary, marginTop: 2 },
+  // The page already pads its content, so the rail bleeds back out to the edge
+  // and re-pads itself — the same trick the New & Popular rail uses, so cards
+  // scroll off the screen edge instead of stopping short of it.
   row: { paddingHorizontal: spacing.lg, gap: spacing.md, paddingTop: spacing.lg },
+  rail: { marginHorizontal: -spacing.lg },
   card: { width: CARD_W },
   art: { width: CARD_W, height: CARD_W, borderRadius: radii.md, backgroundColor: colors.inset },
   artFallback: { alignItems: 'center', justifyContent: 'center' },
