@@ -135,19 +135,6 @@ def thread_access(
             " AND status = 'rated' LIMIT 1"), {"u": user_id, "k": subject_key}).first()
         return (True, None) if hit else (False, "rate_album")
 
-    if subject_type == "track":
-        # A skip stores a NULL score, indistinguishable from "not reached yet"
-        # while the album is in progress — but once the album is rated, a NULL
-        # means the user heard the track and chose to skip it, which is a
-        # deliberate act and earns the room. So the album's status answers the
-        # question the song's score cannot.
-        hit = session.execute(_sql(
-            "SELECT 1 FROM song s JOIN album a ON a.id = s.album_id"
-            " WHERE a.user_id = :u AND s.track_id = :t"
-            "   AND (s.score IS NOT NULL OR a.status = 'rated') LIMIT 1"),
-            {"u": user_id, "t": subject_key}).first()
-        return (True, None) if hit else (False, "rate_track")
-
     return (False, "unknown_subject")
 
 

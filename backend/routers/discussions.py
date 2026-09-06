@@ -46,7 +46,7 @@ REPORTS_TO_HIDE = 5
 
 # Artist threads were built and then dropped (PLAN_discussions.md §17); the
 # code that served them is gone rather than left dormant.
-SUBJECT_TYPES = ("album", "track")
+SUBJECT_TYPES = ("album",)
 
 
 # ── Subject resolution ───────────────────────────────────────────────────────
@@ -64,10 +64,6 @@ def _resolve_key(ref: SubjectRef) -> str:
         if not ref.artist or not ref.album:
             raise HTTPException(400, "album threads need artist and album")
         return subject_key_album(ref.artist, ref.album)
-    if ref.subject_type == "track":
-        if ref.track_id is None:
-            raise HTTPException(400, "track threads need track_id")
-        return str(ref.track_id)
     raise HTTPException(400, f"unknown subject_type {ref.subject_type!r}")
 
 
@@ -83,14 +79,9 @@ def _author_scores(session: Session, thread: Thread, user_ids: list[int]) -> dic
     if not user_ids:
         return {}
     ids = tuple(user_ids)
-    if thread.subject_type == "album":
-        sql = ("SELECT user_id, score FROM album WHERE subject_key = :k"
-               " AND status = 'rated' AND score IS NOT NULL AND user_id IN :ids")
-        params = {"k": thread.subject_key, "ids": ids}
-    else:
-        sql = ("SELECT a.user_id, s.score FROM song s JOIN album a ON a.id = s.album_id"
-               " WHERE s.track_id = :k AND s.score IS NOT NULL AND a.user_id IN :ids")
-        params = {"k": thread.subject_key, "ids": ids}
+    sql = ("SELECT user_id, score FROM album WHERE subject_key = :k"
+           " AND status = 'rated' AND score IS NOT NULL AND user_id IN :ids")
+    params = {"k": thread.subject_key, "ids": ids}
     rows = session.execute(_sql(sql), params).fetchall()
     return {r[0]: round(float(r[1]), 2) for r in rows if r[1] is not None}
 

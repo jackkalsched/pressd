@@ -39,16 +39,12 @@ def display_for(session: Session, subject_type: str, key: str) -> tuple[str, str
     Prefers a copy that actually has cover art — the row that happens to sort
     first is often a stub someone imported without one.
     """
-    if subject_type == "album":
-        row = session.execute(_sql(
-            "SELECT album_name, artist, album_art_url FROM album WHERE subject_key = :k"
-            " ORDER BY (album_art_url IS NULL), id LIMIT 1"), {"k": key}).first()
-        return (row[0], row[1], row[2]) if row else (key.split("||")[-1], None, None)
     row = session.execute(_sql(
-        "SELECT s.title, a.album_name, a.album_art_url FROM song s"
-        " JOIN album a ON a.id = s.album_id WHERE s.track_id = :t"
-        " ORDER BY (a.album_art_url IS NULL), s.id LIMIT 1"), {"t": key}).first()
-    return (row[0], row[1], row[2]) if row else (f"track {key}", None, None)
+        "SELECT album_name, artist, album_art_url FROM album WHERE subject_key = :k"
+        " ORDER BY (album_art_url IS NULL), id LIMIT 1"), {"k": key}).first()
+    if row:
+        return (row[0], row[1], row[2])
+    return (key.split("||")[-1], None, None)
 
 
 def get_or_create_thread(session: Session, subject_type: str, key: str) -> Thread:
@@ -269,60 +265,3 @@ def remove_comment_post(session: Session, comment) -> None:
     except Exception as e:  # pragma: no cover
         session.rollback()
         print(f"[remove_comment_post] comment {getattr(comment, 'id', '?')} failed: {e}")
-
-
-def post_track_note(session: Session, user_id: int, song, body: str) -> int | None:
-    """Put a note written during the rating flow into that track's thread.
-
-    One per person per track, replaced on a re-rate rather than stacked — the
-    note is what you think of the song, not a log of every time you said it.
-
-    Returns the post id, or None when there is nothing to attach to: a song
-    whose `track_id` never resolved has no global identity and therefore no
-    room to be in.
-    """
-    body = (body or "").strip()
-    if not getattr(song, "track_id", None):
-        return None
-    try:
-        key = str(song.track_id)
-        existing = session.execute(_sql("""
-            SELECT p.id, p.thread_id FROM post p JOIN thread t ON t.id = p.thread_id
-            WHERE t.subject_type = 'track' AND t.subject_key = :k
-              AND p.user_id = :u AND p.kind = 'track_note'
-            LIMIT 1"""), {"k": key, "u": user_id}).first()
-
-        if not body:
-            if existing:
-                post = session.get(Post, existing[0])
-                if post and not post.deleted_at:
-                    post.deleted_at = datetime.utcnow()
-                    session.add(post)
-                    session.commit()
-                    _recount(session, existing[1])
-            return None
-
-        if existing:
-            post = session.get(Post, existing[0])
-            if post:
-                if post.body != body:
-                    post.body = body
-                    post.edited_at = datetime.utcnow()
-                post.deleted_at = None
-                session.add(post)
-                session.commit()
-                _recount(session, existing[1])
-                return post.id
-            return None
-
-        thread = get_or_create_thread(session, "track", key)
-        post = Post(thread_id=thread.id, user_id=user_id, kind="track_note", body=body)
-        session.add(post)
-        session.commit()
-        session.refresh(post)
-        _recount(session, thread.id)
-        return post.id
-    except Exception as e:  # pragma: no cover
-        session.rollback()
-        print(f"[post_track_note] song {getattr(song, 'id', '?')} failed: {e}")
-        return None

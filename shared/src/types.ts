@@ -200,7 +200,7 @@ export function computeAlbumScore(
 
 // ── Discussions (PLAN_discussions.md §5) ─────────────────────────────────────
 
-export type SubjectType = 'album' | 'track'
+export type SubjectType = 'album'
 export type ThreadSort = 'newest' | 'popular' | 'all'
 
 /** What a subject reference looks like on the wire. The server derives the
@@ -265,7 +265,7 @@ export interface ThreadMeta {
   lastPostAt: string | null
   canRead: boolean
   canPost: boolean
-  /** 'rate_album' | 'rate_track' when locked, else null. */
+  /** 'rate_album' when locked, else null. */
   lockedReason: string | null
 }
 

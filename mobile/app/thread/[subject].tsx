@@ -60,15 +60,13 @@ const SORTS: { key: ThreadSort; label: string }[] = [
 // entering, so the copy has to read as an invitation rather than a refusal.
 const LOCKED_COPY: Record<string, string> = {
   rate_album: 'Finish rating this record to read what people are saying about it.',
-  rate_track: 'Rate this track to open its notes.',
 }
 
 export default function ThreadScreen() {
-  const { subject, artist, album, trackId, title } = useLocalSearchParams<{
+  const { subject, artist, album, title } = useLocalSearchParams<{
     subject: string
     artist?: string
     album?: string
-    trackId?: string
     title?: string
   }>()
   const router = useRouter()
@@ -93,9 +91,8 @@ export default function ThreadScreen() {
     subjectType: (subject as SubjectType) ?? 'album',
     artist: artist || undefined,
     album: album || undefined,
-    trackId: trackId ? Number(trackId) : undefined,
   }
-  const key = threadKey(ref.subjectType, ref.artist, ref.album, ref.trackId)
+  const key = threadKey(ref.subjectType, ref.artist, ref.album)
 
   const { data: meta, isLoading: metaLoading } = useQuery({
     queryKey: key,
@@ -115,7 +112,7 @@ export default function ThreadScreen() {
     queryClient.invalidateQueries({ queryKey: ['thread'] })
     queryClient.invalidateQueries({ queryKey: ['threadPosts'] })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryClient, subject, artist, album, trackId])
+  }, [queryClient, subject, artist, album])
 
   const send = useMutation({
     mutationFn: async () => {

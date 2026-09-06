@@ -97,10 +97,6 @@ const FACTORS = [
 // that putting the phone down mid-album has already saved.
 const AUTOSAVE_DELAY_MS = 1200
 
-// A line about a song, not a review of one. Long enough for a real thought and
-// short enough that nobody writes their album review here by mistake.
-const TRACK_NOTE_MAX = 280
-
 // How far a horizontal drag has to travel before it counts as moving a track.
 // Generous, because the gesture shares a screen with a vertical scroll and a
 // text field, and an accidental advance costs a track you meant to sit with.
@@ -192,11 +188,6 @@ export default function RatingScreen() {
   const isEditing = album?.status === 'rated'
 
   const [drafts, setDrafts] = useState<string[]>([])
-  // A note per track, indexed the same way drafts are so it survives jumping
-  // between tracks. Nothing is published until the album is submitted — a note
-  // on a half-rated record is a spoiler waiting to happen, and the score it
-  // sits next to may still change.
-  const [notes, setNotes] = useState<string[]>([])
   const [review, setReview] = useState('')
   const [skipped, setSkipped] = useState<Set<number>>(new Set())
   const [idx, setIdx] = useState(0)
@@ -217,7 +208,6 @@ export default function RatingScreen() {
   if (album && !initialized) {
     const seeded = sortedSongs.map((s) => (s.score != null ? String(s.score) : ''))
     setDrafts(seeded)
-    setNotes(sortedSongs.map(() => ''))
     setReview(album.review ?? '')
     setFactorText({
       theme: album.theme != null ? String(album.theme) : '',
@@ -254,7 +244,6 @@ export default function RatingScreen() {
     isEP || (factorVals.theme !== null && factorVals.replay !== null &&
              factorVals.production !== null && factorVals.distinctness !== null)
   const canSubmit = songsComplete && factorsComplete
-  const noteCount = notes.filter((n) => n.trim()).length
 
   const previewScore =
     songsComplete && factorsComplete && (isEP || factorStats)
@@ -410,13 +399,7 @@ export default function RatingScreen() {
       // able to cost someone the rating they just spent an album on. One
       // request, because a client-side loop would lose writing outright if the
       // connection dropped halfway through.
-      await publishThoughts(
-        albumId,
-        review.trim() || null,
-        sortedSongs
-          .map((song, i) => ({ songId: song.id, body: (notes[i] ?? '').trim() }))
-          .filter((n) => n.body),
-      ).catch(() => {})
+      await publishThoughts(albumId, review.trim() || null).catch(() => {})
     },
     onSuccess: async () => {
       setError(null)
@@ -650,25 +633,6 @@ export default function RatingScreen() {
                 </Pressable>
               )}
 
-              {/* Optional, and short on purpose: this is a line about the song,
-                  not a review of it. Held per track like the score is, and
-                  published only when the album is submitted. */}
-              <TextInput
-                style={styles.noteInput}
-                value={notes[idx] ?? ''}
-                onChangeText={(t) =>
-                  setNotes((prev) => {
-                    const next = [...prev]
-                    next[idx] = t.slice(0, TRACK_NOTE_MAX)
-                    return next
-                  })
-                }
-                placeholder="Add a note about this track (optional)"
-                placeholderTextColor={colors.inkMuted}
-                multiline
-                maxLength={TRACK_NOTE_MAX}
-              />
-
               <View style={styles.actions}>
                 <Pressable style={styles.listBtn} onPress={() => setListOpen(true)} accessibilityLabel="Jump to a track">
                   <ListMusic size={20} color={colors.inkSecondary} />
@@ -838,9 +802,7 @@ export default function RatingScreen() {
               <Text style={styles.trackTitle}>{album.albumName}</Text>
               <Text style={styles.trackMeta}>
                 {previewScore != null ? `${previewScore.toFixed(2)} · ` : ''}
-                {noteCount > 0
-                  ? `${noteCount} track ${noteCount === 1 ? 'note' : 'notes'} to post`
-                  : 'Optional — skip it if you would rather not'}
+                Optional &mdash; skip it if you would rather not
               </Text>
 
               <TextInput
@@ -1160,11 +1122,6 @@ const styles = StyleSheet.create({
     minHeight: 180, borderRadius: radii.md, backgroundColor: colors.inset,
     paddingHorizontal: spacing.md, paddingVertical: spacing.md, marginTop: spacing.lg,
     fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: colors.ink,
-  },
-  noteInput: {
-    minHeight: 44, maxHeight: 96, borderRadius: radii.md,
-    backgroundColor: colors.inset, paddingHorizontal: spacing.md, paddingVertical: 10,
-    marginTop: spacing.lg, fontFamily: fonts.body, fontSize: 14, color: colors.ink,
   },
   actions: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.sm, marginTop: spacing.xl },
   nextBtn: {

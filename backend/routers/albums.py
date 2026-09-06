@@ -16,7 +16,7 @@ from ..global_rating import invalidate_cache as invalidate_global_ratings
 from ..genres import GENRES, canonical_genre, canonical_subgenre
 from ..trackkeys import _clean_album, match_title, same_album
 from ..carryover import carryover_for_album
-from ..threads import post_track_note, sync_review_post
+from ..threads import sync_review_post
 
 router = APIRouter(prefix="/albums", tags=["albums"])
 
@@ -1130,61 +1130,6 @@ def save_review(
     }
 
 
-@router.get("/{album_id}/track-threads")
-def track_threads(
-    album_id: int,
-    user: PressUser = Depends(current_user),
-    session: Session = Depends(get_session),
-):
-    """Note counts and a one-line preview for every track on the album, in one
-    call (PLAN_discussions.md §10).
-
-    Deliberately not a request per track: a 25-track record would fire 25 on
-    mount, and the tracklist wants all of it at once or none of it.
-
-    `locked` is the same gate `deps.thread_access` applies — a track the viewer
-    has not rated is not previewed, since the preview is the spoiler.
-    """
-    album = session.get(Album, album_id)
-    if not album:
-        raise HTTPException(status_code=404, detail="Album not found")
-    authorize_view(user, album.user_id, session)
-
-    rows = session.execute(_sql("""
-        SELECT s.id, s.track_id,
-               COALESCE(cnt.n, 0) AS notes,
-               top.body,
-               (s.score IS NOT NULL OR :rated) AS unlocked
-        FROM song s
-        LEFT JOIN LATERAL (
-            SELECT COUNT(*) AS n FROM post p JOIN thread t ON t.id = p.thread_id
-            WHERE t.subject_type = 'track' AND t.subject_key = s.track_id::text
-              AND p.deleted_at IS NULL AND p.kind <> 'system'
-        ) cnt ON TRUE
-        LEFT JOIN LATERAL (
-            SELECT p.body FROM post p JOIN thread t ON t.id = p.thread_id
-            WHERE t.subject_type = 'track' AND t.subject_key = s.track_id::text
-              AND p.deleted_at IS NULL AND p.kind <> 'system' AND NOT p.is_spoiler
-            ORDER BY (p.like_count - p.dislike_count) DESC, p.created_at DESC
-            LIMIT 1
-        ) top ON TRUE
-        WHERE s.album_id = :aid AND s.track_id IS NOT NULL
-    """), {"aid": album_id, "rated": album.status == "rated"}).fetchall()
-
-    return {
-        str(r[0]): {
-            "track_id": r[1],
-            "note_count": r[2] or 0,
-            # Withheld behind the gate, not merely dimmed: a preview of what
-            # people said about a track you have not reached is the spoiler the
-            # whole rule exists to prevent.
-            "preview": (r[3] if r[4] else None),
-            "locked": not r[4],
-        }
-        for r in rows
-    }
-
-
 @router.post("/{album_id}/thoughts")
 def publish_thoughts(
     album_id: int,
@@ -1224,21 +1169,7 @@ def publish_thoughts(
         sync_review_post(session, album)
         review_posted = bool(review)
 
-    songs = {s.id: s for s in album.songs}
-    posted, failed = 0, []
-    for note in data.get("notes") or []:
-        song = songs.get(note.get("song_id"))
-        if not song:
-            failed.append(note.get("song_id"))
-            continue
-        if post_track_note(session, user.id, song, note.get("body") or ""):
-            posted += 1
-        elif (note.get("body") or "").strip():
-            # Only a note that had something in it and still did not land counts
-            # as a failure; an empty one was a deletion and did its job.
-            failed.append(song.id)
-
-    return {"review_posted": review_posted, "notes_posted": posted, "failed": failed}
+    return {"review_posted": review_posted}
 
 
 @router.delete("/{album_id}/review")

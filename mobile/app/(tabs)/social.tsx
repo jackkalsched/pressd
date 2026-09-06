@@ -356,15 +356,12 @@ export default function Social() {
               onOpen={() =>
                 router.push({
                   pathname: '/thread/[subject]',
-                  params:
-                    item.thread.subjectType === 'track'
-                      ? { subject: 'track', trackId: item.thread.subjectKey, title: item.thread.title }
-                      : {
-                          subject: item.thread.subjectType,
-                          artist: item.thread.subtitle ?? '',
-                          album: item.thread.title,
-                          title: item.thread.title,
-                        },
+                  params: {
+                    subject: item.thread.subjectType,
+                    artist: item.thread.subtitle ?? '',
+                    album: item.thread.title,
+                    title: item.thread.title,
+                  },
                 })
               }
             />

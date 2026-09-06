@@ -1801,61 +1801,20 @@ export async function flagSpoiler(postId: number): Promise<{ blurred: boolean }>
   return { blurred: !!d.blurred }
 }
 
-/** Publish what was written during the rating flow — the review and any track
- *  notes — in one request. The server fans out to the threads; the client must
- *  not loop, since a dropped connection mid-loop loses writing outright.
- *
- *  Call it *after* the rating has landed. A note is a consequence of a rating,
- *  never a condition of one, and `failed` names anything to offer back. */
+/** Publish the review written during the rating flow. Called *after* the rating
+ *  has landed: a review is a consequence of having rated the record, never a
+ *  condition of one, so a thread refusing it cannot cost someone the rating. */
 export async function publishThoughts(
   albumId: number,
   review: string | null,
-  notes: { songId: number; body: string }[],
-): Promise<{ reviewPosted: boolean; notesPosted: number; failed: number[] }> {
+): Promise<{ reviewPosted: boolean }> {
   const res = await apiFetch(`${BASE()}/albums/${albumId}/thoughts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      review,
-      notes: notes.map((n) => ({ song_id: n.songId, body: n.body })),
-    }),
+    body: JSON.stringify({ review }),
   })
   if (!res.ok) throw new Error('Failed to publish thoughts')
-  const d = await res.json()
-  return {
-    reviewPosted: !!d.review_posted,
-    notesPosted: d.notes_posted ?? 0,
-    failed: (d.failed ?? []) as number[],
-  }
-}
-
-export interface TrackThreadInfo {
-  trackId: number
-  noteCount: number
-  /** Withheld — not merely dimmed — on a track the viewer has not rated: a
-   *  preview of what people said about it is the spoiler the gate exists for. */
-  preview: string | null
-  locked: boolean
-}
-
-/** Note counts and previews for every track on an album, in one call. Never
- *  fetch these per row: a 25-track record would issue 25 requests on mount. */
-export async function fetchTrackThreads(
-  albumId: number,
-): Promise<Record<number, TrackThreadInfo>> {
-  const res = await apiFetch(`${BASE()}/albums/${albumId}/track-threads`)
-  if (!res.ok) throw new Error('Failed to fetch track notes')
-  const d = (await res.json()) as Record<string, Record<string, unknown>>
-  const out: Record<number, TrackThreadInfo> = {}
-  for (const [songId, v] of Object.entries(d)) {
-    out[Number(songId)] = {
-      trackId: v.track_id as number,
-      noteCount: (v.note_count as number) ?? 0,
-      preview: (v.preview as string | null) ?? null,
-      locked: !!v.locked,
-    }
-  }
-  return out
+  return { reviewPosted: !!(await res.json()).review_posted }
 }
 
 export async function fetchHeated(limit = 10): Promise<HeatedRecord[]> {

@@ -56,7 +56,6 @@ export function threadKey(
   subjectType: string,
   artist?: string,
   album?: string,
-  trackId?: number,
 ): (string | number)[] {
-  return ['thread', subjectType, artist ?? '', album ?? '', trackId ?? 0]
+  return ['thread', subjectType, artist ?? '', album ?? '']
 }

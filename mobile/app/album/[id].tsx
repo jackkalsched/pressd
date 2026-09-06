@@ -36,8 +36,6 @@ import {
   saveReview,
   deleteReview,
   toggleLike,
-  fetchTrackThreads,
-  type TrackThreadInfo,
   type CommunityAlbum as CommunityAlbumData,
   type CommunityTrack,
 } from '../../lib/api'
@@ -192,14 +190,6 @@ export default function AlbumDetail() {
   }, [router])
   const queryClient = useQueryClient()
   const { user } = useAuth()
-  // One call for the whole tracklist (PLAN_discussions.md §10). Failure leaves
-  // the tracks readable without notes rather than retrying at the page.
-  const { data: trackNotes } = useQuery({
-    queryKey: ['trackThreads', albumId],
-    queryFn: () => fetchTrackThreads(albumId),
-    enabled: Number.isFinite(albumId),
-    retry: false,
-  })
 
   // Tracklist reveal: rows fade + rise as they cross into view, and each new
   // one that crosses ticks the Taptic engine — the list feels like it's being
@@ -704,8 +694,6 @@ export default function AlbumDetail() {
           <TrackRow
             key={s.id}
             song={s}
-            notes={trackNotes?.[s.id]}
-            artist={album.artist}
             scrollY={scrollY}
             onMeasure={(y) => rowYs.current.set(s.id, y)}
           />
@@ -1170,18 +1158,13 @@ function CommunityAlbum({
  */
 function TrackRow({
   song,
-  notes,
-  artist,
   scrollY,
   onMeasure,
 }: {
   song: Song
-  notes?: TrackThreadInfo
-  artist: string
   scrollY: Animated.Value
   onMeasure: (y: number) => void
 }) {
-  const router = useRouter()
   const [y, setY] = useState<number | null>(null)
   const start = (y ?? 0) - WINDOW_H + 90
   const progress = scrollY.interpolate({
@@ -1217,24 +1200,6 @@ function TrackRow({
           )}
         </View>
 
-        {notes?.locked ? (
-          <Text style={styles.trackNoteLocked}>Notes open when you rate it</Text>
-        ) : notes && notes.noteCount > 0 ? (
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: '/thread/[subject]',
-                params: { subject: 'track', trackId: String(notes.trackId), title: song.title },
-              })
-            }
-            hitSlop={6}
-          >
-            <Text style={styles.trackNotePreview} numberOfLines={1}>
-              <Text style={styles.trackNoteCount}>{notes.noteCount} </Text>
-              {notes.preview ? `“${notes.preview}”` : 'notes on this track'}
-            </Text>
-          </Pressable>
-        ) : null}
       </View>
     </Animated.View>
   )
@@ -1935,11 +1900,6 @@ const styles = StyleSheet.create({
   },
   trackMain: { flex: 1, minWidth: 0 },
   trackTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  trackNotePreview: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary,
-    marginTop: 3, marginLeft: 26 },
-  trackNoteCount: { fontFamily: fonts.bodySemiBold, color: colors.green },
-  trackNoteLocked: { fontFamily: fonts.body, fontSize: 11, color: colors.inkMuted,
-    marginTop: 3, marginLeft: 26 },
   trackNum: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, width: 20 },
   trackTitle: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.ink },
   trackScore: { fontFamily: fonts.bodyBold, fontSize: 15 },
