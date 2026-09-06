@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Stack } from 'expo-router'
+import { Stack, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -50,6 +50,7 @@ const queryClient = new QueryClient({
 
 function RootNavigator() {
   const { user, ready } = useAuth()
+  const router = useRouter()
 
   const [fontsLoaded] = useFonts({
     PlayfairDisplay_400Regular,
@@ -76,8 +77,22 @@ function RootNavigator() {
   useEffect(() => {
     if (!user) return
     syncPushToken().catch(() => {})
-    return attachPushListeners()
-  }, [user])
+    // Tapping a notification should land on the thing it was about. The payload
+    // carries the subject the server resolved, so the app never has to derive
+    // a key from a title it was handed.
+    return attachPushListeners((data) => {
+      if (!data?.subject_type) return
+      router.push({
+        pathname: '/thread/[subject]',
+        params: {
+          subject: data.subject_type,
+          artist: data.artist ?? '',
+          album: data.album ?? '',
+          title: data.title ?? '',
+        },
+      })
+    })
+  }, [user, router])
 
   if (!fontsLoaded || !ready) return null // splash stays up
 

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field as PydField
 from sqlalchemy import text as _sql
 from sqlmodel import Session
@@ -31,6 +31,7 @@ from ..database import get_session
 from ..deps import authorize_thread, current_user, thread_access
 from ..models import Post, PostLike, PostReport, PressUser, Thread
 from ..threads import display_for, get_or_create_thread, thread_summary
+from ..push import send_push, tokens_for_user
 from ..trackkeys import subject_key_album
 from ..threads import SPOILER_FLAGS_TO_BLUR
 
@@ -305,6 +306,7 @@ class NewReply(BaseModel):
 def create_reply(
     post_id: int,
     payload: NewReply,
+    background: BackgroundTasks,
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
@@ -329,6 +331,34 @@ def create_reply(
     session.add_all([root, thread])
     session.commit()
     session.refresh(reply)
+
+    # Someone answered you: the one thing worth interrupting a person for
+    # (PLAN_discussions.md §11). Deliberately not "someone liked your post" or
+    # "new activity in a thread you read" — those are how a music app turns
+    # into a notification you swipe away without reading.
+    #
+    # Tokens are read here, while the session is open; the send runs after the
+    # response so a slow call to Google cannot hold up the reply, and a failed
+    # one cannot fail it.
+    if root.user_id is not None and root.user_id != user.id:
+        tokens = tokens_for_user(session, root.user_id)
+        if tokens:
+            preview = payload.body.strip()
+            background.add_task(
+                send_push, tokens,
+                f"{user.name} replied",
+                preview[:120] + ("…" if len(preview) > 120 else ""),
+                {
+                    # What the app needs to open the room, computed here — a
+                    # client never derives a subject key.
+                    "subject_type": thread.subject_type,
+                    "artist": thread.subtitle or "",
+                    "album": thread.title,
+                    "title": thread.title,
+                    "thread_id": thread.id,
+                    "post_id": reply.id,
+                },
+            )
     return {"id": reply.id, "parent_id": root_id}
 
 

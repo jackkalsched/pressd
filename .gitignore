@@ -68,3 +68,8 @@ tags_backup_*.json
 # send push to every app on the team, it never expires, and Apple lets you
 # download it exactly once.
 *.p8
+
+# Firebase service account private keys. These sign as the project itself —
+# anything holding one can send push to every install and read whatever the
+# service account can reach. Never commit, never ship in a client bundle.
+*firebase-adminsdk*.json
