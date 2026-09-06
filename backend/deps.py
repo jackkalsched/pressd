@@ -148,15 +148,6 @@ def thread_access(
             {"u": user_id, "t": subject_key}).first()
         return (True, None) if hit else (False, "rate_track")
 
-    if subject_type == "artist":
-        # subject_key for an album is "<artist_key>||<clean album>", so the
-        # artist's own key is a prefix match — and an indexed one.
-        hit = session.execute(_sql(
-            "SELECT 1 FROM album WHERE user_id = :u AND status = 'rated'"
-            " AND subject_key LIKE :p LIMIT 1"),
-            {"u": user_id, "p": f"{subject_key}||%"}).first()
-        return (True, None) if hit else (False, "rate_artist")
-
     return (False, "unknown_subject")
 
 

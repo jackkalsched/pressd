@@ -44,13 +44,6 @@ def display_for(session: Session, subject_type: str, key: str) -> tuple[str, str
             "SELECT album_name, artist, album_art_url FROM album WHERE subject_key = :k"
             " ORDER BY (album_art_url IS NULL), id LIMIT 1"), {"k": key}).first()
         return (row[0], row[1], row[2]) if row else (key.split("||")[-1], None, None)
-    if subject_type == "artist":
-        row = session.execute(_sql(
-            "SELECT a.artist, m.image_url FROM album a"
-            " LEFT JOIN artistmeta m ON m.artist = a.artist"
-            " WHERE a.subject_key LIKE :p ORDER BY (m.image_url IS NULL), a.id LIMIT 1"),
-            {"p": f"{key}||%"}).first()
-        return (row[0], None, row[1]) if row else (key, None, None)
     row = session.execute(_sql(
         "SELECT s.title, a.album_name, a.album_art_url FROM song s"
         " JOIN album a ON a.id = s.album_id WHERE s.track_id = :t"

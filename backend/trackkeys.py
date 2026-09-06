@@ -161,8 +161,3 @@ def subject_key_album(artist: str, album_name: str) -> str:
     later without a migration, which is exactly what `album_key` cannot do.
     """
     return f"{artist_key(artist)}||{_clean_album(album_name)}"
-
-
-def subject_key_artist(artist: str) -> str:
-    """Grouping key for a discussion thread about an artist."""
-    return artist_key(artist)

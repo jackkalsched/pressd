@@ -61,7 +61,6 @@ const SORTS: { key: ThreadSort; label: string }[] = [
 const LOCKED_COPY: Record<string, string> = {
   rate_album: 'Finish rating this record to read what people are saying about it.',
   rate_track: 'Rate this track to open its notes.',
-  rate_artist: 'Rate an album by this artist to join the conversation.',
 }
 
 export default function ThreadScreen() {
