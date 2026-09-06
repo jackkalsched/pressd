@@ -9,12 +9,13 @@ from datetime import datetime
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..database import get_session
+from ..push import send_push, tokens_for_user
 from ..deps import current_user, optional_user, authorize_view, auth_response
 from ..models import (
     PressUser,
@@ -705,10 +706,28 @@ def list_friends(
             for u in friends if u]
 
 
+def _notify_accepted(session: Session, background: BackgroundTasks,
+                     accepter: PressUser, requester_id: int) -> None:
+    """Tell whoever asked that they were accepted.
+
+    Two endpoints reach this: accepting outright, and requesting back someone
+    who had already asked, which is the same thing said differently.
+    """
+    tokens = tokens_for_user(session, requester_id)
+    if tokens:
+        background.add_task(
+            send_push, tokens,
+            f"{accepter.name} accepted your friend request!",
+            "Tap to see what they're rating.",
+            {"kind": "friend_request"},
+        )
+
+
 @router.post("/{user_id}/friends")
 def add_friend(
     user_id: int,
     data: dict,
+    background: BackgroundTasks,
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
@@ -734,6 +753,7 @@ def add_friend(
         existing.status = "accepted"
         session.add(existing)
         session.commit()
+        _notify_accepted(session, background, user, friend_id)
         return {"ok": True, "status": "accepted", "already_friends": True}
     session.add(Friendship(user_id_a=a, user_id_b=b, status="pending", requested_by=user.id))
     try:
@@ -741,6 +761,17 @@ def add_friend(
     except IntegrityError:
         # Concurrent request won the race — a row exists, which is fine
         session.rollback()
+    else:
+        # Only on a request that actually landed. The paths above return early
+        # for a duplicate or an existing friendship, so nobody is told twice.
+        tokens = tokens_for_user(session, friend_id)
+        if tokens:
+            background.add_task(
+                send_push, tokens,
+                f"{user.name} wants to be friends!",
+                "Tap to accept and see what they're rating.",
+                {"kind": "friend_request"},
+            )
     return {"ok": True, "status": "pending", "already_friends": False}
 
 
@@ -773,6 +804,7 @@ def list_friend_requests(
 def accept_friend_request(
     user_id: int,
     other_id: int,
+    background: BackgroundTasks,
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
@@ -793,6 +825,7 @@ def accept_friend_request(
     f.status = "accepted"
     session.add(f)
     session.commit()
+    _notify_accepted(session, background, user, other_id)
     return {"ok": True}
 
 

@@ -349,6 +349,7 @@ def create_reply(
                 f"{user.name} replied",
                 preview[:120] + ("…" if len(preview) > 120 else ""),
                 {
+                    "kind": "reply",
                     # What the app needs to open the room, computed here — a
                     # client never derives a subject key.
                     "subject_type": thread.subject_type,

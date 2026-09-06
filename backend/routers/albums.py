@@ -2,7 +2,7 @@ import json
 import re
 from collections import defaultdict
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlmodel import Session, select
 from sqlalchemy import func, text as _sql
 from sqlalchemy.orm import selectinload
@@ -17,6 +17,7 @@ from ..genres import GENRES, canonical_genre, canonical_subgenre
 from ..trackkeys import _clean_album, match_title, same_album
 from ..carryover import carryover_for_album
 from ..threads import sync_review_post
+from ..push import send_push, tokens_for_user
 
 router = APIRouter(prefix="/albums", tags=["albums"])
 
@@ -771,6 +772,7 @@ RECOMMENDATION_NOTE_MAX = 280
 def recommend_album(
     album_id: int,
     data: dict,
+    background: BackgroundTasks,
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
@@ -801,6 +803,19 @@ def recommend_album(
             status_code=409,
             detail="That album has no tracklist yet, so there's nothing to send. Open it once to resolve its tracks, then try again.",
         )
+
+    # One person deliberately sending a record to another — the same test the
+    # reply notification passes. Read here, before either branch returns, since
+    # the send runs after the response and this session will be gone.
+    def notify_recipient() -> None:
+        tokens = tokens_for_user(session, friend_id)
+        if tokens:
+            background.add_task(
+                send_push, tokens,
+                f"{recommender.name} recommended you an album!",
+                "Tap to see what they recommended you.",
+                {"kind": "recommendation"},
+            )
 
     existing = _find_users_copy(session, friend_id, source.album_name, source.artist)
 
@@ -854,6 +869,9 @@ def recommend_album(
             _queue_predictions(existing.id)
         if not existing.genre:
             _queue_genre_tagging(existing.id, existing.artist, existing.album_name, existing.year)
+        # Notified on this branch too: the recipient already owning a copy is an
+        # implementation detail, not something they should have to notice.
+        notify_recipient()
         return {"ok": True, "already_existed": True, "tracks_added": added}
 
     new_album = _clone_album(
@@ -869,6 +887,7 @@ def recommend_album(
     _queue_predictions(new_album.id)
     if not new_album.genre:
         _queue_genre_tagging(new_album.id, new_album.artist, new_album.album_name, new_album.year)
+    notify_recipient()
     return {"ok": True, "already_existed": False}
 
 

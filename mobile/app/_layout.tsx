@@ -77,20 +77,34 @@ function RootNavigator() {
   useEffect(() => {
     if (!user) return
     syncPushToken().catch(() => {})
-    // Tapping a notification should land on the thing it was about. The payload
-    // carries the subject the server resolved, so the app never has to derive
-    // a key from a title it was handed.
+    // Tapping a notification should land on the thing it was about.
+    //
+    // The server names the *event* and the client decides where that goes,
+    // rather than the server sending a path to push. Destinations stay
+    // type-checked against the router here, and a payload can never talk the
+    // app into navigating somewhere it was not built to go.
     return attachPushListeners((data) => {
-      if (!data?.subject_type) return
-      router.push({
-        pathname: '/thread/[subject]',
-        params: {
-          subject: data.subject_type,
-          artist: data.artist ?? '',
-          album: data.album ?? '',
-          title: data.title ?? '',
-        },
-      })
+      switch (data?.kind) {
+        case 'reply':
+          if (!data.subject_type) return
+          router.push({
+            pathname: '/thread/[subject]',
+            params: {
+              subject: data.subject_type,
+              artist: data.artist ?? '',
+              album: data.album ?? '',
+              title: data.title ?? '',
+            },
+          })
+          return
+        // For You, where the recommendation cell is waiting.
+        case 'recommendation':
+          router.push('/(tabs)')
+          return
+        case 'friend_request':
+          router.push('/(tabs)/social')
+          return
+      }
     })
   }, [user, router])
 
