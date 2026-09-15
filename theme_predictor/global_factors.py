@@ -136,7 +136,7 @@ def ensure_global_factors(con, artist: str, album_name: str,
         return existing
 
     from .corpus import load_or_build_corpus
-    from .predictor import LLM_MODEL
+    from .theme_analysis import LLM_MODEL
     from .distinctness_predictor import predict_distinctness
 
     corpus = load_or_build_corpus(album_id or 0, artist, album_name, year, None)

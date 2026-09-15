@@ -563,31 +563,6 @@ def analyze_song_url(
     return {"ok": True, "song_id": song_id, "title": song.title, "bpm": features["bpm"], "key": features["musical_key"]}
 
 
-@router.post("/predict-themes")
-def predict_themes(
-    status: str = "to_listen",
-    album_id: int | None = None,
-    build_only: bool = False,
-    force: bool = False,
-    background_tasks: BackgroundTasks = None,
-):
-    """Run the RAG theme predictor pipeline in the background."""
-    import sys, pathlib
-    sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent))
-    from theme_predictor.run import run_pipeline
-
-    def _run():
-        run_pipeline(target_status=status, album_id=album_id,
-                     build_only=build_only, force_rebuild=force)
-
-    if background_tasks:
-        background_tasks.add_task(_run)
-        return {"status": "started", "target_status": status}
-    else:
-        _run()
-        return {"status": "done"}
-
-
 @router.get("/album-color")
 async def album_color(album: str, artist: str, session: Session = Depends(get_session)):
     """Return dominant color from stored album art URL, falling back to MusicBrainz lookup."""

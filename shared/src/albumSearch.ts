@@ -109,12 +109,7 @@ const VARIOUS_ARTISTS = /^(various artists?|various|soundtrack)$/i
 // famous album from an obscure one with the same name — "Rumours" by the band
 // Rumours scores a perfect title *and* artist match, beating Fleetwood Mac's.
 // Listener counts separate them by four orders of magnitude.
-let POPULARITY_WEIGHT = 2.0
-
-/** Test seam for tuning the weight against recorded search fixtures. */
-export function setPopularityWeight(w: number): void {
-  POPULARITY_WEIGHT = w
-}
+const POPULARITY_WEIGHT = 2.0
 
 /**
  * Listener count → 0–1. Log-scaled: the interesting range spans ~1 to ~5M

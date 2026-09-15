@@ -787,10 +787,13 @@ def similar_artist_comparisons(
     you and Press'd disagree about most.
 
     "Cluster" here means shared canonical genre, ranked by how many subgenres
-    also overlap. genre_clustering.py exists but is an offline UMAP/HDBSCAN pass
-    over Essentia features that was never wired into the app — nothing persists
-    a cluster id, so genre is the closest thing the stored data supports. If
-    that script ever lands in the schema, this is the one place to repoint.
+    also overlap — not the audio clustering. A genre_clustering.py once sat at
+    the repo root doing an offline UMAP/HDBSCAN pass over Essentia features, but
+    it was never wired into the app and was deleted in the September 2026
+    cleanup; nothing persists a cluster id, so genre is the closest thing the
+    stored data supports. worker/artist_clusters.py does fit a real global map,
+    but it is keyed on artist and lives in the nightly worker. If either ever
+    lands in the schema, this is the one place to repoint.
 
     Built from two queries rather than per-artist ones: computing gaps for a
     dozen artists a call at a time meant two round trips each, over the whole
