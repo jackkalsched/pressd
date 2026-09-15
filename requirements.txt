@@ -13,3 +13,9 @@ Pillow==12.1.1
 beautifulsoup4==4.14.3
 pandas==2.3.3
 anthropic>=0.40.0
+# Signs the FCM service-account token in backend/push.py, which main.py reaches
+# through albums/users/discussions at import time — so a missing google-auth is
+# not a broken notification, it is a backend that will not boot. Nothing else
+# pulls it in: routers/auth.py talks to Google over raw httpx, and anthropic
+# declares google-auth only under its `vertex` extra.
+google-auth==2.48.0

@@ -228,14 +228,6 @@ export async function batchRateSongs(items: { id: number; score: number | null }
   if (!res.ok) throw new Error('Batch rate failed')
 }
 
-export async function rateSong(id: number, score: number | null): Promise<Song> {
-  const res = await apiFetch(`${BASE()}/songs/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ score }),
-  })
-  return transformSong(await res.json())
-}
 
 // ── Search / Import ───────────────────────────────────────────────────────────
 
@@ -660,72 +652,6 @@ export async function resolveReleaseByName(
   throw new Error('No match for this release')
 }
 
-export interface AlbumReportSong {
-  title: string
-  track_number: number | null
-  score: number | null
-  is_bang: boolean
-  is_skip: boolean
-}
-
-export interface ArtistStatsSnapshot {
-  avg_song_score: number | null
-  bang_pct: number | null
-  skip_pct: number | null
-  w_song_plus: number | null
-  consistency_plus: number | null
-  percentiles: {
-    avg_song_score: number | null
-    bang_pct: number | null
-    skip_pct: number | null
-    w_song_plus: number | null
-    consistency_plus: number | null
-  }
-}
-
-export interface AlbumReportData {
-  album: {
-    id: number
-    album_name: string
-    artist: string
-    year: number | null
-    score: number | null
-    album_art_url: string | null
-    genre: string | null
-    extra_artists: string[]
-    theme: number | null
-    replay_value: number | null
-    production: number | null
-    distinctness: number | null
-  }
-  songs: AlbumReportSong[]
-  bang_count: number
-  skip_count: number
-  bang_pct: number
-  skip_pct: number
-  avg_bang_pct: number
-  avg_skip_pct: number
-  album_rank: number | null
-  album_rank_of: number
-  all_album_scores: number[]
-  artist_stats_after: ArtistStatsSnapshot
-  artist_stats_before: ArtistStatsSnapshot
-}
-
-export async function fetchAlbumReport(albumId: number): Promise<AlbumReportData> {
-  const res = await apiFetch(`${BASE()}/albums/${albumId}/report`)
-  if (!res.ok) throw new Error('Report fetch failed')
-  return res.json()
-}
-
-export async function analyzeAudio(albumId: number): Promise<{ analyzed: number; tracks: { id: number; bpm?: number; musical_key?: string; loudness_db?: number; error?: string }[] }> {
-  const res = await apiFetch(`${BASE()}/albums/${albumId}/analyze-audio`, { method: 'POST' })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error((err as { detail?: string }).detail ?? 'Audio analysis failed')
-  }
-  return res.json()
-}
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
@@ -766,21 +692,6 @@ export async function fetchFactorWeights(userId: number): Promise<FactorWeightsR
   return res.json()
 }
 
-export async function updateFactorWeights(
-  userId: number,
-  points: FactorPoints,
-): Promise<{ points: FactorPoints; recomputed: number }> {
-  const res = await apiFetch(`${BASE()}/users/${userId}/factor-weights`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(points),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error((err as { detail?: string }).detail ?? 'Failed to save scoring weights')
-  }
-  return res.json()
-}
 
 export async function fetchSummary(userId = 1): Promise<Summary> {
   const res = await apiFetch(`${BASE()}/stats/summary?user_id=${userId}`)
@@ -864,16 +775,6 @@ export async function fetchGenreScores(userId = 1): Promise<GenreScores[]> {
   return res.json()
 }
 
-export interface YearEntry {
-  album_name: string
-  artist: string
-  score: number
-}
-
-export async function fetchYearByYear(userId = 1): Promise<Record<string, YearEntry[]>> {
-  const res = await apiFetch(`${BASE()}/stats/year-by-year?user_id=${userId}`)
-  return res.json()
-}
 
 export interface ArtistPercentiles {
   avg_song_score: number | null
@@ -1584,11 +1485,6 @@ export async function toggleLike(userId: number, albumId: number): Promise<{ lik
   return res.json()
 }
 
-export async function fetchAnalysis(userId: number): Promise<{ insights: string[] }> {
-  const res = await apiFetch(`${BASE()}/stats/analysis?user_id=${userId}`)
-  if (!res.ok) throw new Error('Failed to fetch analysis')
-  return res.json()
-}
 
 /** Bind this device's push token to the signed-in user.
  *
@@ -1752,19 +1648,6 @@ export async function replyToPost(postId: number, body: string): Promise<{ id: n
   return res.json()
 }
 
-export async function editPost(postId: number, body: string): Promise<void> {
-  const res = await apiFetch(`${BASE()}/posts/${postId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ body }),
-  })
-  if (!res.ok) throw new Error('Failed to edit post')
-}
-
-export async function deletePost(postId: number): Promise<void> {
-  const res = await apiFetch(`${BASE()}/posts/${postId}`, { method: 'DELETE' })
-  if (!res.ok) throw new Error('Failed to delete post')
-}
 
 /** Vote on a post: 1 up, -1 down. Sending the vote already held clears it, so
  *  the caller can pass the button that was tapped and let the server decide. */

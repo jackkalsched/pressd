@@ -54,7 +54,7 @@ def backfill(limit: int | None = None, dry_run: bool = False,
     from theme_predictor.global_factors import (
         albums_missing_factors, analyze_album, store_global_factors,
         _anchor_examples, _corpora_for)
-    from theme_predictor.predictor import LLM_MODEL
+    from theme_predictor.theme_analysis import LLM_MODEL
     from backend.trackkeys import album_key
 
     with engine.connect() as con:
