@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Loader2, Pencil, Trash2, MessageCircle, Star, Music, BookOpen, Users, Share2 } from 'lucide-react'
-import { fetchAlbum, deleteAlbum, fetchFriendRatings, importAlbum, saveReview, deleteReview } from '../api'
+import { fetchAlbum, deleteAlbum, fetchFriendRatings, importAlbum, saveReview, deleteReview, fetchAlbumColor } from '../api'
 import { useUser } from '../context/UserContext'
 import { BANG_THRESHOLD, SKIP_THRESHOLD, songScoreColor } from '../types'
 import type { Album } from '../types'
@@ -17,7 +17,6 @@ function shareRatingViaIMessage(albumName: string, artist: string, score: number
   window.location.href = `sms:?body=${encodeURIComponent(msg)}`
 }
 
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 function accentToPageGradient(hsl: string | null): string {
   if (!hsl) return '#faf8f5'
@@ -29,13 +28,7 @@ function accentToPageGradient(hsl: string | null): string {
 function useAlbumColors(album: string | null, artist: string | null): { color: string | null; color2: string | null } {
   const { data } = useQuery({
     queryKey: ['album-color', album, artist],
-    queryFn: async () => {
-      const res = await fetch(
-        `${BASE}/util/album-color?album=${encodeURIComponent(album!)}&artist=${encodeURIComponent(artist!)}`,
-      )
-      const json = await res.json() as { color: string | null; color2: string | null }
-      return { color: json.color ?? null, color2: json.color2 ?? null }
-    },
+    queryFn: () => fetchAlbumColor(album!, artist!),
     enabled: !!album && !!artist,
     staleTime: Infinity,
   })

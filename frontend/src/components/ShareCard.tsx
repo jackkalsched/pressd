@@ -2,12 +2,10 @@ import { useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { X, Download, Loader2, Star } from 'lucide-react'
 import html2canvas from 'html2canvas'
-import { fetchAlbums } from '../api'
+import { fetchAlbums, fetchAlbumColor } from '../api'
 import { BANG_THRESHOLD, SKIP_THRESHOLD, pickTopSong, songScoreColor } from '../types'
 import type { Album } from '../types'
 import { useUser } from '../context/UserContext'
-
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 // palette (mirrors the app's warm cream + forest-green system)
 const INK = '#1c1917'
@@ -31,10 +29,7 @@ function accentGradient(hsl: string | null): string {
 function useAlbumColor(album: string | null, artist: string | null) {
   const { data } = useQuery({
     queryKey: ['album-color', album, artist],
-    queryFn: async () => {
-      const res = await fetch(`${BASE}/util/album-color?album=${encodeURIComponent(album!)}&artist=${encodeURIComponent(artist!)}`)
-      return (await res.json()) as { color: string | null; color2: string | null }
-    },
+    queryFn: () => fetchAlbumColor(album!, artist!),
     enabled: !!album && !!artist,
     staleTime: 60 * 60 * 1000,
   })

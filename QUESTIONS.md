@@ -95,21 +95,28 @@ with its fetcher. See Q15: its backend endpoint is still there.
 
 ## Open
 
-### Q7. `/util/*` has no auth — 10 endpoints
-No router uses `dependencies=`, and no `/util/*` endpoint takes `current_user`.
-Sharpest: `POST /util/analyze-song?song_id=&youtube_url=` (`util.py:519`) passes a
-caller-supplied URL to `yt-dlp` as argv and writes audio features onto **any**
-`song_id`. Also open: `/util/backfill-genres` and `/backfill-genres-mb` (mutate genre
-columns catalog-wide from iTunes and MusicBrainz respectively), `/util/analyze-all`,
-`/util/download-models`, and the two image proxies. Plus
-`POST /aoty/artist/{name}/refresh`, a mutating force-refresh.
+### Q7. `/util/*` had no auth — **FIXED**
+All ten `/util/*` endpoints were reachable by anyone who knew the URL. The sharpest,
+`POST /util/analyze-song`, passed a caller-supplied URL to `yt-dlp` and wrote the
+resulting features onto whatever `song_id` came with it; the two genre backfills
+rewrote genre across the whole catalog.
 
-Cheapest fix is `dependencies=[Depends(current_user)]` on `util.py:23`. **One caveat:**
-three `/util` endpoints are called by clients — `album-color`, `artist-image`,
-`backfill-covers` — and two of those call sites use a bare `fetch` with no token
-(`frontend/src/components/ShareCard.tsx:35`, `frontend/src/pages/AlbumDetail.tsx:33`).
-They must move to `fetchAlbumColor` (which already exists and uses `apiFetch`) in the
-same change. **Want me to do that?**
+Fixed by declaring the requirement once on the router
+(`backend/routers/util.py:31-45`) rather than on ten functions, since the original gap
+was endpoints being written without it. The two web call sites that fetched
+`/util/album-color` with a bare `fetch` and no token now use `fetchAlbumColor`, which
+goes through `apiFetch`; `frontend/src/pages/AlbumDetail.tsx` lost its now-unused
+`BASE` constant, and there is no longer a bare `fetch` anywhere in the web app.
+
+Verified by driving the app over ASGI: all ten answer **401** with no token and with a
+forged one, `/health` still answers 200, and `/public/charts` still reaches past auth.
+
+**Residual, deliberately not fixed:** this keeps strangers out, not signed-in users.
+Any of your users could still call `/util/backfill-genres?override=true`. Closing that
+means either an admin flag on `PressUser`, which is a schema change, or moving the
+seven maintenance routes out of HTTP and running them like `./run_audio_ingest.sh`.
+The second is the better answer and is the one I'd suggest, but it is a bigger change
+than you asked for.
 
 ### Q8. Three album-grouping keys disagree
 `trackkeys.py`'s header says every cross-user grouping must go through it; the charts

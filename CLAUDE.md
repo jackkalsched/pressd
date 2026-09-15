@@ -272,10 +272,17 @@ the recipient's shell copy is missing, but leaves anything they've engaged with 
 **`backend/routers/public.py`** — the **intended** only unauthenticated surface
 (marketing charts). It deliberately duplicates rather than shares `discover.py`'s charts:
 no auth, aggregates only, never who rated what. Nothing per-user may ever go there.
-(In practice 17 other endpoints are also unguarded — §10 P11.)
+Seven other endpoints are deliberately open: account creation, invite lookup, avatar
+bytes (served into an `<img>`, which cannot carry a header), and the four `/search/*`
+proxies.
 
-**`backend/routers/util.py`** (714) — backfills, bulk audio analysis, album colour,
-artist images. Effectively a maintenance console. Currently unauthenticated.
+**`backend/routers/util.py`** (703) — backfills, bulk audio analysis, album colour,
+artist images. Effectively a maintenance console, and it reads like one: these began
+as scripts run from a laptop. The whole router now requires a signed-in caller
+(`util.py:31-45`), declared once on the `APIRouter` rather than per-endpoint, because
+the original gap was endpoints being added without the dependency. Three of its ten
+routes are used by the apps in normal running: `album-color`, `artist-image` and
+`backfill-covers`.
 
 **`shared/src/albumSearch.ts`** — client-side multi-source ranker. Each source orders
 results its own way and those orders aren't comparable (iTunes ranks *Blonde* as the
@@ -503,7 +510,7 @@ Current → risk → cheapest fix. None of these are implemented.
 |---|---|---|---|
 | **P1** | `PATCH /albums/{id}` calls `recompute_all_scores`, which loops **every user** and reloads every rated album and song — synchronously, on the request that finishes a rating ([albums.py:237](backend/routers/albums.py#L237)) | **HIGH** — O(total corpus) per rating; degrades quadratically in total activity | recompute the rater's own albums inline (`recompute_user_scores` already takes a `prior`), move the full pass to the worker |
 | **P2** | `/discover/charts` selects every rated album, then filters and groups twice in Python, uncached (`discover.py:371`) | **HIGH** — the Charts tab, both platforms | memoise the response on its filter tuple with the existing 60s TTL + invalidation hook |
-| **P11** | **All 10 `/util/*` endpoints have no auth.** `POST /util/analyze-song` hands a caller-supplied URL to `yt-dlp` as argv and writes features onto any `song_id` (`util.py:519`); the two `backfill-genres` endpoints rewrite genre across the whole catalog (`util.py:118`, `:215`) | **HIGH** | `dependencies=[Depends(current_user)]` on `util.py:23` — but two web call sites use a bare `fetch` with no token and must move to `fetchAlbumColor` in the same change |
+| **P11** | ~~All 10 `/util/*` endpoints had no auth.~~ **Fixed.** The router now carries `dependencies=[Depends(current_user)]` (`util.py:31-45`) and the two web call sites that used a bare `fetch` were moved onto `fetchAlbumColor`. Verified: all ten answer 401 without a token. A signed-in user can still call `/backfill-genres?override=true` | ~~HIGH~~ → LOW | residual: move the seven maintenance routes out of HTTP entirely, beside `run_audio_ingest.sh` |
 | **P8** | Engine allows 15 connections *per process*; Supabase's session pooler allows 15 *per project* (`database.py:28` vs `backfill_factors.py:35`) | **HIGH** at scale | confirm pooler mode; size `pool_size` against the real limit ÷ instances |
 | **P5** | All hot caches are per-process. `invalidate_cache()` clears one process's board | **HIGH** the moment there's a 2nd instance | move the board + new-releases to Postgres before scaling out; `ArtistMeta` is the precedent |
 | **P3** | `/discover/picks` runs a `NOT EXISTS` on `lower(trim(…))` with no functional index (`discover.py:504-509`) | MEDIUM — `albumprediction` grows as users × catalog | functional index, or store `album_key` on `Album` |

@@ -17,10 +17,32 @@ from PIL import Image
 from sqlmodel import Session, select
 
 from ..database import engine, get_session
+from ..deps import current_user
 from ..models import Album, ArtistMeta, Song, SongAudioFeatures
 from ..trackkeys import same_album
 
-router = APIRouter(prefix="/util", tags=["util"])
+# Signed in, for every route on this router.
+#
+# These began as maintenance tools run from a laptop, so none of them asked who
+# was calling — and they went public with the rest of the backend. Until this
+# they could be driven by anyone who knew the URL: /analyze-song handed a
+# caller-supplied URL to yt-dlp and wrote the resulting features onto whatever
+# song id came with it, and either backfill rewrote genre across the whole
+# catalog.
+#
+# Declared on the router rather than per-endpoint, deliberately: the gap here
+# was one endpoint at a time being written without the dependency, and a rule
+# that has to be remembered ten times is the rule that was already missed.
+#
+# A floor, not a lock: it keeps strangers out, but it does not stop a signed-in
+# user calling /backfill-genres?override=true. The seven maintenance routes have
+# no business being HTTP endpoints at all and belong beside run_audio_ingest.sh
+# — see CLAUDE.md §11.
+router = APIRouter(
+    prefix="/util",
+    tags=["util"],
+    dependencies=[Depends(current_user)],
+)
 
 MB_HEADERS = {"User-Agent": "Pressd/1.0 (music-rating-app)"}
 
