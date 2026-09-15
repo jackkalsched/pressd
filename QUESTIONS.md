@@ -100,7 +100,7 @@ No router uses `dependencies=`, and no `/util/*` endpoint takes `current_user`.
 Sharpest: `POST /util/analyze-song?song_id=&youtube_url=` (`util.py:519`) passes a
 caller-supplied URL to `yt-dlp` as argv and writes audio features onto **any**
 `song_id`. Also open: `/util/backfill-genres` and `/backfill-genres-mb` (mutate genre
-columns catalog-wide **and spend Anthropic credit**), `/util/analyze-all`,
+columns catalog-wide from iTunes and MusicBrainz respectively), `/util/analyze-all`,
 `/util/download-models`, and the two image proxies. Plus
 `POST /aoty/artist/{name}/refresh`, a mutating force-refresh.
 

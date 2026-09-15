@@ -161,8 +161,8 @@ threadpool slot, 500 on any API error, and reachable for a **friend's** library 
 
 Full detail in `01-foundation-auth-data.md`. 11 mutating/expensive endpoints, zero
 guards. `POST /util/analyze-song` (`util.py:519`) passes a caller-supplied URL to
-`yt-dlp` as argv and writes features onto any `song_id`. `/util/backfill-genres` spends
-Anthropic credit.
+`yt-dlp` as argv and writes features onto any `song_id`. `/util/backfill-genres` and
+`/backfill-genres-mb` rewrite genre across the whole catalog.
 
 **Cheapest intervention.** `APIRouter(prefix="/util", dependencies=[Depends(current_user)])`
 at `util.py:23`. **One caveat:** three `/util` endpoints are called by clients —

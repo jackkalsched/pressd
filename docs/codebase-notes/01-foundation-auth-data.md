@@ -140,8 +140,10 @@ routes and **not one takes `current_user`**:
   so not direct RCE, but yt-dlp accepts many URL schemes.
 - `POST /util/analyze-all` (`:471`) kicks off a bulk background job over every album with
   a given status; `.../abort` and `.../status` are equally open.
-- `POST /util/backfill-genres` (`:118`) and `/backfill-genres-mb` (`:215`) mutate genre
-  columns across the catalog and call the Anthropic API — **billable, by anyone**.
+- `POST /util/backfill-genres` (`:118`) and `/backfill-genres-mb` (`:215`) rewrite the
+  genre columns across the whole catalog, from iTunes and MusicBrainz respectively.
+  With `?override=true` they replace values that are already correct. No LLM spend —
+  the Claude genre tagger lives in `albums.py`, not here.
 - `POST /util/download-models` (`:265`) triggers a multi-megabyte download.
 - `GET /util/album-color` (`:591`) and `/util/artist-image` (`:682`) proxy image fetches.
 
