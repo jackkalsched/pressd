@@ -1,15 +1,20 @@
 """
 New-release discovery.
 
-`/discover/new-releases` returns a cached list of recent album releases sourced
-from ListenBrainz's fresh-releases feed, each resolved to a Deezer album so the
-existing import flow (`/discover/deezer/{id}`) can add it to a library or open
-it in the rating screen. Falls back to Deezer's editorial/chart feed when
-ListenBrainz is unavailable.
+`/discover/new-releases` returns a cached list of recent album releases, each
+resolved to a Deezer album so the existing import flow (`/discover/deezer/{id}`)
+can add it to a library or open it in the rating screen. Sources, in order:
+albumoftheyear.org's this-week listing, ListenBrainz's fresh-releases feed,
+Deezer's editorial releases, then Deezer's album chart.
+
+The list is held in two places. A module-level dict answers instantly; a row in
+`cachedfeed` survives the process, so a deploy or a restart reads the last good
+list back instead of refetching it from four services.
 """
 import asyncio
+import json
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,7 +25,7 @@ from ..database import get_session
 from ..deps import current_user
 from ..global_rating import compute_global_ratings, is_single
 from ..scoring import BANG_THRESHOLD, SKIP_THRESHOLD
-from ..models import Album, PressUser
+from ..models import Album, CachedFeed, PressUser
 from ..trackkeys import same_album
 from ..aoty_releases import AOTY_THIS_WEEK, AOTY_UA, parse_releases
 
@@ -30,7 +35,9 @@ DEEZER_BASE = "https://api.deezer.com"
 LISTENBRAINZ_FRESH = "https://api.listenbrainz.org/1/explore/fresh-releases/"
 LB_UA = "Pressd/1.0 (https://www.pressdmusic.com)"
 CACHE_TTL = 6 * 3600  # releases move slowly; refresh a few times a day
+# The fast path. models.CachedFeed, under _FEED_KEY, is the copy that survives.
 _cache: dict = {"releases": None, "expires": 0.0}
+_FEED_KEY = "new_releases"
 
 
 def _cover(a: dict) -> str | None:
@@ -117,9 +124,14 @@ async def _aoty_this_week(client: httpx.AsyncClient) -> list[dict]:
     fetch; returns [] on any failure so the caller falls back."""
     try:
         resp = await client.get(AOTY_THIS_WEEK, headers={"User-Agent": AOTY_UA})
-    except httpx.HTTPError:
+    except httpx.HTTPError as e:
+        print(f"[new-releases] AOTY unreachable, falling back: {e}")
         return []
     if not resp.is_success:
+        # Logged because it used to be silent. AOTY is the primary source, and a
+        # 403 from its bot protection looked exactly like a quiet week — the
+        # feed would run on its fallback indefinitely with nothing in the logs.
+        print(f"[new-releases] AOTY answered HTTP {resp.status_code}, falling back")
         return []
     try:
         return parse_releases(resp.text)
@@ -170,15 +182,46 @@ async def _deezer_editorial(client: httpx.AsyncClient) -> list[dict]:
     return out
 
 
-@router.get("/new-releases")
-async def new_releases(
-    limit: int = Query(12, ge=1, le=30),
-    user: PressUser = Depends(current_user),
-):
-    now = time.monotonic()
-    if _cache["releases"] and _cache["expires"] > now:  # only serve a non-empty cache
-        return _cache["releases"][:limit]
+def _read_stored_releases(session: Session) -> tuple[list[dict], float] | None:
+    """(releases, age in seconds) from the stored copy, or None.
 
+    Never raises. The stored copy is an optimisation over a live fetch, so a
+    database hiccup here should cost one slow request, not a failed one.
+    """
+    try:
+        row = session.get(CachedFeed, _FEED_KEY)
+        if row is None:
+            return None
+        releases = json.loads(row.payload_json)
+        if not releases:
+            return None
+        # Clamped: fetched_at was stamped by whichever process wrote it, and a
+        # clock behind this one must not read as a list from the future.
+        return releases, max(0.0, (datetime.utcnow() - row.fetched_at).total_seconds())
+    except Exception as e:
+        session.rollback()
+        print(f"[new-releases] stored copy unreadable, fetching live: {e}")
+        return None
+
+
+def _write_stored_releases(session: Session, releases: list[dict]) -> None:
+    """Replace the stored copy. Never raises, for the same reason — and two
+    processes refreshing at once is harmless: the loser's insert conflicts on
+    the key, is rolled back, and the winner's identical list stands."""
+    try:
+        row = session.get(CachedFeed, _FEED_KEY) or CachedFeed(key=_FEED_KEY, payload_json="")
+        row.payload_json = json.dumps(releases)
+        row.fetched_at = datetime.utcnow()
+        session.add(row)
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"[new-releases] could not store fetched releases: {e}")
+
+
+async def _fetch_releases(limit: int) -> list[dict]:
+    """Assemble the list live from the outside sources. Never returns an empty
+    list — raises 502 instead — so nothing empty is ever cached or stored."""
     releases: list[dict] = []
     async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
         sem = asyncio.Semaphore(10)  # keep Deezer calls under its rate limit
@@ -249,9 +292,32 @@ async def new_releases(
             if not releases:
                 raise HTTPException(status_code=502, detail="Could not load new releases")
 
-    if releases:  # never cache an empty result — retry on the next request
-        _cache["releases"] = releases
-        _cache["expires"] = now + CACHE_TTL
+    return releases
+
+
+@router.get("/new-releases")
+async def new_releases(
+    limit: int = Query(12, ge=1, le=30),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    now = time.monotonic()
+    if _cache["releases"] and _cache["expires"] > now:  # only serve a non-empty cache
+        return _cache["releases"][:limit]
+
+    # A fresh process finds the list the last one paid for. It inherits the
+    # stored copy's remaining lifetime rather than starting the clock again, so
+    # restarting can never stretch a list past CACHE_TTL.
+    stored = _read_stored_releases(session)
+    if stored is not None:
+        releases, age = stored
+        if age < CACHE_TTL:
+            _cache["releases"], _cache["expires"] = releases, now + (CACHE_TTL - age)
+            return releases[:limit]
+
+    releases = await _fetch_releases(limit)
+    _cache["releases"], _cache["expires"] = releases, now + CACHE_TTL
+    _write_stored_releases(session, releases)
     return releases[:limit]
 
 

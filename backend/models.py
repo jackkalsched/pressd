@@ -433,6 +433,32 @@ class ArtistMeta(SQLModel, table=True):
     image_checked_at: Optional[datetime] = None
 
 
+class CachedFeed(SQLModel, table=True):
+    """The last good copy of a feed assembled from outside services, kept so it
+    outlives the process that fetched it.
+
+    New releases are the reason it exists. The list used to live only in a
+    module-level dict, so every deploy and every restart emptied it, and the
+    next person to open For You waited on ~25 outbound calls — about 4.5s
+    measured, bounded only by a 20s timeout — for a list that changes a few
+    times a day. Reading this row back costs one primary-key lookup.
+
+    Keyed by feed name rather than shaped around releases, so the next feed
+    that wants the same treatment is a new key, not a new table. The payload is
+    stored as the endpoint returns it; nothing queries inside it.
+
+    Not a cache for anything invalidated on write. The global ratings board is
+    thrown away whenever anyone rates a song, so a stored copy would be rebuilt
+    as often as the in-memory one and read more slowly — it stays in memory.
+
+    A new table, so create_all in init_db builds it on existing databases too;
+    no migration string is needed.
+    """
+    key: str = Field(primary_key=True)
+    payload_json: str
+    fetched_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class PushToken(SQLModel, table=True):
     """One device's FCM registration token.
 
