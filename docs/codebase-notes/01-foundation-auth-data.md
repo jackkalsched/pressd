@@ -129,7 +129,7 @@ picture is the whole picture.
 | `GET /aoty/artist/{name}`, `POST .../refresh` | — | Discogs proxy + **mutating** force-refresh, unauthenticated |
 | **all 11 `/util/*`** | — | see below |
 
-### `/util/*` is an unauthenticated admin console
+### `/util/*` was an unauthenticated admin console (FIXED — see 10-performance.md P11)
 
 This is the finding with the sharpest edge. `backend/routers/util.py` registers 11
 routes and **not one takes `current_user`**:
@@ -147,5 +147,8 @@ routes and **not one takes `current_user`**:
 - `POST /util/download-models` (`:265`) triggers a multi-megabyte download.
 - `GET /util/album-color` (`:591`) and `/util/artist-image` (`:682`) proxy image fetches.
 
-The root `CLAUDE.md` asserts "`routers/public.py` is the only unauthenticated surface."
-That is not true of this tree. QUESTIONS Q7.
+At audit time the root `CLAUDE.md` asserted "`routers/public.py` is the only
+unauthenticated surface", which was not true of this tree. The router now carries
+`dependencies=[Depends(current_user)]`, so the claim holds again for everything except
+the seven endpoints that are open on purpose: account creation, invite lookup, avatar
+bytes, and the four `/search/*` proxies.

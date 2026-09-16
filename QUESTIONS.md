@@ -70,6 +70,28 @@ now carries a short "if you add analytics, here are the seams" section.
 that file, so I fixed the comment: it now says the script was removed, and points at
 `worker/artist_clusters.py` as the real global map for anyone who comes looking.
 
+### Q12. Stale `discover.py` docstring — **FIXED**
+The module docstring named ListenBrainz as the primary new-releases source; AOTY is.
+Rewritten while persisting the feed, since the docstring also describes the caching.
+
+### New releases survive restarts — **DONE**
+Decision: persist new releases, leave the ratings board in memory. The list now also
+lives in a `cachedfeed` row (`backend/models.py:436`). A fresh process reads it back
+and inherits its remaining lifetime instead of refetching from four services. Reads and
+writes of the stored copy never raise. Tested on a throwaway SQLite database against
+cold start, restart, inherited expiry, a stale copy, clock skew, an unreachable
+database and every source down; a real fetch took 9.9s cold and 0.00s after a
+simulated restart.
+
+### P1: a rating no longer rescores the whole userbase — **DONE**
+The rating request rescores only the rater's library, the nightly job rescores everyone,
+and the shared prior now reads four columns instead of whole album rows. Before shipping,
+drift was measured read-only on 544 real rated albums: 20 sampled ratings moved the
+most-affected album by about 0.01 and the average album by 0.0004, and the nightly run
+resets it. Tested on synthetic databases: the rater's scores match the old full rescore
+exactly, nobody else is touched until the nightly run, the nightly run then matches the
+old path exactly for everyone, and `--user N` touches only user N.
+
 ### Q6. Genre classifier weights — **confirmed**
 `POST /util/download-models` fetches them at runtime into the gitignored
 `backend/models/`. Documented that way.
@@ -95,21 +117,28 @@ with its fetcher. See Q15: its backend endpoint is still there.
 
 ## Open
 
-### Q7. `/util/*` has no auth — 10 endpoints
-No router uses `dependencies=`, and no `/util/*` endpoint takes `current_user`.
-Sharpest: `POST /util/analyze-song?song_id=&youtube_url=` (`util.py:519`) passes a
-caller-supplied URL to `yt-dlp` as argv and writes audio features onto **any**
-`song_id`. Also open: `/util/backfill-genres` and `/backfill-genres-mb` (mutate genre
-columns catalog-wide from iTunes and MusicBrainz respectively), `/util/analyze-all`,
-`/util/download-models`, and the two image proxies. Plus
-`POST /aoty/artist/{name}/refresh`, a mutating force-refresh.
+### Q7. `/util/*` had no auth — **FIXED**
+All ten `/util/*` endpoints were reachable by anyone who knew the URL. The sharpest,
+`POST /util/analyze-song`, passed a caller-supplied URL to `yt-dlp` and wrote the
+resulting features onto whatever `song_id` came with it; the two genre backfills
+rewrote genre across the whole catalog.
 
-Cheapest fix is `dependencies=[Depends(current_user)]` on `util.py:23`. **One caveat:**
-three `/util` endpoints are called by clients — `album-color`, `artist-image`,
-`backfill-covers` — and two of those call sites use a bare `fetch` with no token
-(`frontend/src/components/ShareCard.tsx:35`, `frontend/src/pages/AlbumDetail.tsx:33`).
-They must move to `fetchAlbumColor` (which already exists and uses `apiFetch`) in the
-same change. **Want me to do that?**
+Fixed by declaring the requirement once on the router
+(`backend/routers/util.py:31-45`) rather than on ten functions, since the original gap
+was endpoints being written without it. The two web call sites that fetched
+`/util/album-color` with a bare `fetch` and no token now use `fetchAlbumColor`, which
+goes through `apiFetch`; `frontend/src/pages/AlbumDetail.tsx` lost its now-unused
+`BASE` constant, and there is no longer a bare `fetch` anywhere in the web app.
+
+Verified by driving the app over ASGI: all ten answer **401** with no token and with a
+forged one, `/health` still answers 200, and `/public/charts` still reaches past auth.
+
+**Residual, deliberately not fixed:** this keeps strangers out, not signed-in users.
+Any of your users could still call `/util/backfill-genres?override=true`. Closing that
+means either an admin flag on `PressUser`, which is a schema change, or moving the
+seven maintenance routes out of HTTP and running them like `./run_audio_ingest.sh`.
+The second is the better answer and is the one I'd suggest, but it is a bigger change
+than you asked for.
 
 ### Q8. Three album-grouping keys disagree
 `trackkeys.py`'s header says every cross-user grouping must go through it; the charts
@@ -138,7 +167,7 @@ does neither — safe today only because `updateAlbum` always follows it.
 Keep the endpoint for an editing path you plan to wire up, or remove it?
 
 ### Q11. Confirm the web service is *meant* not to re-predict
-`albums.py:241` fires `_queue_song_repredictions` on every rating. It spawns a thread
+`albums.py:249` fires `_queue_song_repredictions` on every rating. It spawns a thread
 that imports `song_score_model`, which imports `sklearn` and `scipy` unguarded at
 module level — neither is in `requirements.txt`. So it always raises, and the bare
 `except` prints and drops it. `_queue_predictions` guards its import, so its theme and
@@ -147,11 +176,6 @@ distinctness stages still run and only the song-model stage no-ops.
 **My guess:** intended after the worker split, and the web copy is a leftover. Confirm
 and I will document it as designed rather than as a bug — or remove the dead call.
 
-### Q12. Fix the stale `discover.py` docstring?
-`discover.py:1-9` says new releases come from ListenBrainz with a Deezer fallback. The
-real chain is **AOTY scrape → ListenBrainz → Deezer editorial → Deezer chart → 502**.
-One-line fix, but it is application code.
-
 ### Q13. Duplicate artist normalizer
 `util.py:613` defines a local `_artist_key` doing what `trackkeys.artist_key` does —
 strip diacritics, lowercase, `&`→`and` — differing only in also deleting spaces.
@@ -159,10 +183,26 @@ Probably deliberate for exact-matching Deezer hits, but undocumented. Intentiona
 
 ### Q15. `/albums/{id}/report` is now a dead endpoint
 Its only consumer was `RatingReport.tsx`, which I deleted as unreachable. The endpoint
-(`albums.py:505-770`, ~265 lines) is substantial and does real work — per-song bang/skip
+(`albums.py:512-777`, ~265 lines) is substantial and does real work — per-song bang/skip
 rates, album rank, a distribution against the owner's library, artist snapshots.
 
 I did **not** delete it, because a finished feature that was simply never mounted is
 different from dead code. Was the rating report shelved, or did it get replaced by the
 share card? If shelved, say so and I will leave it; if replaced, I will remove the
 endpoint too.
+
+### Q16. Is AOTY blocking the production server?
+AOTY is the primary new-releases source. On 2026-09-15 it answered this Mac with
+**403 Forbidden**, which usually means bot protection, so the list came from the
+ListenBrainz fallback instead. I can't see whether Render's IP is blocked too.
+Until now a 403 was silent: `_aoty_this_week` returned an empty list without logging,
+so the feed would have run on its fallback with nothing in the logs. It now logs
+`[new-releases] AOTY answered HTTP 403, falling back`. Once this deploys, either look
+for that line in Render's logs, or ask the database, since the list is now stored:
+
+```sql
+SELECT fetched_at, payload_json LIKE '%rater_count%' AS served_by_aoty
+FROM cachedfeed WHERE key = 'new_releases';
+```
+
+`false` means the fallback served it. If it is blocked, the ranking by rater count is gone.

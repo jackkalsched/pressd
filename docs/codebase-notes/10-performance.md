@@ -157,15 +157,17 @@ threadpool slot, 500 on any API error, and reachable for a **friend's** library 
 
 **Cheapest intervention.** Delete it, or cap the prompt and cache per user per day.
 
-## P11 — Security: the `/util/*` router has no auth (HIGH)
+## P11 — Security: the `/util/*` router had no auth (FIXED)
 
 Full detail in `01-foundation-auth-data.md`. 11 mutating/expensive endpoints, zero
 guards. `POST /util/analyze-song` (`util.py:519`) passes a caller-supplied URL to
 `yt-dlp` as argv and writes features onto any `song_id`. `/util/backfill-genres` and
 `/backfill-genres-mb` rewrite genre across the whole catalog.
 
-**Cheapest intervention.** `APIRouter(prefix="/util", dependencies=[Depends(current_user)])`
-at `util.py:23`. **One caveat:** three `/util` endpoints are called by clients —
+**Fixed** by putting the dependency on the `APIRouter` itself, and moving the two bare
+`fetch` call sites onto `fetchAlbumColor`. Verified all ten answer 401 without a token.
+The note below is retained because it is the reason the fix was not a one-liner:
+three `/util` endpoints are called by clients —
 `album-color`, `artist-image`, `backfill-covers` — and two of those call sites use a
 **bare `fetch`** that attaches no token (`frontend/src/components/ShareCard.tsx:35`,
 `frontend/src/pages/AlbumDetail.tsx:33`). Those two must move to `fetchAlbumColor`

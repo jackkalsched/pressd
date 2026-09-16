@@ -28,6 +28,12 @@ queued album picks up a prediction without refitting anything.
 
 Each user runs inside their own try/except and logs to workerrun.
 
+Before any of that, every stored album score is recomputed against the current
+userbase prior (rescore_library_scores). A rating only rescores the rater's own
+library inline, so other users' scores drift by a hundredth or so over a busy
+day; this is what makes them exact again. Nothing below reads a stored album
+score, so the order is for tidiness, not correctness.
+
 Usage:
     python -m worker.nightly_predict [--user 1] [--skip-llm]
 """
@@ -376,6 +382,48 @@ def run_user(user_id: int, skip_llm: bool = False, pooled=None,
         return {"user_id": user_id, "status": "error", "error": str(e)}
 
 
+def rescore_library_scores(only_user: int | None = None) -> dict:
+    """Recompute stored album scores: the whole userbase, or one user.
+
+    The nightly half of scoring on a rating. The request rescores only the
+    rater; this catches everyone else up to the prior their scores are shrunk
+    toward. A single-user run (--user) rescores just that user, so a debugging
+    run for one person doesn't rewrite everyone's library as a side effect.
+
+    Own try/except and own workerrun row: a failure here should be visible,
+    and must not stop the prediction stages that follow.
+    """
+    from sqlmodel import Session, select
+    from backend import scoring
+    from backend.models import PressUser
+
+    with engine.connect() as con:
+        run_id = runlog.start(con, "rescore_scores", only_user)
+    try:
+        with Session(engine) as session:
+            if only_user is None:
+                users = len(session.exec(select(PressUser.id)).all())
+                scoring.recompute_all_scores(session)   # commits
+            else:
+                user = session.get(PressUser, only_user)
+                users = 1 if user else 0
+                if user:
+                    scoring.recompute_user_scores(session, user)
+                    session.commit()
+        with engine.connect() as con:
+            runlog.finish(con, run_id, "ok", users=users)
+        print(f"[nightly_predict] rescored stored album scores for {users} user(s)")
+        return {"status": "ok", "users": users}
+    except Exception as e:
+        try:
+            with engine.connect() as con:
+                runlog.finish(con, run_id, "error", error=str(e))
+        except Exception:
+            pass
+        print(f"[nightly_predict] rescoring stored album scores FAILED — {e}")
+        return {"status": "error", "error": str(e)}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--user", type=int, help="run for one user id only")
@@ -398,6 +446,8 @@ def main():
                 "SELECT DISTINCT user_id FROM album"
                 " WHERE status IN ('rated', 'to_listen', 'listening')"
                 " AND user_id IS NOT NULL ORDER BY user_id")).fetchall()]
+
+    rescore_library_scores(args.user)
 
     # Everything userbase-wide is built once here: the pooled prior, the
     # catalog, and the song frame every user's model predicts over.
