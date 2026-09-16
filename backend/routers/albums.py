@@ -11,7 +11,7 @@ from datetime import date, datetime
 from ..database import get_session
 from ..deps import current_user, authorize_view, are_friends
 from ..models import Album, Song, SongAudioFeatures, PressUser, Like, Comment
-from ..scoring import compute_a_score, recompute_all_scores, BANG_THRESHOLD, SKIP_THRESHOLD
+from ..scoring import compute_a_score, recompute_user_scores, BANG_THRESHOLD, SKIP_THRESHOLD
 from ..global_rating import invalidate_cache as invalidate_global_ratings
 from ..genres import GENRES, canonical_genre, canonical_subgenre
 from ..trackkeys import _clean_album, match_title, same_album
@@ -234,7 +234,14 @@ def update_album(
     session.refresh(album)
 
     if any(k in data for k in ("theme", "replay_value", "production", "distinctness", "status")):
-        recompute_all_scores(session)
+        # The rater's library only — the same thing changing factor weights does
+        # (users.py). A new rating also nudges the userbase prior that everyone
+        # else is shrunk toward, but by at most ~0.01 over a busy day, so the
+        # full rescore runs nightly in the worker instead of here, where its
+        # cost grew with every rating in the database. See
+        # scoring.recompute_all_scores.
+        recompute_user_scores(session, user)
+        session.commit()
         invalidate_global_ratings()
         session.refresh(album)
 
