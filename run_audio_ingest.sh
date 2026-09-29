@@ -26,6 +26,11 @@ cd "$(dirname "$0")"
 PYBIN="/Library/Frameworks/Python.framework/Versions/3.13/bin"
 export PATH="$PYBIN:/usr/local/bin:/opt/homebrew/bin:$PATH"
 
+# Python block-buffers stdout when it isn't a terminal. Under launchd the log is
+# a file, so progress sat in an 8 KB buffer and `tail -f` showed nothing for
+# minutes while tracks were already landing in trackaudio.
+export PYTHONUNBUFFERED=1
+
 echo "=== audio ingest $(date '+%Y-%m-%d %H:%M:%S %Z') $* ==="
 
 if [ "${PRESSD_UPDATE_YTDLP:-0}" = "1" ]; then

@@ -132,7 +132,9 @@ and puts `nightly.sh` beside it. Each night `nightly.sh` fetches `origin/main`, 
 out detached, and runs it — **merged code reaches the job with no reinstall; unmerged
 code never does.** Re-run `install.sh` after changing `.env`. The installer refuses when
 the target ref lacks the canary-era ingest, rather than schedule the old silent one.
-`--uninstall` deletes the clone and its `.env` copy.
+`--uninstall` deletes the clone and its `.env` copy. The job logs to
+`~/Library/Logs/pressd/audio-ingest.log`, unbuffered, so `tail -f` follows it live;
+`workerrun` and `trackaudio` in Supabase are the durable record.
 
 **Env vars.** Backend/worker: `DATABASE_URL` **or** `PG_HOST`/`PG_PORT`/`PG_DB`/`PG_USER`/
 `PG_PASSWORD`; `JWT_SECRET`, `TOKEN_TTL_DAYS`, `APP_URL`, `ANTHROPIC_API_KEY`,
