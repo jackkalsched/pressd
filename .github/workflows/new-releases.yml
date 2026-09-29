@@ -1,0 +1,39 @@
+name: New releases
+
+# Rebuilds the For You "New & Popular" list and stores it in `cachedfeed`
+# (worker/refresh_new_releases.py). albumoftheyear.org now answers automated
+# requests with a Cloudflare challenge, so the list is ranked by Last.fm
+# listeners instead — ~1,000 paced lookups, minutes of work, which is why it
+# runs here and not inside a page request. The web endpoint only reads it.
+#
+# A failed run leaves the stored list as it was, so users keep the last good
+# one; this job going red is how a dead source gets noticed.
+
+on:
+  schedule:
+    - cron: "20 */6 * * *" # every 6 hours
+  workflow_dispatch:
+
+concurrency:
+  group: new-releases
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements-worker.txt
+
+      - name: Rebuild the new-releases list
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+        run: python -m worker.refresh_new_releases

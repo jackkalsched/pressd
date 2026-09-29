@@ -1,20 +1,15 @@
 """
-New-release discovery.
+Discovery surfaces: new releases, the userbase charts, picks, and heated threads.
 
-`/discover/new-releases` returns a cached list of recent album releases, each
-resolved to a Deezer album so the existing import flow (`/discover/deezer/{id}`)
-can add it to a library or open it in the rating screen. Sources, in order:
-albumoftheyear.org's this-week listing, ListenBrainz's fresh-releases feed,
-Deezer's editorial releases, then Deezer's album chart.
-
-The list is held in two places. A module-level dict answers instantly; a row in
-`cachedfeed` survives the process, so a deploy or a restart reads the last good
-list back instead of refetching it from four services.
+`/discover/new-releases` serves the list `backend/new_releases.py` builds: this
+week's releases ranked by Last.fm listeners, since albumoftheyear.org answers
+automated requests with a Cloudflare challenge (that module has the history and
+the measurements). Building it takes minutes, so worker/refresh_new_releases.py
+does it every 6 hours and stores it in `cachedfeed`; this endpoint only reads.
 """
-import asyncio
 import json
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -25,274 +20,23 @@ from ..database import get_session
 from ..deps import current_user
 from ..global_rating import compute_global_ratings, is_single
 from ..scoring import BANG_THRESHOLD, SKIP_THRESHOLD
-from ..models import Album, CachedFeed, PressUser
-from ..trackkeys import same_album
-from ..aoty_releases import AOTY_THIS_WEEK, AOTY_UA, parse_releases
+from ..models import Album, PressUser
+from ..new_releases import (
+    DEEZER_BASE, NoReleases, cover as _cover, quick_build, read_stored, write_stored,
+    year as _year,
+)
 
 router = APIRouter(prefix="/discover", tags=["discover"])
 
-DEEZER_BASE = "https://api.deezer.com"
-LISTENBRAINZ_FRESH = "https://api.listenbrainz.org/1/explore/fresh-releases/"
-LB_UA = "Pressd/1.0 (https://www.pressdmusic.com)"
-CACHE_TTL = 6 * 3600  # releases move slowly; refresh a few times a day
-# The fast path. models.CachedFeed, under _FEED_KEY, is the copy that survives.
+# How long this process trusts its in-memory copy before re-reading the stored
+# row. Short, so a list the worker has just written reaches users within the
+# half hour; a re-read is one primary-key lookup.
+MEMORY_TTL = 30 * 60
+# How old a stored list may be and still be served. The worker refreshes every
+# 6 hours, so this is how long it can be down before the endpoint builds its
+# own. A week's releases don't change fast enough for a day-old list to be wrong.
+STALE_OK = 3 * 24 * 3600
 _cache: dict = {"releases": None, "expires": 0.0}
-_FEED_KEY = "new_releases"
-
-
-def _cover(a: dict) -> str | None:
-    return a.get("cover_xl") or a.get("cover_big") or a.get("cover_medium") or None
-
-
-def _year(release_date: str | None) -> int | None:
-    return int(release_date[:4]) if release_date and release_date[:4].isdigit() else None
-
-
-def _caa_cover(r: dict) -> str | None:
-    cid, mbid = r.get("caa_id"), r.get("caa_release_mbid")
-    return f"https://coverartarchive.org/release/{mbid}/{cid}-500.jpg" if cid and mbid else None
-
-
-async def _listenbrainz_fresh(client: httpx.AsyncClient, days: int = 7) -> list[dict]:
-    """Recent album releases from ListenBrainz, most recent first."""
-    try:
-        resp = await client.get(
-            LISTENBRAINZ_FRESH,
-            params={"days": days, "sort": "release_date", "past": "true", "future": "false"},
-            headers={"User-Agent": LB_UA},
-        )
-    except httpx.HTTPError:
-        return []
-    if not resp.is_success:  # 400 on a bad date / days > 90, etc.
-        return []
-    rels = resp.json().get("payload", {}).get("releases", [])
-    out: list[dict] = []
-    seen: set[tuple[str, str]] = set()
-    for r in rels:
-        title, artist = r.get("release_name"), r.get("artist_credit_name")
-        if not (title and artist) or r.get("release_group_primary_type") != "Album":
-            continue
-        key = (title.lower(), artist.lower())
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append({"title": title, "artist": artist, "release_date": r.get("release_date"), "caa": _caa_cover(r)})
-    out.sort(key=lambda x: x["release_date"] or "", reverse=True)
-    return out
-
-
-async def _deezer_resolve(client: httpx.AsyncClient, sem: asyncio.Semaphore, title: str, artist: str) -> dict | None:
-    """Match a release to a Deezer album for the importable id + cover.
-
-    Scans a page of hits rather than only the first: Deezer frequently ranks a
-    single or a lead track above the album itself, so the record we want is
-    often the second or third result.
-    """
-    try:
-        async with sem:
-            resp = await client.get(
-                f"{DEEZER_BASE}/search/album", params={"q": f"{artist} {title}", "limit": 10}
-            )
-    except httpx.HTTPError:
-        return None
-    if not resp.is_success:
-        return None
-    body = resp.json()
-    if body.get("error"):  # Deezer returns HTTP 200 + an error body when rate-limited
-        return None
-    for a in body.get("data", []):
-        if not a.get("id"):
-            continue
-        # Guard against a wrong match: the hit has to be the same record, not
-        # just something Deezer ranked highly for the query. Title and artist
-        # must both line up — a different album by the right artist is as wrong
-        # as a same-titled album by someone else.
-        dz_artist_obj = a.get("artist") or {}
-        if not same_album(title, artist, a.get("title") or "", dz_artist_obj.get("name") or ""):
-            continue
-        return {
-            "deezer_id": a["id"],
-            "artist_id": dz_artist_obj.get("id"),
-            "cover_url": _cover(a),
-            "nb_tracks": a.get("nb_tracks"),
-        }
-    return None
-
-
-async def _aoty_this_week(client: httpx.AsyncClient) -> list[dict]:
-    """This week's releases from albumoftheyear.org, most-rated first. One page
-    fetch; returns [] on any failure so the caller falls back."""
-    try:
-        resp = await client.get(AOTY_THIS_WEEK, headers={"User-Agent": AOTY_UA})
-    except httpx.HTTPError as e:
-        print(f"[new-releases] AOTY unreachable, falling back: {e}")
-        return []
-    if not resp.is_success:
-        # Logged because it used to be silent. AOTY is the primary source, and a
-        # 403 from its bot protection looked exactly like a quiet week — the
-        # feed would run on its fallback indefinitely with nothing in the logs.
-        print(f"[new-releases] AOTY answered HTTP {resp.status_code}, falling back")
-        return []
-    try:
-        return parse_releases(resp.text)
-    except Exception as e:  # markup drifted — degrade instead of 500ing
-        print(f"[new-releases] AOTY parse failed: {e}")
-        return []
-
-
-async def _artist_fans(client: httpx.AsyncClient, sem: asyncio.Semaphore, artist_id: int | None) -> int:
-    """Total Deezer fan count of the releasing artist — the popularity signal we
-    rank by, so a fresh album by a well-known artist floats to the top."""
-    if not artist_id:
-        return 0
-    try:
-        async with sem:
-            resp = await client.get(f"{DEEZER_BASE}/artist/{artist_id}")
-    except httpx.HTTPError:
-        return 0
-    if not resp.is_success:
-        return 0
-    body = resp.json()
-    return 0 if body.get("error") else (body.get("nb_fan") or 0)
-
-
-async def _deezer_editorial(client: httpx.AsyncClient) -> list[dict]:
-    """Fallback: Deezer's editorial releases, else the global album chart."""
-    resp = await client.get(f"{DEEZER_BASE}/editorial/0/releases", params={"limit": 40})
-    items = resp.json().get("data", []) if resp.is_success else []
-    if not items:
-        resp = await client.get(f"{DEEZER_BASE}/chart/0/albums", params={"limit": 40})
-        items = resp.json().get("data", []) if resp.is_success else []
-    out: list[dict] = []
-    seen: set[tuple[str, str]] = set()
-    for a in items:
-        aid, title = a.get("id"), a.get("title")
-        artist = (a.get("artist") or {}).get("name")
-        if not (aid and title and artist):
-            continue
-        key = (title.lower(), artist.lower())
-        if key in seen:
-            continue
-        seen.add(key)
-        rd = a.get("release_date") or ""
-        out.append({
-            "deezer_id": aid, "album_name": title, "artist": artist, "cover_url": _cover(a),
-            "year": _year(rd), "release_date": rd or None, "nb_tracks": a.get("nb_tracks"),
-        })
-    return out
-
-
-def _read_stored_releases(session: Session) -> tuple[list[dict], float] | None:
-    """(releases, age in seconds) from the stored copy, or None.
-
-    Never raises. The stored copy is an optimisation over a live fetch, so a
-    database hiccup here should cost one slow request, not a failed one.
-    """
-    try:
-        row = session.get(CachedFeed, _FEED_KEY)
-        if row is None:
-            return None
-        releases = json.loads(row.payload_json)
-        if not releases:
-            return None
-        # Clamped: fetched_at was stamped by whichever process wrote it, and a
-        # clock behind this one must not read as a list from the future.
-        return releases, max(0.0, (datetime.utcnow() - row.fetched_at).total_seconds())
-    except Exception as e:
-        session.rollback()
-        print(f"[new-releases] stored copy unreadable, fetching live: {e}")
-        return None
-
-
-def _write_stored_releases(session: Session, releases: list[dict]) -> None:
-    """Replace the stored copy. Never raises, for the same reason — and two
-    processes refreshing at once is harmless: the loser's insert conflicts on
-    the key, is rolled back, and the winner's identical list stands."""
-    try:
-        row = session.get(CachedFeed, _FEED_KEY) or CachedFeed(key=_FEED_KEY, payload_json="")
-        row.payload_json = json.dumps(releases)
-        row.fetched_at = datetime.utcnow()
-        session.add(row)
-        session.commit()
-    except Exception as e:
-        session.rollback()
-        print(f"[new-releases] could not store fetched releases: {e}")
-
-
-async def _fetch_releases(limit: int) -> list[dict]:
-    """Assemble the list live from the outside sources. Never returns an empty
-    list — raises 502 instead — so nothing empty is ever cached or stored."""
-    releases: list[dict] = []
-    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
-        sem = asyncio.Semaphore(10)  # keep Deezer calls under its rate limit
-
-        # Primary: AOTY's this-week listing, already ordered by how many people
-        # have rated each release — a per-record popularity signal neither
-        # ListenBrainz nor Deezer provides. Deezer is still consulted, but only
-        # to resolve an importable album id for the top slice.
-        aoty = await _aoty_this_week(client)
-        if aoty:
-            # Generous spares: anything that won't resolve is dropped below, and
-            # AOTY lists plenty of small releases that aren't on Deezer at all.
-            top = aoty[:limit + 12]
-            resolved = await asyncio.gather(
-                *[_deezer_resolve(client, sem, r["album_name"], r["artist"]) for r in top]
-            )
-            for r, dz in zip(top, resolved):
-                # A release we can't resolve has no tracklist and nothing to
-                # rate, so it's left out rather than shown as a dead end.
-                if not dz:
-                    continue
-                releases.append({
-                    "deezer_id": dz["deezer_id"],
-                    "album_name": r["album_name"],
-                    "artist": r["artist"],
-                    "cover_url": r["cover_url"] or dz["cover_url"],
-                    "year": None,
-                    "release_date": None,
-                    "nb_tracks": dz["nb_tracks"],
-                    "rater_count": r["user_count"],
-                    "user_score": r["user_score"],
-                    "critic_score": r["critic_score"],
-                })
-
-        if not releases:
-            # Fallback: ListenBrainz's fresh feed, ranked by the releasing
-            # artist's total Deezer fan count — the best available proxy when
-            # there's no per-release signal. Sample evenly across the week so
-            # earlier releases are represented, and keep the pool under
-            # Deezer's ~50-per-5s quota.
-            POOL = 24
-            allcands = await _listenbrainz_fresh(client, days=7)
-            if len(allcands) > POOL:
-                step = len(allcands) / POOL
-                candidates = [allcands[int(i * step)] for i in range(POOL)]
-            else:
-                candidates = allcands
-            resolved = await asyncio.gather(*[_deezer_resolve(client, sem, c["title"], c["artist"]) for c in candidates])
-            matched = [(c, dz) for c, dz in zip(candidates, resolved) if dz]
-            fans = await asyncio.gather(*[_artist_fans(client, sem, dz.get("artist_id")) for _, dz in matched])
-            for (c, dz), f in zip(matched, fans):
-                releases.append({
-                    "deezer_id": dz["deezer_id"],
-                    "album_name": c["title"],
-                    "artist": c["artist"],
-                    "cover_url": dz["cover_url"] or c["caa"],
-                    "year": _year(c["release_date"]),
-                    "release_date": c["release_date"],
-                    "nb_tracks": dz["nb_tracks"],
-                    "_fans": f,
-                })
-            releases.sort(key=lambda r: r["_fans"], reverse=True)
-            for r in releases:
-                r.pop("_fans", None)
-
-        if not releases:  # both feeds down → Deezer's own editorial list
-            releases = await _deezer_editorial(client)
-            if not releases:
-                raise HTTPException(status_code=502, detail="Could not load new releases")
-
-    return releases
 
 
 @router.get("/new-releases")
@@ -302,22 +46,29 @@ async def new_releases(
     session: Session = Depends(get_session),
 ):
     now = time.monotonic()
-    if _cache["releases"] and _cache["expires"] > now:  # only serve a non-empty cache
+    if _cache["releases"] and _cache["expires"] > now:
         return _cache["releases"][:limit]
 
-    # A fresh process finds the list the last one paid for. It inherits the
-    # stored copy's remaining lifetime rather than starting the clock again, so
-    # restarting can never stretch a list past CACHE_TTL.
-    stored = _read_stored_releases(session)
-    if stored is not None:
-        releases, age = stored
-        if age < CACHE_TTL:
-            _cache["releases"], _cache["expires"] = releases, now + (CACHE_TTL - age)
-            return releases[:limit]
+    stored = read_stored(session)
+    if stored is not None and stored[1] < STALE_OK:
+        _cache["releases"], _cache["expires"] = stored[0], now + MEMORY_TTL
+        return stored[0][:limit]
 
-    releases = await _fetch_releases(limit)
-    _cache["releases"], _cache["expires"] = releases, now + CACHE_TTL
-    _write_stored_releases(session, releases)
+    # Nothing recent from the worker (first deploy, or it has been failing for
+    # days — GitHub shows that run red). Build a quick list rather than fail.
+    try:
+        releases = await quick_build()
+    except NoReleases as e:
+        print(f"[new-releases] quick build failed: {e}")
+        if stored is not None:  # an old list beats an error
+            return stored[0][:limit]
+        raise HTTPException(status_code=502, detail="Could not load new releases")
+    _cache["releases"], _cache["expires"] = releases, now + MEMORY_TTL
+    try:
+        write_stored(session, releases)
+    except Exception as e:
+        session.rollback()
+        print(f"[new-releases] could not store the quick list: {e}")
     return releases[:limit]
 
 

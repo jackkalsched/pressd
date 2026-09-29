@@ -72,8 +72,8 @@ PLAN_*.md         gitignored design docs; code cites them by section
 | `backend/scoring.py` | framework 1: the user's own album score | 267 |
 | `backend/global_rating.py` | framework 2: the userbase-pooled rating | 155 |
 | `backend/trackkeys.py` | normalization keys; pure stdlib, imported everywhere | 163 |
-| `backend/routers/` | 14 routers, **104 endpoints** | 5,529 |
-| `worker/` | `nightly_predict`, `catalog_predict`, `artist_clusters`, `audio_ingest`, … | 1,786 |
+| `backend/routers/` | 14 routers, **104 endpoints** | 7,282 |
+| `worker/` | `nightly_predict`, `catalog_predict`, `artist_clusters`, `audio_ingest`, `refresh_new_releases`, … | 2,149 |
 | `theme_predictor/` | `predict_single`, `personalize`, `global_factors`, `corpus`, … | 1,896 |
 | `shared/src/api.ts` | the single API client, 92 exported functions | 1,763 |
 | `frontend/src/` | 14 pages, 14 components | 9,715 |
@@ -221,28 +221,35 @@ way, because the global board recomputes from raw ratings.
 ### Journey: load the new-releases feed
 
 ```
-GET /discover/new-releases        discover.py:298, 6h TTL
-  a. in-memory dict               instant
-  b. cachedfeed row in Postgres   one PK lookup; survives deploys and restarts,
-                                  and a fresh process inherits its remaining lifetime
-  c. live fetch, _fetch_releases  then written to both
-     1. AOTY this-week scrape        discover.py:122   ranked by rater count
-        └─ ~24 concurrent Deezer resolves (semaphore 10) for importable ids
-     2. ListenBrainz fresh-releases  discover.py:56    sampled to 24, ranked by fan count
-     3. Deezer /editorial/0/releases
-     4. Deezer /chart/0/albums
-     5. 502 — nothing empty is ever cached or stored
+every 6h, GitHub Actions          .github/workflows/new-releases.yml
+  worker/refresh_new_releases.py → backend/new_releases.py build()
+     1. AOTY this-week scrape     ranked by rater count; every request has met a
+                                  Cloudflare challenge since 2026-09, so this is []
+     2. ListenBrainz fresh releases (every album + EP of the last 7 days, ~950)
+        ∪ Apple Music most-played albums released in the window
+        → Last.fm album.getinfo listeners for each, paced 4.5/s   ~3.5 min
+        → top 45 resolved on Deezer for importable ids; 30 stored in cachedfeed
+     fails (exit 1, workerrun 'error') rather than store a thin list; the last one stays
+GET /discover/new-releases        discover.py
+  a. in-memory dict               re-read from the row every 30 min
+  b. cachedfeed row               served while under 3 days old
+  c. quick_build                  only with no recent row: Apple's recent most-played,
+                                  padded with Deezer's album chart, ~4s; then stored
+  d. an older row if even that fails; 502 only with nothing stored at all
 ```
-A live fetch is ≈ 25 outbound HTTP calls; measured at 4.5s and 9.9s on two runs. Before
-the stored copy, every deploy and restart made the next For You visitor pay it. Reading
-or writing the stored copy never raises: a database error costs a slow request, not a
-failed one. From a Mac on 2026-09-15, AOTY answered **403**, so the list came from
-ListenBrainz; whether Render is blocked too is unverified. See QUESTIONS Q16.
+Why Last.fm: scored against AOTY's own archived this-week lists for the weeks of
+2026-09-12, -19 and -26, 11, 12 and 11 of our top 12 were on AOTY's list. The old
+fallback — 24 releases sampled at random, ranked by the artist's total Deezer fans —
+managed 0–3, and in the week of 2026-09-26 showed Kärbholz and Blitzkid where AOTY's
+top two were Tinashe and Taylor Swift; the new build puts those two first. Apple is
+there for the biggest records MusicBrainz hasn't listed yet (Swift's *The Encore* that
+week). ListenBrainz's own `listen_count` is 0 for fresh releases, so it cannot rank.
+The page never waits on an outside source.
 
 ### Journey: the charts
 
 ```
-GET /discover/charts              discover.py:418
+GET /discover/charts              discover.py:169
   → SELECT every rated album (no filter)
   → facets + filter + group in Python, TWICE (today + yesterday, for movement)
   → ranked by compute_global_ratings()   global_rating.py:59, 60s memo
@@ -263,7 +270,7 @@ uncached on every Social open.
 
 ```
 nightly: worker → albumprediction(user_id, album_key) for the WHOLE catalog
-live:    GET /discover/picks      discover.py:544  ORDER BY predicted_score DESC
+live:    GET /discover/picks      discover.py:295  ORDER BY predicted_score DESC
          → excludes already_rated and anything already in the library
 ```
 
@@ -500,9 +507,10 @@ nulls never overwrite stored values.
 | **Deezer** | search, tracklist, covers, **artist photos**, release resolution | none | in-proc + `ArtistMeta` |
 | MusicBrainz | search (release *groups*), tracklist, **upcoming** releases | none, UA | in-proc 600s |
 | Cover Art Archive | covers for MB hits only | none | via MB result |
-| Last.fm | listener counts (search prior), genre tags | `LASTFM_API_KEY` | in-proc 600s |
-| ListenBrainz | fresh-releases feed (2nd choice) | none, UA | 6h, stored in `cachedfeed` |
-| albumoftheyear.org | **primary** new-release feed, scraped | none | 6h, stored in `cachedfeed` |
+| Last.fm | listener counts (search prior), genre tags, **per-album listeners that rank new releases** | `LASTFM_API_KEY` (web + GitHub secret) | in-proc 600s; the ranking is stored |
+| ListenBrainz | new-release candidates: every album + EP of the last 7 days | none, UA | via the stored list |
+| Apple Music RSS | most-played albums released this week — candidates, and the quick fallback | none | via the stored list |
+| albumoftheyear.org | new-release feed, still tried first — **blocked by a Cloudflare challenge since 2026-09**, so in practice unused | none | — |
 | Discogs | artist discographies | `DISCOGS_TOKEN` | `ArtistMeta.albums_json` |
 
 **Not integrated:** fanart.tv (mentioned once, in a comment explaining its *rejection*,
@@ -539,7 +547,7 @@ match).
 |---|---|---|---|
 | global ratings board | `global_rating.py:45` | 60s | **process** |
 | search results | `search.py:34-37` | 600s, max 500 | **process** |
-| new releases | memory, then `CachedFeed` row (Postgres), `discover.py:37-40` | 6h | shared ✅ survives restarts |
+| new releases | built into a `CachedFeed` row by a GitHub worker; memory copy re-read every 30 min | rebuilt 6h, served up to 3 days | shared ✅ survives restarts |
 | Apple JWKS, FCM creds | `auth.py:21`, `push.py:48` | — | **process** |
 | artist photos | `ArtistMeta` (Postgres) | 30d | shared ✅ |
 | album LLM factors | `albumfactors` (Postgres) | forever | shared ✅ |
@@ -550,13 +558,13 @@ match).
 a song or finishes an album (`songs.py:154`, `albums.py:245`), so a stored copy would be
 rebuilt as often as the in-memory one and every read would cost a database round trip.
 It only needs moving once there is more than one process. New releases are the opposite
-case: they change a few times a day and are expensive to rebuild, so they are stored.
+case: they change a few times a day and take minutes to rebuild, so a worker builds and stores them.
 `CachedFeed` is keyed by feed name, so the next feed like that is a new key, not a table.
 
 Hottest paths, in order: `/discover/charts`
 (reads every rated album), `/social/compare` (reads every friend's library),
-`/albums/{id}/report` (aggregates the whole song table), `/discover/new-releases` on a
-cold cache (~25 outbound calls).
+`/albums/{id}/report` (aggregates the whole song table). `/discover/new-releases` left
+the list: it reads one stored row.
 
 ---
 
@@ -568,13 +576,13 @@ Current → risk → cheapest fix. Rows marked fixed have been implemented; the 
 | # | Finding | Risk | Cheapest fix |
 |---|---|---|---|
 | **P1** | ~~Finishing a rating rescored every user's library inside the request.~~ **Fixed.** The request now rescores only the rater ([albums.py:243](backend/routers/albums.py#L243)); the nightly job makes everyone exact again (`nightly_predict.py:385`); the userbase prior reads four columns instead of whole rows (`scoring.py:113`). On a 30-user test database one rating went from 124 queries to 13, and the rater's scores matched the old path exactly | ~~HIGH~~ → LOW | residual: the prior is still one scan over every rated album per rating, now of four numbers |
-| **P2** | `/discover/charts` selects every rated album, then filters and groups twice in Python, uncached (`discover.py:438`) | **HIGH** — the Charts tab, both platforms | memoise the response on its filter tuple with the existing 60s TTL + invalidation hook |
+| **P2** | `/discover/charts` selects every rated album, then filters and groups twice in Python, uncached (`discover.py:189`) | **HIGH** — the Charts tab, both platforms | memoise the response on its filter tuple with the existing 60s TTL + invalidation hook |
 | **P11** | ~~All 10 `/util/*` endpoints had no auth.~~ **Fixed.** The router now carries `dependencies=[Depends(current_user)]` (`util.py:31-45`) and the two web call sites that used a bare `fetch` were moved onto `fetchAlbumColor`. Verified: all ten answer 401 without a token. A signed-in user can still call `/backfill-genres?override=true` | ~~HIGH~~ → LOW | residual: move the seven maintenance routes out of HTTP entirely, beside `run_audio_ingest.sh` |
 | **P8** | Engine allows 15 connections *per process*; Supabase's session pooler allows 15 *per project* (`database.py:28` vs `backfill_factors.py:35`) | **HIGH** at scale | confirm pooler mode; size `pool_size` against the real limit ÷ instances |
 | **P5** | The ratings board and search cache are per-process. `invalidate_cache()` clears one process's board. New releases now persist in `CachedFeed` | **HIGH** the moment there's a 2nd instance | move the board to shared storage before scaling out, not before: at one process it would only be slower |
-| **P3** | `/discover/picks` runs a `NOT EXISTS` on `lower(trim(…))` with no functional index (`discover.py:570-575`) | MEDIUM — `albumprediction` grows as users × catalog | functional index, or store `album_key` on `Album` |
+| **P3** | `/discover/picks` runs a `NOT EXISTS` on `lower(trim(…))` with no functional index (`discover.py:321-326`) | MEDIUM — `albumprediction` grows as users × catalog | functional index, or store `album_key` on `Album` |
 | **P4** | `/albums/{id}/report` aggregates the **entire** song table, then filters in Python (`albums.py:554-557`) | MEDIUM | add `.where(Song.album_id.in_(...))` — one line |
-| **P6** | `/discover/new-releases` has no single-flight; when both the memory and the stored copy have expired, N concurrent requests each do ~25 outbound calls, and failure prevents caching. The stored copy narrows this to the moment of expiry rather than every restart | LOW–MED | `asyncio.Lock` around the refill |
+| **P6** | ~~`/discover/new-releases` has no single-flight; N concurrent refills each made ~25 outbound calls.~~ **Moot.** The endpoint no longer fetches in normal running: a GitHub worker builds the list every 6h and the endpoint reads it | ~~LOW–MED~~ → LOW | residual: `quick_build` (~30 calls) has no single-flight, but runs only after the worker has failed for 3 days |
 | **P7** | ~90 migration statements on every boot, incl. 3 `DELETE`s and 6 full-table `UPDATE`s, with `statement_timeout = 0` | LOW–MED | a `schema_version` table |
 | **P12** | `JWT_SECRET` defaults to a literal that is public in this repo, with no startup assertion (`deps.py:18`) | MEDIUM — fails open, silently | raise at import when unset in production |
 | **P10** | `GET /stats/analysis` is an uncached, untimed, unbounded Claude call in a blocking `def`, reachable for a **friend's** library (`stats.py:1070`) | MEDIUM, latent (no client calls it) | delete, or cap + cache |
@@ -617,7 +625,7 @@ is the real one), and `analyze_missing_audio.py` (user-1-only, wrote the legacy
   grouping must go through it; the charts don't. `album_key` (stored, folds nothing),
   `subject_key_album` (folds editions + diacritics), and `record_key`
   (`global_rating.py:54`, a bare `.strip().lower()`) — the last inlined again at
-  `discover.py:358`, `:387`, `:489`, `public.py:91`, `social.py:359`. So **"Take Care"
+  `discover.py:109`, `:138`, `:240`, `public.py:91`, `social.py:359`. So **"Take Care"
   and "Take Care (Deluxe)" are one discussion thread and two chart rows**, each with a
   fraction of the raters, while `/discover/heated` groups correctly on `subject_key`.
   QUESTIONS Q8 — re-ranking the boards is Jack's call.
@@ -687,7 +695,7 @@ is a product call, not a cleanup — QUESTIONS Q15.
 Q8 (three grouping keys disagree), Q9 (is `PATCH /songs/{id}` deliberate? the endpoint
 was kept, its client wrapper deleted), Q11 (confirm web-side re-prediction is meant to
 no-op), Q13 (is the duplicate `_artist_key` intentional?), Q15 (is `/albums/{id}/report`
-shelved or superseded?), Q16 (is AOTY blocking the production server?).
+shelved or superseded?).
 
 Nothing in this document is marked `INFERRED — unverified`. Two claims rest on
 environments I cannot see: that Render currently has `JWT_SECRET` and

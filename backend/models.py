@@ -399,7 +399,7 @@ class ArtistCluster(SQLModel, table=True):
 class WorkerRun(SQLModel, table=True):
     """One row per worker job execution (audio ingest / per-user predict)."""
     id: Optional[int] = Field(default=None, primary_key=True)
-    job: str = Field(index=True)  # 'audio_ingest' | 'nightly_predict' | 'rescore_scores'
+    job: str = Field(index=True)  # 'audio_ingest' | 'nightly_predict' | 'rescore_scores' | 'new_releases'
     user_id: Optional[int] = Field(default=None, index=True)
     started_at: datetime = Field(default_factory=datetime.utcnow)
     finished_at: Optional[datetime] = None

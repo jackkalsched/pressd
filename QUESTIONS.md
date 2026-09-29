@@ -114,6 +114,20 @@ double-check. Nothing imported it and it took `AlbumReportData` as a prop, so it
 with its fetcher. See Q15: its backend endpoint is still there.
 
 ---
+### Q16. Is AOTY blocking the production server? — **YES; THE FEED NO LONGER DEPENDS ON IT**
+Verified 2026-09-30: every automated request to `/releases/this-week/` meets a
+Cloudflare challenge ("Just a moment…", HTTP 403, `cf-mitigated: challenge`) — from a
+residential connection and with a browser User-Agent — so Render's datacenter IP is
+certainly blocked. The stored row confirmed production had been on the ListenBrainz
+fallback, which showed Kärbholz and Blitzkid the week AOTY's top two were Tinashe and
+Taylor Swift. AOTY has no API and the challenge is deliberate, so nothing tries to get
+past it.
+
+Decided: rank the week by Last.fm listeners (`backend/new_releases.py`, which absorbed
+`aoty_releases.py`), built every 6 hours by `worker/refresh_new_releases.py` in GitHub
+Actions and stored; the endpoint only reads. Scored against AOTY's archived lists for
+three weeks: 11, 12 and 11 of our top 12 on AOTY's list, against 0–3 for the old
+fallback. AOTY is still tried first — one request — in case the block lifts.
 
 ## Open
 
@@ -190,19 +204,3 @@ I did **not** delete it, because a finished feature that was simply never mounte
 different from dead code. Was the rating report shelved, or did it get replaced by the
 share card? If shelved, say so and I will leave it; if replaced, I will remove the
 endpoint too.
-
-### Q16. Is AOTY blocking the production server?
-AOTY is the primary new-releases source. On 2026-09-15 it answered this Mac with
-**403 Forbidden**, which usually means bot protection, so the list came from the
-ListenBrainz fallback instead. I can't see whether Render's IP is blocked too.
-Until now a 403 was silent: `_aoty_this_week` returned an empty list without logging,
-so the feed would have run on its fallback with nothing in the logs. It now logs
-`[new-releases] AOTY answered HTTP 403, falling back`. Once this deploys, either look
-for that line in Render's logs, or ask the database, since the list is now stored:
-
-```sql
-SELECT fetched_at, payload_json LIKE '%rater_count%' AS served_by_aoty
-FROM cachedfeed WHERE key = 'new_releases';
-```
-
-`false` means the fallback served it. If it is blocked, the ranking by rater count is gone.
