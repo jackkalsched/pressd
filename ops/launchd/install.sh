@@ -5,14 +5,14 @@
 #
 #   ops/launchd/install.sh                 # track main
 #   ops/launchd/install.sh --ref <branch>  # track another pushed branch
-#   ops/launchd/install.sh --uninstall     # remove the agent, the clone and its .env
+#   ops/launchd/install.sh --uninstall     # remove both agents, the clone and its .env
 #
 # Layout, all outside the folders macOS privacy protection guards:
 #
 #   ~/Library/Application Support/pressd/
 #     nightly.sh   copied from ops/launchd/nightly.sh; updates the clone, runs it
 #     ingest/      git clone, detached at origin/<ref>, plus a copy of .env (0600)
-#   ~/Library/LaunchAgents/com.pressd.audio-ingest.plist
+#   ~/Library/LaunchAgents/com.pressd.audio-ingest{,.login}.plist
 #   ~/Library/Logs/pressd/{audio-ingest,preflight}.log
 #
 # Why a clone: launchd cannot read ~/Desktop, where the working copy lives
@@ -27,11 +27,14 @@
 # ingest's --preflight *as a launchd job*, through nightly.sh, from the clone —
 # the exact path the nightly run takes — and installs nothing unless it passes.
 #
-# Scheduling: StartCalendarInterval, 00:30 *local* time — two hours before the
-# GitHub predictions (02:30 PT) on Pacific time, further ahead in other zones.
-# If the laptop is asleep then, launchd runs the job on the next wake (missed
-# intervals coalesce into one run), so a closed lid delays the ingest rather
-# than skipping it. worker/audio_health.py goes red in GitHub if a run fails or
+# Scheduling — two agents, both through nightly.sh, which has the details:
+#   com.pressd.audio-ingest        00:30 *local* time, or on the next wake if the
+#                                  Mac is asleep then (missed runs coalesce)
+#   com.pressd.audio-ingest.login  at login with --catch-up: covers a Mac that was
+#                                  shut down, not asleep; skips if a run succeeded
+#                                  in the last 20h
+# In practice the laptop is shut at 00:30, so the run happens when it is opened
+# in the morning. worker/audio_health.py goes red in GitHub if a run fails or
 # none happens for 36h.
 #
 # Secrets: the clone gets a copy of this repo's .env. Re-run this script after
@@ -53,6 +56,8 @@ LOGDIR="$HOME/Library/Logs/pressd"
 AGENTS="$HOME/Library/LaunchAgents"
 DOMAIN="gui/$(id -u)"
 PLIST="$AGENTS/$LABEL.plist"
+LOGIN_LABEL="$LABEL.login"
+LOGIN_PLIST="$AGENTS/$LOGIN_LABEL.plist"
 
 REF="main"
 MODE="install"
@@ -119,11 +124,11 @@ PLIST
 }
 
 if [ "$MODE" = "uninstall" ]; then
-  unload "$LABEL"
-  rm -f "$PLIST"
+  unload "$LABEL"; unload "$LOGIN_LABEL"
+  rm -f "$PLIST" "$LOGIN_PLIST"
   # The clone holds a copy of .env; leaving it behind would strand secrets.
   case "$BASE" in */Library/"Application Support"/pressd) rm -rf "$BASE" ;; esac
-  echo "Removed $LABEL, its plist, and $BASE (clone + .env copy). Logs kept in $LOGDIR."
+  echo "Removed $LABEL and $LOGIN_LABEL, their plists, and $BASE (clone + .env copy). Logs kept in $LOGDIR."
   exit 0
 fi
 
@@ -205,9 +210,16 @@ unload "$LABEL"
 write_plist "$LABEL" "$PLIST" "$LOGDIR/audio-ingest.log" schedule
 launchctl bootstrap "$DOMAIN" "$PLIST"
 
+# The login catch-up. RunAtLoad fires at every login — and once now, at
+# bootstrap; nightly.sh makes that a no-op when a run succeeded in the last 20h.
+unload "$LOGIN_LABEL"
+write_plist "$LOGIN_LABEL" "$LOGIN_PLIST" "$LOGDIR/audio-ingest.log" once --catch-up
+launchctl bootstrap "$DOMAIN" "$LOGIN_PLIST"
+
 cat <<DONE
 
-Installed $LABEL — nightly at 00:30 local, or on the next wake if the Mac is asleep.
+Installed $LABEL (00:30 local, or on the next wake if the Mac is asleep)
+      and $LOGIN_LABEL (at login, if no run has succeeded in 20h).
   runs        origin/$REF from $CLONE (updated each night)
   log         $LOGDIR/audio-ingest.log
   run now     launchctl kickstart -p $DOMAIN/$LABEL

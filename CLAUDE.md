@@ -119,7 +119,7 @@ python song_score_model.py                   # retrain → song_score_model.pkl
 # Audio ingest — the Mac only: yt-dlp is bot-blocked from datacenter IPs.
 ./run_audio_ingest.sh [--limit 20]           # by hand
 ./run_audio_ingest.sh --preflight            # tools, canary download + analysis, DB; writes nothing
-ops/launchd/install.sh [--ref B] [--uninstall]  # nightly 00:30 local; preflights *under launchd* first
+ops/launchd/install.sh [--ref B] [--uninstall]  # 00:30 local + at login; preflights *under launchd* first
 python -m worker.audio_health                # the check GitHub runs: exit 1 if stale or failed
 ```
 
@@ -135,6 +135,17 @@ the target ref lacks the canary-era ingest, rather than schedule the old silent 
 `--uninstall` deletes the clone and its `.env` copy. The job logs to
 `~/Library/Logs/pressd/audio-ingest.log`, unbuffered, so `tail -f` follows it live;
 `workerrun` and `trackaudio` in Supabase are the durable record.
+
+**When it runs — in practice, when the laptop is opened.** Two agents, neither needing
+VS Code or Claude open, both needing you logged in. `com.pressd.audio-ingest` fires at
+00:30 local, or on the next wake if the Mac was asleep then (`man launchd.plist`:
+missed runs coalesce into one). `com.pressd.audio-ingest.login` runs at login with
+`--catch-up`, covering a Mac that was shut down rather than asleep, which launchd's wake
+catch-up does not; it does nothing if a run succeeded in the last 20h (a `last_success`
+stamp beside the clone, written only by a finished real run). A wake-triggered run
+starts before Wi-Fi is back and the ingest's first act is a database connection, so
+`nightly.sh` waits up to 3 min for the network; and a `lockf` lock stops the two agents
+running at once.
 
 **Env vars.** Backend/worker: `DATABASE_URL` **or** `PG_HOST`/`PG_PORT`/`PG_DB`/`PG_USER`/
 `PG_PASSWORD`; `JWT_SECRET`, `TOKEN_TTL_DAYS`, `APP_URL`, `ANTHROPIC_API_KEY`,
