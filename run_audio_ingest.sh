@@ -1,25 +1,37 @@
 #!/usr/bin/env bash
 #
-# Manually run the audio analysis (yt-dlp download + Essentia extraction) for
-# every album with tracks that have no audio features yet. This is the job that
-# used to run nightly via launchd — now it's on-demand: run it whenever you want
-# to fill in missing audio.
+# Run the audio analysis (yt-dlp download + Essentia extraction) for every
+# album with tracks that have no audio features yet. launchd runs this nightly
+# (ops/launchd/install.sh); run it by hand whenever you like:
 #
 #   ./run_audio_ingest.sh              # analyze all albums with missing audio
 #   ./run_audio_ingest.sh --limit 20   # cap this run to 20 albums
+#   ./run_audio_ingest.sh --preflight  # check the toolchain; analyze nothing
 #
-# Output prints live to your terminal. To run it in the background and log to a
-# file instead:
-#   nohup ./run_audio_ingest.sh > audio_ingest.log 2>&1 &
-#   tail -f audio_ingest.log
+# PRESSD_UPDATE_YTDLP=1 upgrades yt-dlp first. The launchd job sets it: when
+# YouTube changes something, a new yt-dlp release is almost always the fix, and
+# an unattended job has nobody to install it.
 #
 set -euo pipefail
 
 # Run from the repo root so backend/database.py's load_dotenv() finds .env
 cd "$(dirname "$0")"
 
-# yt-dlp lives in the Python framework bin; make sure it's on PATH regardless of
-# how this script is invoked (Finder, cron, a bare shell, etc.)
-export PATH="/Library/Frameworks/Python.framework/Versions/3.13/bin:$PATH"
+# Everything the job shells out to, whoever invokes it. launchd starts jobs with
+# PATH=/usr/bin:/bin:/usr/sbin:/sbin, which has none of these:
+#   Python framework bin — python3, yt-dlp
+#   /usr/local/bin       — node (yt-dlp's JavaScript runtime), ffmpeg, ffprobe
+# Without the second, yt-dlp still searches but produces no file, so every track
+# reads as "no match". That is how the previous launchd agent failed.
+PYBIN="/Library/Frameworks/Python.framework/Versions/3.13/bin"
+export PATH="$PYBIN:/usr/local/bin:/opt/homebrew/bin:$PATH"
 
-exec /Library/Frameworks/Python.framework/Versions/3.13/bin/python3 -m worker.audio_ingest "$@"
+echo "=== audio ingest $(date '+%Y-%m-%d %H:%M:%S %Z') $* ==="
+
+if [ "${PRESSD_UPDATE_YTDLP:-0}" = "1" ]; then
+  # A failed upgrade must not cost the night: the installed version may be fine.
+  "$PYBIN/python3" -m pip install --quiet --upgrade --disable-pip-version-check yt-dlp \
+    || echo "[run_audio_ingest] yt-dlp upgrade failed; continuing with $(yt-dlp --version)"
+fi
+
+exec "$PYBIN/python3" -m worker.audio_ingest "$@"

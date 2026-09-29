@@ -1,9 +1,18 @@
 name: Nightly predictions
 
 # Per-user prediction pipeline (PLAN_ml_worker_split §4, phase B).
-# Audio ingest (phase A) runs separately on the Mac — yt-dlp is bot-blocked
-# from datacenter IPs, so it can't run here. Trigger it manually when needed:
-# ./run_audio_ingest.sh (until the 30s-preview ingest lands and it can move here).
+#
+# Audio ingest (phase A) cannot run here: yt-dlp is bot-blocked from datacenter
+# IPs. It runs on the Mac under launchd at 00:30 *local* time (ops/launchd/install.sh):
+# two hours ahead of this on Pacific time, further ahead in other zones, and ahead
+# of the next run either way. It is not a self-hosted runner job on purpose — this
+# repository is public, and a fork's pull request could target a self-hosted
+# runner and execute code on the machine that holds .env.
+#
+# `audio-health` is how that job reports back. It reads the ingest's workerrun
+# row and fails if the last run errored or is stale, and it is independent of
+# `predict` on purpose: predictions still run on whatever audio exists, and a
+# dead ingest goes red on its own instead of silently for weeks.
 
 on:
   schedule:
@@ -40,3 +49,21 @@ jobs:
           else
             python -m worker.nightly_predict
           fi
+
+  audio-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements-worker.txt
+
+      - name: Check the Mac's nightly audio ingest
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m worker.audio_health

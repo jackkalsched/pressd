@@ -54,6 +54,7 @@ backend/          FastAPI web service        → Render  (uvicorn backend.main:a
 frontend/         React 19 + Vite SPA        → Vercel
 mobile/           Expo SDK 57 iOS app        → TestFlight
 worker/           nightly ML pipeline        → GitHub Actions, 02:30 PT
+ops/launchd/      nightly audio ingest       → launchd on the Mac, from a deploy clone of main
 shared/           @pressd/shared — TS source consumed by frontend + mobile, no build
 theme_predictor/  LLM album analysis; imported by the worker AND the web service
 song_score_model.py  LightGBM per-song model (1,211 lines) — train + inference
@@ -115,10 +116,23 @@ python -m worker.nightly_predict --user 1 --skip-llm --force
 python -m worker.catalog_predict --dry-run
 python song_score_model.py                   # retrain → song_score_model.pkl
 
-# Audio ingest — Mac-only, manual. yt-dlp is bot-blocked from datacenter IPs,
-# which is why this cannot run in CI. This is the canonical audio job.
-./run_audio_ingest.sh [--limit 20]
+# Audio ingest — the Mac only: yt-dlp is bot-blocked from datacenter IPs.
+./run_audio_ingest.sh [--limit 20]           # by hand
+./run_audio_ingest.sh --preflight            # tools, canary download + analysis, DB; writes nothing
+ops/launchd/install.sh [--ref B] [--uninstall]  # nightly 00:30 local; preflights *under launchd* first
+python -m worker.audio_health                # the check GitHub runs: exit 1 if stale or failed
 ```
+
+**The nightly job runs from a deploy clone, not this working copy.** macOS privacy
+protection (TCC) denies launchd jobs access to `~/Desktop` — `Operation not permitted`,
+exit 126, verified 2026-09-29 — and a working copy would run whatever branch is checked
+out. So `install.sh` clones the repo (over HTTPS; it is public, and launchd has no SSH
+agent) into `~/Library/Application Support/pressd/ingest`, copies `.env` in at `0600`,
+and puts `nightly.sh` beside it. Each night `nightly.sh` fetches `origin/main`, checks it
+out detached, and runs it — **merged code reaches the job with no reinstall; unmerged
+code never does.** Re-run `install.sh` after changing `.env`. The installer refuses when
+the target ref lacks the canary-era ingest, rather than schedule the old silent one.
+`--uninstall` deletes the clone and its `.env` copy.
 
 **Env vars.** Backend/worker: `DATABASE_URL` **or** `PG_HOST`/`PG_PORT`/`PG_DB`/`PG_USER`/
 `PG_PASSWORD`; `JWT_SECRET`, `TOKEN_TTL_DAYS`, `APP_URL`, `ANTHROPIC_API_KEY`,
@@ -396,8 +410,18 @@ album score against the current userbase prior (`rescore_library_scores`, logged
 ⚠️ `TrackAudio.source` — never mix `yt_full` and `preview_30s` between training and
 prediction; 30s-preview features shift.
 
-Audio ingest (phase A) is Mac-only and manual; only prediction (phase B) runs in
-[.github/workflows/nightly-predict.yml](.github/workflows/nightly-predict.yml).
+Audio ingest (phase A) runs on the Mac, nightly under launchd from a deploy clone of
+`main` (`ops/launchd/`, §3), because yt-dlp is bot-blocked from datacenter IPs. It cannot be a self-hosted runner: **the repo
+is public**, and a fork's pull request could run code on the machine holding `.env`.
+Prediction (phase B) runs in
+[.github/workflows/nightly-predict.yml](.github/workflows/nightly-predict.yml), whose
+independent `audio-health` job reads the ingest's `workerrun` row and goes red if the
+last run errored, died mid-run, or is more than 36h old — the ingest's only channel into
+GitHub. Every ingest run starts with a **canary** download through the real yt-dlp
+invocation, because a broken toolchain and a track with no YouTube match look identical
+per track, and about twenty albums have no match on any night. `run_audio_ingest.sh`
+puts `/usr/local/bin` (node, ffmpeg, ffprobe) on PATH; without it yt-dlp still searches
+but produces nothing.
 
 ---
 
@@ -591,6 +615,16 @@ is the real one), and `analyze_missing_audio.py` (user-1-only, wrote the legacy
   (`predict_single.py:148`), so its theme and distinctness stages still run and only the
   song-model stage no-ops. `_queue_genre_tagging` works. Probably intended after the
   worker split, but the code doesn't say so. QUESTIONS Q11.
+
+- ~~**Audio ingest was silently dead from 2026-08-20 to 2026-09-29.**~~ **Fixed.** Runs
+  761 and 833 analyzed 0 tracks of ~85 albums and recorded `status='ok'`; nothing ran
+  after that, leaving 766 tracks across 113 albums without audio. Four causes, each
+  silent: launchd's PATH lacked node and ffmpeg (yt-dlp still *searches*, then produces
+  nothing); a broken toolchain was indistinguishable from "no YouTube match", which ~20
+  albums hit on any night; status was always `ok`, and a killed run sat at `running`
+  (run 547); and launchd cannot read `~/Desktop`. Now: a canary download opens every
+  run, status is honest, the GitHub `audio-health` job reads `workerrun`, and the job
+  runs nightly from a deploy clone (§3). The first run drains the backlog, ~3h.
 
 ### Product gaps (verified by call-graph, not assumed)
 
