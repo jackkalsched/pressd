@@ -1,15 +1,18 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Music, Search, UserPlus, Check, Heart, X, Clock, MessageCircle, Star, BookOpen, Users, ChevronDown } from 'lucide-react'
 import {
   fetchFeed, searchUsers, addFriend, toggleLike,
   fetchFriendRequests, acceptFriendRequest, declineFriendRequest,
-  fetchFriends, fetchFriendReviews,
+  fetchFriends, fetchFriendReviews, fetchDiscussionFeed,
 } from '../api'
 import type { FeedItem, UserSearchResult, FriendReview } from '../api'
+import type { FeedPost } from '../types'
+import { songScoreColor } from '../types'
 import { useUser } from '../context/UserContext'
 import CommentThread from '../components/CommentThread'
+import { threadPath } from '../lib/threads'
 
 function timeAgo(dateStr?: string): string {
   if (!dateStr) return ''
@@ -615,9 +618,101 @@ function ReviewsTab() {
   )
 }
 
+/** The discussion feed: what the people you follow have been saying in the
+ *  rooms, plus anything said back to you.
+ *
+ *  Replies to you are not friend-scoped and are marked — anyone who has rated
+ *  the record can answer you, and hiding that would leave you looking like you
+ *  ignored them. PLAN_discussions.md §9.
+ */
+function DiscussionsTab() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['discussionFeed'],
+    queryFn: () => fetchDiscussionFeed(),
+    staleTime: 60_000,
+  })
+  const posts = data?.posts ?? []
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-[#aaa]">
+        <Loader2 size={16} className="animate-spin" /> Loading…
+      </div>
+    )
+  }
+  if (posts.length === 0) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-[#bbb] text-sm">Nothing from your friends yet.</p>
+        <p className="text-[#ccc] text-xs mt-1">When they weigh in on a record, it lands here.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+      {posts.map((post) => <FeedPostCard key={post.id} post={post} />)}
+    </div>
+  )
+}
+
+function FeedPostCard({ post }: { post: FeedPost }) {
+  const what = post.toMe
+    ? ' replied to you'
+    : post.isReply
+      ? ' replied'
+      : post.kind === 'review'
+        ? ' reviewed it'
+        : ' posted'
+
+  return (
+    <Link
+      to={threadPath(post.thread.subjectType, post.thread.subtitle, post.thread.title)}
+      className={`block no-underline rounded-2xl border p-4 transition-colors hover:border-[#2d6a4f]/50 hover:bg-[#f7faf8] ${
+        post.toMe ? 'border-[#cfe0d6] bg-[#f7faf8]' : 'border-[#e8e2d9] bg-white/70'
+      }`}
+    >
+      <div className="flex items-center gap-2.5 mb-2.5">
+        {post.thread.artUrl ? (
+          <img src={post.thread.artUrl} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0 bg-[#f0ebe3]" />
+        ) : (
+          <div className="w-9 h-9 rounded-lg bg-[#f0ebe3] shrink-0" />
+        )}
+        <div className="min-w-0">
+          <p className="m-0 text-[13.5px] font-bold text-[#1c1917] truncate">{post.thread.title}</p>
+          {!!post.thread.subtitle && (
+            <p className="m-0 text-[11.5px] text-[#8a7f72] truncate">{post.thread.subtitle}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-start gap-3">
+        {post.author.score != null && (
+          <span
+            className="font-display text-[17px] font-bold tabular-nums shrink-0 leading-tight"
+            style={{ color: songScoreColor(post.author.score) }}
+          >
+            {post.author.score.toFixed(2)}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="m-0 text-[12.5px] text-[#111]">
+            <span className="font-semibold">{post.author.name}</span>
+            <span className="text-[#8a7f72]">{what}</span>
+            {post.createdAt && <span className="text-[#c2b8ad]"> · {timeAgo(post.createdAt)}</span>}
+          </p>
+          <p className="m-0 mt-1 text-[13px] text-[#444] leading-snug line-clamp-3 break-words">
+            {post.isSpoiler ? 'Marked as a spoiler — open the thread to read it' : post.body}
+          </p>
+        </div>
+      </div>
+    </Link>
+  )
+}
+
 export default function Social() {
   const { activeUser } = useUser()
-  const [tab, setTab] = useState<'activity' | 'reviews'>('activity')
+  const [tab, setTab] = useState<'activity' | 'reviews' | 'discussions'>('activity')
 
   const { data: feed = [], isLoading } = useQuery({
     queryKey: ['feed', activeUser?.id],
@@ -626,7 +721,7 @@ export default function Social() {
     staleTime: 60_000,
   })
 
-  const tabBtn = (key: 'activity' | 'reviews', label: string) => (
+  const tabBtn = (key: 'activity' | 'reviews' | 'discussions', label: string) => (
     <button
       onClick={() => setTab(key)}
       className={`text-sm font-semibold px-1 py-2 border-b-2 transition-colors ${
@@ -650,10 +745,13 @@ export default function Social() {
       <div className="flex items-center gap-5 border-b border-[#eee] mb-6">
         {tabBtn('activity', 'Activity')}
         {tabBtn('reviews', 'Reviews')}
+        {tabBtn('discussions', 'Discussions')}
       </div>
 
       {tab === 'reviews' ? (
         <ReviewsTab />
+      ) : tab === 'discussions' ? (
+        <DiscussionsTab />
       ) : isLoading ? (
         <div className="flex items-center gap-2 text-[#aaa]">
           <Loader2 size={16} className="animate-spin" /> Loading…

@@ -37,7 +37,7 @@ function useAlbumColor(album: string | null, artist: string | null) {
 }
 
 function pillNeutral(): React.CSSProperties {
-  return { font: "700 17px 'DM Sans', sans-serif", color: '#4a423a', background: 'rgba(255,255,255,.6)', border: '1px solid #e6ded2', borderRadius: 99, padding: '9px 18px' }
+  return { font: "700 17px 'Plus Jakarta Sans', sans-serif", color: '#4a423a', background: 'rgba(255,255,255,.6)', border: '1px solid #e6ded2', borderRadius: 99, padding: '9px 18px' }
 }
 
 export default function ShareCardModal({ album, onClose }: { album: Album; onClose: () => void }) {
@@ -134,8 +134,8 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl border border-[#e6ded2] p-5 flex flex-col items-center max-h-[94vh]">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm fade-in" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-xl border border-[#e6ded2] p-5 flex flex-col items-center max-h-[94vh] pop-in">
         <div className="w-full flex items-center justify-between mb-4">
           <h2 className="text-[#1c1917] font-semibold text-[15px]">Share card</h2>
           <button onClick={onClose} className="text-[#aaa] hover:text-[#555] transition-colors"><X size={18} /></button>
@@ -150,7 +150,7 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
                 position: 'relative', width: CARD_W, height: CARD_H, overflow: 'hidden',
                 background: accentGradient(accent), color: INK,
                 display: 'flex', flexDirection: 'column', padding: '52px 70px 44px',
-                fontFamily: "'DM Sans', system-ui, sans-serif",
+                fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
               }}
             >
               {/* faint album-art watermark (like the album page). The image is
@@ -184,7 +184,7 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
                   <img src="/logo.png" alt="" style={{ height: 44, width: 'auto', display: 'block' }} />
                   <span style={{ font: "800 30px 'Plus Jakarta Sans', sans-serif", letterSpacing: '-.02em', color: INK }}>Press&rsquo;d</span>
                 </div>
-                <span style={{ font: "600 17px 'DM Sans'", letterSpacing: '.14em', textTransform: 'uppercase', color: WARM }}>{dateStr}</span>
+                <span style={{ font: "600 17px 'Plus Jakarta Sans'", letterSpacing: '.14em', textTransform: 'uppercase', color: WARM }}>{dateStr}</span>
               </div>
 
               {/* album */}
@@ -196,16 +196,16 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <h1 style={{ margin: 0, font: "800 54px/1 'Playfair Display', serif", letterSpacing: '-.01em', color: INK }}>{album.albumName}</h1>
-                  <p style={{ margin: '11px 0 0', font: "500 22px 'DM Sans'", color: WARM }}>{[album.artist, ...album.extraArtists].join(', ')}{album.year ? ` · ${album.year}` : ''}</p>
+                  <p style={{ margin: '11px 0 0', font: "500 22px 'Plus Jakarta Sans'", color: WARM }}>{[album.artist, ...album.extraArtists].join(', ')}{album.year ? ` · ${album.year}` : ''}</p>
                   {album.genre && (
-                    <span style={{ display: 'inline-block', marginTop: 11, font: "700 13px 'DM Sans'", letterSpacing: '.16em', textTransform: 'uppercase', color: GREEN, border: '1.5px solid rgba(45,106,79,.4)', borderRadius: 99, padding: '5px 13px' }}>{album.genre}</span>
+                    <span style={{ display: 'inline-block', marginTop: 11, font: "700 13px 'Plus Jakarta Sans'", letterSpacing: '.16em', textTransform: 'uppercase', color: GREEN, border: '1.5px solid rgba(45,106,79,.4)', borderRadius: 99, padding: '5px 13px' }}>{album.genre}</span>
                   )}
                 </div>
               </div>
 
               {/* final score */}
               <div style={{ position: 'relative', textAlign: 'center', marginTop: 22 }}>
-                <p style={{ margin: 0, font: "700 15px 'DM Sans'", letterSpacing: '.32em', textTransform: 'uppercase', color: WARM }}>Final Score</p>
+                <p style={{ margin: 0, font: "700 15px 'Plus Jakarta Sans'", letterSpacing: '.32em', textTransform: 'uppercase', color: WARM }}>Final Score</p>
                 <div style={{ margin: '2px 0 0', font: "800 148px/0.86 'Playfair Display', serif", letterSpacing: '-.02em', color: scoreColor }}>
                   {album.score !== null ? album.score.toFixed(2) : '—'}
                   <span style={{ font: "600 40px 'Plus Jakarta Sans'", color: WARM2 }}> /10</span>
@@ -233,7 +233,7 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
                     )
                   })}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 11, font: "600 13px 'DM Sans'", letterSpacing: '.1em', color: FAINT }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 11, font: "600 13px 'Plus Jakarta Sans'", letterSpacing: '.1em', color: FAINT }}>
                   <span>SCORE DISTRIBUTION</span><span>ALL YOUR RATED ALBUMS</span>
                 </div>
               </div>
@@ -244,13 +244,13 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
                   <div style={{ background: 'rgba(45,106,79,.10)', border: '1.5px solid rgba(45,106,79,.4)', borderRadius: 22, padding: '18px 22px' }}>
                     <div style={{ font: "800 58px/0.9 'Playfair Display', serif", color: GREEN }}>{stats.bangPct}%</div>
                     <p style={{ margin: '9px 0 0', font: "800 17px 'Plus Jakarta Sans'", letterSpacing: '.14em', textTransform: 'uppercase', color: INK }}>Bangs</p>
-                    <p style={{ margin: '4px 0 0', font: "500 15px 'DM Sans'", color: WARM }}>{stats.bangCount} {stats.bangCount === 1 ? 'song' : 'songs'} · 8.0+</p>
+                    <p style={{ margin: '4px 0 0', font: "500 15px 'Plus Jakarta Sans'", color: WARM }}>{stats.bangCount} {stats.bangCount === 1 ? 'song' : 'songs'} · 8.0+</p>
                   </div>
                   <span style={{ font: "700 20px 'Playfair Display', serif", color: WARM2 }}>vs</span>
                   <div style={{ background: 'rgba(176,64,47,.10)', border: '1.5px solid rgba(176,64,47,.4)', borderRadius: 22, padding: '18px 22px', textAlign: 'right' }}>
                     <div style={{ font: "800 58px/0.9 'Playfair Display', serif", color: CORAL }}>{stats.skipPct}%</div>
                     <p style={{ margin: '9px 0 0', font: "800 17px 'Plus Jakarta Sans'", letterSpacing: '.14em', textTransform: 'uppercase', color: INK }}>Skips</p>
-                    <p style={{ margin: '4px 0 0', font: "500 15px 'DM Sans'", color: WARM }}>{stats.skipCount} {stats.skipCount === 1 ? 'song' : 'songs'} · under 6.5</p>
+                    <p style={{ margin: '4px 0 0', font: "500 15px 'Plus Jakarta Sans'", color: WARM }}>{stats.skipCount} {stats.skipCount === 1 ? 'song' : 'songs'} · under 6.5</p>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 5, marginTop: 14, height: 22 }}>
@@ -258,7 +258,7 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
                   <div style={{ width: `${stats.midPct}%`, background: 'rgba(120,100,80,.2)', borderRadius: 99 }} />
                   <div style={{ width: `${stats.skipPct}%`, background: CORAL, borderRadius: 99 }} />
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 9, font: "600 13px 'DM Sans'", letterSpacing: '.08em', color: FAINT }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 9, font: "600 13px 'Plus Jakarta Sans'", letterSpacing: '.08em', color: FAINT }}>
                   <span>{stats.bangCount} {stats.bangCount === 1 ? 'BANG' : 'BANGS'}</span>
                   <span>{stats.midCount} MIDS</span>
                   <span>{stats.skipCount} {stats.skipCount === 1 ? 'SKIP' : 'SKIPS'}</span>
@@ -271,13 +271,13 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
                   <div style={{ background: 'rgba(255,255,255,.5)', border: '1px solid rgba(45,106,79,.3)', borderRadius: 22, padding: '18px 22px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Star size={18} fill={GREEN} strokeWidth={0} /><span style={{ font: "800 14px 'Plus Jakarta Sans'", letterSpacing: '.16em', textTransform: 'uppercase', color: GREEN }}>Favorite</span></div>
                     <p style={{ margin: '11px 0 0', font: "700 32px/1 'Playfair Display', serif", color: INK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stats.favorite.title}</p>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginTop: 9 }}><span style={{ font: "800 40px 'Playfair Display', serif", color: songScoreColor(stats.favorite.score!) }}>{stats.favorite.score!.toFixed(1)}</span><span style={{ font: "600 17px 'DM Sans'", color: WARM2 }}>/10</span></div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginTop: 9 }}><span style={{ font: "800 40px 'Playfair Display', serif", color: songScoreColor(stats.favorite.score!) }}>{stats.favorite.score!.toFixed(1)}</span><span style={{ font: "600 17px 'Plus Jakarta Sans'", color: WARM2 }}>/10</span></div>
                   </div>
                   {stats.least && (
                     <div style={{ background: 'rgba(255,255,255,.5)', border: '1px solid rgba(176,64,47,.3)', borderRadius: 22, padding: '18px 22px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18, color: CORAL }}>▽</span><span style={{ font: "800 14px 'Plus Jakarta Sans'", letterSpacing: '.16em', textTransform: 'uppercase', color: CORAL }}>Least Favorite</span></div>
                       <p style={{ margin: '11px 0 0', font: "700 32px/1 'Playfair Display', serif", color: INK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stats.least.title}</p>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginTop: 9 }}><span style={{ font: "800 40px 'Playfair Display', serif", color: songScoreColor(stats.least.score!) }}>{stats.least.score!.toFixed(1)}</span><span style={{ font: "600 17px 'DM Sans'", color: WARM2 }}>/10</span></div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginTop: 9 }}><span style={{ font: "800 40px 'Playfair Display', serif", color: songScoreColor(stats.least.score!) }}>{stats.least.score!.toFixed(1)}</span><span style={{ font: "600 17px 'Plus Jakarta Sans'", color: WARM2 }}>/10</span></div>
                     </div>
                   )}
                 </div>
@@ -289,7 +289,7 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
                   {factors.map((f) => (
                     <div key={f.label} style={{ textAlign: 'center', background: 'rgba(255,255,255,.5)', border: '1px solid #e6ded2', borderRadius: 18, padding: '16px 8px' }}>
                       <div style={{ font: "800 34px 'Playfair Display', serif", color: INK }}>{f.value !== null ? Math.round(f.value) : '—'}</div>
-                      <p style={{ margin: '6px 0 0', font: "600 12px 'DM Sans'", letterSpacing: '.1em', textTransform: 'uppercase', color: WARM }}>{f.label}</p>
+                      <p style={{ margin: '6px 0 0', font: "600 12px 'Plus Jakarta Sans'", letterSpacing: '.1em', textTransform: 'uppercase', color: WARM }}>{f.label}</p>
                     </div>
                   ))}
                 </div>
@@ -297,7 +297,7 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
 
               {/* footer */}
               <div style={{ position: 'relative', marginTop: 'auto', paddingTop: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 11, borderTop: '1px solid #e6ded2' }}>
-                <span style={{ font: "500 19px 'DM Sans'", color: WARM }}>Rate your albums on</span>
+                <span style={{ font: "500 19px 'Plus Jakarta Sans'", color: WARM }}>Rate your albums on</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                   <img src="/logo.png" alt="" style={{ height: 32, width: 'auto', display: 'block' }} />
                   <span style={{ font: "800 22px 'Plus Jakarta Sans', sans-serif", letterSpacing: '-.02em', color: INK }}>Press&rsquo;d</span>

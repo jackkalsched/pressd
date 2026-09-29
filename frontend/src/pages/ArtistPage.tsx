@@ -485,7 +485,7 @@ export default function ArtistPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-[#111]">{data.artist}</h1>
+          <h1 className="font-display text-3xl font-bold text-[#111]">{data.artist}</h1>
           <p className="text-[#aaa] text-sm mt-1">
             {data.album_count} rated {data.album_count === 1 ? 'album' : 'albums'}
           </p>

@@ -77,7 +77,7 @@ export default function Join() {
       try {
         const user = await signInWithGoogle(tokenResponse.access_token)
         // Log in first — invite accept is best-effort
-        setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl })
+        setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl, tutorialSeen: user.tutorialSeen })
         await finishJoin(user.id)
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Something went wrong.'
@@ -106,7 +106,7 @@ export default function Join() {
           </div>
         ) : (
           <div className="bg-white border border-[#e2e2e2] rounded-2xl p-6 shadow-sm">
-            <h1 className="text-[#111] font-semibold text-lg mb-1">You've been invited</h1>
+            <h1 className="font-display text-[#111] font-bold text-xl mb-1">You've been invited</h1>
             <p className="text-[#777] text-sm mb-6">
               <span className="font-medium text-[#111]">{inviterName}</span> invited you to join Pressd.
               Sign in with Google to create your account or pick up where you left off.

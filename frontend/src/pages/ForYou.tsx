@@ -1,11 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Loader2 } from 'lucide-react'
-import { fetchAlbums, fetchFeed, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews } from '../api'
-import type { NewRelease, PredictedPick, TopReview } from '../api'
+import { fetchAlbums, fetchFeed, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion } from '../api'
+import type { NewRelease, PredictedPick, RecommendSuggestion, TopReview } from '../api'
 import { songScoreColor } from '../types'
 import { Cover, ScorePill, COVER_LIFT, hueFromString, coverGradient, scoreTint } from '../components/covers'
+import HeatedDiscussions from '../components/HeatedDiscussions'
+import PassItOnCell from '../components/PassItOnCell'
+import RecommendModal from '../components/RecommendModal'
+import { markPassItOnEmpty, markPassItOnShown, passItOnRecent, usePassItOnDue, usePassItOnOpen } from '../lib/passItOn'
 import { useUser } from '../context/UserContext'
 
 // ── small helpers ─────────────────────────────────────────────────────────────
@@ -212,6 +216,37 @@ export default function ForYou() {
     } catch { /* ignore */ }
   }
 
+  // Pass it on: one of your favourites for a friend predicted to love it, on
+  // the visits lib/passItOn deems due (a random 3–5 apart, at most once a day).
+  //
+  // Pinned to the visit it was drawn for: marking it shown ends "due" at once,
+  // and without the pin that would pull the cell out from under the reader.
+  // The next visit drops it.
+  const passOpen = usePassItOnOpen()
+  const passDue = usePassItOnDue()
+  const { data: passDraw } = useQuery({
+    queryKey: ['recommend-suggestion', userId, passOpen],
+    queryFn: () => fetchRecommendSuggestion(passItOnRecent()),
+    enabled: userId > 0 && passDue,
+    staleTime: Infinity,
+  })
+  const [passPinned, setPassPinned] = useState<{ open: number; suggestion: RecommendSuggestion } | null>(null)
+  if (passDraw && passDue && passPinned?.open !== passOpen) {
+    setPassPinned({ open: passOpen, suggestion: passDraw })
+  }
+  const passItOn = passPinned?.open === passOpen ? passPinned.suggestion : null
+  const passKey = passItOn ? `${passItOn.album.id}:${passItOn.friend.id}` : null
+  useEffect(() => {
+    if (passKey) markPassItOnShown(passKey)
+  }, [passKey])
+  useEffect(() => {
+    if (passDue && passDraw === null) markPassItOnEmpty()
+  }, [passDue, passDraw])
+  const [passModalOpen, setPassModalOpen] = useState(false)
+  // Sent from the dialog: the suggestion has done its job, so it leaves once
+  // the dialog closes.
+  const [passSent, setPassSent] = useState<string | null>(null)
+
   const nothingYet = !resume && toListen.length === 0 && rated.length === 0
 
   // Same ground as every other page: the shell in Layout and the pages that
@@ -233,7 +268,7 @@ export default function ForYou() {
           {/* header */}
           <header className="mb-7">
             <p className="m-0 mb-1.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-[#a8998a]">{dateStr}</p>
-            <h1 className="m-0 text-[36px] leading-none font-extrabold tracking-[-0.02em]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>For You</h1>
+            <h1 className="m-0 text-[40px] leading-none font-black tracking-[0.01em]" style={{ fontFamily: "'Playfair Display', serif" }}>For You</h1>
             <p className="mt-2.5 text-[15px] text-[#8a7f72]">
               {greeting}{firstName ? ` ${firstName},` : ''} here&rsquo;s what&rsquo;s moving on Press&rsquo;d this week.
             </p>
@@ -254,6 +289,20 @@ export default function ForYou() {
                 <Plus size={15} /> Add an album
               </button>
             </div>
+          )}
+
+          {/* Absent on most visits by design — see lib/passItOn. */}
+          {passItOn && passKey !== passSent && (
+            <PassItOnCell suggestion={passItOn} onClick={() => setPassModalOpen(true)} />
+          )}
+          {passItOn && passModalOpen && (
+            <RecommendModal
+              key={passKey}
+              album={{ id: passItOn.album.id, albumName: passItOn.album.albumName, artist: passItOn.album.artist }}
+              initialFriendId={passItOn.friend.id}
+              onClose={() => setPassModalOpen(false)}
+              onSent={() => setPassSent(passKey)}
+            />
           )}
 
           {/* resume card */}
@@ -381,6 +430,11 @@ export default function ForYou() {
               </div>
             </section>
           )}
+
+          {/* Records people are writing about right now, which is when their
+              threads are worth opening. Sits above the reviews for that reason,
+              the way it does on mobile's For You. */}
+          <HeatedDiscussions />
 
           {/* what are pressers talking about — userbase-wide, so this section has
               something to show on day one, before the user has added anyone. */}

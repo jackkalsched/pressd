@@ -15,12 +15,15 @@ import FriendProfile from './pages/FriendProfile'
 import RatingScreen from './pages/RatingScreen'
 import AlbumDetail from './pages/AlbumDetail'
 import ArtistPage from './pages/ArtistPage'
+import Thread from './pages/Thread'
 import Join from './pages/Join'
 import LandingPage from './pages/LandingPage'
 import Privacy from './pages/Privacy'
 import PublicCharts from './pages/PublicCharts'
 import Charts from './pages/Charts'
 import HowItWorks from './pages/HowItWorks'
+import Tutorial from './pages/Tutorial'
+import TagBoard from './pages/TagBoard'
 
 function PublicHome() {
   const { activeUser } = useUser()
@@ -34,9 +37,12 @@ function RequireUser({ children }: { children: ReactElement }) {
   return children
 }
 
-/** The app shell plus the first-login onboarding gate: no rated albums yet →
- *  rate one before reaching the main site (skippable per session). /rate/:id
- *  stays reachable — it's the flow the onboarding page hands off to.
+/** The app shell plus the first-login gates. A new account sees the tutorial
+ *  first; the check is for an explicit false, because sessions stored before
+ *  the field existed carry nothing and those accounts are past their first run.
+ *  Then: no rated albums yet → rate one before reaching the main site
+ *  (skippable per session). /rate/:id stays reachable — it's the flow the
+ *  onboarding page hands off to.
  *
  *  Split out from ProtectedRoutes so a single page can sit behind the same gate
  *  without going through the catch-all. A descendant <Routes> only matches
@@ -50,6 +56,7 @@ function AppGate({ children }: { children: ReactElement }) {
     enabled: !!activeUser && !skipped,
   })
   if (!activeUser) return <Navigate to="/" replace />
+  if (activeUser.tutorialSeen === false) return <Navigate to="/tutorial" replace />
   if (!skipped) {
     if (isLoading) return null
     if ((rated ?? []).length === 0) return <Navigate to="/welcome" replace />
@@ -75,10 +82,12 @@ function ProtectedRoutes() {
         <Route path="/library" element={<Library />} />
         <Route path="/ratings" element={<Ratings />} />
         <Route path="/stats" element={<Stats />} />
+        <Route path="/stats/:kind/:tag" element={<TagBoard />} />
         <Route path="/social" element={<Social />} />
         <Route path="/u/:userId" element={<FriendProfile />} />
         <Route path="/album/:id" element={<AlbumDetail />} />
         <Route path="/artist/:name" element={<ArtistPage />} />
+        <Route path="/thread/:subject" element={<Thread />} />
       </Routes>
     </AppGate>
   )
@@ -92,6 +101,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<PublicHome />} />
           <Route path="/rate/:id" element={<RequireUser><RatingScreen /></RequireUser>} />
+          <Route path="/tutorial" element={<RequireUser><Tutorial /></RequireUser>} />
           <Route path="/welcome" element={<RequireUser><Onboarding /></RequireUser>} />
           <Route path="/join" element={<Join />} />
           {/* Public: App Store Connect requires a privacy URL that Apple's

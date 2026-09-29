@@ -1679,10 +1679,64 @@ export async function fetchThreadPosts(
           raters: sm.raters as number,
           topTrack: track(sm.top_track as Record<string, unknown> | null),
           bottomTrack: track(sm.bottom_track as Record<string, unknown> | null),
+          tracks: ((sm.tracks as Record<string, unknown>[] | undefined) ?? []).map((t) => ({
+            title: t.title as string,
+            score: t.score as number,
+            trackNumber: (t.track_number as number | null) ?? null,
+            raters: t.raters as number,
+          })),
         }
       : null,
     posts: (d.posts as Record<string, unknown>[]).map(transformPost),
     nextCursor: d.next_cursor ?? null,
+  }
+}
+
+/** One person's full rating of the record a thread is about, as the thread
+ *  shows it: the working behind the score on their post. Scoped to that post's
+ *  author and that record — see discussions.post_author_rating. */
+export interface PostAuthorRating {
+  author: UserInfo
+  albumName: string
+  artist: string
+  albumArtUrl: string | null
+  score: number | null
+  theme: number | null
+  replayValue: number | null
+  production: number | null
+  distinctness: number | null
+  review: string | null
+  dateRated: string | null
+  topSongId: number | null
+  songs: { id: number; title: string; trackNumber: number | null; score: number | null }[]
+}
+
+export async function fetchPostAuthorRating(postId: number): Promise<PostAuthorRating> {
+  const res = await apiFetch(`${BASE()}/posts/${postId}/rating`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? 'Could not load that review')
+  }
+  const d = await res.json()
+  return {
+    author: toUserInfo(d.author),
+    albumName: d.album_name,
+    artist: d.artist,
+    albumArtUrl: d.album_art_url ?? null,
+    score: d.score ?? null,
+    theme: d.theme ?? null,
+    replayValue: d.replay_value ?? null,
+    production: d.production ?? null,
+    distinctness: d.distinctness ?? null,
+    review: d.review ?? null,
+    dateRated: d.date_rated ?? null,
+    topSongId: d.top_song_id ?? null,
+    songs: (d.songs as Record<string, unknown>[]).map((s) => ({
+      id: s.id as number,
+      title: s.title as string,
+      trackNumber: (s.track_number as number | null) ?? null,
+      score: (s.score as number | null) ?? null,
+    })),
   }
 }
 

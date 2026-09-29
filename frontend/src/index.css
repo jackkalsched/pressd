@@ -46,6 +46,31 @@
   }
 }
 
+/* First-run tutorial scenes (components/TutorialScenes.tsx). Each runs once
+   per mount; the tutorial remounts a scene whenever its card comes back.
+   Backwards, not both: a finished animation must let go of the element, or
+   it would outrank the inline styles scene 1 uses to slide a track out. */
+@keyframes tut-slide-in {
+  from { opacity: 0; transform: translateX(28px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes tut-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes tut-pop {
+  0%   { opacity: 0; transform: scale(0.6); }
+  70%  { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.tut-slide-in { animation: tut-slide-in 280ms cubic-bezier(0.33, 1, 0.68, 1) backwards; }
+.tut-rise     { animation: tut-rise 420ms cubic-bezier(0.33, 1, 0.68, 1) backwards; }
+.tut-pop      { animation: tut-pop 360ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tut-slide-in, .tut-rise, .tut-pop { animation: none; }
+}
+
 @keyframes shimmer {
   0%   { background-position: -200% 0; }
   100% { background-position:  200% 0; }
@@ -61,13 +86,15 @@ body {
   margin: 0;
   background-color: #ffffff;
   color: #111111;
-  font-family: 'DM Sans', system-ui, sans-serif;
+  /* Mobile's body face (theme/tokens.ts fonts.body*). Web used DM Sans until
+     September 2026; the two apps now set text in the same two families. */
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 /* Clash Display isn't on Google Fonts, so it's self-hosted from /public/fonts
    (Fontshare EULA permits web use — see fonts/ClashDisplay-LICENSE.txt).
-   Reserved for the Pressd wordmark; headings stay Playfair via .font-metric. */
+   Reserved for the Pressd wordmark. */
 @font-face {
   font-family: 'Clash Display';
   src: url('/fonts/ClashDisplay-Bold.woff2') format('woff2'),
@@ -84,10 +111,116 @@ body {
   letter-spacing: -0.02em;
 }
 
-.font-display {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-}
-
+/* Mobile's fonts.display: page titles, album titles and scores are Playfair,
+   everything else is the body face. The name means the same thing on both
+   platforms; .font-metric is the older alias and reads identically. */
+.font-display,
 .font-metric {
   font-family: 'Playfair Display', Georgia, serif;
+}
+
+/* ── Interaction feedback ────────────────────────────────────────────────────
+   One small vocabulary shared by every surface, so a press, an entrance and an
+   arrival feel the same wherever they happen. Short and eased out: feedback
+   should confirm an action, not make anyone wait for it. All of it is dropped
+   under prefers-reduced-motion at the end of this block. */
+
+/* Every button gives under the pointer. Global rather than per-component
+   because the whole point is that nothing is left feeling dead. */
+button:not(:disabled) {
+  transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+  transition-duration: 150ms;
+}
+button:not(:disabled):active {
+  transform: scale(0.96);
+  transition-duration: 60ms;
+}
+
+/* A keyboard user always sees where they are; a mouse user never sees a ring.
+   Not on text fields: they match focus-visible on a click too, and already
+   mark focus with their own border. */
+:where(button, a, [role="button"]):focus-visible {
+  outline: 2px solid #2d6a4f;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* A new page settles in rather than cutting. */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter { animation: page-enter 240ms cubic-bezier(0.33, 1, 0.68, 1) backwards; }
+
+/* Dialogs: the scrim fades, the panel rises into place. */
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.fade-in { animation: fade-in 180ms ease-out backwards; }
+.pop-in  { animation: pop-in 240ms cubic-bezier(0.34, 1.3, 0.64, 1) backwards; }
+
+/* Dropdowns grow from the control that opened them (top right). */
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.menu-in { animation: menu-in 150ms cubic-bezier(0.33, 1, 0.68, 1) backwards; transform-origin: top right; }
+
+/* Lists arrive a row at a time. --i is the row's index; the delay is capped
+   so a long list doesn't make its last rows wait. */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rise-in {
+  animation: rise-in 320ms cubic-bezier(0.33, 1, 0.68, 1) backwards;
+  animation-delay: calc(min(var(--i, 0), 14) * 28ms);
+}
+
+/* A small spring for a state that just flipped on (a vote, a sent check). */
+@keyframes pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+.pop { animation: pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* Something the user just made, marked once so they can find it. */
+@keyframes flash {
+  from { background-color: rgba(45, 106, 79, 0.12); }
+  to   { background-color: transparent; }
+}
+.flash { animation: flash 1.6s ease-out; }
+
+/* A bar that fills from the left when it first appears, staggered like
+   rise-in. Scales rather than animating width, so it never reflows the row. */
+@keyframes grow-x {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+.grow-x {
+  transform-origin: left center;
+  animation: grow-x 560ms cubic-bezier(0.33, 1, 0.68, 1) backwards;
+  animation-delay: calc(min(var(--i, 0), 14) * 28ms + 80ms);
+}
+
+/* The rating flow moves one track at a time: forward arrives from the right,
+   back from the left, so direction reads without thinking about it. */
+@keyframes slide-next {
+  from { opacity: 0; transform: translateX(36px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes slide-prev {
+  from { opacity: 0; transform: translateX(-36px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.slide-next { animation: slide-next 280ms cubic-bezier(0.33, 1, 0.68, 1) backwards; }
+.slide-prev { animation: slide-prev 280ms cubic-bezier(0.33, 1, 0.68, 1) backwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active { transform: none; }
+  .page-enter, .fade-in, .pop-in, .menu-in, .rise-in, .pop, .flash, .grow-x,
+  .slide-next, .slide-prev { animation: none; }
 }

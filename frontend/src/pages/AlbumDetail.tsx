@@ -8,6 +8,7 @@ import { BANG_THRESHOLD, SKIP_THRESHOLD, songScoreColor } from '../types'
 import type { Album } from '../types'
 import RecommendModal from '../components/RecommendModal'
 import CommentThread from '../components/CommentThread'
+import AlbumThoughts from '../components/AlbumThoughts'
 import ShareCardModal from '../components/ShareCard'
 
 function shareRatingViaIMessage(albumName: string, artist: string, score: number | null, viewingName?: string) {
@@ -379,7 +380,7 @@ export default function AlbumDetail() {
 
           {/* Meta + score */}
           <div className="flex-1 min-w-0 flex flex-col justify-start pt-1">
-            <h1 className="text-2xl md:text-3xl font-bold leading-tight text-[#1c1917]">
+            <h1 className="font-display text-2xl md:text-3xl font-bold leading-tight text-[#1c1917]">
               {album.albumName}
             </h1>
 
@@ -586,6 +587,11 @@ export default function AlbumDetail() {
 
         {/* ── Review ───────────────────────────────────────────────── */}
         <ReviewSection album={album} editable={!isViewingFriend} authorName={isViewingFriend ? viewingUser!.name : (activeUser?.name ?? 'You')} />
+
+        {/* ── The record's discussion — after your review, because it is the
+               step out from your own copy to what the whole userbase said, and
+               before Comments, which are friend-scoped and about this copy. ── */}
+        <AlbumThoughts album={album.albumName} artist={album.artist} />
 
         {/* ── Comments ─────────────────────────────────────────────── */}
         <div className="mt-10 max-w-2xl">

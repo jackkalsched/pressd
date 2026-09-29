@@ -77,6 +77,12 @@ def thread_summary(session: Session, thread: Thread) -> dict | None:
     Song scores are averaged **per track across users** before being compared,
     the way global_rating does it, so the favourite is the track the room likes
     rather than the track one person scored hardest.
+
+    `tracks` is every one of those averages in album order, for the per-song
+    breakdown under the score. Order comes from the lowest track number any copy
+    gives the track, so a deluxe edition's bonus tracks fall in after the
+    standard ones rather than shuffling them. `raters` there is per track: a
+    song someone skipped has fewer voices than the album does.
     """
     if thread.subject_type != "album":
         return None
@@ -89,13 +95,15 @@ def thread_summary(session: Session, thread: Thread) -> dict | None:
     if not agg or agg[1] in (0, None):
         return None
 
-    tracks = session.execute(_sql("""
-        SELECT s.title, AVG(s.score) AS m
+    rows = session.execute(_sql("""
+        SELECT s.title, AVG(s.score) AS m, MIN(s.track_number) AS n,
+               COUNT(DISTINCT a.user_id) AS r
         FROM song s JOIN album a ON a.id = s.album_id
         WHERE a.subject_key = :k AND s.score IS NOT NULL AND s.track_id IS NOT NULL
         GROUP BY s.track_id, s.title
-        ORDER BY m DESC
     """), {"k": thread.subject_key}).fetchall()
+    in_order = sorted(rows, key=lambda r: (r[2] is None, r[2] or 0, r[0]))
+    tracks = sorted(rows, key=lambda r: -float(r[1]))
 
     def track(row):
         return {"title": row[0], "score": round(float(row[1]), 1)} if row else None
@@ -106,6 +114,10 @@ def thread_summary(session: Session, thread: Thread) -> dict | None:
         "top_track": track(tracks[0]) if tracks else None,
         # Only worth naming a worst track when there is more than one to lose.
         "bottom_track": track(tracks[-1]) if len(tracks) > 1 else None,
+        "tracks": [
+            {"title": r[0], "score": round(float(r[1]), 1), "track_number": r[2], "raters": r[3]}
+            for r in in_order
+        ],
     }
 
 

@@ -83,6 +83,23 @@ export interface ArtistStats {
 export const BANG_THRESHOLD = 8.0
 export const SKIP_THRESHOLD = 6.5
 
+/** Where a score would land among a library's album scores, as a percentile
+ *  label: "top 12%" in the upper half, "bottom 20%" in the lower — "top 90%"
+ *  reads as praise for a record that is near the bottom.
+ *
+ *  Both rating flows show this as "on pace for …" beside the running average.
+ *  A percentile rather than a rank, because "top 361" means nothing without the
+ *  size of the library beside it, and a percentile carries that on its own.
+ *  `others` should not include the album being rated. */
+export function libraryPercentileLabel(score: number, others: number[]): string {
+  const total = others.length + 1
+  const rank = others.filter((s) => s > score).length + 1
+  const fromTop = (rank / total) * 100
+  if (fromTop <= 50) return `top ${Math.max(1, Math.ceil(fromTop))}%`
+  const fromBottom = ((total - rank + 1) / total) * 100
+  return `bottom ${Math.max(1, Math.ceil(fromBottom))}%`
+}
+
 // Short releases (≤6 tracks) skip the factor ratings and score as the song
 // mean; they show everywhere with a tag so they read differently from LPs
 export const EP_MAX_TRACKS = 6
@@ -277,6 +294,9 @@ export interface ThreadSummary {
   topTrack: { title: string; score: number } | null
   /** Null when the record has one track — there is no worst of one. */
   bottomTrack: { title: string; score: number } | null
+  /** Every scored track's room average, in album order. `raters` is per track —
+   *  a skipped song has fewer voices than the album. */
+  tracks: { title: string; score: number; trackNumber: number | null; raters: number }[]
 }
 
 export interface ThreadPage {

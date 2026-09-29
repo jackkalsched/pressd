@@ -40,6 +40,7 @@ import {
   SKIP_THRESHOLD,
   EP_MAX_TRACKS,
   tiedTopSongs,
+  libraryPercentileLabel,
   type Album,
   type Song,
 } from '@pressd/shared/types'
@@ -259,12 +260,13 @@ export default function RatingScreen() {
           )
       : null
 
-  // Where this album would land in the library if it finished at the running avg.
+  // Where this album would land in the library if it finished at the running
+  // avg, as a percentile. Needs a library of ten for the number to mean much.
   const pace = useMemo(() => {
     if (runningAvg == null || ratedAlbums.length < 10) return null
-    const better = ratedAlbums.filter((a) => (a.score ?? 0) > runningAvg).length
-    return better + 1
-  }, [runningAvg, ratedAlbums])
+    const others = ratedAlbums.filter((a) => a.id !== albumId && a.score != null).map((a) => a.score!)
+    return libraryPercentileLabel(runningAvg, others)
+  }, [runningAvg, ratedAlbums, albumId])
 
   function setDraftAt(i: number, text: string) {
     setDrafts((prev) => {
@@ -668,7 +670,7 @@ export default function RatingScreen() {
                     {album.predictedScore != null && (
                       <Text style={styles.runNote}>predicted was {album.predictedScore.toFixed(2)}</Text>
                     )}
-                    {pace != null && <Text style={styles.runNote}>on pace for a top-{pace} album</Text>}
+                    {pace != null && <Text style={styles.runNote}>on pace for the {pace}</Text>}
                   </View>
                 </View>
                 <View style={styles.chipRow}>

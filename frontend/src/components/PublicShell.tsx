@@ -21,7 +21,7 @@ export const PUBLIC_SHELL_CSS = `
     background: radial-gradient(120% 80% at 60% 0%, #47775E 0%, #3E6B54 45%, #2F5341 100%);
     background-attachment: fixed;
     color: #F4F2EC;
-    font-family: 'DM Sans', system-ui, sans-serif;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   }
 
   .pub-nav {
@@ -109,7 +109,7 @@ export default function PublicShell({
     onSuccess: async (tokenResponse) => {
       try {
         const user = await signInWithGoogle(tokenResponse.access_token)
-        setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl })
+        setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl, tutorialSeen: user.tutorialSeen })
         navigate('/for-you', { replace: true })
       } catch {
         setLoading(false)

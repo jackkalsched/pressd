@@ -25,7 +25,7 @@ export default function Privacy() {
           min-height: 100vh;
           background: #f9f8f6;
           color: #1c1917;
-          font-family: 'DM Sans', system-ui, sans-serif;
+          font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
         }
 
         .legal-nav {

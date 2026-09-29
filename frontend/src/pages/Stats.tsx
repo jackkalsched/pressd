@@ -1,15 +1,17 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { fetchSummary, fetchGenreStats, fetchScatterData, fetchGenreScores, fetchSongs } from '../api'
+import { fetchSummary, fetchGenreStats, fetchSubgenreStats, fetchScatterData, fetchGenreScores, fetchSongs, fetchArtistStats } from '../api'
+import GenreBreakdown from '../components/GenreBreakdown'
+import { songScoreColor, BANG_THRESHOLD, SKIP_THRESHOLD } from '../types'
 import { ScoreHistogram } from '../components/histograms'
 import { useUser } from '../context/UserContext'
 import { Loader2, Disc3, ListMusic, Star, Trophy, Heart, CalendarDays, Flame, Music } from 'lucide-react'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  XAxis, YAxis, Tooltip, ResponsiveContainer,
   ScatterChart, Scatter, ZAxis, ReferenceLine,
   LineChart, Line, Legend,
 } from 'recharts'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 function gaussianKDE(scores: number[], h: number, xs: number[]): number[] {
   const n = scores.length
@@ -56,9 +58,23 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
     queryFn: () => fetchSummary(userId),
   })
 
-  const { data: genres = [], isLoading: loadingGenres } = useQuery({
+  const { data: genres = [] } = useQuery({
     queryKey: ['stats', 'genres', userId],
     queryFn: () => fetchGenreStats(userId),
+  })
+
+  // The subgenre slots, counted the way genres are. Mobile's Stats has shown
+  // these since the tag boards landed; the desktop page only had genres.
+  const { data: subgenres = [] } = useQuery({
+    queryKey: ['stats', 'subgenres', userId],
+    queryFn: () => fetchSubgenreStats(userId),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: artists = [] } = useQuery({
+    queryKey: ['artist-stats', userId],
+    queryFn: () => fetchArtistStats(userId),
+    staleTime: 5 * 60 * 1000,
   })
 
   const { data: scatter } = useQuery({
@@ -83,6 +99,16 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
     () => songs.filter((s) => s.score != null).map((s) => s.score!),
     [songs],
   )
+  // Bang vs skip, on the same thresholds as mobile's card and the share card.
+  const bangs = songScores.filter((x) => x >= BANG_THRESHOLD).length
+  const skips = songScores.filter((x) => x < SKIP_THRESHOLD).length
+  const bangPct = songScores.length ? (bangs / songScores.length) * 100 : null
+  const skipPct = songScores.length ? (skips / songScores.length) * 100 : null
+  const topArtists = useMemo(
+    () => [...artists].sort((a, b) => b.count - a.count).slice(0, 12),
+    [artists],
+  )
+  const ownerName = isViewingFriend ? viewingUser?.name : undefined
 
 
   const kdeData = useMemo(() => {
@@ -266,32 +292,44 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
           </div>
         </div>
 
-        {/* ── Row 3: Genre chart + Factor averages ── */}
+        {/* ── Row 3: Genres and subgenres, each row opening its ranking ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <GenreBreakdown title="Genres" kind="genre" rows={genres} userId={userId} ownerName={ownerName} />
+          <GenreBreakdown title="Subgenres" kind="subgenre" rows={subgenres} userId={userId} ownerName={ownerName} />
+        </div>
+
+        {/* ── Row 4: Bang vs skip + Factor averages ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          {/* Albums by genre */}
+          {/* One joined distribution with the middle greyed, as mobile and the
+              share card draw it. */}
           <div className={panelCls}>
-            <h2 className="text-sm font-semibold text-[#78716c] mb-5">Albums by genre</h2>
-            {loadingGenres ? (
-              <div className="flex items-center justify-center h-48 text-[#a8998a]">
-                <Loader2 size={14} className="animate-spin" />
+            <h2 className="text-sm font-semibold text-[#78716c] mb-5">Bangs vs skips</h2>
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="font-display text-5xl font-bold tabular-nums leading-none text-[#2d6a4f] m-0">
+                  {bangPct != null ? bangPct.toFixed(1) : '—'}%
+                </p>
+                <p className="text-[10px] font-bold tracking-[0.14em] text-[#a8998a] mt-2 m-0">BANGS</p>
+                <p className="text-xs text-[#a8998a] m-0 mt-0.5">
+                  {bangs.toLocaleString()} songs · {BANG_THRESHOLD.toFixed(1)}+
+                </p>
               </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={Math.max(200, genres.length * 28)}>
-                <BarChart data={genres} layout="vertical" barSize={14}>
-                  <XAxis type="number" tick={{ fill: '#c2b8ad', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis
-                    type="category"
-                    dataKey="genre"
-                    tick={{ fill: '#78716c', fontSize: 11 }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={100}
-                  />
-                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#00000006' }} />
-                  <Bar dataKey="count" fill="#2d6a4f" radius={[0, 4, 4, 0]} opacity={0.8} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
+              <span className="font-display italic text-[#c2b8ad] text-lg pb-6">vs</span>
+              <div className="text-right">
+                <p className="font-display text-5xl font-bold tabular-nums leading-none text-[#c0392b] m-0">
+                  {skipPct != null ? skipPct.toFixed(1) : '—'}%
+                </p>
+                <p className="text-[10px] font-bold tracking-[0.14em] text-[#a8998a] mt-2 m-0">SKIPS</p>
+                <p className="text-xs text-[#a8998a] m-0 mt-0.5">
+                  {skips.toLocaleString()} songs · under {SKIP_THRESHOLD.toFixed(1)}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-1 h-2.5 mt-6">
+              <div className="rounded-full bg-[#2d6a4f]" style={{ flex: Math.max(bangs, 0.0001) }} />
+              <div className="rounded-full bg-[#78645033]" style={{ flex: Math.max(songScores.length - bangs - skips, 0.0001) }} />
+              <div className="rounded-full bg-[#c0392b]" style={{ flex: Math.max(skips, 0.0001) }} />
+            </div>
           </div>
 
           {/* Factor averages with progress bars */}
@@ -326,19 +364,44 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
         {/* Song score distribution — the same board the app's Stats tab shows */}
         {songScores.length > 0 && (
           <div className={`mt-6 ${panelCls}`}>
-            <h2 className="text-sm font-semibold text-[#78716c] mb-1">Song Score Distribution</h2>
-            <p className="text-[#c2b8ad] text-xs mb-5">
-              {songScores.length.toLocaleString()} scored songs, bucketed by whole point
-            </p>
+            <h2 className="text-sm font-semibold text-[#78716c] mb-5">Song Score Distribution</h2>
             <ScoreHistogram scores={songScores} height={150} />
+          </div>
+        )}
+
+        {/* Most rated artists — the list mobile's Stats ends on */}
+        {topArtists.length > 0 && (
+          <div className={`mt-6 ${panelCls}`}>
+            <h2 className="text-sm font-semibold text-[#78716c] mb-4">Most rated artists</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-8">
+              {topArtists.map((a, i) => (
+                <Link
+                  key={a.artist}
+                  to={`/artist/${encodeURIComponent(a.artist)}`}
+                  className="group grid grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-3 py-2.5 border-b border-[#f0ebe3] hover:bg-[#f2f0ec] -mx-1.5 px-1.5 rounded-lg transition-colors"
+                >
+                  <span className="text-[11.5px] text-[#b5aa9c] tabular-nums text-right">{i + 1}</span>
+                  <span className="min-w-0">
+                    <span className="block text-[13.5px] font-medium text-[#1c1917] truncate group-hover:text-[#2d6a4f] transition-colors">
+                      {a.artist}
+                    </span>
+                    <span className="block text-[11.5px] text-[#a8998a]">
+                      {a.count} song{a.count === 1 ? '' : 's'} · {(a.bangPct * 100).toFixed(0)}% bangs
+                    </span>
+                  </span>
+                  <span className="font-display text-[16px] font-bold tabular-nums" style={{ color: songScoreColor(a.avgSongScore) }}>
+                    {a.avgSongScore.toFixed(2)}
+                  </span>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
 
         {/* Genre KDE */}
         {kdeData.length > 0 && (
           <div className={`mt-6 ${panelCls}`}>
-            <h2 className="text-sm font-semibold text-[#78716c] mb-1">Score Distribution by Genre</h2>
-            <p className="text-[#c2b8ad] text-xs mb-5">Kernel density estimate of average song scores per album</p>
+            <h2 className="text-sm font-semibold text-[#78716c] mb-5">Score Distribution by Genre</h2>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={kdeData} margin={{ left: -20, right: 16, top: 8, bottom: 8 }}>
                 <XAxis
@@ -377,10 +440,7 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
         {/* Scatter */}
         <div className={`mt-6 ${panelCls}`}>
           <div className="flex items-center justify-between mb-5">
-            <div>
-              <h2 className="text-sm font-semibold text-[#78716c]">Song Score vs External Factors — All Artists</h2>
-              <p className="text-[#c2b8ad] text-xs mt-0.5">Click an artist to view their page</p>
-            </div>
+            <h2 className="text-sm font-semibold text-[#78716c]">Song Score vs External Factors — All Artists</h2>
             <select
               value={genreFilter}
               onChange={(e) => setGenreFilter(e.target.value)}

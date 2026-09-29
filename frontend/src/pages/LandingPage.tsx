@@ -60,7 +60,7 @@ export default function LandingPage() {
     onSuccess: async (tokenResponse) => {
       try {
         const user = await signInWithGoogle(tokenResponse.access_token)
-        setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl })
+        setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl, tutorialSeen: user.tutorialSeen })
         navigate('/library', { replace: true })
       } catch {
         setAuthError('Sign in failed. Please try again.')
@@ -91,7 +91,7 @@ export default function LandingPage() {
           background:
             radial-gradient(120% 90% at 78% 45%, #47775E 0%, #3E6B54 42%, #2F5341 100%);
           color: #F4F2EC;
-          font-family: 'DM Sans', system-ui, sans-serif;
+          font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
           display: flex;
           flex-direction: column;
           overflow: hidden;

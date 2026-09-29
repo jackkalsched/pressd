@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Play, ChevronRight, Star, Trash2, Music, Sparkles } from 'lucide-react'
+import { Play, ChevronRight, Star, Trash2, Music, Sparkles, Loader2 } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Album } from '../types'
 import { SKIP_THRESHOLD, shortReleaseLabel } from '../types'
@@ -38,6 +38,8 @@ export default function AlbumCard({ album, showActions = true }: Props) {
   })
   const [showRecommend, setShowRecommend] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState(false)
   const [visible, setVisible] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
@@ -53,11 +55,34 @@ export default function AlbumCard({ album, showActions = true }: Props) {
     return () => obs.disconnect()
   }, [])
 
+  // Two clicks: the first arms it ("Delete?"), the second deletes.
+  //
+  // The card leaves every cached album list the moment the second click lands,
+  // rather than waiting for a refetch to drop it. That wait was the bug: with the
+  // database pool saturated (CLAUDE.md §10, P8) the refetch could fail, the card
+  // stayed put, and a delete that had already succeeded looked like it had done
+  // nothing — so people clicked again, and one album logged four DELETEs. A
+  // failed delete puts the lists back and says so.
   async function handleDiscard(e: React.MouseEvent) {
     e.stopPropagation()
-    if (!confirmDelete) { setConfirmDelete(true); return }
-    await deleteAlbum(album.id)
-    queryClient.invalidateQueries({ queryKey: ['albums'] })
+    if (deleting) return
+    if (!confirmDelete) { setConfirmDelete(true); setDeleteError(false); return }
+    setDeleting(true)
+    const snapshot = queryClient.getQueriesData<Album[]>({ queryKey: ['albums'] })
+    queryClient.setQueriesData<Album[]>({ queryKey: ['albums'] }, (old) =>
+      Array.isArray(old) ? old.filter((a) => a.id !== album.id) : old,
+    )
+    try {
+      await deleteAlbum(album.id)
+      queryClient.removeQueries({ queryKey: ['album', album.id] })
+      queryClient.invalidateQueries({ queryKey: ['albums'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+    } catch {
+      snapshot.forEach(([key, data]) => queryClient.setQueryData(key, data))
+      setDeleting(false)
+      setConfirmDelete(false)
+      setDeleteError(true)
+    }
   }
 
   const artists = [album.artist, ...album.extraArtists].join(', ')
@@ -86,6 +111,9 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           ${visible ? 'card-pop' : 'opacity-0'}
         `}
         onClick={() => (album.status === 'rated' || album.status === 'to_listen') && navigate(`/album/${album.id}`)}
+        // Leaving the card disarms a pending delete. Blur alone isn't enough:
+        // Safari never focuses a clicked button, so it never blurs either.
+        onMouseLeave={() => { if (!deleting) setConfirmDelete(false) }}
       >
         {/* ── Cover ─────────────────────────────────────────────────── */}
         <div className="aspect-square relative overflow-hidden bg-[#ece6dc] shrink-0">
@@ -241,15 +269,25 @@ export default function AlbumCard({ album, showActions = true }: Props) {
                     </button>
                     <button
                       onClick={handleDiscard}
-                      onBlur={() => setConfirmDelete(false)}
-                      className={`flex items-center justify-center px-3 text-[11px] font-medium rounded-lg transition-colors border min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
-                        confirmDelete
+                      onBlur={() => { if (!deleting) setConfirmDelete(false) }}
+                      disabled={deleting}
+                      aria-label={confirmDelete ? `Confirm deleting ${album.albumName}` : `Delete ${album.albumName}`}
+                      className={`flex items-center justify-center gap-1 px-3 text-[11px] font-semibold rounded-lg transition-colors border min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                        confirmDelete || deleting
                           ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200 focus-visible:outline-red-400'
-                          : 'bg-[#f0ebe3] hover:bg-[#e5ddd2] text-[#a8998a] border-[#ddd5c8] focus-visible:outline-[#a8998a]'
+                          : deleteError
+                            ? 'bg-red-50 text-red-600 border-red-200'
+                            : 'bg-[#f0ebe3] hover:bg-[#e5ddd2] text-[#a8998a] border-[#ddd5c8] focus-visible:outline-[#a8998a]'
                       }`}
-                      title={confirmDelete ? 'Click to confirm' : 'Discard'}
+                      title={deleteError ? "Couldn't delete — try again" : 'Delete'}
                     >
-                      <Trash2 size={12} />
+                      {deleting ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={12} className={confirmDelete ? 'pop' : undefined} />
+                      )}
+                      {confirmDelete && !deleting && <span className="pop-in">Delete?</span>}
+                      {deleteError && !confirmDelete && !deleting && <span>Retry</span>}
                     </button>
                   </>
                 )}

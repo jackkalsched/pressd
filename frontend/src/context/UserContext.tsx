@@ -1,10 +1,15 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { markTutorialSeen } from '../api'
 
 export interface UserInfo {
   id: number
   name: string
   avatarUrl?: string
   bio?: string
+  /** Only the caller's own record carries this, from sign-in. Absent — a
+   *  session stored before the field existed — must read as "seen", so the
+   *  first-run gate checks for an explicit false. */
+  tutorialSeen?: boolean
 }
 
 interface UserContextValue {
@@ -13,6 +18,8 @@ interface UserContextValue {
   viewingUser: UserInfo | null
   setViewingUser: (user: UserInfo | null) => void
   isViewingFriend: boolean
+  /** Close out the first-run tutorial, finished or skipped. */
+  completeTutorial: () => void
   signOut: () => void
 }
 
@@ -44,6 +51,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setActiveUserState(user)
   }
 
+  // Local first, so the gate in App lets the user through on this render
+  // instead of waiting on the network. A failed save only means another device
+  // may show the tutorial once more — not worth holding anyone here for.
+  function completeTutorial() {
+    if (!activeUser || activeUser.tutorialSeen !== false) return
+    setActiveUserState({ ...activeUser, tutorialSeen: true })
+    markTutorialSeen(activeUser.id).catch(() => {})
+  }
+
   function signOut() {
     try { localStorage.removeItem('pressd_token') } catch { /* ignore */ }
     setActiveUserState(null)
@@ -58,6 +74,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         viewingUser,
         setViewingUser,
         isViewingFriend: !!activeUser && !!viewingUser && viewingUser.id !== activeUser.id,
+        completeTutorial,
         signOut,
       }}
     >

@@ -36,8 +36,8 @@ Vocabulary of the core loop:
 Surfaces: **Library/profile** (three buckets plus stats), **Ratings** (rankings by
 various metrics, including baseball-style artist stats — SAR, consistency+, bang %,
 skip %), **Charts** (userbase-wide, week and all-time), **For You** (home feed),
-**Social** (activity, reviews, friend comparison), and **threads** (one discussion room
-per record, mobile only).
+**Social** (activity, reviews, discussions, friend comparison), and **threads** (one
+discussion room per record, on both platforms since September 2026).
 
 **Web and mobile are meant to stay in lockstep on features.** Layout and visual design
 differ per platform and are expected to — the shared thing is the feature and the API.
@@ -72,11 +72,11 @@ PLAN_*.md         gitignored design docs; code cites them by section
 | `backend/scoring.py` | framework 1: the user's own album score | 267 |
 | `backend/global_rating.py` | framework 2: the userbase-pooled rating | 155 |
 | `backend/trackkeys.py` | normalization keys; pure stdlib, imported everywhere | 163 |
-| `backend/routers/` | 14 routers, **106 endpoints** | 7,442 |
+| `backend/routers/` | 14 routers, **107 endpoints** | 7,501 |
 | `worker/` | `nightly_predict`, `catalog_predict`, `artist_clusters`, `audio_ingest`, `refresh_new_releases`, … | 2,149 |
 | `theme_predictor/` | `predict_single`, `personalize`, `global_factors`, `corpus`, … | 1,896 |
 | `shared/src/api.ts` | the single API client, 92 exported functions | 1,763 |
-| `frontend/src/` | 14 pages, 14 components | 9,715 |
+| `frontend/src/` | 18 pages, 16 components, 2 lib modules | 10,355 |
 | `mobile/` | 19 routes, 32 components, 14 lib modules | 17,416 |
 
 **Stack, as verified.** FastAPI 0.103 + SQLModel on **Postgres only** — Supabase is a
@@ -207,7 +207,7 @@ There is no Alembic and no version table. Adding a column means adding a SQLMode
 ### Journey: submit a rating
 
 ```
-RatingScreen.tsx:191 / rate/[id].tsx:378
+frontend RatingScreen.tsx `submit` / mobile rate/[id].tsx `submit`
   POST /songs/batch-rate            songs.py:83   writes scores; NO recompute
   PATCH /albums/{id}                albums.py:197 status + 4 factors
     ├─ recompute_user_scores()      albums.py:243  the rater's library only
@@ -279,10 +279,12 @@ live:    GET /discover/picks      discover.py:296  ORDER BY predicted_score DESC
          → excludes already_rated and anything already in the library
 ```
 
-### Journey: "Pass it on" (mobile For You)
+### Journey: "Pass it on" (For You, both platforms)
 
 ```
-launch / return after 30 min   lib/passItOn.ts   counts an "open" in the Keychain
+launch / return after 30 min   lib/passItOn.ts   counts an "open" — Keychain on mobile,
+                                                  localStorage on web (a page load, or the
+                                                  tab visible again after 30 min hidden)
 due?  opens ≥ nextAt (a random 3–5 after the last showing), not already today
 GET /discover/recommend-suggestion?exclude=albumId:friendId,…
   → caller's rated albums with score ≥ 8.0 AND in their own top quarter, with a tracklist
@@ -290,7 +292,7 @@ GET /discover/recommend-suggestion?exclude=albumId:friendId,…
   → albumprediction > 7.5 for that friend, matched on album_key
   → drop friends who own the record in any edition (Album.subject_key)
   → random pair, avoiding recently shown ones; null when none qualifies
-PassItOnCell → RecommendSheet with the friend preselected → POST /albums/{id}/recommend
+PassItOnCell → RecommendSheet / RecommendModal, friend preselected → POST /albums/{id}/recommend
 ```
 The friend's predicted score qualifies the pair on the server and is **never sent**: it
 is built from the friend's ratings. The response carries the album and `public_user`
@@ -326,7 +328,12 @@ identity never comes from a client-supplied `user_id`. `authorize_view` /
 `viewable_user_id` gate friend-viewing and require an **accepted** friendship — pending
 grants nothing (`:83-89`). `thread_access` (`:121`) is stricter: you may read an album's
 thread only if **you have rated that album**, because a thread on a record you're
-halfway through is the most spoiler-prone surface in the app. `public_user` is the only
+halfway through is the most spoiler-prone surface in the app. It is also the one gate
+under which a **non-friend's per-song scores** are visible: `GET /posts/{id}/rating`
+(`discussions.post_author_rating`) returns a post author's full rating of the thread's
+record — score, factors, every song, review — to anyone past `thread_access`. It is
+keyed on a post, not a user id, so only people who have spoken in the room can be
+looked up, and only for that record, never their library. `public_user` is the only
 shape one user may see of another (id, name, avatar, bio); `own_user` adds the caller's
 private state and backs `auth_response` and `GET /users/me`. Returning a `PressUser`
 row directly hands every column to the caller — email and provider ids included — which
@@ -343,15 +350,21 @@ sharing a name but differing >10s in duration get a `||d{sec}`-suffixed key (`:4
 `recommend_album` (`:778`) refuses without a tracklist (`:808-812`) and fills in whatever
 the recipient's shell copy is missing, but leaves anything they've engaged with alone.
 
-**First run (mobile).** `app/(tabs)/_layout.tsx` sends an account whose
-`tutorialSeen` is explicitly `false` to `/tutorial`: five swipeable cards
-(`components/TutorialScenes.tsx`), then `/welcome` for the first-album pick. Finishing
+**First run (both platforms).** Mobile's `app/(tabs)/_layout.tsx` and web's `AppGate`
+(`frontend/src/App.tsx`) send an account whose `tutorialSeen` is explicitly `false` to
+`/tutorial`: five cards (`components/TutorialScenes.tsx` on each platform — swiped on
+mobile; Next/Back, arrow keys and touch swipe on web), then `/welcome` for the
+first-album pick. The copy and the scenes' fixed numbers are duplicated per platform;
+change both. Finishing
 and skipping both count as seen. The flag is `PressUser.tutorial_seen_at`, set once by
 `PATCH /users/{id}` with `{"tutorial_seen": true}` and returned as `tutorial_seen` by
 `auth_response` and `GET /users/me` (`deps.py`, `own_user`); dev-token sign-in reads
 `/users/me`. Its migration stamps every account that existed when
-the column arrived, so only new sign-ups see it. Settings → *How Pressd works* replays
-it with `?replay=1`, which records nothing. The last card promises predictions after
+the column arrived, so only new sign-ups see it. Because the flag is on the account, a
+tutorial met on one platform is not shown again on the other. Mobile Settings → *How
+Pressd works* and web's Edit Profile dialog replay it with `?replay=1`, which records
+nothing. Web keeps the flag in `UserContext`, so every web sign-in site must pass
+`tutorialSeen` through. The last card promises predictions after
 10 rated albums, restating `MIN_RATED_ALBUMS` — change both.
 
 **`backend/routers/public.py`** — the **intended** only unauthenticated surface
@@ -456,7 +469,7 @@ person thinks of it is fitted per user.**
 rationale. It was 50 (one user in twenty got anything), then 1 (predictions for anyone).
 Below 10 the blend is almost entirely pooled, and while the userbase is small the pool is
 largely one person's taste — so the prediction reads as a stranger's opinion wearing the
-user's name. The mobile first-run tutorial quotes this number to new users.
+user's name. The first-run tutorial quotes this number to new users, on both platforms.
 
 It is enforced where predictions are **made** — the nightly job, and the import-time
 `_queue_predictions` thread in `albums.py` — and again where they are **served**, via
@@ -700,6 +713,10 @@ backend: `/users/` rows carry only `id`, `name`, `avatar_url`, `bio`.
   (run 547); and launchd cannot read `~/Desktop`. Now: a canary download opens every
   run, status is honest, the GitHub `audio-health` job reads `workerrun`, and the job
   runs nightly from a deploy clone (§3). The first run drains the backlog, ~3h.
+- **`python song_score_model.py` crashes at HEAD.** `__main__` (`song_score_model.py:1179`)
+  builds `TasteModel()` without `clusters=`, so `artist_clusters` is `[]` and
+  `_ensemble_sim` fails on `np.vstack([])`. `fit_for_user` (`:572`) passes it, so the
+  nightly worker is unaffected; only the standalone retrain command in §3 is broken.
 
 ### Product gaps (verified by call-graph, not assumed)
 
@@ -708,25 +725,105 @@ backend: `/users/` rows carry only `id`, `name`, `avatar_url`, `bio`.
   **nothing on either platform writes them**. Every user is on 25/15/15/5. The unused
   `updateFactorWeights` wrapper was removed in the cleanup; re-add it when the UI lands.
 - **Discussion posts can't be edited or deleted from the apps.** `PATCH /posts/{id}`
-  and `DELETE /posts/{id}` still exist server-side and the thread screen renders deleted
-  states, but no client reaches them — the unused `deletePost`/`editPost` wrappers were
-  removed in the cleanup, so wiring this up means re-adding two six-line functions. A
-  moderation gap, given `PostReport` and the auto-hide rule.
+  and `DELETE /posts/{id}` still exist server-side, and both thread screens render the
+  deleted tombstone, but no client reaches them — the unused `deletePost`/`editPost`
+  wrappers were removed in the cleanup, so wiring this up means re-adding two six-line
+  functions. A moderation gap, given `PostReport` and the auto-hide rule. The web thread
+  deliberately stayed at parity here rather than spending the `canDelete`/`canEdit` flags
+  the payload already carries: doing it on one platform only is the drift §1 forbids.
 - **A tracklist never re-syncs after import.** `POST /albums/import` returns an existing
   copy with `already_existed: True` and only backfills a missing cover (`albums.py:381`).
   There is no refresh endpoint, so when an upstream catalog corrects a tracklist the
   user's only recourse is delete-and-re-add, losing their ratings. Wanted, not intended.
   `backend/repair_missing_songs.py` is a one-off Excel-sourced script, not a fix.
 
-### Parity — **the old `CLAUDE.md`'s "web is behind on For You" note is out of date**
+### Parity — what web is still missing (audited 2026-09-23)
 
-Both gaps it named are closed: `frontend/src/pages/ForYou.tsx:101-110` calls
-`fetchPredictedPicks` and `fetchTopReviews`. The real gap runs much wider in the same
-direction — **32 client functions are mobile-only, 8 web-only**. The first-run tutorial and For You's
-"Pass it on" cell are mobile-only too. Most significantly,
-**the entire discussions feature is mobile-only** (threads, replies, votes, reports,
-spoilers, the community album view, `publishThoughts`), as is account management
-(avatar upload, delete account, Apple sign-in, provider unlinking) and push.
+Counted by resolving every export in `shared/src/api.ts` against both clients:
+**19 client functions are mobile-only, 11 web-only.** Every mobile-only function is
+already backed by a shipped endpoint and already transformed by the shared client, so
+**closing these gaps is UI work in `frontend/src/` only** — no router, no migration, no
+`shared/` change. Ordered by how much of a feature is missing, not by effort.
+
+**Discussions — closed, September 2026.** Ten functions (`resolveThread`,
+`fetchThreadPosts`, `createThreadPost`, `replyToPost`, `fetchReplies`, `votePost`,
+`reportPost`, `flagSpoiler`, `fetchDiscussionFeed`, `fetchHeated`) and four surfaces
+now exist on web: [Thread.tsx](frontend/src/pages/Thread.tsx) at `/thread/:subject`,
+`AlbumThoughts` on the album page, `HeatedDiscussions` on For You, and a Discussions tab
+in Social. Sort, the summary, votes, replies, spoiler reveal, report and the lock state
+all match mobile; §12's rule that a duplicated rule changes in every copy now covers
+`LOCKED_COPY` and the vote-button semantics, which exist once per platform. Since then
+both thread screens also carry author avatars, a *Full review* option per post and
+reply (`FullReviewModal` / `FullReviewSheet`, over `fetchPostAuthorRating`), and every
+track's room average under the summary (`ThreadSummary.tracks` from
+`threads.thread_summary`). Web lays the thread out wide — conversation plus a sticky
+record rail — where mobile is one column.
+⚠️ `frontend/src/components/CommentThread.tsx` is **not** this — it is review comments
+(`fetchComments`/`postComment`), friend-scoped and about one copy of an album, sharing a
+name with `mobile/components/CommentThread.tsx`.
+Both rating flows now end in an optional review written with `publishThoughts` (after
+the rating, never as part of it). The album page's `PUT /albums/{id}/review` still exists
+for editing a review later, and both paths post into the thread through
+`sync_review_post`.
+
+**Whole features still absent from web.**
+
+1. **The community album view.** `fetchCommunityAlbum` / `fetchCommunityAlbumByName` /
+   `copyAlbumToLibrary`. This is where the global Press'd rating (§6.2) and the pooled
+   per-track scores are shown. Web `AlbumDetail.tsx` renders only the caller's own copy
+   plus `fetchFriendRatings` — a web user never sees the userbase number at all. The
+   largest remaining gap.
+2. **Compare / taste overlap.** `fetchCompare` (`/social/compare`), `fetchRankedSongs`,
+   and the board behind it (`SongGapChart`, `ScoreKdeCompare`, `app/splits/[name].tsx`).
+   Web Social has Activity, Reviews and Discussions, but no Compare tab.
+3. **Account management.** `deleteOwnAccount`, `signInWithApple`/`linkApple`,
+   `fetchLinkedProviders`/`unlinkProvider`, `deleteAvatar`. Mobile's `SettingsSheet`
+   (808 LOC) has Account / Sign-in methods / Notifications / Danger zone; web's whole
+   settings surface is the Edit Profile modal in `Layout.tsx`. Account deletion being
+   mobile-only is the one with a compliance edge to it.
+   ⚠️ **Avatars diverge in mechanism, not just presence**: mobile posts bytes via
+   `uploadAvatar`, web base64s the image into `updateUser` (`Layout.tsx:184`). Two
+   storage shapes for one field — reconcile before adding a third caller.
+
+**Surfaces that exist on both, where web is the thinner one.**
+
+4. **Profile.** Mobile unifies library + stats + identity in `app/(tabs)/profile.tsx`
+   (849) with `ProfileBanner` (578): score ring, headline stats, taste chips, and
+   **My Picks** (`favorite_album/artist/song_id`, `setTopSong`). Web splits this across
+   `Library.tsx` (168) and `Stats.tsx` (498) and has **no picks UI and no banner** —
+   `Library.tsx` calls only `fetchAlbums`, where mobile also calls `fetchSummary`,
+   `fetchScoreRange`, `fetchArtistStats`, `fetchScatterData`.
+5. **Stats.** Closed, September 2026: web's Stats ranks genres and subgenres
+   (`GenreBreakdown`, by count or by average), each row opening
+   [TagBoard.tsx](frontend/src/pages/TagBoard.tsx) at `/stats/:kind/:tag?user=&owner=`
+   over `fetchTagRecords` — mobile's `app/genre/[tag].tsx`, plus each record's rank in
+   the whole library. Bang vs skip and most-rated artists came across with it.
+6. **Artist page.** Web lacks `fetchSimilarArtistComparisons` and `fetchArtistImage`, so
+   no artist photo and no neighbour comparisons. (Web *is* ahead here on `fetchAotyAlbums`
+   and `refreshAotyArtist`.)
+7. **For You.** Web lacks `RecommendationBanner`. ("Pass it on" closed, September 2026:
+   `frontend/src/lib/passItOn.ts` + `PassItOnCell`, and web's `RecommendModal` gained
+   the preselected friend and the recommendation note it had been missing.)
+8. **Rating screen.** Closed, September 2026: web's
+   [RatingScreen.tsx](frontend/src/pages/RatingScreen.tsx) is mobile's flow — one track
+   at a time with the same `canJumpTo` unlock rule, then factors (a finish step for EPs),
+   then the review, autosave, the `TopSongTiebreak` dialog and the share card. The
+   desktop difference is a rail holding the running average and tracklist. Web's old
+   "Clear all" button went with the form it belonged to; mobile never had it.
+9. **Release notes.** `WhatsNewSheet` is mobile-only. (The five-card tutorial and
+   `markTutorialSeen` closed, September 2026: `frontend/src/pages/Tutorial.tsx`. Web's
+   `HowItWorks.tsx` is the signed-out marketing page, a different thing.)
+
+**Not gaps.** `registerPushToken`/`unregisterPushToken` (FCM, no web push today) and
+`fetchMe`/`fetchProfile`/`fetchUsers` (web reaches the same state through
+`UserContext`). Mobile is behind on invites (`fetchInvite`, `acceptInvite`,
+`getInviteLink`), public marketing charts, `fetchFriendReviews`, `fetchFriendRatings`
+and `fetchGenreScores`.
+
+**Dead on web:** `frontend/src/pages/Search.tsx` (199 LOC) is routed from nowhere and
+imported by nothing — the same orphan shape as the deleted `RatingReport.tsx`. It holds
+the only web call site of `backfillCovers`, so that wrapper is dead with it. Deleting a
+finished-but-unmounted page is a product call (cf. Q15), so it is flagged, not removed.
 
 ### Dead code — removed, September 2026
 
@@ -798,14 +895,28 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   ("PLAN_ml_worker_split §4", "PLAN_global_artist_clusters.md §3.3",
   "PLAN_discussions.md §2.3"). Read the relevant one before touching the pipeline it
   describes.
+- **Both apps set type in the same two families.** Playfair Display for page
+  titles, album titles and scores (mobile `fonts.display*`, web `.font-display` —
+  the name means the same on both); Plus Jakarta Sans for everything else (the web
+  `body` face). Clash Display is the wordmark only. Web used DM Sans until September
+  2026, share card included; don't bring a third face back.
+- **Web motion has one vocabulary, in `frontend/src/index.css`** ("Interaction
+  feedback"): every button presses in, `page-enter` on route change (keyed in
+  `Layout`), `fade-in` + `pop-in` for dialogs, `menu-in` for dropdowns, `rise-in` /
+  `grow-x` staggered by a `--i` custom property, `pop` for a state switched on, and
+  `flash` for something the user just made. Use these rather than new keyframes;
+  all of them stop under `prefers-reduced-motion`. A horizontal scroller clips
+  vertically, so a rail of `COVER_LIFT` covers needs room inside it
+  (`HeatedDiscussions` pads `py-5` and gives it back with `-my-5`).
 - **Changing a rule that is duplicated across platforms means changing every copy.**
   `EP_MAX_TRACKS` / `isEP` lives in `scoring.py` and both rating screens. The share
   card's geometry lives in both `ShareCard.tsx` files by the same rule — every mobile
   measurement is the web pixel value passed through `u()`.
 - **There is no test suite, so verification is typecheck + lint + running it.** Web:
   `cd frontend && npm run typecheck`. Mobile: `cd mobile && npm run typecheck`. Backend:
-  import the app (`python -c "import backend.main"`). Lint currently has **16
-  pre-existing errors in 10 frontend files**, and mobile `eslint .` reports **130 errors
+  import the app (`python -c "import backend.main"`). `cd frontend && npx eslint .`
+  currently reports **16 problems — 12 errors and 4 warnings**, and mobile `eslint .`
+  reports **130 errors
   and 7 warnings** (mostly `react-hooks/refs` on `useRef(...).current`; hold an
   `Animated.Value` in `useState(() => …)` instead) — if your change doesn't add to
   those counts, you haven't regressed them.
@@ -819,4 +930,4 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
 | A new scoring input | `backend/scoring.py` only — `global_rating.py` and both workers compose through it |
 | A new ML stage | `worker/nightly_predict.run_user`; build anything userbase-wide in `main()` and pass it down |
 | A new theme axis | append to `THEME_AXES`, then re-analyse every album and refit every model |
-| Closing the web/mobile gap | `frontend/src/` — the API and the shared client already carry discussions in full |
+| Closing the web/mobile gap | `frontend/src/` only — every mobile-only function already has an endpoint and a shared-client wrapper (§11 lists the remaining 19) |

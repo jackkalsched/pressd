@@ -25,11 +25,11 @@ from datetime import datetime
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field as PydField
 from sqlalchemy import text as _sql
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from ..database import get_session
-from ..deps import authorize_thread, current_user, thread_access
-from ..models import Post, PostLike, PostReport, PressUser, Thread
+from ..deps import authorize_thread, current_user, public_user, thread_access
+from ..models import Album, Post, PostLike, PostReport, PressUser, Song, Thread
 from ..threads import display_for, get_or_create_thread, thread_summary
 from ..push import send_push, tokens_for_user
 from ..trackkeys import subject_key_album
@@ -391,6 +391,65 @@ def list_replies(
             "SELECT post_id, value FROM postlike WHERE user_id = :u AND post_id IN :ids"),
             {"u": user.id, "ids": tuple(r[0] for r in rows)}).fetchall()}
     return [_serialize(r, user.id, scores, votes) for r in rows]
+
+
+@router.get("/posts/{post_id}/rating")
+def post_author_rating(
+    post_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """The full rating behind a post: its author's score, four factors, every
+    song score in track order and the written review, for this record only.
+
+    This is the one place a user sees another's per-song scores without being
+    their friend, so it is scoped as narrowly as the ask. It hangs off a post,
+    not a user id: only someone who has spoken in the room can be looked up,
+    and only for the record the room is about — never their library. The reader
+    passes the same `thread_access` gate as reading the post itself, so they
+    have finished the record too and nothing here is a spoiler. The author's
+    album score is already on every post; this is the working behind it.
+    """
+    post = session.get(Post, post_id)
+    if not post or post.deleted_at or post.user_id is None:
+        raise HTTPException(404, "Post not found")
+    thread = session.get(Thread, post.thread_id)
+    if not thread or thread.subject_type != "album":
+        raise HTTPException(404, "Post not found")
+    authorize_thread(session, user.id, thread.subject_type, thread.subject_key)
+
+    author = session.get(PressUser, post.user_id)
+    album = session.exec(
+        select(Album).where(
+            Album.user_id == post.user_id,
+            Album.subject_key == thread.subject_key,
+            Album.status == "rated",
+        ).order_by(Album.id)
+    ).first()
+    if not author or not album:
+        raise HTTPException(404, "No rating to show")
+
+    songs = session.exec(
+        select(Song).where(Song.album_id == album.id).order_by(Song.track_number, Song.id)
+    ).all()
+    return {
+        "author": public_user(author),
+        "album_name": album.album_name,
+        "artist": album.artist,
+        "album_art_url": album.album_art_url,
+        "score": album.score,
+        "theme": album.theme,
+        "replay_value": album.replay_value,
+        "production": album.production,
+        "distinctness": album.distinctness,
+        "review": album.review,
+        "date_rated": album.date_rated.isoformat() if album.date_rated else None,
+        "top_song_id": album.top_song_id,
+        "songs": [
+            {"id": s.id, "title": s.title, "track_number": s.track_number, "score": s.score}
+            for s in songs
+        ],
+    }
 
 
 class EditPost(BaseModel):

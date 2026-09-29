@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useGoogleLogin } from '@react-oauth/google'
-import { Library, BarChart2, List, Mail, X, Loader2, MessageCircle, Pencil, Users, Plus, Sparkles, TrendingUp } from 'lucide-react'
+import { Library, BarChart2, List, Mail, X, Loader2, MessageCircle, Pencil, Users, Plus, Sparkles, TrendingUp, ChevronRight } from 'lucide-react'
 import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
 import { fetchFriends, getInviteLink, updateUser, linkGoogle, removeFriend } from '../api'
@@ -87,8 +87,8 @@ function InviteModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white border border-[#e2e2e2] rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm fade-in" onClick={onClose} />
+      <div className="relative bg-white border border-[#e2e2e2] rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl pop-in">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-[#111] font-semibold">Invite Someone</h2>
           <button onClick={onClose} className="text-[#aaa] hover:text-[#555] transition-colors">
@@ -167,7 +167,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
         // Links to whoever the stored session token belongs to; the server no
         // longer accepts a user id from the client here.
         const user = await linkGoogle(tokenResponse.access_token)
-        setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl })
+        setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl, tutorialSeen: user.tutorialSeen })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to link Google account')
       }
@@ -208,6 +208,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
         bio: bio.trim() !== (activeUser.bio ?? '') ? bio.trim() : undefined,
       })
       setActiveUser({
+        ...activeUser,
         id: updated.id,
         name: updated.name,
         avatarUrl: updated.avatar_url ?? undefined,
@@ -226,8 +227,8 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white border border-[#e2e2e2] rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm fade-in" onClick={onClose} />
+      <div className="relative bg-white border border-[#e2e2e2] rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl pop-in">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-[#111] font-semibold">Edit Profile</h2>
           <button onClick={onClose} className="text-[#aaa] hover:text-[#555] transition-colors"><X size={18} /></button>
@@ -291,6 +292,18 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
               Link Google Account
             </button>
           )}
+          {/* Mobile's Settings → How Pressd works. This dialog is the web's
+              settings surface, so the replay lives here. */}
+          <button
+            onClick={() => { onClose(); navigate('/tutorial?replay=1') }}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left hover:bg-[#f5f5f5] transition-colors"
+          >
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-medium text-[#111]">How Pressd works</span>
+              <span className="block text-xs text-[#999]">Replay the intro</span>
+            </span>
+            <ChevronRight size={16} className="text-[#bbb]" />
+          </button>
           <button
             onClick={handleSignOut}
             className="w-full py-2 rounded-xl text-sm font-medium text-[#c0392b] hover:bg-[#fdf0ee] transition-colors"
@@ -306,6 +319,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { activeUser, viewingUser, setViewingUser, isViewingFriend } = useUser()
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const [showInvite, setShowInvite] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
@@ -432,7 +446,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
-        {children}
+        {/* Keyed on the path so each new page settles in rather than cutting.
+            The search string is left out: a filter or sort change on the same
+            page shouldn't replay the entrance. */}
+        <div key={location.pathname} className="page-enter">
+          {children}
+        </div>
       </main>
 
       {/* Bottom tab bar — mobile only */}
