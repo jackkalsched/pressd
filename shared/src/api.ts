@@ -499,6 +499,43 @@ export async function fetchPredictedPicks(limit = 10): Promise<PredictedPick[]> 
   }))
 }
 
+/** One of your favourites and a friend the model expects to love it. The
+ *  friend's predicted score qualified the pair on the server and is never sent:
+ *  it is built from their ratings, not yours. */
+export interface RecommendSuggestion {
+  album: {
+    id: number
+    albumName: string
+    artist: string
+    albumArtUrl: string | null
+    year: number | null
+    score: number
+  }
+  friend: UserInfo
+}
+
+/** A random qualifying pair, or null when none qualifies. `exclude` holds
+ *  recently shown pairs as "albumId:friendId", kept out of the draw while
+ *  anything else is left. */
+export async function fetchRecommendSuggestion(exclude: string[] = []): Promise<RecommendSuggestion | null> {
+  const q = exclude.length ? `?exclude=${encodeURIComponent(exclude.join(','))}` : ''
+  const res = await apiFetch(`${BASE()}/discover/recommend-suggestion${q}`)
+  if (!res.ok) throw new Error('Failed to load a recommendation suggestion')
+  const data = await res.json()
+  if (!data) return null
+  return {
+    album: {
+      id: data.album.id,
+      albumName: data.album.album_name,
+      artist: data.album.artist,
+      albumArtUrl: data.album.album_art_url ?? null,
+      year: data.album.year ?? null,
+      score: data.album.score,
+    },
+    friend: toUserInfo(data.friend),
+  }
+}
+
 export async function fetchNewReleases(limit = 12): Promise<NewRelease[]> {
   const res = await apiFetch(`${BASE()}/discover/new-releases?limit=${limit}`)
   if (!res.ok) throw new Error('Failed to load new releases')
@@ -997,8 +1034,7 @@ async function postAuth(path: string, body: Record<string, unknown>): Promise<Us
   }
   const data = await res.json()
   config.setToken(data.token)
-  const u = data.user
-  return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined, bio: u.bio ?? undefined }
+  return toUserInfo(data.user)
 }
 
 export async function signInWithGoogle(accessToken: string): Promise<UserInfo> {
@@ -1048,11 +1084,34 @@ export interface UserInfo {
   name: string
   avatarUrl?: string
   bio?: string
+  /** Only the caller's own record carries this (sign-in, /users/me). Absent —
+   *  another user, or a session stored before the field existed — must read as
+   *  "seen", so the first-run gate checks for an explicit false. */
+  tutorialSeen?: boolean
 }
 
+function toUserInfo(u: { id: number; name: string; avatar_url?: string | null; bio?: string | null; tutorial_seen?: boolean }): UserInfo {
+  return {
+    id: u.id,
+    name: u.name,
+    avatarUrl: u.avatar_url ?? undefined,
+    bio: u.bio ?? undefined,
+    tutorialSeen: u.tutorial_seen,
+  }
+}
+
+/** Every account's public fields — id, name, avatar, bio, nothing else. */
 export async function fetchUsers(): Promise<UserInfo[]> {
   const res = await apiFetch(`${BASE()}/users/`)
-  return res.json()
+  if (!res.ok) return []
+  return (await res.json()).map(toUserInfo)
+}
+
+/** The signed-in account, in the shape sign-in returns it. */
+export async function fetchMe(): Promise<UserInfo> {
+  const res = await apiFetch(`${BASE()}/users/me`)
+  if (!res.ok) throw new Error('Failed to load your account')
+  return toUserInfo(await res.json())
 }
 
 export interface UserSearchResult {
@@ -1111,7 +1170,7 @@ export async function getInviteLink(userId: number): Promise<{ link: string; inv
   return res.json()
 }
 
-export async function fetchInvite(token: string): Promise<{ inviter_name: string; email: string }> {
+export async function fetchInvite(token: string): Promise<{ inviter_name: string }> {
   const res = await apiFetch(`${BASE()}/users/invite/${token}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -1132,8 +1191,7 @@ export async function acceptInvite(token: string, name?: string, userId?: number
   }
   const data = await res.json()
   config.setToken(data.token)
-  const u = data.user
-  return { id: u.id, name: u.name, avatarUrl: u.avatar_url ?? undefined, bio: u.bio ?? undefined }
+  return toUserInfo(data.user)
 }
 
 export async function fetchFriends(userId: number): Promise<UserInfo[]> {
@@ -1228,6 +1286,17 @@ export async function updateUser(
     throw new Error((err as { detail?: string }).detail ?? 'Failed to update profile')
   }
   return res.json()
+}
+
+/** Record that the first-run tutorial was finished or skipped. Only the first
+ *  run calls this — a replay from Settings has nothing to record. */
+export async function markTutorialSeen(userId: number): Promise<void> {
+  const res = await apiFetch(`${BASE()}/users/${userId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tutorial_seen: true }),
+  })
+  if (!res.ok) throw new Error('Failed to save tutorial progress')
 }
 
 /** One scored song of a user's, as the favourite-song picker lists them: best

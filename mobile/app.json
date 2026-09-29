@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.pressd.app",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "googleServicesFile": "./GoogleService-Info.plist",
       "usesAppleSignIn": true,
       "infoPlist": {
@@ -23,7 +23,7 @@
         ]
       },
       "entitlements": {
-        "aps-environment": "development"
+        "aps-environment": "production"
       }
     },
     "android": {

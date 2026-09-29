@@ -18,34 +18,7 @@ export interface Release {
   notes: ReleaseNote[]
 }
 
-export const RELEASES: Release[] = [
-  {
-    build: 3,
-    version: '1.0.0',
-    notes: [
-      {
-        title: 'Predictions for every album',
-        body: "The prediction model has been rebuilt to score every album in Press'd for every user — so you get a predicted rating even on records nobody has rated yet, and even before you've rated anything yourself.",
-      },
-      {
-        title: 'Pick your favourites',
-        body: 'Choose a favourite song, album and artist, and they sit at the top of your profile for anyone visiting it.',
-      },
-      {
-        title: 'Ratings save as you go',
-        body: 'The rating flow now saves in the background while you score, so leaving an album half-finished no longer loses the tracks you already rated.',
-      },
-      {
-        title: 'Recommend to friends',
-        body: 'Send an album straight to a friend with a note about why. It lands on their To Listen shelf marked with an orange star, and For You tells them it arrived.',
-      },
-      {
-        title: 'A rebuilt Compare page',
-        body: "The artist Compare tab now shows the songs you and the rest of Press'd hear most differently, with your score distributions overlaid — instead of percentile bars you couldn't put a track name to.",
-      },
-    ],
-  },
-]
+export const RELEASES: Release[] = []
 
 /** The notes for a given build, or null when that build has none. */
 export function releaseFor(build: number): Release | null {

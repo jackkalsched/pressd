@@ -24,6 +24,44 @@ _POINT_COLS = {
 }
 
 
+# Predictions are withheld until a user has rated this many albums. It sat at 50
+# once, which meant one user in twenty ever got a prediction; then at 1, which
+# produced predictions for anyone who had rated anything at all. The components
+# that need a large personal library degrade rather than fail either way — the
+# song model falls back to a pooled prior calibrated to the user
+# (song_score_model.fit_for_user), and theme/distinctness to the global consensus
+# mapped onto their scale (theme_predictor.personalize).
+#
+# The catch is what that fallback is made of. At one or two ratings the blend is
+# almost entirely pooled, and the pool is one person's taste while the userbase
+# is this small — so the prediction reads as a stranger's opinion wearing the
+# user's name. Ten ratings is where enough of their own signal survives the
+# blend to be worth showing.
+#
+# Enforced where predictions are made (worker/nightly_predict.py, the import-time
+# queue in routers/albums.py) and again where they are served (/discover/picks,
+# album reads), because rows written before the gate existed are still stored.
+# The mobile first-run tutorial (mobile/app/tutorial.tsx) quotes this number.
+MIN_RATED_ALBUMS = 10
+
+PREDICTION_FIELDS = (
+    "predicted_score", "predicted_song_mean", "predicted_theme",
+    "predicted_theme_reasoning", "predicted_distinctness", "predicted_replay",
+)
+
+
+def predictions_unlocked(session, user_id: int) -> bool:
+    """Whether this user has rated enough albums to be shown predictions."""
+    from sqlalchemy import func
+    from sqlmodel import select
+    from .models import Album
+    rated = session.exec(
+        select(func.count()).select_from(Album)
+        .where(Album.user_id == user_id, Album.status == "rated")
+    ).one()
+    return rated >= MIN_RATED_ALBUMS
+
+
 def get_user_points(user) -> dict:
     """A user's factor point allocation, falling back to defaults for any unset column."""
     return {

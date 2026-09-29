@@ -73,3 +73,6 @@ tags_backup_*.json
 # anything holding one can send push to every install and read whatever the
 # service account can reach. Never commit, never ship in a client bundle.
 *firebase-adminsdk*.json
+
+# App Store preview/screenshot exports, rendered locally for submission.
+pressd_app_preview_*.png

@@ -11,7 +11,10 @@ from datetime import date, datetime
 from ..database import get_session
 from ..deps import current_user, authorize_view, are_friends
 from ..models import Album, Song, SongAudioFeatures, PressUser, Like, Comment
-from ..scoring import compute_a_score, recompute_user_scores, BANG_THRESHOLD, SKIP_THRESHOLD
+from ..scoring import (
+    compute_a_score, recompute_user_scores, predictions_unlocked, BANG_THRESHOLD,
+    PREDICTION_FIELDS, SKIP_THRESHOLD,
+)
 from ..global_rating import invalidate_cache as invalidate_global_ratings
 from ..genres import GENRES, canonical_genre, canonical_subgenre
 from ..trackkeys import _clean_album, match_title, same_album
@@ -91,7 +94,17 @@ def list_albums(
     albums = session.exec(q.order_by(Album.score.desc())).all()
     if artist:
         albums = [a for a in albums if artist_in_album(a, artist)]
+    if not predictions_unlocked(session, target_id):
+        return [_hide_predictions(a.model_dump()) for a in albums]
     return albums
+
+
+def _hide_predictions(row: dict) -> dict:
+    """Blank the prediction columns on a serialised album whose owner is below
+    MIN_RATED_ALBUMS. Rows written before the threshold existed still hold
+    values, and a prediction shown there is the stranger's opinion the
+    threshold exists to withhold."""
+    return {**row, **{f: None for f in PREDICTION_FIELDS}}
 
 
 @router.get("/art-strip")
@@ -165,8 +178,11 @@ def get_album(
                 s["carried_score"] = hit["score"]
                 s["carried_from_album_id"] = hit["from_album_id"]
                 s["carried_from_album_name"] = hit["from_album_name"]
+    row = album.model_dump()
+    if not predictions_unlocked(session, album.user_id):
+        row = _hide_predictions(row)
     return {
-        **album.model_dump(),
+        **row,
         "others_rater_count": others,
         "songs": songs,
     }
@@ -263,6 +279,13 @@ def _queue_predictions(album_id: int):
     sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent))
     def _run():
         try:
+            # Checked here rather than at the call sites: there are three, and
+            # the thread keeps the count query off the request.
+            from ..database import engine
+            with Session(engine) as session:
+                album = session.get(Album, album_id)
+                if album is None or not predictions_unlocked(session, album.user_id):
+                    return
             from theme_predictor.predict_single import predict_album
             predict_album(album_id)
         except Exception as e:
@@ -1046,7 +1069,10 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
         "tracks": tracks,
         "your_album_id": mine_any.id if mine_any else None,
         "your_status": mine_any.status if mine_any else None,
-        "predicted_score": mine_any.predicted_score if mine_any else None,
+        "predicted_score": (
+            mine_any.predicted_score
+            if mine_any and predictions_unlocked(session, user.id) else None
+        ),
         # Off your own copy, not the pooled record: a recommendation is made to
         # one person, so it has no meaning on the userbase view of an album
         # except as "this is why it's on your shelf".

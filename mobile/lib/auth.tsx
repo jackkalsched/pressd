@@ -8,10 +8,11 @@ import {
   signInWithApple,
   linkGoogle,
   linkApple,
-  fetchUsers,
+  fetchMe,
   updateUser,
   uploadAvatar,
   deleteAvatar,
+  markTutorialSeen,
   type Profile,
   type UserInfo,
 } from '@pressd/shared/api'
@@ -44,21 +45,12 @@ interface AuthContextValue {
   /** Upload a profile picture and adopt the cache-busted URL it returns. */
   uploadAvatarImage: (image: { base64: string; contentType: string }) => Promise<void>
   removeAvatar: () => Promise<void>
+  /** Close out the first-run tutorial, finished or skipped. */
+  completeTutorial: () => void
   signOut: () => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
-
-function decodeJwtSub(token: string): number | null {
-  try {
-    const payload = token.split('.')[1]
-    const json = JSON.parse(globalThis.atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
-    const sub = Number(json.sub)
-    return Number.isFinite(sub) ? sub : null
-  } catch {
-    return null
-  }
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserInfo | null>(null)
@@ -124,14 +116,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // test in Expo Go before the Google iOS client exists.
   const signInWithDevToken = useCallback(async (jwt: string) => {
     setToken(jwt)
-    const id = decodeJwtSub(jwt)
-    const users = await fetchUsers()
-    const u = users.find((x) => x.id === id)
-    if (!u) {
+    try {
+      persistUser(await fetchMe())
+    } catch {
       setToken(null)
       throw new Error('Dev token did not match a user')
     }
-    persistUser(u)
   }, [persistUser])
 
   // PATCH /users/{id} answers with the whole profile — picks included — but the
@@ -174,6 +164,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     persistUser({ ...user, avatarUrl: undefined })
   }, [user, persistUser])
 
+  // Local first, so the gate in (tabs)/_layout lets the user through on this
+  // render instead of waiting on the network. A failed save only means another
+  // device may show the tutorial once more — not worth holding anyone here for.
+  const completeTutorial = useCallback(() => {
+    if (!user || user.tutorialSeen !== false) return
+    persistUser({ ...user, tutorialSeen: true })
+    markTutorialSeen(user.id).catch(() => {})
+  }, [user, persistUser])
+
   const value = useMemo(
     () => ({
       user,
@@ -186,6 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateProfile,
       uploadAvatarImage,
       removeAvatar,
+      completeTutorial,
       signOut,
     }),
     [
@@ -199,6 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateProfile,
       uploadAvatarImage,
       removeAvatar,
+      completeTutorial,
       signOut,
     ],
   )

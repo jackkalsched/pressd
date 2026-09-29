@@ -84,9 +84,20 @@ Once enrollment clears:
 
 ### Bump before every subsequent upload
 
-Apple rejects a build whose `CFBundleVersion` matches one already uploaded. Increment
-`CFBundleVersion` in `ios/Pressd/Info.plist` (currently `1`) for each upload;
-`CFBundleShortVersionString` (`1.0.0`) only changes for user-visible releases.
+Apple rejects a build whose `CFBundleVersion` matches one already uploaded, so bump it
+for every upload. The number lives in **three** places and they must agree — the
+archive reads Info.plist, but a later `expo prebuild` regenerates it from `app.json`,
+so a bump applied to only one of them silently reverts:
+
+- `ios/Pressd/Info.plist` → `CFBundleVersion` (a literal, not `$(CURRENT_PROJECT_VERSION)`)
+- `ios/Pressd.xcodeproj/project.pbxproj` → `CURRENT_PROJECT_VERSION`, in **both** the
+  Debug and Release configurations
+- `app.json` → `ios.buildNumber`
+
+Currently `5`. `CFBundleShortVersionString` (`1.0.0`) only changes for user-visible
+releases. Note that the Xcode project's `MARKETING_VERSION` says `1.0` while the
+plist says `1.0.0`; the plist literal is what ships, and App Store Connect shows the
+version as `1.0`.
 
 ### Distribute to testers
 

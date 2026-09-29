@@ -114,6 +114,12 @@ def init_db():
             "ALTER TABLE pressuser ADD COLUMN replay_pts INTEGER DEFAULT 15",
             "ALTER TABLE pressuser ADD COLUMN production_pts INTEGER DEFAULT 15",
             "ALTER TABLE pressuser ADD COLUMN distinctness_pts INTEGER DEFAULT 5",
+            # The default stamps every account that exists when the column
+            # arrives — they are past the first run — and is dropped at once so
+            # accounts created afterwards start null. On later boots the ADD is
+            # a no-op and DROP DEFAULT has nothing to drop.
+            "ALTER TABLE pressuser ADD COLUMN tutorial_seen_at TIMESTAMP DEFAULT NOW()",
+            "ALTER TABLE pressuser ALTER COLUMN tutorial_seen_at DROP DEFAULT",
             "UPDATE pressuser SET theme_pts = 25 WHERE theme_pts IS NULL",
             "UPDATE pressuser SET replay_pts = 15 WHERE replay_pts IS NULL",
             "UPDATE pressuser SET production_pts = 15 WHERE production_pts IS NULL",

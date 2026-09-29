@@ -19,6 +19,7 @@ import '../lib/api' // configure the shared client before anything fetches
 import { AuthProvider, useAuth } from '../lib/auth'
 import { loadSocialSeen } from '../lib/socialSeen'
 import { loadRecsSeen } from '../lib/recsSeen'
+import { loadPassItOn } from '../lib/passItOn'
 import {
   currentBuild, loadWhatsNewSeen, markWhatsNewSeen,
   useWhatsNewHydrated, useWhatsNewSeen,
@@ -33,6 +34,7 @@ import { colors } from '../theme/tokens'
 SplashScreen.preventAutoHideAsync().catch(() => {})
 loadSocialSeen() // hydrate the Social "new activity" marker once at launch
 loadRecsSeen()   // and the watermark that keeps the recommendation banner to one showing
+loadPassItOn()   // and count this launch toward the next "Pass it on" suggestion
 loadWhatsNewSeen()  // and which build's release notes have already been read
 // Without this React Query never learns the app came back to the foreground —
 // refetchOnWindowFocus is a browser concept and no-ops in React Native.
@@ -112,10 +114,14 @@ function RootNavigator() {
 
   return (
     <>
-    <WhatsNew signedIn={!!user} />
+    {/* Held back while the first-run tutorial is owed: a new account has no
+        previous build to compare against, and the tutorial marks the current
+        build's notes read when it closes. */}
+    <WhatsNew signedIn={!!user && user.tutorialSeen !== false} />
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Protected guard={!!user}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="tutorial" options={{ gestureEnabled: false }} />
         <Stack.Screen name="welcome" />
         <Stack.Screen name="add" options={{ presentation: 'modal' }} />
         <Stack.Screen name="first-album" options={{ presentation: 'modal' }} />

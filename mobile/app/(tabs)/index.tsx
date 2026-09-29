@@ -26,18 +26,29 @@ import {
   fetchNewReleases,
   fetchTrending,
   fetchTopReviews,
+  fetchRecommendSuggestion,
   toggleLike,
   type NewRelease,
+  type RecommendSuggestion,
   type TopReview,
   type TrendingAlbum,
 } from '../../lib/api'
 import { songScoreColor, type Album } from '@pressd/shared/types'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import RecommendationBanner from '../../components/RecommendationBanner'
+import PassItOnCell from '../../components/PassItOnCell'
+import RecommendSheet from '../../components/RecommendSheet'
 import HeatedDiscussions from '../../components/HeatedDiscussions'
 import LikeButton from '../../components/LikeButton'
 import { useRefreshOnFocus } from '../../lib/refresh'
 import { markRecsSeen, recTime, useRecsSeen } from '../../lib/recsSeen'
+import {
+  markPassItOnEmpty,
+  markPassItOnShown,
+  passItOnRecent,
+  usePassItOnDue,
+  usePassItOnOpen,
+} from '../../lib/passItOn'
 import { useAuth } from '../../lib/auth'
 import { revealStyle } from '../../lib/scrollReveal'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
@@ -187,6 +198,36 @@ export default function ForYou() {
     if (!bannerRec) return
     markRecsSeen(recTime(bannerRec.recommendedAt))
   }, [bannerRec])
+
+  // Pass it on: one of your favourites for a friend predicted to love it, on
+  // the opens lib/passItOn deems due (a random 3–5 apart, at most once a day).
+  //
+  // Pinned to the open it was drawn for, the same way the banner holds for its
+  // session: marking it shown ends "due" at once, and without the pin that
+  // would pull the cell out from under the reader. The next open drops it.
+  const passOpen = usePassItOnOpen()
+  const passDue = usePassItOnDue()
+  const { data: passDraw } = useQuery({
+    queryKey: ['recommend-suggestion', userId, passOpen],
+    queryFn: () => fetchRecommendSuggestion(passItOnRecent()),
+    enabled: userId > 0 && passDue,
+    staleTime: Infinity,
+  })
+  const [passPinned, setPassPinned] = useState<{ open: number; suggestion: RecommendSuggestion } | null>(null)
+  if (passDraw && passDue && passPinned?.open !== passOpen) {
+    setPassPinned({ open: passOpen, suggestion: passDraw })
+  }
+  const passItOn = passPinned?.open === passOpen ? passPinned.suggestion : null
+  const passKey = passItOn ? `${passItOn.album.id}:${passItOn.friend.id}` : null
+  useEffect(() => {
+    if (passKey) markPassItOnShown(passKey)
+  }, [passKey])
+  useEffect(() => {
+    if (passDue && passDraw === null) markPassItOnEmpty()
+  }, [passDue, passDraw])
+  const [passSheetOpen, setPassSheetOpen] = useState(false)
+  // Sent from the sheet: the suggestion has done its job, so it leaves.
+  const [passSent, setPassSent] = useState<string | null>(null)
 
   // Rate this next: rotates once per day, stable within the day.
   //
@@ -350,6 +391,22 @@ export default function ForYou() {
             albumName={bannerRec.albumName}
             count={recommended.length}
             onPress={() => openRecommendation(bannerRec.id)}
+          />
+        )}
+
+        {/* Beside the banner because it is the same exchange in the other
+            direction. Absent on most opens by design — see lib/passItOn. */}
+        {passItOn && passKey !== passSent && (
+          <PassItOnCell suggestion={passItOn} onPress={() => setPassSheetOpen(true)} />
+        )}
+        {passItOn && (
+          <RecommendSheet
+            key={passKey}
+            album={{ id: passItOn.album.id, albumName: passItOn.album.albumName, artist: passItOn.album.artist }}
+            initialFriendId={passItOn.friend.id}
+            visible={passSheetOpen}
+            onClose={() => setPassSheetOpen(false)}
+            onSent={() => setPassSent(passKey)}
           />
         )}
 

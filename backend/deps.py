@@ -32,13 +32,23 @@ def create_access_token(user_id: int) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
 
 
+def public_user(user: PressUser) -> dict:
+    """Everything one user may see about another: who they are, never how they
+    sign in. Email, provider subject ids, factor weights and first-run state stay
+    on the row. Any endpoint listing people returns this rather than the row
+    itself, because serialising a PressUser hands every column to the caller."""
+    return {"id": user.id, "name": user.name, "avatar_url": user.avatar_url, "bio": user.bio}
+
+
+def own_user(user: PressUser) -> dict:
+    """The signed-in user's view of themselves: public fields plus the state
+    only they need."""
+    return {**public_user(user), "tutorial_seen": user.tutorial_seen_at is not None}
+
+
 def auth_response(user: PressUser) -> dict:
-    """Standard login payload: a session token plus the public user fields."""
-    return {
-        "token": create_access_token(user.id),
-        "user": {"id": user.id, "name": user.name, "avatar_url": user.avatar_url,
-                 "bio": user.bio},
-    }
+    """Standard login payload: a session token plus the caller's own fields."""
+    return {"token": create_access_token(user.id), "user": own_user(user)}
 
 
 def current_user(

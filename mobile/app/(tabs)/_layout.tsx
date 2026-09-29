@@ -18,6 +18,13 @@ export default function TabsLayout() {
     enabled: !!user,
   })
 
+  // A new account sees the tutorial before the first-album screen. The check
+  // is for an explicit false: sessions stored before the field existed carry
+  // nothing, and those accounts are past their first run.
+  if (user?.tutorialSeen === false) {
+    return <Redirect href="/tutorial" />
+  }
+
   if (user && !isOnboardingSkipped() && !isLoading && rated?.length === 0) {
     return <Redirect href="/welcome" />
   }

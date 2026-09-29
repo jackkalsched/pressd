@@ -49,20 +49,9 @@ import backend.models  # noqa: F401 — registers tables in SQLModel.metadata
 from backend.database import engine
 from worker import runlog
 
-# Tier 1 gates all prediction output. It sat at 50 once, which meant one user in
-# twenty ever got a prediction; then at 1, which produced predictions for anyone
-# who had rated anything at all. The components that need a large personal
-# library degrade rather than fail either way — the song model falls back to a
-# pooled prior calibrated to the user (song_score_model.fit_for_user), and
-# theme/distinctness to the global consensus mapped onto their scale
-# (theme_predictor.personalize).
-#
-# The catch is what that fallback is made of. At one or two ratings the blend is
-# almost entirely pooled, and the pool is one person's taste while the userbase
-# is this small — so the prediction reads as a stranger's opinion wearing the
-# user's name. Ten ratings is where enough of their own signal survives the
-# blend to be worth showing.
-MIN_RATED_ALBUMS = 10
+# Tier 1 gates all prediction output. The threshold and the reasoning behind it
+# live in backend/scoring.py, which the web service also enforces when serving.
+from backend.scoring import MIN_RATED_ALBUMS  # noqa: E402
 
 # Retained for reporting only — fit_for_user now decides how much of the
 # personal model to trust, on a ramp rather than a cliff.

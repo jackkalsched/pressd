@@ -33,6 +33,12 @@ class PressUser(SQLModel, table=True):
     production_pts: int = Field(default=15)
     distinctness_pts: int = Field(default=5)
 
+    # When the first-run tutorial was finished or skipped; null means it is
+    # still owed. On the account rather than the device so a reinstall or a
+    # second phone doesn't replay it. Every account that existed before the
+    # tutorial shipped was stamped by the migration, so only new sign-ups see it.
+    tutorial_seen_at: Optional[datetime] = None
+
     albums: list["Album"] = Relationship(back_populates="user")
 
 

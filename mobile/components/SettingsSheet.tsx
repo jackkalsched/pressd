@@ -237,6 +237,14 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
     router.push(`/favorite/${kind}`)
   }
 
+  /** Same hand-off as openPicker: the tutorial is a full screen too. */
+  function openTutorial() {
+    if (navigatingRef.current) return
+    navigatingRef.current = true
+    onClose()
+    router.push({ pathname: '/tutorial', params: { replay: '1' } })
+  }
+
   async function handleUnlink(provider: 'google' | 'apple') {
     setBusy(provider)
     setError(null)
@@ -405,6 +413,15 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
                 />
               </>
             )}
+
+            <Text style={styles.sectionLabel}>HELP</Text>
+            <Pressable style={styles.settingRow} onPress={openTutorial} accessibilityRole="button">
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.providerLabel}>How Pressd works</Text>
+                <Text style={styles.settingValue} numberOfLines={1}>Replay the intro</Text>
+              </View>
+              <ChevronRight size={17} color={colors.inkMuted} />
+            </Pressable>
 
             <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
             <Text style={styles.sectionHint}>

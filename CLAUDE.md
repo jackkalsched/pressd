@@ -72,12 +72,12 @@ PLAN_*.md         gitignored design docs; code cites them by section
 | `backend/scoring.py` | framework 1: the user's own album score | 267 |
 | `backend/global_rating.py` | framework 2: the userbase-pooled rating | 155 |
 | `backend/trackkeys.py` | normalization keys; pure stdlib, imported everywhere | 163 |
-| `backend/routers/` | 14 routers, **104 endpoints** | 7,282 |
+| `backend/routers/` | 14 routers, **106 endpoints** | 7,442 |
 | `worker/` | `nightly_predict`, `catalog_predict`, `artist_clusters`, `audio_ingest`, `refresh_new_releases`, … | 2,149 |
 | `theme_predictor/` | `predict_single`, `personalize`, `global_factors`, `corpus`, … | 1,896 |
 | `shared/src/api.ts` | the single API client, 92 exported functions | 1,763 |
 | `frontend/src/` | 14 pages, 14 components | 9,715 |
-| `mobile/` | 20 routes, 34 components, 13 lib modules | 17,416 |
+| `mobile/` | 19 routes, 32 components, 14 lib modules | 17,416 |
 
 **Stack, as verified.** FastAPI 0.103 + SQLModel on **Postgres only** — Supabase is a
 Postgres *host*, no SDK, no Supabase auth, no RLS (`database.py:11-29`). Firebase is
@@ -156,6 +156,10 @@ Web: `VITE_API_URL`, `VITE_GOOGLE_CLIENT_ID`. Mobile: `EXPO_PUBLIC_API_URL`,
 `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`.
 Files: `.env` at root, `frontend/.env.local`, `mobile/.env`.
 `EXPO_PUBLIC_*` vars are **inlined into the shipped iOS bundle** — never secrets.
+
+⚠️ Local `.env` points `PG_HOST` at the **production** Supabase pooler, and `init_db()`
+runs every migration on startup — so starting `uvicorn` locally after adding an
+`ALTER TABLE` line applies it to production.
 
 Local `.env` sets neither `JWT_SECRET` nor `DISCOGS_TOKEN`. The first falls back to a
 public literal (§10, P12); the second means `/aoty/*` discographies degrade in dev.
@@ -270,9 +274,28 @@ uncached on every Social open.
 
 ```
 nightly: worker → albumprediction(user_id, album_key) for the WHOLE catalog
-live:    GET /discover/picks      discover.py:295  ORDER BY predicted_score DESC
+live:    GET /discover/picks      discover.py:296  ORDER BY predicted_score DESC
+         → [] below MIN_RATED_ALBUMS (scoring.py)
          → excludes already_rated and anything already in the library
 ```
+
+### Journey: "Pass it on" (mobile For You)
+
+```
+launch / return after 30 min   lib/passItOn.ts   counts an "open" in the Keychain
+due?  opens ≥ nextAt (a random 3–5 after the last showing), not already today
+GET /discover/recommend-suggestion?exclude=albumId:friendId,…
+  → caller's rated albums with score ≥ 8.0 AND in their own top quarter, with a tracklist
+  → accepted friends with ≥ MIN_RATED_ALBUMS rated
+  → albumprediction > 7.5 for that friend, matched on album_key
+  → drop friends who own the record in any edition (Album.subject_key)
+  → random pair, avoiding recently shown ones; null when none qualifies
+PassItOnCell → RecommendSheet with the friend preselected → POST /albums/{id}/recommend
+```
+The friend's predicted score qualifies the pair on the server and is **never sent**: it
+is built from the friend's ratings. The response carries the album and `public_user`
+only. A null answer still starts a new gap, so a user with no pair to offer doesn't
+spend a request on every open.
 
 ### Hubs — blast radius
 
@@ -303,7 +326,11 @@ identity never comes from a client-supplied `user_id`. `authorize_view` /
 `viewable_user_id` gate friend-viewing and require an **accepted** friendship — pending
 grants nothing (`:83-89`). `thread_access` (`:121`) is stricter: you may read an album's
 thread only if **you have rated that album**, because a thread on a record you're
-halfway through is the most spoiler-prone surface in the app.
+halfway through is the most spoiler-prone surface in the app. `public_user` is the only
+shape one user may see of another (id, name, avatar, bio); `own_user` adds the caller's
+private state and backs `auth_response` and `GET /users/me`. Returning a `PressUser`
+row directly hands every column to the caller — email and provider ids included — which
+is how `GET /users/` leaked them until September 2026.
 
 **`backend/trackkeys.py`** — pure stdlib, safe to import from web, worker and scripts.
 Users' catalogs disagree about editions, feat-credits and apostrophes; these keys
@@ -315,6 +342,17 @@ dedups, inserts, then `_link_tracks` (`:473`) resolves global track ids; two rec
 sharing a name but differing >10s in duration get a `||d{sec}`-suffixed key (`:490-491`).
 `recommend_album` (`:778`) refuses without a tracklist (`:808-812`) and fills in whatever
 the recipient's shell copy is missing, but leaves anything they've engaged with alone.
+
+**First run (mobile).** `app/(tabs)/_layout.tsx` sends an account whose
+`tutorialSeen` is explicitly `false` to `/tutorial`: five swipeable cards
+(`components/TutorialScenes.tsx`), then `/welcome` for the first-album pick. Finishing
+and skipping both count as seen. The flag is `PressUser.tutorial_seen_at`, set once by
+`PATCH /users/{id}` with `{"tutorial_seen": true}` and returned as `tutorial_seen` by
+`auth_response` and `GET /users/me` (`deps.py`, `own_user`); dev-token sign-in reads
+`/users/me`. Its migration stamps every account that existed when
+the column arrived, so only new sign-ups see it. Settings → *How Pressd works* replays
+it with `?replay=1`, which records nothing. The last card promises predictions after
+10 rated albums, restating `MIN_RATED_ALBUMS` — change both.
 
 **`backend/routers/public.py`** — the **intended** only unauthenticated surface
 (marketing charts). It deliberately duplicates rather than shares `discover.py`'s charts:
@@ -414,10 +452,19 @@ person thinks of it is fitted per user.**
    into `albumprediction`, keyed `(user_id, album_key)` — not just the user's queue.
    That is what lets `/discover/picks` recommend a record the user has never heard of.
 
-`MIN_RATED_ALBUMS = 10` gates all output. It was 50 (one user in twenty got anything),
-then 1 (predictions for anyone). Below 10 the blend is almost entirely pooled, and while
-the userbase is small the pool is largely one person's taste — so the prediction reads
-as a stranger's opinion wearing the user's name (`nightly_predict.py:52-65`).
+`MIN_RATED_ALBUMS = 10` gates all output, defined once in `backend/scoring.py` with its
+rationale. It was 50 (one user in twenty got anything), then 1 (predictions for anyone).
+Below 10 the blend is almost entirely pooled, and while the userbase is small the pool is
+largely one person's taste — so the prediction reads as a stranger's opinion wearing the
+user's name. The mobile first-run tutorial quotes this number to new users.
+
+It is enforced where predictions are **made** — the nightly job, and the import-time
+`_queue_predictions` thread in `albums.py` — and again where they are **served**, via
+`predictions_unlocked`: `/discover/picks` returns `[]`, and album list, detail and the
+community payload blank every `PREDICTION_FIELDS` column. The serving check exists
+because rows written before the gate are still stored (users 14 and 29 hold predictions
+from 2026-08-08); they are hidden, not deleted, and the nightly job overwrites them once
+the user reaches 10. Both clients already render a missing prediction as absent.
 
 Users whose rating counts haven't moved are skipped, but their album rows still sync so
 a newly queued album picks up a prediction without refitting. Each user runs in its own
@@ -619,6 +666,13 @@ clean venv now imports the app. Also deleted three superseded scripts:
 is the real one), and `analyze_missing_audio.py` (user-1-only, wrote the legacy
 `songaudiofeatures` table the models no longer read, never called `sync_tracks`).
 
+**Fixed, September 2026 — private fields exposed to other users.** `GET /users/`
+returned every account's full row (email, Google/Apple subject ids, factor weights,
+favourite ids) to any signed-in caller; `POST /users/` returned the full new row; and the
+unauthenticated `GET /users/invite/{token}` returned the address an invite was emailed
+to. All three now return `public_user` (`deps.py`) or less. Verified against a running
+backend: `/users/` rows carry only `id`, `name`, `avatar_url`, `bio`.
+
 ### Confirmed defects
 
 - **Three album-grouping keys disagree.** `trackkeys.py`'s header says every cross-user
@@ -668,7 +722,8 @@ is the real one), and `analyze_missing_audio.py` (user-1-only, wrote the legacy
 
 Both gaps it named are closed: `frontend/src/pages/ForYou.tsx:101-110` calls
 `fetchPredictedPicks` and `fetchTopReviews`. The real gap runs much wider in the same
-direction — **32 client functions are mobile-only, 8 web-only**. Most significantly,
+direction — **32 client functions are mobile-only, 8 web-only**. The first-run tutorial and For You's
+"Pass it on" cell are mobile-only too. Most significantly,
 **the entire discussions feature is mobile-only** (threads, replies, votes, reports,
 spoilers, the community album view, `publishThoughts`), as is account management
 (avatar upload, delete account, Apple sign-in, provider unlinking) and push.
@@ -750,8 +805,10 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
 - **There is no test suite, so verification is typecheck + lint + running it.** Web:
   `cd frontend && npm run typecheck`. Mobile: `cd mobile && npm run typecheck`. Backend:
   import the app (`python -c "import backend.main"`). Lint currently has **16
-  pre-existing errors in 10 frontend files** — if your change doesn't add to that count,
-  you haven't regressed it.
+  pre-existing errors in 10 frontend files**, and mobile `eslint .` reports **130 errors
+  and 7 warnings** (mostly `react-hooks/refs` on `useRef(...).current`; hold an
+  `Animated.Value` in `useState(() => …)` instead) — if your change doesn't add to
+  those counts, you haven't regressed them.
 
 ### Where the next feature goes
 

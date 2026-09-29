@@ -13,14 +13,15 @@ from datetime import date, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlmodel import Session, select
 
 from ..database import get_session
-from ..deps import current_user
+from ..deps import current_user, public_user
 from ..global_rating import compute_global_ratings, is_single
-from ..scoring import BANG_THRESHOLD, SKIP_THRESHOLD
-from ..models import Album, PressUser
+from ..scoring import MIN_RATED_ALBUMS, BANG_THRESHOLD, SKIP_THRESHOLD, predictions_unlocked
+from ..models import Album, AlbumPrediction, Friendship, PressUser, Song
+from ..trackkeys import album_key, subject_key_album
 from ..new_releases import (
     DEEZER_BASE, NoReleases, cover as _cover, quick_build, read_stored, write_stored,
     year as _year,
@@ -310,7 +311,13 @@ def picks(
 
     Anything already in their library is filtered out — a pick they own is a
     queue item, not a discovery.
+
+    Empty below MIN_RATED_ALBUMS. The nightly job stopped writing rows for
+    those users when the threshold arrived, but rows from before it are still
+    stored, and this is the only thing standing between them and For You.
     """
+    if not predictions_unlocked(session, user.id):
+        return []
     rows = session.execute(text("""
         SELECT p.album_name, p.artist, p.year, p.genre, p.album_art_url,
                p.predicted_score
@@ -339,6 +346,121 @@ def picks(
         }
         for r in rows
     ]
+
+
+# "Pass it on": an album you loved, for a friend the model thinks would love it.
+#
+# Both bars have to clear. The album must be one of yours that scores at least
+# PASS_ON_MIN_SCORE *and* sits in your own top quarter — the fixed bar keeps a
+# generous rater's 8.0 from counting as a favourite by default, the relative one
+# keeps a harsh rater's favourites from never qualifying. The friend's
+# prediction must beat PASS_ON_MIN_PREDICTED.
+PASS_ON_MIN_SCORE = 8.0
+PASS_ON_MIN_PREDICTED = 7.5
+
+
+@router.get("/recommend-suggestion")
+def recommend_suggestion(
+    exclude: str = Query("", description="comma-separated album_id:friend_id pairs shown recently"),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """One random album-and-friend pair to suggest sending, or null.
+
+    The friend's predicted score decides eligibility and is never returned: it is
+    built from that friend's own ratings, which are theirs, and "they would
+    probably love it" is all the suggestion needs to say.
+
+    A friend below MIN_RATED_ALBUMS is skipped even if old prediction rows exist
+    for them — the same reason /picks withholds those rows from the friend
+    themselves. So is any friend who already has the record on their shelf in
+    any edition, since a recommendation there would only restamp a copy they own.
+    Random rather than best-first, so the same favourite doesn't lead every
+    time; `exclude` lets the client keep recently shown pairs out of the draw.
+    """
+    import random
+
+    mine = session.exec(
+        select(Album).where(
+            Album.user_id == user.id,
+            Album.status == "rated",
+            Album.score.is_not(None),
+        )
+    ).all()
+    if not mine:
+        return None
+    scores = sorted(a.score for a in mine)
+    top_quarter = scores[int(0.75 * (len(scores) - 1))]
+    bar = max(PASS_ON_MIN_SCORE, top_quarter)
+
+    # Sending needs a tracklist (recommend_album refuses without one), so an
+    # album that can't be sent is never offered.
+    with_songs = set(session.exec(
+        select(Song.album_id).where(Song.album_id.in_([a.id for a in mine if a.score >= bar])).distinct()
+    ).all())
+    candidates: dict[str, Album] = {}
+    for a in mine:
+        if a.score >= bar and a.id in with_songs:
+            key = album_key(a.artist or "", a.album_name or "")
+            if key not in candidates or a.score > candidates[key].score:
+                candidates[key] = a
+    if not candidates:
+        return None
+
+    links = session.exec(
+        select(Friendship).where(
+            Friendship.status == "accepted",
+            (Friendship.user_id_a == user.id) | (Friendship.user_id_b == user.id),
+        )
+    ).all()
+    friend_ids = [f.user_id_b if f.user_id_a == user.id else f.user_id_a for f in links]
+    if not friend_ids:
+        return None
+    rated_counts = dict(session.exec(
+        select(Album.user_id, func.count()).where(
+            Album.user_id.in_(friend_ids), Album.status == "rated"
+        ).group_by(Album.user_id)
+    ).all())
+    friend_ids = [f for f in friend_ids if rated_counts.get(f, 0) >= MIN_RATED_ALBUMS]
+    if not friend_ids:
+        return None
+
+    predicted = session.exec(
+        select(AlbumPrediction.user_id, AlbumPrediction.album_key).where(
+            AlbumPrediction.user_id.in_(friend_ids),
+            AlbumPrediction.album_key.in_(list(candidates)),
+            AlbumPrediction.predicted_score > PASS_ON_MIN_PREDICTED,
+        )
+    ).all()
+    owned = set(session.exec(
+        select(Album.user_id, Album.subject_key).where(Album.user_id.in_(friend_ids))
+    ).all())
+
+    shown = {p for p in exclude.split(",") if p}
+    pairs = []
+    for friend_id, key in predicted:
+        album = candidates[key]
+        if (friend_id, subject_key_album(album.artist or "", album.album_name or "")) in owned:
+            continue
+        pairs.append((album, friend_id))
+    if not pairs:
+        return None
+    # Recently shown pairs sit out while anything else qualifies; with nothing
+    # else left, a repeat beats an empty cell.
+    fresh = [p for p in pairs if f"{p[0].id}:{p[1]}" not in shown]
+    album, friend_id = random.choice(fresh or pairs)
+    friend = session.get(PressUser, friend_id)
+    return {
+        "album": {
+            "id": album.id,
+            "album_name": album.album_name,
+            "artist": album.artist,
+            "album_art_url": album.album_art_url,
+            "year": album.year,
+            "score": album.score,
+        },
+        "friend": public_user(friend),
+    }
 
 
 @router.get("/deezer/{deezer_id}")

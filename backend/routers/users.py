@@ -16,7 +16,7 @@ from sqlmodel import Session, select
 
 from ..database import get_session
 from ..push import send_push, tokens_for_user
-from ..deps import current_user, optional_user, authorize_view, auth_response
+from ..deps import current_user, optional_user, authorize_view, auth_response, own_user, public_user
 from ..models import (
     PressUser,
     PushToken,
@@ -76,7 +76,13 @@ def list_users(
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
-    return session.exec(select(PressUser)).all()
+    return [public_user(u) for u in session.exec(select(PressUser)).all()]
+
+
+@router.get("/me")
+def get_me(user: PressUser = Depends(current_user)):
+    """The caller's own identity, in the shape sign-in returns it."""
+    return own_user(user)
 
 
 @router.get("/search")
@@ -139,7 +145,7 @@ def create_user(data: dict, session: Session = Depends(get_session)):
     session.add(user)
     session.commit()
     session.refresh(user)
-    return user
+    return public_user(user)
 
 
 @router.get("/{user_id}/invite-link")
@@ -203,7 +209,9 @@ def get_invite(token: str, session: Session = Depends(get_session)):
     if not invite.permanent and invite.accepted_at is not None:
         raise HTTPException(status_code=410, detail="Invite already used")
     inviter = session.get(PressUser, invite.invited_by)
-    return {"inviter_name": inviter.name if inviter else "Someone", "email": invite.email}
+    # Unauthenticated — anyone holding the link reads this, and a link gets
+    # forwarded. The address it was sent to is not theirs to see.
+    return {"inviter_name": inviter.name if inviter else "Someone"}
 
 
 @router.post("/invite/{token}/accept")
@@ -368,6 +376,10 @@ def update_user(
         if len(bio) > 240:
             raise HTTPException(status_code=400, detail="Bio must be 240 characters or fewer")
         user.bio = bio or None
+    # One-way: the tutorial can be replayed from Settings, but that never puts
+    # it back on the first-run path, so there is nothing to unset.
+    if data.get("tutorial_seen") and user.tutorial_seen_at is None:
+        user.tutorial_seen_at = datetime.utcnow()
 
     # Favourites. An album or song has to be one this user has rated — the
     # picker only offers those, and accepting anything else would let a profile

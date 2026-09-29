@@ -35,25 +35,39 @@ export default function RecommendSheet({
   album,
   visible,
   onClose,
+  initialFriendId,
+  onSent,
 }: {
-  album: Album
+  album: Pick<Album, 'id' | 'albumName' | 'artist'>
   visible: boolean
   onClose: () => void
+  /** Chosen on open, and listed first — how For You's "Pass it on" hands over
+   *  the friend it suggested. Read once; remount the sheet to change it. */
+  initialFriendId?: number
+  onSent?: () => void
 }) {
   const { user } = useAuth()
   const qc = useQueryClient()
-  const [selected, setSelected] = useState<number | null>(null)
+  const [selected, setSelected] = useState<number | null>(initialFriendId ?? null)
   const [note, setNote] = useState('')
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const { data: friends = [] } = useQuery({
+  const { data: allFriends = [] } = useQuery({
     queryKey: ['friends', user?.id],
     queryFn: () => fetchFriends(user!.id),
     enabled: !!user && visible,
     staleTime: 60_000,
   })
+  // The suggested friend leads, so the preselection is visible without scrolling.
+  const friends = useMemo(
+    () =>
+      initialFriendId == null
+        ? allFriends
+        : [...allFriends].sort((a, b) => Number(b.id === initialFriendId) - Number(a.id === initialFriendId)),
+    [allFriends, initialFriendId],
+  )
 
   const friendName = useMemo(
     () => friends.find((f) => f.id === selected)?.name ?? null,
@@ -61,7 +75,7 @@ export default function RecommendSheet({
   )
 
   function reset() {
-    setSelected(null)
+    setSelected(initialFriendId ?? null)
     setNote('')
     setSent(null)
     setError(null)
@@ -86,6 +100,7 @@ export default function RecommendSheet({
       // Their shelf changed, and the feed carries the recommendation as an event.
       qc.invalidateQueries({ queryKey: ['albums'] })
       qc.invalidateQueries({ queryKey: ['feed'] })
+      onSent?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not send that recommendation')
     } finally {
