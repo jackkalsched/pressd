@@ -35,7 +35,7 @@ export default function PassItOnCell({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Pass it on: recommend ${album.albumName}, which you rated ${album.score.toFixed(1)}, to ${friend.name}`}
+      accessibilityLabel={`Pass it on: recommend ${album.albumName}, which you rated ${album.score.toFixed(2)}, to ${friend.name}`}
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
     >
       <View style={styles.body}>
@@ -59,7 +59,7 @@ export default function PassItOnCell({
             <Text style={styles.meta} numberOfLines={1}>
               {album.artist} · you rated it{' '}
               <Text style={[styles.score, { color: songScoreColor(album.score) }]}>
-                {album.score.toFixed(1)}
+                {album.score.toFixed(2)}
               </Text>
             </Text>
             <View style={styles.friendRow}>

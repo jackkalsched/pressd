@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Loader2 } from 'lucide-react'
-import { fetchAlbums, fetchFeed, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion } from '../api'
+import { fetchAlbum, fetchAlbums, fetchFeed, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion } from '../api'
 import type { NewRelease, PredictedPick, RecommendSuggestion, TopReview } from '../api'
 import { songScoreColor } from '../types'
 import { Cover, ScorePill, COVER_LIFT, hueFromString, coverGradient, scoreTint } from '../components/covers'
 import HeatedDiscussions from '../components/HeatedDiscussions'
 import PassItOnCell from '../components/PassItOnCell'
+import SpotlightCard from '../components/SpotlightCard'
 import RecommendModal from '../components/RecommendModal'
 import { markPassItOnEmpty, markPassItOnShown, passItOnRecent, usePassItOnDue, usePassItOnOpen } from '../lib/passItOn'
 import { useUser } from '../context/UserContext'
@@ -119,17 +120,43 @@ export default function ForYou() {
   const now = new Date()
   const dateStr = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
   const hour = now.getHours()
-  const greeting = hour < 5 ? 'Up late.' : hour < 12 ? 'Good morning.' : hour < 18 ? 'Good afternoon.' : 'Good evening.'
+  // Reads as one sentence with the name: "Good afternoon jack." The late-night
+  // one takes a comma, since "Up late jack" isn't a greeting.
+  const greeting = hour < 5 ? 'Up late' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  const greetingJoin = hour < 5 ? ', ' : ' '
   const firstName = (activeUser?.name ?? '').split(' ')[0]
 
   // Resume: most recently touched in-progress album
-  const resume = useMemo(() => {
+  // Resume: the most recently added in-progress album. The list endpoint omits
+  // songs, so its rows can't say how far along a record is — counting scored
+  // songs on one always gave 0. Fetch the full album for the real count, the
+  // way mobile's For You does.
+  const resumeAlbum = useMemo(() => {
     if (listening.length === 0) return null
-    const a = [...listening].sort((x, y) => (y.dateAdded ?? '').localeCompare(x.dateAdded ?? ''))[0]
-    const total = a.songs.length || a.totalTracks || 0
-    const done = a.songs.filter((s) => s.score !== null).length
-    return { album: a, done, total, pct: total > 0 ? Math.round((done / total) * 100) : 0 }
+    return [...listening].sort((x, y) => (y.dateAdded ?? '').localeCompare(x.dateAdded ?? ''))[0]
   }, [listening])
+  const { data: resumeFull } = useQuery({
+    queryKey: ['album', resumeAlbum?.id],
+    queryFn: () => fetchAlbum(resumeAlbum!.id),
+    enabled: !!resumeAlbum,
+    // Always re-read on arrival: the rating screen autosaves scores without
+    // touching this cache entry, and a count left over from before the last
+    // session is the inaccuracy this exists to fix.
+    staleTime: 0,
+  })
+  const resume = useMemo(() => {
+    if (!resumeAlbum) return null
+    const done = resumeFull?.songs.filter((s) => s.score !== null).length ?? null
+    const total = resumeFull?.songs.length || resumeAlbum.totalTracks || 0
+    return {
+      album: resumeAlbum,
+      // Null until the full album arrives, so the card never states a count it
+      // doesn't know.
+      done,
+      total,
+      pct: done != null && total > 0 ? Math.round((done / total) * 100) : 0,
+    }
+  }, [resumeAlbum, resumeFull])
 
   // Trending on Pressd this week: popular albums across the whole userbase
   const { data: trending = [] } = useQuery({
@@ -246,6 +273,7 @@ export default function ForYou() {
   // Sent from the dialog: the suggestion has done its job, so it leaves once
   // the dialog closes.
   const [passSent, setPassSent] = useState<string | null>(null)
+  const showPass = !!passItOn && passKey !== passSent
 
   const nothingYet = !resume && toListen.length === 0 && rated.length === 0
 
@@ -270,7 +298,7 @@ export default function ForYou() {
             <p className="m-0 mb-1.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-[#a8998a]">{dateStr}</p>
             <h1 className="m-0 text-[40px] leading-none font-black tracking-[0.01em]" style={{ fontFamily: "'Playfair Display', serif" }}>For You</h1>
             <p className="mt-2.5 text-[15px] text-[#8a7f72]">
-              {greeting}{firstName ? ` ${firstName},` : ''} here&rsquo;s what&rsquo;s moving on Press&rsquo;d this week.
+              {greeting}{firstName ? `${greetingJoin}${firstName}` : ''}. Here&rsquo;s what&rsquo;s moving on Pressd this week.
             </p>
           </header>
 
@@ -291,9 +319,43 @@ export default function ForYou() {
             </div>
           )}
 
-          {/* Absent on most visits by design — see lib/passItOn. */}
-          {passItOn && passKey !== passSent && (
-            <PassItOnCell suggestion={passItOn} onClick={() => setPassModalOpen(true)} />
+          {/* The two "one record, one thing to do" cards, side by side when the
+              column has room for both. Pass it on is absent on most visits by
+              design — see lib/passItOn. */}
+          {(showPass || resume) && (
+            <div
+              className="grid gap-4 mb-9"
+              style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 430px), 1fr))' }}
+            >
+              {showPass && passItOn && (
+                <PassItOnCell suggestion={passItOn} onClick={() => setPassModalOpen(true)} index={0} />
+              )}
+              {resume && (
+                <SpotlightCard
+                  tone="green"
+                  index={showPass ? 1 : 0}
+                  onClick={() => navigate(`/rate/${resume.album.id}`)}
+                  ariaLabel={`Continue rating ${resume.album.albumName}${resume.done != null ? `: ${resume.done} of ${resume.total} tracks done` : ''}`}
+                  eyebrow="Pick up where you left off"
+                  title={resume.album.albumName}
+                  artUrl={resume.album.albumArtUrl}
+                  seed={resume.album.artist}
+                  action="Continue"
+                  progress={resume.pct}
+                >
+                  <p className="m-0 mt-1 text-[13px] text-[#78716c] truncate">
+                    {resume.album.artist}{resume.album.year ? ` · ${resume.album.year}` : ''}
+                  </p>
+                  <p className="m-0 mt-1 text-[14px] text-[#57534e] tabular-nums">
+                    {resume.done != null ? (
+                      <><span className="font-bold text-[#1c1917]">{resume.done}</span> of {resume.total} tracks</>
+                    ) : (
+                      <>{resume.total} tracks</>
+                    )}
+                  </p>
+                </SpotlightCard>
+              )}
+            </div>
           )}
           {passItOn && passModalOpen && (
             <RecommendModal
@@ -303,31 +365,6 @@ export default function ForYou() {
               onClose={() => setPassModalOpen(false)}
               onSent={() => setPassSent(passKey)}
             />
-          )}
-
-          {/* resume card */}
-          {resume && (
-            <div className="flex items-center gap-4 rounded-[18px] border border-[#d7e6dd] p-4 mb-7" style={{ background: 'linear-gradient(100deg,#eef5f0,#faf8f5 55%)' }}>
-              <Cover artUrl={resume.album.albumArtUrl} seed={resume.album.artist} size={68} radius={14} />
-              <div className="flex-1 min-w-0">
-                <p className="m-0 mb-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#7a9e8b]">Pick up where you left off</p>
-                <p className="m-0 font-bold text-[16px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{resume.album.albumName}</p>
-                <p className="m-0 mt-0.5 mb-2 text-[12.5px] text-[#8a7f72] truncate">{resume.album.artist} · {resume.album.year}</p>
-                <div className="flex items-center gap-2.5">
-                  <div className="flex-1 max-w-[240px] h-1.5 rounded-full overflow-hidden bg-[#dfe9e2]">
-                    <div className="h-full rounded-full bg-[#2d6a4f]" style={{ width: `${resume.pct}%` }} />
-                  </div>
-                  <span className="text-[11.5px] text-[#8a7f72]">{resume.done} / {resume.total} tracks</span>
-                </div>
-              </div>
-              <button
-                onClick={() => navigate(`/rate/${resume.album.id}`)}
-                className="shrink-0 rounded-[11px] bg-[#2d6a4f] hover:bg-[#245c43] text-white px-5 py-2.5 text-[13px] font-bold transition-colors flex items-center gap-1.5"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-              >
-                Continue <ArrowRight size={15} />
-              </button>
-            </div>
           )}
 
           {/* new releases (Deezer) */}

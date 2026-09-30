@@ -5,7 +5,7 @@
 // complete with a tonearm and groove lines. The current brand mark has neither,
 // so that illustration is gone — the mark itself is now the hero, and the spin
 // comes from PressdMark's highlight sweep rather than a rotating record.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Loader2, Star } from 'lucide-react'
 import { useGoogleLogin } from '@react-oauth/google'
@@ -13,6 +13,7 @@ import { signInWithGoogle } from '../api'
 import { useUser } from '../context/UserContext'
 import PressdMark from '../components/PressdMark'
 import AppleLogo from '../components/AppleLogo'
+import { IOS_APP_URL, iosAppLink } from '../lib/iosApp'
 
 // Real artwork, from the same iTunes artwork CDN the app already uses for
 // album covers. 200px renders crisply at the card's 44px on a 2x display.
@@ -50,6 +51,15 @@ function GoogleLogo() {
   )
 }
 
+// The App Store preview slides, resized for the web (frontend/public/app/).
+const APP_SLIDES = [
+  { src: '/app/02-rate.jpg', alt: 'Pressd on iPhone: scoring an album track by track' },
+  { src: '/app/03-album.jpg', alt: 'Pressd on iPhone: an album page' },
+  { src: '/app/01-hero.jpg', alt: 'Pressd on iPhone: the For You feed' },
+  { src: '/app/04-artist.jpg', alt: 'Pressd on iPhone: an artist page' },
+  { src: '/app/05-social.jpg', alt: 'Pressd on iPhone: comparing ratings with friends' },
+]
+
 export default function LandingPage() {
   const { setActiveUser } = useUser()
   const navigate = useNavigate()
@@ -73,6 +83,14 @@ export default function LandingPage() {
     },
   })
 
+  // Arriving at /#iphone from another page (How it Works links here): the
+  // router changes the route but doesn't scroll to an anchor, so do it once.
+  useEffect(() => {
+    if (window.location.hash === '#iphone') {
+      document.getElementById('iphone')?.scrollIntoView()
+    }
+  }, [])
+
   function handleSignIn() {
     setAuthLoading(true)
     setAuthError(null)
@@ -83,6 +101,9 @@ export default function LandingPage() {
     <>
       <style>{`
         .landing *, .landing *::before, .landing *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        /* The iPhone buttons jump to the showcase further down this page. */
+        @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 
         .landing {
           min-height: 100vh;
@@ -253,16 +274,6 @@ export default function LandingPage() {
           box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
         }
 
-        .ios-note {
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          font-size: 13.5px;
-          color: rgba(244,242,236,0.7);
-          margin-top: 18px;
-        }
-        .ios-note svg { flex-shrink: 0; }
-
         .auth-error { font-size: 13px; color: #ffc9c2; margin-top: 12px; }
 
         /* entrance */
@@ -386,6 +397,140 @@ export default function LandingPage() {
           .mini-card, .friend-chip, .star, .rise { animation: none; opacity: 1; }
         }
 
+
+        /* ── Hero actions: web sign-in and the iPhone app, side by side ── */
+        .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+
+        .btn-app {
+          display: inline-flex;
+          align-items: center;
+          gap: 9px;
+          background: rgba(244,242,236,0.08);
+          color: #F4F2EC;
+          font-family: inherit;
+          font-size: 15px;
+          font-weight: 700;
+          padding: 14px 24px;
+          border-radius: 14px;
+          border: 1.5px solid rgba(244,242,236,0.42);
+          cursor: pointer;
+          text-decoration: none;
+          transition: background 0.15s, border-color 0.15s, transform 0.12s;
+        }
+        .btn-app:hover { background: rgba(244,242,236,0.16); border-color: #F4F2EC; transform: translateY(-1px); }
+        .btn-app:focus-visible { outline: 2px solid #F4F2EC; outline-offset: 2px; }
+
+        .nav-app {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        /* ── The iPhone app ─────────────────────────────────────────────
+           Its own full-width band below the hero, so the app is a thing the
+           page shows rather than a line it mentions. The five slides are the
+           App Store previews, fanned like a hand of cards; the one under the
+           pointer straightens and comes forward. */
+        .app-band {
+          position: relative;
+          background: linear-gradient(180deg, #24382D 0%, #1B2A22 100%);
+          padding: 96px 32px 0;
+          text-align: center;
+          scroll-margin-top: 64px;
+        }
+        .app-eyebrow {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: #9CC9B0;
+        }
+        .app-title {
+          font-family: 'Clash Display', 'Plus Jakarta Sans', system-ui, sans-serif;
+          font-size: clamp(36px, 4.6vw, 64px);
+          font-weight: 700;
+          line-height: 1.04;
+          letter-spacing: -1.8px;
+          color: #F4F2EC;
+          margin-top: 14px;
+        }
+        .app-sub {
+          max-width: 520px;
+          margin: 18px auto 30px;
+          font-size: 17px;
+          line-height: 1.6;
+          color: rgba(244,242,236,0.72);
+        }
+        .app-soon {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 12px 22px;
+          border-radius: 999px;
+          background: rgba(244,242,236,0.1);
+          border: 1px solid rgba(244,242,236,0.22);
+          font-size: 14.5px;
+          font-weight: 700;
+          color: #F4F2EC;
+        }
+
+        .app-fan {
+          display: flex;
+          justify-content: center;
+          align-items: flex-end;
+          /* Room above for the lifted card; the band clips the bottoms, so the
+             slides read as rising out of the page. */
+          padding: 64px 24px 0;
+          margin-bottom: -120px;
+        }
+        .app-slide {
+          width: clamp(150px, 17vw, 250px);
+          flex-shrink: 0;
+          margin: 0 -14px;
+          border-radius: 26px;
+          overflow: hidden;
+          background: #F4F2EC;
+          box-shadow: 0 30px 60px -20px rgba(0,0,0,0.65), 0 0 0 1px rgba(244,242,236,0.08);
+          transform: translateY(var(--y)) rotate(var(--r));
+          transition: transform 0.35s cubic-bezier(0.34, 1.3, 0.64, 1), box-shadow 0.3s;
+          position: relative;
+          z-index: var(--z);
+        }
+        .app-slide img { display: block; width: 100%; height: auto; }
+        .app-slide:hover {
+          transform: translateY(calc(var(--y) - 34px)) rotate(0deg) scale(1.06);
+          z-index: 10;
+          box-shadow: 0 44px 80px -24px rgba(0,0,0,0.75), 0 0 0 1px rgba(244,242,236,0.14);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .app-slide { transition: none; }
+        }
+        @media (max-width: 760px) {
+          .app-band { padding: 72px 0 0; }
+          .app-title, .app-sub, .app-eyebrow { margin-left: 24px; margin-right: 24px; }
+          /* Too many to fan on a phone: a swipeable row instead, with room
+             inside the scroller so nothing is clipped. */
+          .app-fan {
+            justify-content: flex-start;
+            overflow-x: auto;
+            gap: 14px;
+            padding: 40px 24px 0;
+            margin-bottom: -60px;
+            scroll-snap-type: x mandatory;
+          }
+          .app-slide {
+            width: 62vw;
+            margin: 0;
+            transform: none;
+            scroll-snap-align: center;
+          }
+          .app-slide:hover { transform: none; }
+        }
+
         /* ── Responsive ─────────────────────────── */
         @media (max-width: 980px) {
           .landing-nav { padding: 0 20px; gap: 12px; }
@@ -423,6 +568,9 @@ export default function LandingPage() {
           <div className="nav-links">
             <Link to="/charts" className="nav-link">Charts</Link>
             <Link to="/how-it-works" className="nav-link">How it Works</Link>
+            <a {...iosAppLink('#iphone')} className="nav-link nav-app">
+              <AppleLogo size={13} /> iPhone app
+            </a>
           </div>
 
           <button onClick={handleSignIn} disabled={authLoading} className="btn-signin">
@@ -442,16 +590,20 @@ export default function LandingPage() {
             </p>
 
             <div className="rise d3">
-              <button onClick={handleSignIn} disabled={authLoading} className="btn-primary">
-                <span className="google-chip">
-                  {authLoading ? <Loader2 size={14} className="animate-spin" /> : <GoogleLogo />}
-                </span>
-                {authLoading ? 'Signing in…' : 'Get started with Google'}
-              </button>
-              <p className="ios-note">
-                <AppleLogo size={13} />
-                Pressd is coming to iPhone — iOS beta starting soon.
-              </p>
+              <div className="hero-actions">
+                <button onClick={handleSignIn} disabled={authLoading} className="btn-primary">
+                  <span className="google-chip">
+                    {authLoading ? <Loader2 size={14} className="animate-spin" /> : <GoogleLogo />}
+                  </span>
+                  {authLoading ? 'Signing in…' : 'Get started with Google'}
+                </button>
+                {/* Beside the web sign-in rather than under it as a footnote:
+                    the app is the other way in, not an aside. */}
+                <a {...iosAppLink('#iphone')} className="btn-app">
+                  <AppleLogo size={16} />
+                  {IOS_APP_URL ? 'Get the iPhone app' : 'See the iPhone app'}
+                </a>
+              </div>
               {authError && <p className="auth-error">{authError}</p>}
             </div>
           </div>
@@ -487,6 +639,41 @@ export default function LandingPage() {
                 <span className="chip-score">9.50</span>
               </span>
             </div>
+          </div>
+        </section>
+
+        {/* ── The iPhone app ── */}
+        <section className="app-band" id="iphone">
+          <p className="app-eyebrow"><AppleLogo size={13} /> Pressd for iPhone</p>
+          <h2 className="app-title">Your record collection,<br />in your pocket.</h2>
+          <p className="app-sub">
+            Rate as you listen, settle scores with friends, and get told the
+            moment someone sends you a record.
+          </p>
+          {IOS_APP_URL ? (
+            <a {...iosAppLink('#iphone')} className="btn-primary" style={{ textDecoration: 'none' }}>
+              <AppleLogo size={17} /> Get the iPhone app
+            </a>
+          ) : (
+            <span className="app-soon"><AppleLogo size={15} /> iPhone beta starting soon</span>
+          )}
+
+          <div className="app-fan">
+            {APP_SLIDES.map((slide, i) => (
+              <div
+                key={slide.src}
+                className="app-slide"
+                style={{
+                  // Fanned about the middle card: the outer ones sit lower and
+                  // lean away, and stack behind their inner neighbours.
+                  '--r': `${(i - 2) * 4}deg`,
+                  '--y': `${Math.abs(i - 2) * 22}px`,
+                  '--z': 5 - Math.abs(i - 2),
+                } as React.CSSProperties}
+              >
+                <img src={slide.src} alt={slide.alt} loading="lazy" width={720} height={1558} />
+              </div>
+            ))}
           </div>
         </section>
       </div>

@@ -375,9 +375,9 @@ export function YourCatalogScene() {
         <Cover url={art[0]} size={TILE} seed="a" />
         <div
           className="absolute -right-2 -top-2 rounded-full px-1.5 py-0.5 text-[11px] font-bold text-white"
-          style={{ background: songScoreColor(8.7), opacity: chip ? 1 : 0, transition: instant ? 'none' : 'opacity 250ms' }}
+          style={{ background: songScoreColor(ALBUM_SCORE), opacity: chip ? 1 : 0, transition: instant ? 'none' : 'opacity 250ms' }}
         >
-          8.7
+          {ALBUM_SCORE.toFixed(2)}
         </div>
       </div>
 
@@ -439,7 +439,7 @@ export function FriendsScene() {
           <span className="font-semibold text-[#1c1917]">Maya</span> rated an album
         </span>
         <Cover url={art[2]} size={34} seed="c" />
-        <span className="rounded-md px-1.5 py-0.5 text-[12px] font-bold text-white" style={{ background: songScoreColor(9.1) }}>9.1</span>
+        <span className="rounded-md px-1.5 py-0.5 text-[12px] font-bold text-white" style={{ background: songScoreColor(9.12) }}>9.12</span>
       </div>
 
       <div className={row} style={rise(1)}>
@@ -468,7 +468,8 @@ export function FriendsScene() {
 
 const RING = 92
 const RING_STROKE = 9
-const PREDICTED = [8.9, 8.1, 9.3]
+// Album scores, so two decimals like every final album score in the app.
+const PREDICTED = [8.94, 8.13, 9.31]
 
 export function LearnsYouScene() {
   const [reduce] = useState(reducedMotion)
@@ -518,7 +519,7 @@ export function LearnsYouScene() {
               className="tut-pop absolute -right-2 -bottom-2 rounded-md px-1.5 py-0.5 text-[12px] font-bold text-white"
               style={{ background: songScoreColor(p), animationDelay: `${1850 + i * 140}ms` }}
             >
-              {p.toFixed(1)}
+              {p.toFixed(2)}
             </span>
           </div>
         ))}

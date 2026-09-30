@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom'
 import { ListMusic, Sliders, Sparkles, Users, BarChart3 } from 'lucide-react'
 import PublicShell from '../components/PublicShell'
 import AppleLogo from '../components/AppleLogo'
+import { IOS_APP_URL } from '../lib/iosApp'
 
 const STEPS = [
   {
@@ -133,6 +134,7 @@ export default function HowItWorks() {
           display: inline-flex; align-items: center; gap: 8px;
           font-size: 14px; color: rgba(244,242,236,0.7); margin-top: 18px;
         }
+        .ios-line a { color: #F4F2EC; font-weight: 600; text-underline-offset: 3px; }
 
         .contact-line {
           font-size: 14.5px; line-height: 1.6;
@@ -199,7 +201,15 @@ export default function HowItWorks() {
             </p>
             <p className="ios-line">
               <AppleLogo size={14} />
-              Pressd is coming to iPhone — iOS beta starting soon.
+              {/* One span: .ios-line is a flex row, and loose text and a link
+                  would each become their own gapped item. */}
+              <span>
+                {IOS_APP_URL ? (
+                  <a href={IOS_APP_URL} target="_blank" rel="noopener noreferrer">Get Pressd for iPhone</a>
+                ) : (
+                  <>Pressd is coming to iPhone — <Link to="/#iphone">see the app</Link>.</>
+                )}
+              </span>
             </p>
           </div>
           <Link to="/charts" className="closer-link">See what people are rating</Link>

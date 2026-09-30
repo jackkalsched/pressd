@@ -152,7 +152,9 @@ running at once.
 `LASTFM_API_KEY`, `DISCOGS_TOKEN`, `GENIUS_ACCESS_TOKEN`, `THEME_LLM_MODEL`,
 `APPLE_BUNDLE_ID`, `FIREBASE_PROJECT_ID`, `FIREBASE_CREDENTIALS_JSON` (Render) |
 `FIREBASE_CREDENTIALS_FILE` (local), `SMTP_*`.
-Web: `VITE_API_URL`, `VITE_GOOGLE_CLIENT_ID`. Mobile: `EXPO_PUBLIC_API_URL`,
+Web: `VITE_API_URL`, `VITE_GOOGLE_CLIENT_ID`, `VITE_IOS_APP_URL` (the TestFlight or App
+Store link the public pages' iPhone buttons open; unset, they say the beta is coming —
+`frontend/src/lib/iosApp.ts`). Mobile: `EXPO_PUBLIC_API_URL`,
 `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`.
 Files: `.env` at root, `frontend/.env.local`, `mobile/.env`.
 `EXPO_PUBLIC_*` vars are **inlined into the shipped iOS bundle** — never secrets.
@@ -349,6 +351,11 @@ dedups, inserts, then `_link_tracks` (`:473`) resolves global track ids; two rec
 sharing a name but differing >10s in duration get a `||d{sec}`-suffixed key (`:490-491`).
 `recommend_album` (`:778`) refuses without a tracklist (`:808-812`) and fills in whatever
 the recipient's shell copy is missing, but leaves anything they've engaged with alone.
+⚠️ **`GET /albums/` (the list) returns albums without their songs**; only
+`GET /albums/{id}` carries them. Anything that needs per-song state for a listed album —
+how many tracks are scored, say — must fetch the album itself. Both For You screens do
+this for the "Pick up where you left off" card; web counted songs on the list row until
+September 2026 and so always read 0.
 
 **First run (both platforms).** Mobile's `app/(tabs)/_layout.tsx` and web's `AppGate`
 (`frontend/src/App.tsx`) send an account whose `tutorialSeen` is explicitly `false` to
@@ -900,6 +907,20 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   the name means the same on both); Plus Jakarta Sans for everything else (the web
   `body` face). Clash Display is the wordmark only. Web used DM Sans until September
   2026, share card included; don't bring a third face back.
+- **A final album score is always shown to two decimals** (`8.20`, never `8.2`) —
+  rated, predicted or projected, on both platforms. Song scores and factor values are
+  one decimal. The tutorial's demo numbers follow the same rule.
+- **The public pages promote the iPhone app as a feature, not a footnote.** The
+  landing page carries an iPhone button beside the Google sign-in, a nav link, and a
+  full-width band (`#iphone`) fanning the five App Store preview slides
+  (`frontend/public/app/`, resized from the design exports). Where the buttons go is
+  one setting, `VITE_IOS_APP_URL` (`frontend/src/lib/iosApp.ts`): unset, they scroll
+  to the band and the page says the beta is coming rather than offering a download
+  that isn't there.
+- **For You's single-record cards share `SpotlightCard`** (web): Pass it on and Pick
+  up where you left off. No border and no box button — the cover, blurred, is the
+  card's colour; the whole card is the target. A new card of that kind goes through
+  the same component rather than a fresh bordered row.
 - **Web motion has one vocabulary, in `frontend/src/index.css`** ("Interaction
   feedback"): every button presses in, `page-enter` on route change (keyed in
   `Layout`), `fade-in` + `pop-in` for dialogs, `menu-in` for dropdowns, `rise-in` /
@@ -915,7 +936,7 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
 - **There is no test suite, so verification is typecheck + lint + running it.** Web:
   `cd frontend && npm run typecheck`. Mobile: `cd mobile && npm run typecheck`. Backend:
   import the app (`python -c "import backend.main"`). `cd frontend && npx eslint .`
-  currently reports **16 problems — 12 errors and 4 warnings**, and mobile `eslint .`
+  currently reports **15 problems — 11 errors and 4 warnings**, and mobile `eslint .`
   reports **130 errors
   and 7 warnings** (mostly `react-hooks/refs` on `useRef(...).current`; hold an
   `Animated.Value` in `useState(() => …)` instead) — if your change doesn't add to

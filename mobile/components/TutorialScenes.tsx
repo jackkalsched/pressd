@@ -402,7 +402,7 @@ export function YourCatalogScene({ active }: SceneProps) {
           >
             <Cover uri={art[0]} size={TILE} seed="a" />
             <Animated.View style={[styles.tileChip, { opacity: chip }]}>
-              <Text style={styles.tileChipText} maxFontSizeMultiplier={NUM_SCALE_CAP}>8.7</Text>
+              <Text style={styles.tileChipText} maxFontSizeMultiplier={NUM_SCALE_CAP}>{ALBUM_SCORE.toFixed(2)}</Text>
             </Animated.View>
           </Animated.View>
 
@@ -476,8 +476,8 @@ export function FriendsScene({ active }: SceneProps) {
           <Text style={styles.feedName}>Maya</Text> rated an album
         </Text>
         <Cover uri={art[2]} size={34} seed="c" />
-        <View style={[styles.scoreChip, { backgroundColor: songScoreColor(9.1) }]}>
-          <Text style={styles.scoreChipText} maxFontSizeMultiplier={NUM_SCALE_CAP}>9.1</Text>
+        <View style={[styles.scoreChip, { backgroundColor: songScoreColor(9.12) }]}>
+          <Text style={styles.scoreChipText} maxFontSizeMultiplier={NUM_SCALE_CAP}>9.12</Text>
         </View>
       </Animated.View>
 
@@ -510,7 +510,8 @@ export function FriendsScene({ active }: SceneProps) {
 const RING = 92
 const RING_STROKE = 9
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
-const PREDICTED = [8.9, 8.1, 9.3]
+// Album scores, so two decimals like every final album score in the app.
+const PREDICTED = [8.94, 8.13, 9.31]
 
 export function LearnsYouScene({ active }: SceneProps) {
   const reduce = useReduceMotion()
@@ -583,7 +584,7 @@ export function LearnsYouScene({ active }: SceneProps) {
                 { opacity: chips[i], transform: [{ scale: chips[i].interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }] },
               ]}
             >
-              <Text style={styles.predChipText} maxFontSizeMultiplier={NUM_SCALE_CAP}>{p.toFixed(1)}</Text>
+              <Text style={styles.predChipText} maxFontSizeMultiplier={NUM_SCALE_CAP}>{p.toFixed(2)}</Text>
             </Animated.View>
           </View>
         ))}
