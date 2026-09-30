@@ -486,20 +486,22 @@ export default function LandingPage() {
           padding: 64px 24px 0;
           margin-bottom: -120px;
         }
+        /* Each slide sits in a dark bezel with rounded corners, so the row
+           reads as a hand of phones rather than a strip of cream cards. */
         .app-slide {
           width: clamp(150px, 17vw, 250px);
           flex-shrink: 0;
           margin: 0 -14px;
-          border-radius: 26px;
-          overflow: hidden;
-          background: #F4F2EC;
-          box-shadow: 0 30px 60px -20px rgba(0,0,0,0.65), 0 0 0 1px rgba(244,242,236,0.08);
+          padding: 7px;
+          border-radius: 34px;
+          background: #0E1512;
+          box-shadow: 0 30px 60px -20px rgba(0,0,0,0.65), 0 0 0 1px rgba(244,242,236,0.16);
           transform: translateY(var(--y)) rotate(var(--r));
           transition: transform 0.35s cubic-bezier(0.34, 1.3, 0.64, 1), box-shadow 0.3s;
           position: relative;
           z-index: var(--z);
         }
-        .app-slide img { display: block; width: 100%; height: auto; }
+        .app-slide img { display: block; width: 100%; height: auto; border-radius: 27px; }
         .app-slide:hover {
           transform: translateY(calc(var(--y) - 34px)) rotate(0deg) scale(1.06);
           z-index: 10;
@@ -655,7 +657,7 @@ export default function LandingPage() {
               <AppleLogo size={17} /> Get the iPhone app
             </a>
           ) : (
-            <span className="app-soon"><AppleLogo size={15} /> iPhone beta starting soon</span>
+            <span className="app-soon"><AppleLogo size={15} /> Coming to iOS soon</span>
           )}
 
           <div className="app-fan">

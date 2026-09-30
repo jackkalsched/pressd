@@ -153,7 +153,7 @@ running at once.
 `APPLE_BUNDLE_ID`, `FIREBASE_PROJECT_ID`, `FIREBASE_CREDENTIALS_JSON` (Render) |
 `FIREBASE_CREDENTIALS_FILE` (local), `SMTP_*`.
 Web: `VITE_API_URL`, `VITE_GOOGLE_CLIENT_ID`, `VITE_IOS_APP_URL` (the TestFlight or App
-Store link the public pages' iPhone buttons open; unset, they say the beta is coming —
+Store link the public pages' iPhone buttons open; unset, they say it is coming to iOS soon —
 `frontend/src/lib/iosApp.ts`). Mobile: `EXPO_PUBLIC_API_URL`,
 `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`.
 Files: `.env` at root, `frontend/.env.local`, `mobile/.env`.
@@ -915,7 +915,7 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   full-width band (`#iphone`) fanning the five App Store preview slides
   (`frontend/public/app/`, resized from the design exports). Where the buttons go is
   one setting, `VITE_IOS_APP_URL` (`frontend/src/lib/iosApp.ts`): unset, they scroll
-  to the band and the page says the beta is coming rather than offering a download
+  to the band and the page says "Coming to iOS soon" rather than offering a download
   that isn't there.
 - **For You's single-record cards share `SpotlightCard`** (web): Pass it on and Pick
   up where you left off. No border and no box button — the cover, blurred, is the

@@ -1,7 +1,7 @@
 // Where "Get the iPhone app" goes: a TestFlight public link or the App Store
-// listing, set as VITE_IOS_APP_URL. Unset — which it is until the beta has a
+// listing, set as VITE_IOS_APP_URL. Unset — which it is until the app has a
 // public link — the landing page's buttons scroll to its showcase instead and
-// the public pages keep saying the beta is coming, rather than offering a
+// the public pages say it is coming to iOS soon, rather than offering a
 // download that isn't there. One constant so the two pages can't disagree.
 export const IOS_APP_URL: string | undefined = import.meta.env.VITE_IOS_APP_URL || undefined
 

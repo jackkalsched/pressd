@@ -207,7 +207,7 @@ export default function HowItWorks() {
                 {IOS_APP_URL ? (
                   <a href={IOS_APP_URL} target="_blank" rel="noopener noreferrer">Get Pressd for iPhone</a>
                 ) : (
-                  <>Pressd is coming to iPhone — <Link to="/#iphone">see the app</Link>.</>
+                  <>Pressd is coming to iOS soon — <Link to="/#iphone">see the app</Link>.</>
                 )}
               </span>
             </p>
