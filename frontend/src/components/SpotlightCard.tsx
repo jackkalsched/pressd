@@ -3,9 +3,10 @@
 //
 // It replaced two bordered boxes with a rectangular button each, which read as
 // form rows. This one has no border and no box button: the record's own cover,
-// blurred, is the card's colour; the cover sits tilted and straightens under
-// the pointer; the whole card is the target, and the action is a round arrow
-// that moves when you reach for it. The two callers differ only in what rides
+// blurred, is the card's colour; the cover sits tilted and eases a little
+// straighter under the pointer; the whole card is the target, and the action
+// is a round arrow that moves when you reach for it. The two callers differ
+// only in what rides
 // on the cover (a friend's face) and around the arrow (a progress ring).
 import type { CSSProperties, ReactNode } from 'react'
 import { ArrowRight } from 'lucide-react'
@@ -77,11 +78,11 @@ export default function SpotlightCard({
 
       <div className="flex items-center gap-5 p-5 pr-6">
         <div className="relative shrink-0">
-          <div className="-rotate-[5deg] rounded-[18px] shadow-[0_16px_30px_-14px_rgba(40,25,10,0.6)] transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:rotate-0 group-hover:scale-105">
+          <div className="-rotate-[5deg] rounded-[18px] shadow-[0_16px_30px_-14px_rgba(40,25,10,0.6)] transition-transform duration-300 ease-out group-hover:-rotate-[2deg] group-hover:scale-[1.02]">
             <Cover artUrl={artUrl} seed={seed} size={92} radius={18} />
           </div>
           {badge && (
-            <div className="absolute -bottom-1.5 -right-2 rounded-full ring-[3px] ring-white/90 transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-110">
+            <div className="absolute -bottom-1.5 -right-2 rounded-full ring-[3px] ring-white/90 transition-transform duration-300 ease-out group-hover:scale-[1.04]">
               {badge}
             </div>
           )}
@@ -121,7 +122,7 @@ export default function SpotlightCard({
               </svg>
             )}
             <span
-              className="flex h-11 w-11 items-center justify-center rounded-full text-white shadow-[0_8px_18px_-8px_rgba(0,0,0,0.45)] transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-110"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-white shadow-[0_8px_18px_-8px_rgba(0,0,0,0.45)] transition-transform duration-300 ease-out group-hover:scale-[1.05]"
               style={{ background: t.ink }}
             >
               <ArrowRight size={18} className="transition-transform duration-300 group-hover:translate-x-0.5" />

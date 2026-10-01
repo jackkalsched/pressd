@@ -921,6 +921,15 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   up where you left off. No border and no box button — the cover, blurred, is the
   card's colour; the whole card is the target. A new card of that kind goes through
   the same component rather than a fresh bordered row.
+- **Heated Discussions shows a verdict, not tags** (web): *Divided*, *Loved*, *Hated* or
+  *Lukewarm*, as a coloured badge, a glow under the cover and a meter of where the
+  room's scores fall. The verdict is the server's flags (`discover.py`: `LOVED_MEAN`,
+  `HATED_MEAN`, `CONTROVERSIAL_SPREAD`), never a client threshold, and *Divided* wins
+  when a record is also loved or hated. Trending on Pressd stays a plain ranked list
+  (`TrendingBoard`): no rank gets special treatment.
+- **Hover feedback stays small.** `COVER_LIFT` is a 4% lift and a 1° lean on an
+  ease-out; it was 13% and 3° on a springy curve and made rows of covers jump. Keep
+  new hover scales in that range.
 - **Web motion has one vocabulary, in `frontend/src/index.css`** ("Interaction
   feedback"): every button presses in, `page-enter` on route change (keyed in
   `Layout`), `fade-in` + `pop-in` for dialogs, `menu-in` for dropdowns, `rise-in` /

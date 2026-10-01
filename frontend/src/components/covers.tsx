@@ -28,11 +28,15 @@ export function scoreTint(s: number): string {
   return `hsl(${scoreHue(s)}, 46%, 94%)`
 }
 
-/** Cover feedback: a spring-eased lift and tilt on hover, settling on press.
- *  Put this on a wrapper around <Cover> and `group` on the row that owns it. */
+/** Cover feedback: a slight lift and lean on hover, settling on press.
+ *  Put this on a wrapper around <Cover> and `group` on the row that owns it.
+ *
+ *  Deliberately small. It was a 13% zoom with a 3° tilt on a springy curve,
+ *  which made a row of covers jump around under the pointer; this is enough to
+ *  say "this is clickable" without pulling the eye off everything else. */
 export const COVER_LIFT =
-  'transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] ' +
-  'group-hover:scale-[1.13] group-hover:-rotate-3 group-active:scale-105'
+  'transition-transform duration-[250ms] ease-out ' +
+  'group-hover:scale-[1.04] group-hover:-rotate-1 group-active:scale-[1.02]'
 
 export function Cover({
   artUrl, seed, size, radius = 12, fontSize,

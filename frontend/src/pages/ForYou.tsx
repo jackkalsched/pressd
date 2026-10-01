@@ -5,10 +5,11 @@ import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Load
 import { fetchAlbum, fetchAlbums, fetchFeed, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion } from '../api'
 import type { NewRelease, PredictedPick, RecommendSuggestion, TopReview } from '../api'
 import { songScoreColor } from '../types'
-import { Cover, ScorePill, COVER_LIFT, hueFromString, coverGradient, scoreTint } from '../components/covers'
+import { Cover, ScorePill, hueFromString, coverGradient, scoreTint } from '../components/covers'
 import HeatedDiscussions from '../components/HeatedDiscussions'
 import PassItOnCell from '../components/PassItOnCell'
 import SpotlightCard from '../components/SpotlightCard'
+import TrendingBoard from '../components/TrendingBoard'
 import RecommendModal from '../components/RecommendModal'
 import { markPassItOnEmpty, markPassItOnShown, passItOnRecent, usePassItOnDue, usePassItOnOpen } from '../lib/passItOn'
 import { useUser } from '../context/UserContext'
@@ -441,30 +442,7 @@ export default function ForYou() {
                 <h2 className={SECTION_LABEL}>Trending on Pressd</h2>
                 <span className="text-[11px] text-[#b3a99c]">This week</span>
               </div>
-              <div className="rounded-[18px] border border-[#e6ded2] bg-[#faf8f5] overflow-hidden">
-                {trending.map((row, i) => (
-                  <button
-                    key={row.album_id}
-                    onClick={() => navigate(`/album/${row.album_id}`)}
-                    className="group w-full flex items-center gap-4 text-left hover:bg-[#f3efe8] transition-colors"
-                    style={{ borderTop: i === 0 ? 'none' : '1px solid #f0ebe3', padding: '15px 18px' }}
-                  >
-                    <span className="w-[22px] text-center shrink-0 tabular-nums" style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 15, color: '#c2b8ad' }}>{i + 1}</span>
-                    <div className={`shrink-0 ${COVER_LIFT}`} style={{ willChange: 'transform' }}>
-                      <Cover artUrl={row.album_art_url} seed={row.artist} size={58} radius={13} fontSize={24} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="m-0 font-bold text-[15px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{row.album_name}</p>
-                      <p className="m-0 mt-0.5 text-[12.5px] text-[#8a7f72] truncate">{row.artist}</p>
-                    </div>
-                    <span className="text-[11.5px] text-[#8a7f72] shrink-0 hidden sm:block text-right" style={{ width: 118 }}>
-                      {row.rater_count} {row.rater_count === 1 ? 'rating' : 'ratings'}
-                      {row.last_rated ? ` · ${timeAgo(row.last_rated)}` : ''}
-                    </span>
-                    {row.avg_score != null && <ScorePill score={row.avg_score} />}
-                  </button>
-                ))}
-              </div>
+              <TrendingBoard rows={trending} onOpen={(id) => navigate(`/album/${id}`)} />
             </section>
           )}
 
