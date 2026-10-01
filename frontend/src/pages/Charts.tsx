@@ -235,7 +235,7 @@ export default function Charts() {
               it ? (
                 <Link
                   key={it.album_id}
-                  to={`/album/${it.album_id}`}
+                  to={`/album/${it.album_id}/community`}
                   className="text-center group"
                 >
                   <div
@@ -279,7 +279,7 @@ export default function Charts() {
             {rest.map((it) => (
               <Link
                 key={it.album_id}
-                to={`/album/${it.album_id}`}
+                to={`/album/${it.album_id}/community`}
                 className="group grid grid-cols-[32px_44px_1fr_38px_auto] md:grid-cols-[44px_56px_1fr_auto_42px_auto] items-center gap-3 md:gap-4 px-1.5 py-3 border-b border-[#ededed] hover:bg-[#f2f0ec] transition-colors"
               >
                 <span className="font-display text-[19px] text-[#aaa] tabular-nums text-center">{it.rank}</span>

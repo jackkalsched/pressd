@@ -755,7 +755,7 @@ backend: `/users/` rows carry only `id`, `name`, `avatar_url`, `bio`.
 ### Parity — what web is still missing (audited 2026-09-23)
 
 Counted by resolving every export in `shared/src/api.ts` against both clients:
-**19 client functions are mobile-only, 11 web-only.** Every mobile-only function is
+**16 client functions are mobile-only, 11 web-only.** Every mobile-only function is
 already backed by a shipped endpoint and already transformed by the shared client, so
 **closing these gaps is UI work in `frontend/src/` only** — no router, no migration, no
 `shared/` change. Ordered by how much of a feature is missing, not by effort.
@@ -783,11 +783,18 @@ for editing a review later, and both paths post into the thread through
 
 **Whole features still absent from web.**
 
-1. **The community album view.** `fetchCommunityAlbum` / `fetchCommunityAlbumByName` /
-   `copyAlbumToLibrary`. This is where the global Press'd rating (§6.2) and the pooled
-   per-track scores are shown. Web `AlbumDetail.tsx` renders only the caller's own copy
-   plus `fetchFriendRatings` — a web user never sees the userbase number at all. The
-   largest remaining gap.
+1. **The community album view.** Closed, October 2026:
+   [CommunityAlbum.tsx](frontend/src/pages/CommunityAlbum.tsx) at `/album/:id/community`
+   (from any copy's id) and `/album/community?name=&artist=&deezer=` (by name, for a
+   record not in Pressd yet) — mobile's `CommunityAlbum`, over `fetchCommunityAlbum` /
+   `fetchCommunityAlbumByName` / `copyAlbumToLibrary`. The Pressd average (`avg_score`,
+   labelled PRESSD AVG as on mobile), averaged factors, pooled per-track scores, Rate
+   now / Add to Library, and a Compare view that uses the `others_*` fields so you
+   aren't counted on both sides. Unboxed; track rows pop up as they scroll into view.
+   Charts, Trending, recommended suggestions, new-release titles and To Listen open it,
+   and a rated album you own offers *Compare with Pressd* when someone else has rated
+   it. Before this, web's Charts and Trending linked to whichever user's copy ranked —
+   friends-only, so they failed for everyone else.
 2. **Compare / taste overlap.** `fetchCompare` (`/social/compare`), `fetchRankedSongs`,
    and the board behind it (`SongGapChart`, `ScoreKdeCompare`, `app/splits/[name].tsx`).
    Web Social has Activity, Reviews and Discussions, but no Compare tab.
@@ -968,4 +975,4 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
 | A new scoring input | `backend/scoring.py` only — `global_rating.py` and both workers compose through it |
 | A new ML stage | `worker/nightly_predict.run_user`; build anything userbase-wide in `main()` and pass it down |
 | A new theme axis | append to `THEME_AXES`, then re-analyse every album and refit every model |
-| Closing the web/mobile gap | `frontend/src/` only — every mobile-only function already has an endpoint and a shared-client wrapper (§11 lists the remaining 19) |
+| Closing the web/mobile gap | `frontend/src/` only — every mobile-only function already has an endpoint and a shared-client wrapper (§11 lists the remaining 16) |

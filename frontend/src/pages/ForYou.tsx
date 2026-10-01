@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Loader2 } from 'lucide-react'
 import { fetchAlbum, fetchAlbums, fetchFeed, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion } from '../api'
@@ -442,7 +442,9 @@ export default function ForYou() {
                 <h2 className={SECTION_LABEL}>Trending on Pressd</h2>
                 <span className="text-[11px] text-[#b3a99c]">This week</span>
               </div>
-              <TrendingBoard rows={trending} onOpen={(id) => navigate(`/album/${id}`)} />
+              {/* Trending isn't tied to a person: open the userbase's averaged view, not
+                  whichever copy happened to rank (friends-only, so it failed). */}
+              <TrendingBoard rows={trending} onOpen={(id) => navigate(`/album/${id}/community`)} />
             </section>
           )}
 
@@ -571,7 +573,7 @@ export default function ForYou() {
                   // into the scoring flow scores a record the person hasn't heard
                   // of yet and gives them no way to look at it first. Albums they
                   // queued themselves keep the fast path.
-                  suggestion.recommendedByName ? `/album/${suggestion.id}` : `/rate/${suggestion.id}`,
+                  suggestion.recommendedByName ? `/album/${suggestion.id}/community` : `/rate/${suggestion.id}`,
                 )}
                 className="mt-4 w-full py-2.5 rounded-[11px] border border-[#2d6a4f] bg-transparent text-[#2d6a4f] hover:bg-[#2d6a4f] hover:text-white text-[13px] font-bold transition-colors flex items-center justify-center gap-1.5"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
@@ -681,7 +683,19 @@ function NewReleaseCard({
           )}
         </div>
       </div>
-      <p className="mt-2.5 mb-0 font-bold text-[14px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{release.albumName}</p>
+      {/* The title opens the record's community view — the cover already opens
+          Rate now / To listen. By name, because a new release may not be in
+          Pressd yet; the Deezer id rides along for its tracklist. */}
+      <Link
+        to={`/album/community?${new URLSearchParams({
+          name: release.albumName,
+          artist: release.artist,
+          ...(release.deezerId != null ? { deezer: String(release.deezerId) } : {}),
+        }).toString()}`}
+        className="mt-2.5 mb-0 block font-bold text-[14px] truncate text-[#1c1917] hover:text-[#2d6a4f] hover:underline underline-offset-2"
+      >
+        {release.albumName}
+      </Link>
       <p className="m-0 mt-0.5 text-[12px] text-[#8a7f72] truncate">{release.artist}{release.year ? ` · ${release.year}` : ''}</p>
       {error && <p className="m-0 mt-1 text-[11px] text-[#c0392b]">Couldn&rsquo;t add — try again</p>}
     </div>

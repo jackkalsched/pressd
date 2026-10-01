@@ -24,6 +24,7 @@ import Charts from './pages/Charts'
 import HowItWorks from './pages/HowItWorks'
 import Tutorial from './pages/Tutorial'
 import TagBoard from './pages/TagBoard'
+import CommunityAlbum from './pages/CommunityAlbum'
 
 function PublicHome() {
   const { activeUser } = useUser()
@@ -85,6 +86,10 @@ function ProtectedRoutes() {
         <Route path="/stats/:kind/:tag" element={<TagBoard />} />
         <Route path="/social" element={<Social />} />
         <Route path="/u/:userId" element={<FriendProfile />} />
+        {/* The userbase's view of a record — by name for one that may not be in
+            Pressd yet, or from any copy's id. The static path outranks :id. */}
+        <Route path="/album/community" element={<CommunityAlbum />} />
+        <Route path="/album/:id/community" element={<CommunityAlbum />} />
         <Route path="/album/:id" element={<AlbumDetail />} />
         <Route path="/artist/:name" element={<ArtistPage />} />
         <Route path="/thread/:subject" element={<Thread />} />

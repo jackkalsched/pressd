@@ -330,6 +330,13 @@ export default function AlbumDetail() {
                 <Share2 size={12} /> Share Card
               </button>
             )}
+            {/* Only when someone else has rated it — otherwise the comparison
+                would hold your score against itself. */}
+            {album.status === 'rated' && !isViewingFriend && album.othersRaterCount > 0 && (
+              <button onClick={() => navigate(`/album/${album.id}/community?compare=1`)} className={btnNeutral}>
+                <Users size={12} /> Compare with Pressd
+              </button>
+            )}
             {album.status === 'rated' && !isViewingFriend && (
               <button onClick={() => setShowRecommend(true)} className={btnOrange}>
                 <Star size={12} fill="#ea7a2a" strokeWidth={0} /> Recommend

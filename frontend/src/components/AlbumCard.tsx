@@ -110,7 +110,12 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           motion-reduce:transition-none motion-reduce:hover:transform-none motion-reduce:hover:shadow-none
           ${visible ? 'card-pop' : 'opacity-0'}
         `}
-        onClick={() => (album.status === 'rated' || album.status === 'to_listen') && navigate(`/album/${album.id}`)}
+        onClick={() => {
+          // A To Listen album is one you haven't heard yet, so it opens what
+          // everyone else thinks of it — the community view, as on mobile.
+          if (album.status === 'to_listen') navigate(`/album/${album.id}/community`)
+          else if (album.status === 'rated') navigate(`/album/${album.id}`)
+        }}
         // Leaving the card disarms a pending delete. Blur alone isn't enough:
         // Safari never focuses a clicked button, so it never blurs either.
         onMouseLeave={() => { if (!deleting) setConfirmDelete(false) }}
