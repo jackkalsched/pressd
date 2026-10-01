@@ -187,6 +187,18 @@ def init_db():
             "ALTER TABLE post ADD COLUMN dislike_count INTEGER DEFAULT 0",
             "UPDATE post SET dislike_count = 0 WHERE dislike_count IS NULL",
             "CREATE INDEX IF NOT EXISTS ix_comment_post_id ON comment (post_id)",
+            # ── When an account or a library copy was made, so signups and
+            #    activation can be counted by day. Added without a default and
+            #    given one after, so existing rows stay null: a DEFAULT on the
+            #    ADD would stamp all of them with the deploy time and read as
+            #    every account signing up that day — the opposite of
+            #    tutorial_seen_at above, where stamping existing rows was the
+            #    point. The ORM sets the value itself; the default covers raw
+            #    SQL inserts.
+            "ALTER TABLE pressuser ADD COLUMN created_at TIMESTAMPTZ",
+            "ALTER TABLE pressuser ALTER COLUMN created_at SET DEFAULT NOW()",
+            "ALTER TABLE album ADD COLUMN created_at TIMESTAMPTZ",
+            "ALTER TABLE album ALTER COLUMN created_at SET DEFAULT NOW()",
         ]:
             _exec_migration(conn, stmt)
 

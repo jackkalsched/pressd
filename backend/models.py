@@ -39,6 +39,11 @@ class PressUser(SQLModel, table=True):
     # tutorial shipped was stamped by the migration, so only new sign-ups see it.
     tutorial_seen_at: Optional[datetime] = None
 
+    # When the account was made, so signups can be counted by day. Accounts that
+    # predate the column are null — when they joined was never recorded, and a
+    # guessed date would read as a burst of signups on the day it shipped.
+    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
+
     albums: list["Album"] = Relationship(back_populates="user")
 
 
@@ -129,6 +134,10 @@ class Album(SQLModel, table=True):
     # Long-form review — optional prose attached to this album rating.
     review: Optional[str] = None
     review_at: Optional[datetime] = None  # set on first write, immutable on edit (feed ordering)
+
+    # When this copy entered the user's library — import, recommendation or
+    # copy from the community view. Null for copies that predate the column.
+    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
     # The user's pick when several tracks tie for the album's best score. Only
     # set when they were asked and answered, so null means "nobody broke a tie"

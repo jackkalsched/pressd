@@ -202,6 +202,7 @@ def create_album(
     album.predicted_distinctness = None
     album.predicted_replay = None
     album.predicted_song_mean = None
+    album.created_at = datetime.utcnow()
     session.add(album)
     session.commit()
     session.refresh(album)

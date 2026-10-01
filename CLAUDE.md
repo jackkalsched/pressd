@@ -66,13 +66,13 @@ PLAN_*.md         gitignored design docs; code cites them by section
 | Area | Role | LOC |
 |---|---|---|
 | `backend/main.py` | CORS, 14 routers, `init_db()` on startup, `/health` | 45 |
-| `backend/database.py` | engine + **the entire migration system** (§3) | 190 |
-| `backend/models.py` | 23 SQLModel tables | 580 |
+| `backend/database.py` | engine + **the entire migration system** (§3) | 208 |
+| `backend/models.py` | 23 SQLModel tables | 595 |
 | `backend/deps.py` | `current_user`, `viewable_user_id`, `thread_access` — the auth invariant | 148 |
 | `backend/scoring.py` | framework 1: the user's own album score | 267 |
 | `backend/global_rating.py` | framework 2: the userbase-pooled rating | 155 |
 | `backend/trackkeys.py` | normalization keys; pure stdlib, imported everywhere | 163 |
-| `backend/routers/` | 14 routers, **107 endpoints** | 7,501 |
+| `backend/routers/` | 14 routers, **107 endpoints** | 7,502 |
 | `worker/` | `nightly_predict`, `catalog_predict`, `artist_clusters`, `audio_ingest`, `refresh_new_releases`, … | 2,149 |
 | `theme_predictor/` | `predict_single`, `personalize`, `global_factors`, `corpus`, … | 1,896 |
 | `shared/src/api.ts` | the single API client, 92 exported functions | 1,763 |
@@ -171,7 +171,7 @@ paid tier) and declares four env vars where the code reads about fifteen. Don't 
 about deploy config from it.
 
 **Migrations are a list of idempotent SQL strings** in `init_db()`
-([backend/database.py:66-186](backend/database.py#L66-L186)), run on **every startup**.
+([backend/database.py:66-201](backend/database.py#L66-L201)), run on **every startup**.
 There is no Alembic and no version table. Adding a column means adding a SQLModel field
 **and** appending an `ALTER TABLE … ADD COLUMN` line. `_exec_migration` (`:33`) swallows
 "already exists" and logs everything else, so drift is loud rather than silent.
@@ -211,10 +211,10 @@ There is no Alembic and no version table. Adding a column means adding a SQLMode
 ```
 frontend RatingScreen.tsx `submit` / mobile rate/[id].tsx `submit`
   POST /songs/batch-rate            songs.py:83   writes scores; NO recompute
-  PATCH /albums/{id}                albums.py:197 status + 4 factors
-    ├─ recompute_user_scores()      albums.py:243  the rater's library only
+  PATCH /albums/{id}                albums.py:215 status + 4 factors
+    ├─ recompute_user_scores()      albums.py:260  the rater's library only
     ├─ invalidate_global_ratings()  global_rating.py:49  (this process only)
-    └─ _queue_song_repredictions()  albums.py:351  ⚠️ dies on Render (§11)
+    └─ _queue_song_repredictions()  albums.py:375  ⚠️ dies on Render (§11)
   → returns album + songs (the share card renders straight from this response)
 nightly, 02:30 PT:
   rescore_library_scores()          nightly_predict.py:385  every user, exact again
@@ -317,10 +317,10 @@ spend a request on every open.
 ## 5. Module reference
 
 **`backend/models.py`** — 23 tables. `Album` is a **per-user copy**, not a record
-(`:82`); anything "global" must pool copies. `Song` carries `track_id` into the global
-`Track`, so audio is analyzed once and shared (`:244-246`) — that split is what makes
+(`:89`); anything "global" must pool copies. `Song` carries `track_id` into the global
+`Track`, so audio is analyzed once and shared (`:258-260`) — that split is what makes
 the ML affordable. A mapper event keeps `Album.subject_key` in step with artist+name on
-every write (`:158-172`), deliberately, because albums are constructed in four places
+every write (`:173-187`), deliberately, because albums are constructed in four places
 and `PATCH` writes arbitrary fields through `setattr`. `favorite_*_id` and `top_song_id`
 are **plain ints, not FKs** (`:18-19`): a deleted album should blank the pick, not block
 the delete.
@@ -346,10 +346,10 @@ Users' catalogs disagree about editions, feat-credits and apostrophes; these key
 collapse "Take Care", "Take Care (Deluxe)" and "Take Care (Deluxe Version)" into one
 record. Read §12 before adding a grouping.
 
-**`backend/routers/albums.py`** (1,301) — the largest router. `import_album` (`:373`)
-dedups, inserts, then `_link_tracks` (`:473`) resolves global track ids; two recordings
-sharing a name but differing >10s in duration get a `||d{sec}`-suffixed key (`:490-491`).
-`recommend_album` (`:778`) refuses without a tracklist (`:808-812`) and fills in whatever
+**`backend/routers/albums.py`** (1,335) — the largest router. `import_album` (`:398`)
+dedups, inserts, then `_link_tracks` (`:497`) resolves global track ids; two recordings
+sharing a name but differing >10s in duration get a `||d{sec}`-suffixed key (`:514-515`).
+`recommend_album` (`:803`) refuses without a tracklist (`:831-836`) and fills in whatever
 the recipient's shell copy is missing, but leaves anything they've engaged with alone.
 ⚠️ **`GET /albums/` (the list) returns albums without their songs**; only
 `GET /albums/{id}` carries them. Anything that needs per-song state for a listed album —
@@ -526,7 +526,7 @@ Four call sites, all `claude-haiku-4-5-20251001`:
 |---|---|---|
 | `theme_analysis.analyze_theme:141` | nightly worker | **yes** — `albumfactors`, once per album ever |
 | `distinctness_predictor.predict_distinctness` | nightly worker | **yes** — same row |
-| `albums.py:_classify_genre_claude:278` | web, background thread, on import | once per album row |
+| `albums.py:_classify_genre_claude:302` | web, background thread, on import | once per album row |
 | `stats.py:analysis:1138` | **web, synchronous, unbounded** | **no** — §10 P10 |
 
 **The design.** The old prompt asked *"what would Jack score this?"*, with Jack's
@@ -622,7 +622,7 @@ match).
 **Everything in-process is correct only because the backend is one process.** See §10 P5.
 
 **The ratings board stays in memory on purpose.** It is thrown away whenever anyone rates
-a song or finishes an album (`songs.py:154`, `albums.py:245`), so a stored copy would be
+a song or finishes an album (`songs.py:154`, `albums.py:262`), so a stored copy would be
 rebuilt as often as the in-memory one and every read would cost a database round trip.
 It only needs moving once there is more than one process. New releases are the opposite
 case: they change a few times a day and take minutes to rebuild, so a worker builds and stores them.
@@ -642,13 +642,13 @@ Current → risk → cheapest fix. Rows marked fixed have been implemented; the 
 
 | # | Finding | Risk | Cheapest fix |
 |---|---|---|---|
-| **P1** | ~~Finishing a rating rescored every user's library inside the request.~~ **Fixed.** The request now rescores only the rater ([albums.py:243](backend/routers/albums.py#L243)); the nightly job makes everyone exact again (`nightly_predict.py:385`); the userbase prior reads four columns instead of whole rows (`scoring.py:113`). On a 30-user test database one rating went from 124 queries to 13, and the rater's scores matched the old path exactly | ~~HIGH~~ → LOW | residual: the prior is still one scan over every rated album per rating, now of four numbers |
+| **P1** | ~~Finishing a rating rescored every user's library inside the request.~~ **Fixed.** The request now rescores only the rater ([albums.py:260](backend/routers/albums.py#L260)); the nightly job makes everyone exact again (`nightly_predict.py:385`); the userbase prior reads four columns instead of whole rows (`scoring.py:113`). On a 30-user test database one rating went from 124 queries to 13, and the rater's scores matched the old path exactly | ~~HIGH~~ → LOW | residual: the prior is still one scan over every rated album per rating, now of four numbers |
 | **P2** | `/discover/charts` selects every rated album, then filters and groups twice in Python, uncached (`discover.py:189`) | **HIGH** — the Charts tab, both platforms | memoise the response on its filter tuple with the existing 60s TTL + invalidation hook |
 | **P11** | ~~All 10 `/util/*` endpoints had no auth.~~ **Fixed.** The router now carries `dependencies=[Depends(current_user)]` (`util.py:31-45`) and the two web call sites that used a bare `fetch` were moved onto `fetchAlbumColor`. Verified: all ten answer 401 without a token. A signed-in user can still call `/backfill-genres?override=true` | ~~HIGH~~ → LOW | residual: move the seven maintenance routes out of HTTP entirely, beside `run_audio_ingest.sh` |
 | **P8** | Engine allows 15 connections *per process*; Supabase's session pooler allows 15 *per project* (`database.py:28` vs `backfill_factors.py:35`) | **HIGH** at scale | confirm pooler mode; size `pool_size` against the real limit ÷ instances |
 | **P5** | The ratings board and search cache are per-process. `invalidate_cache()` clears one process's board. New releases now persist in `CachedFeed` | **HIGH** the moment there's a 2nd instance | move the board to shared storage before scaling out, not before: at one process it would only be slower |
 | **P3** | `/discover/picks` runs a `NOT EXISTS` on `lower(trim(…))` with no functional index (`discover.py:321-326`) | MEDIUM — `albumprediction` grows as users × catalog | functional index, or store `album_key` on `Album` |
-| **P4** | `/albums/{id}/report` aggregates the **entire** song table, then filters in Python (`albums.py:554-557`) | MEDIUM | add `.where(Song.album_id.in_(...))` — one line |
+| **P4** | `/albums/{id}/report` aggregates the **entire** song table, then filters in Python (`albums.py:578-581`) | MEDIUM | add `.where(Song.album_id.in_(...))` — one line |
 | **P6** | ~~`/discover/new-releases` has no single-flight; N concurrent refills each made ~25 outbound calls.~~ **Moot.** The endpoint no longer fetches in normal running: a GitHub worker builds the list every 6h and the endpoint reads it | ~~LOW–MED~~ → LOW | residual: `quick_build` (~30 calls) has no single-flight, but runs only after the worker has failed for 3 days |
 | **P7** | ~90 migration statements on every boot, incl. 3 `DELETE`s and 6 full-table `UPDATE`s, with `statement_timeout = 0` | LOW–MED | a `schema_version` table |
 | **P12** | `JWT_SECRET` defaults to a literal that is public in this repo, with no startup assertion (`deps.py:18`) | MEDIUM — fails open, silently | raise at import when unset in production |
@@ -662,10 +662,18 @@ function in the two `QueryClient` configs that backs off and skips 4xx. Two file
 
 **If you add product analytics** (there is none today; `@react-native-firebase/analytics`
 ships in the mobile bundle unused): the seams already exist. Invite→signup at
-`users.py:209` with `Invite.accepted_at` already stored; recommend→rate at `albums.py:778`
+`users.py:209` with `Invite.accepted_at` already stored; recommend→rate at `albums.py:803`
 with `recommended_by`/`recommended_at` already persisting the edge; rating-funnel
 drop-off is the gap between `batch-rate` and `PATCH /albums`; discovery→library is
 `/discover/picks` → `POST /albums/import`.
+
+Signups and library adds are dated from October 2026: `PressUser.created_at` and
+`Album.created_at` (`TIMESTAMPTZ`, set by the ORM, `DEFAULT NOW()` for raw SQL).
+**Rows older than the column are null** — when they were made was never stored, and
+the migration deliberately leaves them so (`database.py:190-201`) rather than stamping
+the deploy time, which would read as every account signing up that day. Count signups
+with `created_at > …`, never `created_at IS NULL OR …`. `create_album` stamps it
+server-side because it takes an `Album` straight from the request body.
 
 The structural gap is the share card. It is rasterised entirely client-side
 (`html2canvas` on web, `captureRef` on mobile) and produces a bare PNG — **no
@@ -705,8 +713,8 @@ backend: `/users/` rows carry only `id`, `name`, `avatar_url`, `bio`.
   QUESTIONS Q8 — re-ranking the boards is Jack's call.
 - **Three background threads in `albums.py` can't fully work on Render.**
   `song_score_model.py:29-38` imports `sklearn` and `scipy` unguarded, and neither is in
-  `requirements.txt`. `_queue_song_repredictions` (`:351`) therefore always raises,
-  caught and printed. `_queue_predictions` (`:260`) guards its import
+  `requirements.txt`. `_queue_song_repredictions` (`:375`) therefore always raises,
+  caught and printed. `_queue_predictions` (`:277`) guards its import
   (`predict_single.py:148`), so its theme and distinctness stages still run and only the
   song-model stage no-ops. `_queue_genre_tagging` works. Probably intended after the
   worker split, but the code doesn't say so. QUESTIONS Q11.
@@ -739,7 +747,7 @@ backend: `/users/` rows carry only `id`, `name`, `avatar_url`, `bio`.
   deliberately stayed at parity here rather than spending the `canDelete`/`canEdit` flags
   the payload already carries: doing it on one platform only is the drift §1 forbids.
 - **A tracklist never re-syncs after import.** `POST /albums/import` returns an existing
-  copy with `already_existed: True` and only backfills a missing cover (`albums.py:381`).
+  copy with `already_existed: True` and only backfills a missing cover (`albums.py:410`).
   There is no refresh endpoint, so when an upstream catalog corrects a tracklist the
   user's only recourse is delete-and-re-add, losing their ratings. Wanted, not intended.
   `backend/repair_missing_songs.py` is a one-off Excel-sourced script, not a fix.
@@ -845,7 +853,7 @@ exports from `shared/src/api.ts` plus `setPopularityWeight` from `albumSearch.ts
 `theme_analysis.py`. Verified after: both clients typecheck, lint is unchanged at its
 pre-existing 16 errors, and every backend and worker module imports.
 
-One item knowingly left: `GET /albums/{id}/report` (`albums.py:512-777`), whose only
+One item knowingly left: `GET /albums/{id}/report` (`albums.py:536-743`), whose only
 consumer was the deleted `RatingReport.tsx`. Removing a finished-but-unmounted feature
 is a product call, not a cleanup — QUESTIONS Q15.
 
