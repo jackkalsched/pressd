@@ -12,7 +12,7 @@
 #   ~/Library/Application Support/pressd/
 #     nightly.sh   copied from ops/launchd/nightly.sh; updates the clone, runs it
 #     ingest/      git clone, detached at origin/<ref>, plus a copy of .env (0600)
-#   ~/Library/LaunchAgents/com.pressd.audio-ingest{,.login}.plist
+#   ~/Library/LaunchAgents/com.pressd.audio-ingest{,.catchup}.plist
 #   ~/Library/Logs/pressd/{audio-ingest,preflight}.log
 #
 # Why a clone: launchd cannot read ~/Desktop, where the working copy lives
@@ -28,14 +28,17 @@
 # the exact path the nightly run takes — and installs nothing unless it passes.
 #
 # Scheduling — two agents, both through nightly.sh, which has the details:
-#   com.pressd.audio-ingest        00:30 *local* time, or on the next wake if the
-#                                  Mac is asleep then (missed runs coalesce)
-#   com.pressd.audio-ingest.login  at login with --catch-up: covers a Mac that was
-#                                  shut down, not asleep; skips if a run succeeded
-#                                  in the last 20h
-# In practice the laptop is shut at 00:30, so the run happens when it is opened
-# in the morning. worker/audio_health.py goes red in GitHub if a run fails or
-# none happens for 36h.
+#   com.pressd.audio-ingest          00:30 *local* time, or on the next wake if
+#                                    the Mac is asleep then (missed runs coalesce)
+#   com.pressd.audio-ingest.catchup  at login and every 30 minutes, with
+#                                    --catch-up: runs only if tonight's run hasn't
+#                                    succeeded yet, and does nothing offline
+# In practice the laptop is asleep at 00:30, so the run happens in the first
+# awake, online half-hour after it. worker/audio_health.py goes red in GitHub if
+# a run fails or none happens for 36h. The catch-up replaced a login-only agent
+# (com.pressd.audio-ingest.login, removed here on install) after three nights in
+# October 2026 failed on dark wakes and nothing retried: opening the lid is a
+# wake, not a login.
 #
 # Secrets: the clone gets a copy of this repo's .env. Re-run this script after
 # changing .env, or the nightly job keeps the old values.
@@ -56,8 +59,12 @@ LOGDIR="$HOME/Library/Logs/pressd"
 AGENTS="$HOME/Library/LaunchAgents"
 DOMAIN="gui/$(id -u)"
 PLIST="$AGENTS/$LABEL.plist"
-LOGIN_LABEL="$LABEL.login"
-LOGIN_PLIST="$AGENTS/$LOGIN_LABEL.plist"
+CATCHUP_LABEL="$LABEL.catchup"
+CATCHUP_PLIST="$AGENTS/$CATCHUP_LABEL.plist"
+# The agent the catch-up replaced; removed wherever it is still installed.
+LEGACY_LABEL="$LABEL.login"
+LEGACY_PLIST="$AGENTS/$LEGACY_LABEL.plist"
+CATCHUP_EVERY_S=1800
 
 REF="main"
 MODE="install"
@@ -72,7 +79,7 @@ done
 xml_escape() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
 unload() { launchctl bootout "$DOMAIN/$1" 2>/dev/null || true; }
 
-# write_plist <label> <path> <log> <schedule|once> [extra program args...]
+# write_plist <label> <path> <log> <schedule|once|periodic> [extra program args...]
 write_plist() {
   local label="$1" path="$2" log="$3" when="$4"; shift 4
   local args="" a
@@ -86,6 +93,13 @@ write_plist() {
         <key>Minute</key>
         <integer>30</integer>
     </dict>'
+  elif [ "$when" = "periodic" ]; then
+    # At load (login, and once now) and then every CATCHUP_EVERY_S. Intervals
+    # missed while asleep coalesce into one run on the next wake.
+    trigger="    <key>RunAtLoad</key>
+    <true/>
+    <key>StartInterval</key>
+    <integer>$CATCHUP_EVERY_S</integer>"
   else
     trigger='    <key>RunAtLoad</key>
     <true/>'
@@ -124,11 +138,11 @@ PLIST
 }
 
 if [ "$MODE" = "uninstall" ]; then
-  unload "$LABEL"; unload "$LOGIN_LABEL"
-  rm -f "$PLIST" "$LOGIN_PLIST"
+  unload "$LABEL"; unload "$CATCHUP_LABEL"; unload "$LEGACY_LABEL"
+  rm -f "$PLIST" "$CATCHUP_PLIST" "$LEGACY_PLIST"
   # The clone holds a copy of .env; leaving it behind would strand secrets.
   case "$BASE" in */Library/"Application Support"/pressd) rm -rf "$BASE" ;; esac
-  echo "Removed $LABEL and $LOGIN_LABEL, their plists, and $BASE (clone + .env copy). Logs kept in $LOGDIR."
+  echo "Removed $LABEL and $CATCHUP_LABEL, their plists, and $BASE (clone + .env copy). Logs kept in $LOGDIR."
   exit 0
 fi
 
@@ -210,16 +224,17 @@ unload "$LABEL"
 write_plist "$LABEL" "$PLIST" "$LOGDIR/audio-ingest.log" schedule
 launchctl bootstrap "$DOMAIN" "$PLIST"
 
-# The login catch-up. RunAtLoad fires at every login — and once now, at
-# bootstrap; nightly.sh makes that a no-op when a run succeeded in the last 20h.
-unload "$LOGIN_LABEL"
-write_plist "$LOGIN_LABEL" "$LOGIN_PLIST" "$LOGDIR/audio-ingest.log" once --catch-up
-launchctl bootstrap "$DOMAIN" "$LOGIN_PLIST"
+# The catch-up: at login, once now at bootstrap, and every 30 minutes after.
+# nightly.sh makes each one a silent no-op unless tonight's run is still owed.
+unload "$LEGACY_LABEL"; rm -f "$LEGACY_PLIST"
+unload "$CATCHUP_LABEL"
+write_plist "$CATCHUP_LABEL" "$CATCHUP_PLIST" "$LOGDIR/audio-ingest.log" periodic --catch-up
+launchctl bootstrap "$DOMAIN" "$CATCHUP_PLIST"
 
 cat <<DONE
 
 Installed $LABEL (00:30 local, or on the next wake if the Mac is asleep)
-      and $LOGIN_LABEL (at login, if no run has succeeded in 20h).
+      and $CATCHUP_LABEL (at login and every 30 min, when tonight's run is still owed).
   runs        origin/$REF from $CLONE (updated each night)
   log         $LOGDIR/audio-ingest.log
   run now     launchctl kickstart -p $DOMAIN/$LABEL

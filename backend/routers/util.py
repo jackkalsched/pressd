@@ -111,12 +111,17 @@ async def _fetch_cover_url(client: httpx.AsyncClient, album: str, artist: str) -
     if not releases:
         return None
 
+    # The 500px thumbnail, not `front` itself: `front` is the uploaded original,
+    # which ran 0.3–11 MB for an image drawn at 58–184 px (thumbnail_cover_urls.py
+    # has the measurements). What's stored is the redirect target on the Archive
+    # machine, the fastest address; the apps fall back to the stable one
+    # (shared/src/covers.ts) if that machine stops answering.
     for release in releases:
         mbid = release.get("id")
         if not mbid:
             continue
         art_resp = await client.head(
-            f"https://coverartarchive.org/release/{mbid}/front",
+            f"https://coverartarchive.org/release/{mbid}/front-500",
             follow_redirects=True,
             timeout=4,
         )
@@ -127,7 +132,7 @@ async def _fetch_cover_url(client: httpx.AsyncClient, album: str, artist: str) -
     rg_id = releases[0].get("release-group", {}).get("id")
     if rg_id:
         art_resp = await client.head(
-            f"https://coverartarchive.org/release-group/{rg_id}/front",
+            f"https://coverartarchive.org/release-group/{rg_id}/front-500",
             follow_redirects=True,
             timeout=4,
         )

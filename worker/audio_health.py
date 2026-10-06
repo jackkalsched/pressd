@@ -43,6 +43,15 @@ def main() -> int:
             FROM workerrun WHERE job = 'audio_ingest'
             ORDER BY started_at DESC LIMIT 1
         """)).first()
+        # A run frozen by a sleeping Mac sits at 'running' until the lid opens
+        # and then finishes normally (Oct 6 2026: 00:30 → 23:13). That is only
+        # an alarm once the ingest has also gone a full STALE_AFTER_H without a
+        # success; before then it is a late night, which this check tolerates.
+        last_ok_h = con.execute(text("""
+            SELECT EXTRACT(EPOCH FROM (NOW() - MAX(finished_at))) / 3600.0
+            FROM workerrun WHERE job = 'audio_ingest' AND status = 'ok'
+        """)).scalar()
+        last_ok_h = float(last_ok_h) if last_ok_h is not None else None
         pending = con.execute(text("""
             SELECT COUNT(DISTINCT s.track_id) FROM song s
             WHERE s.track_id IS NOT NULL AND NOT EXISTS (
@@ -61,7 +70,8 @@ def main() -> int:
         print(f"  detail: {detail}")
         if row.status == "error":
             problems.append(f"last run #{row.id} failed: {detail.get('error', 'no reason recorded')}")
-        elif row.status == "running" and age > RUNNING_TOO_LONG_H:
+        elif (row.status == "running" and age > RUNNING_TOO_LONG_H
+              and not (last_ok_h is not None and last_ok_h <= STALE_AFTER_H)):
             problems.append(f"run #{row.id} has been 'running' for {age:.1f}h — it died "
                             f"without recording a result")
         if age > STALE_AFTER_H:

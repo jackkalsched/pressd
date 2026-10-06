@@ -15,6 +15,7 @@ import { ArrowRight, Send } from 'lucide-react-native'
 import { avatarColor, songScoreColor } from '@pressd/shared/types'
 import type { RecommendSuggestion } from '@pressd/shared/api'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import CoverImage from './CoverImage'
 
 // The recommendation orange, shared with RecommendationBanner and RecommendSheet.
 const ORANGE = '#f97316'
@@ -46,7 +47,7 @@ export default function PassItOnCell({
 
         <View style={styles.mediaRow}>
           {album.albumArtUrl ? (
-            <Image source={{ uri: album.albumArtUrl }} style={styles.cover} contentFit="cover" />
+            <CoverImage url={album.albumArtUrl} displayPx={56} style={styles.cover} />
           ) : (
             <View style={[styles.cover, styles.coverFallback]}>
               <Text style={styles.coverInitial} maxFontSizeMultiplier={NUM_SCALE_CAP}>

@@ -22,12 +22,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
-import { Image } from 'expo-image'
 import { ArrowLeft } from 'lucide-react-native'
 import { fetchTagRecords, type TagRecord } from '../../lib/api'
 import { songScoreColor, avatarColor } from '@pressd/shared/types'
 import { revealStyle } from '../../lib/scrollReveal'
 import { colors, contentWidth, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+import CoverImage from '../../components/CoverImage'
 
 // Podium proportions and numeral caps copied from Charts deliberately: the two
 // boards sit one tap apart and any drift between them would read as a bug.
@@ -188,7 +188,7 @@ function PodiumTile({ item, size, onOpen }: { item: TagRecord; size: number; onO
     <Pressable style={[styles.podCol, { width: size }]} onPress={() => onOpen(item.album_id)}>
       <View style={[styles.podTile, { width: size, height: size }]}>
         {item.album_art_url ? (
-          <Image source={{ uri: item.album_art_url }} style={styles.podImg} contentFit="cover" />
+          <CoverImage url={item.album_art_url} displayPx={size} style={styles.podImg} />
         ) : (
           <View style={[styles.podImg, styles.podFallback, { backgroundColor: avatarColor(item.album_name) }]}>
             <Text style={[styles.podLetter, { fontSize: size * 0.4 }]}>{item.album_name[0]?.toUpperCase()}</Text>
@@ -245,7 +245,7 @@ function BoardRow({ item, onOpen }: { item: TagRecord; onOpen: (id: number) => v
         {item.rank}
       </Text>
       {item.album_art_url ? (
-        <Image source={{ uri: item.album_art_url }} style={styles.rowArt} contentFit="cover" />
+        <CoverImage url={item.album_art_url} displayPx={40} style={styles.rowArt} />
       ) : (
         <View style={[styles.rowArt, styles.podFallback, { backgroundColor: avatarColor(item.album_name) }]}>
           <Text style={styles.rowLetter}>{item.album_name[0]?.toUpperCase()}</Text>

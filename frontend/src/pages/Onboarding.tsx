@@ -7,6 +7,7 @@ import type { AlbumSearchResult } from '../api'
 import { useAlbumSearch } from '../hooks/useAlbumSearch'
 import TracklistLoader from '../components/TracklistLoader'
 import { useUser } from '../context/UserContext'
+import CoverImg from '../components/CoverImg'
 
 export const ONBOARDING_SKIP_KEY = 'pressd-onboarding-skipped'
 
@@ -21,7 +22,7 @@ function Belt({ urls, duration, size }: { urls: string[]; duration: number; size
         {content.map((url, i) => (
           <div key={i} className={`${size} shrink-0 rounded-xl overflow-hidden bg-[#ece6dc] shadow-[0_4px_14px_-4px_rgba(50,30,10,0.25)]`}>
             {url ? (
-              <img src={url} alt="" loading="lazy" className="w-full h-full object-cover" />
+              <CoverImg url={url} displayPx={112} alt="" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#e8dfd2] to-[#cfc3b0]">
                 <Music size={20} className="text-[#b0a090]" strokeWidth={1.25} />
@@ -161,7 +162,7 @@ export default function Onboarding() {
                     className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[#f7f3ee] transition-colors text-left border-b border-[#f0ebe3] last:border-0"
                   >
                     {r.cover_url ? (
-                      <img src={r.cover_url} alt="" className="w-9 h-9 rounded-md object-cover shrink-0" />
+                      <CoverImg url={r.cover_url} displayPx={36} alt="" className="w-9 h-9 rounded-md object-cover shrink-0" />
                     ) : (
                       <div className="w-9 h-9 rounded-md bg-[#e8e2d9] shrink-0 flex items-center justify-center">
                         <Music size={13} className="text-[#b0a090]" />
@@ -206,7 +207,7 @@ export default function Onboarding() {
           {selected && !importing && (
             <div className="flex items-center gap-3 bg-white rounded-xl px-3.5 py-3 border border-[#2d6a4f]/25 shadow-sm mt-4">
               {selected.cover_url ? (
-                <img src={selected.cover_url} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                <CoverImg url={selected.cover_url} displayPx={48} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
               ) : (
                 <div className="w-12 h-12 rounded-lg bg-[#e8e2d9] shrink-0" />
               )}

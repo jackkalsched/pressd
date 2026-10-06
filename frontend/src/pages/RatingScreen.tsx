@@ -30,6 +30,8 @@ import ShareCardModal from '../components/ShareCard'
 import TopSongTiebreak from '../components/TopSongTiebreak'
 import { useUser } from '../context/UserContext'
 import { useRecalibrationMessage } from '@pressd/shared/hooks/useRecalibration'
+import CoverImg from '../components/CoverImg'
+import { coverUrl } from '@pressd/shared/covers'
 
 const DANGER = '#b91c1c'
 
@@ -605,7 +607,8 @@ export default function RatingScreen() {
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 h-[420px] opacity-[0.22] fade-in"
           style={{
-            backgroundImage: `url(${album.albumArtUrl})`,
+            // Blurred 70px: a small image is all it needs.
+            backgroundImage: `url(${coverUrl(album.albumArtUrl, 120)})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             filter: 'blur(70px) saturate(1.3)',
@@ -626,7 +629,7 @@ export default function RatingScreen() {
             <ArrowLeft size={18} />
           </button>
           {album.albumArtUrl ? (
-            <img src={album.albumArtUrl} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0 lg:hidden" />
+            <CoverImg url={album.albumArtUrl} displayPx={40} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0 lg:hidden" />
           ) : null}
           <div className="min-w-0 flex-1 lg:hidden">
             <p className="m-0 text-[14.5px] font-semibold text-[#1c1917] truncate">{album.albumName}</p>
@@ -905,8 +908,9 @@ export default function RatingScreen() {
             <div className="sticky top-6 flex flex-col gap-5">
               <div className="flex items-center gap-4">
                 {album.albumArtUrl ? (
-                  <img
-                    src={album.albumArtUrl}
+                  <CoverImg
+                    url={album.albumArtUrl}
+                    displayPx={96}
                     alt=""
                     className="w-24 h-24 rounded-2xl object-cover shrink-0 shadow-[0_16px_34px_-16px_rgba(50,30,10,0.5)]"
                   />

@@ -13,6 +13,7 @@ import { songScoreColor } from '../types'
 import { useUser } from '../context/UserContext'
 import CommentThread from '../components/CommentThread'
 import { threadPath } from '../lib/threads'
+import CoverImg from '../components/CoverImg'
 
 function timeAgo(dateStr?: string): string {
   if (!dateStr) return ''
@@ -110,7 +111,7 @@ function FeedCard({ item }: { item: FeedItem }) {
         {/* Album art */}
         <div className="w-24 h-24 shrink-0 rounded-xl overflow-hidden bg-[#e8e8e8] flex items-center justify-center text-[#aaa]">
           {item.album_art_url
-            ? <img src={item.album_art_url} alt={item.album_name} className="w-full h-full object-cover" />
+            ? <CoverImg url={item.album_art_url} displayPx={96} alt={item.album_name} className="w-full h-full object-cover" />
             : <Music size={30} />}
         </div>
 
@@ -503,7 +504,7 @@ function ReviewCard({ review }: { review: FriendReview }) {
       <div className="flex gap-4 mb-3">
         <div className="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-[#e8e8e8] flex items-center justify-center text-[#aaa]">
           {review.album_art_url
-            ? <img src={review.album_art_url} alt={review.album_name} className="w-full h-full object-cover" />
+            ? <CoverImg url={review.album_art_url} displayPx={64} alt={review.album_name} className="w-full h-full object-cover" />
             : <Music size={22} />}
         </div>
         <div className="flex-1 min-w-0">
@@ -674,7 +675,7 @@ function FeedPostCard({ post }: { post: FeedPost }) {
     >
       <div className="flex items-center gap-2.5 mb-2.5">
         {post.thread.artUrl ? (
-          <img src={post.thread.artUrl} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0 bg-[#f0ebe3]" />
+          <CoverImg url={post.thread.artUrl} displayPx={36} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0 bg-[#f0ebe3]" />
         ) : (
           <div className="w-9 h-9 rounded-lg bg-[#f0ebe3] shrink-0" />
         )}

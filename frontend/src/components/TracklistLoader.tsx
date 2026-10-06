@@ -3,6 +3,7 @@
 // depending on source) between the click and having something to rate — this
 // fills it with the album they picked rather than a bare spinner.
 import { useEffect, useState } from 'react'
+import CoverImg from './CoverImg'
 
 /** "Loading tracklist" + a dot cycling 1→3, so the wait reads as live. */
 function useEllipsis(): string {
@@ -36,7 +37,7 @@ export default function TracklistLoader({
   }, [])
 
   const art = coverUrl ? (
-    <img src={coverUrl} alt="" className={`${compact ? 'w-12 h-12 rounded-lg' : 'w-40 h-40 rounded-2xl'} object-cover shrink-0`} />
+    <CoverImg url={coverUrl} displayPx={compact ? 48 : 160} loading="eager" alt="" className={`${compact ? 'w-12 h-12 rounded-lg' : 'w-40 h-40 rounded-2xl'} object-cover shrink-0`} />
   ) : (
     <div className={`${compact ? 'w-12 h-12 rounded-lg text-lg' : 'w-40 h-40 rounded-2xl text-5xl'} bg-[#e8e2d9] text-[#b0a090] shrink-0 flex items-center justify-center font-semibold`}>
       {albumName[0]?.toUpperCase()}

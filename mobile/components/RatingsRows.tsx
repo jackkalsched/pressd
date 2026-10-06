@@ -6,11 +6,11 @@
 // direction, theirs was a fixed score-descending list of albums with no artist
 // mode at all. The favourite-pickers list through the same three.
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { Image } from 'expo-image'
 import { songScoreColor, type Album } from '@pressd/shared/types'
 import type { RankedSong } from '@pressd/shared/api'
 import { NUM_SCALE_CAP, RANK_NUM_MIN_W, RANK_NUM_SIZE, type ArtistRank } from '../lib/rankings'
 import { colors, fonts, radii, spacing } from '../theme/tokens'
+import CoverImage from './CoverImage'
 
 export function RatingRow({
   album,
@@ -27,7 +27,7 @@ export function RatingRow({
         {rank}
       </Text>
       {album.albumArtUrl ? (
-        <Image source={{ uri: album.albumArtUrl }} style={styles.ratingArt} contentFit="cover" />
+        <CoverImage url={album.albumArtUrl} displayPx={48} style={styles.ratingArt} />
       ) : (
         <View style={[styles.ratingArt, styles.artFallback]}>
           <Text style={styles.artInitial}>{album.albumName[0]?.toUpperCase()}</Text>
@@ -119,7 +119,7 @@ export function SongRankRow({
         {rank}
       </Text>
       {song.album_art_url ? (
-        <Image source={{ uri: song.album_art_url }} style={styles.ratingArt} contentFit="cover" />
+        <CoverImage url={song.album_art_url} displayPx={48} style={styles.ratingArt} />
       ) : (
         <View style={[styles.ratingArt, styles.artFallback]}>
           <Text style={styles.artInitial}>{song.title[0]?.toUpperCase()}</Text>

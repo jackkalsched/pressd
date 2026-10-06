@@ -11,6 +11,7 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
   ScatterChart, Scatter, ZAxis,
 } from 'recharts'
+import CoverImg from '../components/CoverImg'
 
 // ── Percentile bar ────────────────────────────────────────────────────────────
 
@@ -326,8 +327,9 @@ function Tile({ entry }: { entry: GridEntry }) {
   const inner = (
     <div className="relative w-full aspect-square rounded-lg overflow-hidden bg-[#e8e8e8]">
       {entry.art && !imgError ? (
-        <img
-          src={entry.art}
+        <CoverImg
+          url={entry.art}
+          displayPx={200}
           alt={entry.name}
           className="w-full h-full object-cover"
           style={isRated ? undefined : { filter: 'grayscale(100%) brightness(0.7)' }}
@@ -504,7 +506,7 @@ export default function ArtistPage() {
                   className="w-20 h-20 rounded-xl overflow-hidden border-2 border-[#f9f8f6] hover:scale-110 hover:z-10 transition-transform relative"
                   style={{ marginLeft: i === 0 ? 0 : '-10px', zIndex: shown.length - i }}
                 >
-                  <img src={a.album_art_url!} alt={a.album_name} className="w-full h-full object-cover" />
+                  <CoverImg url={a.album_art_url} displayPx={80} alt={a.album_name} className="w-full h-full object-cover" />
                 </Link>
               ))}
             </div>
@@ -614,7 +616,7 @@ export default function ArtistPage() {
           >
             <div className="w-12 h-12 shrink-0 bg-[#e8e8e8] rounded-lg overflow-hidden flex items-center justify-center text-[#aaa] text-lg font-bold">
               {album.album_art_url
-                ? <img src={album.album_art_url} alt={album.album_name} className="w-full h-full object-cover" />
+                ? <CoverImg url={album.album_art_url} displayPx={48} alt={album.album_name} className="w-full h-full object-cover" />
                 : album.album_name[0]}
             </div>
             <div className="flex-1 min-w-0">

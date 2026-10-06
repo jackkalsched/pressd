@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Loader2 } from 'lucide-react'
 import { fetchAlbum, fetchAlbums, fetchFeed, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion } from '../api'
 import type { NewRelease, PredictedPick, RecommendSuggestion, TopReview } from '../api'
-import { songScoreColor } from '../types'
+import { MIN_RATED_ALBUMS, songScoreColor } from '../types'
 import { Cover, ScorePill, hueFromString, coverGradient, scoreTint } from '../components/covers'
 import HeatedDiscussions from '../components/HeatedDiscussions'
 import PassItOnCell from '../components/PassItOnCell'
@@ -81,7 +81,7 @@ export default function ForYou() {
     queryFn: () => fetchAlbums({ status: 'to_listen', userId }),
     enabled: userId > 0,
   })
-  const { data: rated = [] } = useQuery({
+  const { data: rated = [], isSuccess: ratedLoaded } = useQuery({
     queryKey: ['albums', 'rated', userId],
     queryFn: () => fetchAlbums({ status: 'rated', userId }),
     enabled: userId > 0,
@@ -277,6 +277,10 @@ export default function ForYou() {
   const showPass = !!passItOn && passKey !== passSent
 
   const nothingYet = !resume && toListen.length === 0 && rated.length === 0
+  // Below MIN_RATED_ALBUMS the server sends no picks and no predicted scores,
+  // so say how far off they are. Held until the count has loaded: a default
+  // of zero would flash "10 more" at someone who is one away.
+  const unlockLeft = ratedLoaded ? Math.max(0, MIN_RATED_ALBUMS - rated.length) : 0
 
   // Same ground as every other page: the shell in Layout and the pages that
   // set their own root (Ratings, Stats) are all #f9f8f6. This one was alone on
@@ -356,6 +360,23 @@ export default function ForYou() {
                   </p>
                 </SpotlightCard>
               )}
+            </div>
+          )}
+          {unlockLeft > 0 && (
+            <div className="rise-in mb-9 flex flex-wrap items-center gap-x-4 gap-y-2.5">
+              <div className="flex gap-1.5" aria-hidden>
+                {Array.from({ length: MIN_RATED_ALBUMS }, (_, i) => (
+                  <span
+                    key={i}
+                    className="h-2 w-6 rounded-full"
+                    style={{ background: i < rated.length ? '#2d6a4f' : '#e7e0d6' }}
+                  />
+                ))}
+              </div>
+              <p className="m-0 text-[14px] text-[#57534e]">
+                <span className="font-bold text-[#1c1917] tabular-nums">{unlockLeft}</span>{' '}
+                more {unlockLeft === 1 ? 'album' : 'albums'} until picks unlock
+              </p>
             </div>
           )}
           {passItOn && passModalOpen && (

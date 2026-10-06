@@ -17,7 +17,6 @@ import {
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
-import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { ChevronDown, Triangle, X } from 'lucide-react-native'
 import { fetchCharts, type ChartItem } from '../../lib/api'
@@ -25,6 +24,7 @@ import { songScoreColor, avatarColor } from '@pressd/shared/types'
 import AnchoredMenu, { type MenuOption } from '../../components/AnchoredMenu'
 import { revealStyle } from '../../lib/scrollReveal'
 import { colors, contentWidth, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+import CoverImage from '../../components/CoverImage'
 
 const DOWN = '#c0392b'
 
@@ -332,7 +332,7 @@ function PodiumTile({ item, size, onOpen }: { item: ChartItem; size: number; onO
     <Pressable style={[styles.podCol, { width: size }]} onPress={() => onOpen(item.album_id)}>
       <View style={[styles.podTile, { width: size, height: size }]}>
         {item.album_art_url ? (
-          <Image source={{ uri: item.album_art_url }} style={styles.podImg} contentFit="cover" />
+          <CoverImage url={item.album_art_url} displayPx={size} style={styles.podImg} />
         ) : (
           <View style={[styles.podImg, styles.podFallback, { backgroundColor: avatarColor(item.album_name) }]}>
             <Text style={[styles.podLetter, { fontSize: size * 0.4 }]}>{item.album_name[0]?.toUpperCase()}</Text>

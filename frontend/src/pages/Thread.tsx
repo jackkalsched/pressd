@@ -26,6 +26,7 @@ import { timeAgo } from '../lib/format'
 import VoteButtons from '../components/VoteButtons'
 import Avatar from '../components/Avatar'
 import FullReviewModal from '../components/FullReviewModal'
+import CoverImg from '../components/CoverImg'
 
 // Matches the red For You uses for a worst track.
 const DOWN = '#e0492b'
@@ -141,8 +142,10 @@ export default function Thread() {
             <div className="lg:sticky lg:top-8">
               <div className="flex lg:flex-col items-center lg:items-stretch gap-4">
                 {meta?.artUrl ? (
-                  <img
-                    src={meta.artUrl}
+                  <CoverImg
+                    url={meta.artUrl}
+                    displayPx={400}
+                    loading="eager"
                     alt=""
                     className="w-16 h-16 lg:w-full lg:h-auto lg:aspect-square rounded-xl lg:rounded-2xl object-cover shrink-0 bg-[#f0ebe3] lg:shadow-[0_18px_40px_-18px_rgba(50,30,10,0.45)]"
                   />

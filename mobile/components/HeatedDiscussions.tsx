@@ -4,13 +4,13 @@
 // Ordered by review activity rather than by disagreement: spread is a real
 // signal but a slow-moving one, and a section that never changes stops being
 // looked at. Disagreement survives as a tag instead.
-import { Image } from 'expo-image'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchHeated } from '../lib/api'
 import { type HeatedRecord } from '@pressd/shared/types'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import CoverImage from './CoverImage'
 
 const CARD_W = 200
 
@@ -60,7 +60,7 @@ function Card({ record: r, onPress }: { record: HeatedRecord; onPress: () => voi
   return (
     <Pressable style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]} onPress={onPress}>
       {r.albumArtUrl ? (
-        <Image source={{ uri: r.albumArtUrl }} style={styles.art} contentFit="cover" />
+        <CoverImage url={r.albumArtUrl} displayPx={CARD_W} style={styles.art} />
       ) : (
         <View style={[styles.art, styles.artFallback]}>
           <Text style={styles.artInitial}>{r.albumName[0]}</Text>

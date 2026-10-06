@@ -21,6 +21,7 @@ import ScoreKdeCompare from '../../components/ScoreKdeCompare'
 import Discography from '../../components/Discography'
 import SimilarArtistComparisons from '../../components/SimilarArtistComparisons'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+import CoverImage from '../../components/CoverImage'
 
 /** Which rating set the page is showing.
  *   mine    — your ratings, ranked among your own artists
@@ -548,7 +549,7 @@ function CatalogStrip({
           {/* Sits behind the cover, so a dead art URL (the library has some)
               shows the album's initial instead of an empty tile. */}
           <Text style={styles.stripInitial}>{a.name[0]}</Text>
-          <Image source={{ uri: a.art }} style={styles.stripImg} contentFit="cover" />
+          <CoverImage url={a.art} displayPx={120} style={styles.stripImg} />
         </Pressable>
       ))}
     </View>

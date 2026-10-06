@@ -10,6 +10,7 @@ import RecommendModal from '../components/RecommendModal'
 import CommentThread from '../components/CommentThread'
 import AlbumThoughts from '../components/AlbumThoughts'
 import ShareCardModal from '../components/ShareCard'
+import CoverImg from '../components/CoverImg'
 
 function shareRatingViaIMessage(albumName: string, artist: string, score: number | null, viewingName?: string) {
   const who = viewingName ? `${viewingName} rated` : 'I rated'
@@ -279,8 +280,9 @@ export default function AlbumDetail() {
       {/* Faint album art watermark */}
       {album.albumArtUrl && (
         <div className="absolute inset-0 pointer-events-none select-none" aria-hidden="true">
-          <img
-            src={album.albumArtUrl}
+          <CoverImg
+            url={album.albumArtUrl}
+            displayPx={420}
             alt=""
             className="absolute top-0 right-0 w-[55vw] max-w-2xl object-cover rounded-none"
             style={{
@@ -374,7 +376,7 @@ export default function AlbumDetail() {
           {/* Cover */}
           <div className="w-36 h-36 md:w-44 md:h-44 shrink-0 rounded-2xl overflow-hidden shadow-[0_16px_48px_rgba(0,0,0,0.32),0_4px_12px_rgba(0,0,0,0.18)] bg-[#ece6dc]">
             {album.albumArtUrl ? (
-              <img src={album.albumArtUrl} alt={album.albumName} className="w-full h-full object-cover" />
+              <CoverImg url={album.albumArtUrl} displayPx={176} loading="eager" alt={album.albumName} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-[#e8dfd2] to-[#cfc3b0]">
                 <Music size={32} className="text-[#b0a090]" strokeWidth={1.25} />

@@ -80,7 +80,12 @@ PLAN_*.md         gitignored design docs; code cites them by section
 | `mobile/` | 19 routes, 32 components, 14 lib modules | 17,416 |
 
 **Stack, as verified.** FastAPI 0.103 + SQLModel on **Postgres only** — Supabase is a
-Postgres *host*, no SDK, no Supabase auth, no RLS (`database.py:11-29`). Firebase is
+Postgres *host*, no SDK, no Supabase auth (`database.py:11-29`). **Row-level security is
+on for every public table, with no policies**, so Supabase's auto-generated REST API
+(`anon`/`authenticated`) reads nothing; the backend connects as `postgres`, which owns
+the tables and has `BYPASSRLS`, so it is unaffected. The last migration in `init_db()`
+enables it on any table that lacks it, so a new table is covered on the next boot. Never
+add `FORCE ROW LEVEL SECURITY` — that would bind the owner too. Firebase is
 **FCM push only**, not a datastore (`push.py`). React 19 / Vite 8 / TanStack Query 5 /
 Tailwind 4 on web; Expo 57 / RN 0.86 / expo-router on mobile. Plain REST, JSON,
 snake_case on the wire, camelCase at the client boundary.
@@ -136,16 +141,27 @@ the target ref lacks the canary-era ingest, rather than schedule the old silent 
 `~/Library/Logs/pressd/audio-ingest.log`, unbuffered, so `tail -f` follows it live;
 `workerrun` and `trackaudio` in Supabase are the durable record.
 
-**When it runs — in practice, when the laptop is opened.** Two agents, neither needing
-VS Code or Claude open, both needing you logged in. `com.pressd.audio-ingest` fires at
-00:30 local, or on the next wake if the Mac was asleep then (`man launchd.plist`:
-missed runs coalesce into one). `com.pressd.audio-ingest.login` runs at login with
-`--catch-up`, covering a Mac that was shut down rather than asleep, which launchd's wake
-catch-up does not; it does nothing if a run succeeded in the last 20h (a `last_success`
-stamp beside the clone, written only by a finished real run). A wake-triggered run
-starts before Wi-Fi is back and the ingest's first act is a database connection, so
-`nightly.sh` waits up to 3 min for the network; and a `lockf` lock stops the two agents
-running at once.
+**When it runs — in practice, the first awake, online half-hour after 00:30.** Two
+agents, neither needing VS Code or Claude open, both needing you logged in.
+`com.pressd.audio-ingest` fires at 00:30 local, or on the next wake if the Mac was asleep
+then (`man launchd.plist`: missed runs coalesce into one).
+`com.pressd.audio-ingest.catchup` runs at login and every 30 minutes with `--catch-up`,
+and does the run only when tonight's is still owed: no success (`last_success`, a stamp
+beside the clone written only by a finished real run) since the most recent 00:30, and
+at least an hour past it. Offline, either agent exits 0 and leaves the night to the
+next catch-up — the scheduled run after waiting up to 3 min, a catch-up after 1 min.
+Neither starts a run in a dark wake (`pmset -g systemstate` without Graphics): on Oct 6
+one did, advanced in few-second bursts with the lid shut, and finished 22h later. A
+`lockf` lock stops the two running at once; finding it held exits 0. `audio-health`
+forgives a run stuck at `running` while a success is under 36h old.
+
+The catch-up replaced a login-only agent (`.login`, which `install.sh` now removes)
+after Oct 3–5 2026: the Mac slept on battery through 00:30, macOS spent the missed run on
+a 5–9 s "DarkWake" maintenance wake with no Wi-Fi, and the run failed at its database
+connection — or froze and resumed when the lid opened, before Wi-Fi reconnected. Opening
+the lid is a wake, not a login, so nothing retried and `audio-health` went red. The rule
+used to be "no success in 20h", which a periodic check would turn into a schedule that
+creeps earlier each day. `pmset -g log` shows the dark wakes if it recurs.
 
 **Env vars.** Backend/worker: `DATABASE_URL` **or** `PG_HOST`/`PG_PORT`/`PG_DB`/`PG_USER`/
 `PG_PASSWORD`; `JWT_SECRET`, `TOKEN_TTL_DAYS`, `APP_URL`, `ANTHROPIC_API_KEY`,
@@ -476,7 +492,9 @@ person thinks of it is fitted per user.**
 rationale. It was 50 (one user in twenty got anything), then 1 (predictions for anyone).
 Below 10 the blend is almost entirely pooled, and while the userbase is small the pool is
 largely one person's taste — so the prediction reads as a stranger's opinion wearing the
-user's name. The first-run tutorial quotes this number to new users, on both platforms.
+user's name. The first-run tutorial quotes this number to new users, on both platforms,
+and both For You screens count down to it ("3 more albums until picks unlock", ten
+pips) from the user's rated list, using the copy in `shared/src/types.ts` — change both.
 
 It is enforced where predictions are **made** — the nightly job, and the import-time
 `_queue_predictions` thread in `albums.py` — and again where they are **served**, via
@@ -573,7 +591,7 @@ nulls never overwrite stored values.
 | iTunes | search, tracklist, covers | none | in-proc 600s |
 | **Deezer** | search, tracklist, covers, **artist photos**, release resolution | none | in-proc + `ArtistMeta` |
 | MusicBrainz | search (release *groups*), tracklist, **upcoming** releases | none, UA | in-proc 600s |
-| Cover Art Archive | covers for MB hits only | none | via MB result |
+| Cover Art Archive | covers for MB hits only — stored as the **500px thumbnail** on the Archive machine the stable address redirected to | none | via MB result |
 | Last.fm | listener counts (search prior), genre tags, **per-album listeners that rank new releases** | `LASTFM_API_KEY` (web + GitHub secret) | in-proc 600s; the ranking is stored |
 | ListenBrainz | new-release candidates: every album + EP of the last 7 days | none, UA | via the stored list |
 | Apple Music RSS | most-played albums released this week — candidates, and the quick fallback | none | via the stored list |
@@ -925,6 +943,18 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
 - **A final album score is always shown to two decimals** (`8.20`, never `8.2`) —
   rated, predicted or projected, on both platforms. Song scores and factor values are
   one decimal. The tutorial's demo numbers follow the same rule.
+- **Album covers go through one sizing rule.** `shared/src/covers.ts`'s `coverUrl(url,
+  displayPx)` asks each host for the size actually drawn (Deezer and Apple render any
+  size; the Archive has 250/500/1200 thumbnails), and `coverFallbacks` lists the stable
+  `coverartarchive.org` addresses to try when an Archive storage machine stops answering.
+  Web draws covers with `CoverImg` (and `covers.tsx`'s `Cover`), mobile with
+  `CoverImage`; a new cover goes through one of them, not a bare `<img>`/`Image`. The
+  share card is the exception — it rasterises the stored full-size image. Stored
+  Archive covers are the `_thumb500` copy: until October 2026 the backfill stored the
+  uploaded original (643 albums, 0.3–11 MB each), rewritten by
+  `backend/thumbnail_cover_urls.py`, and both writers (`util.py` backfill,
+  `search.py` resolve) now ask for `front-500`. A cold For You loaded 2.3 MB of
+  covers after that rewrite and 1.4 MB with the sizing; Library 7.3 MB and 2.1 MB.
 - **The public pages promote the iPhone app as a feature, not a footnote.** The
   landing page carries an iPhone button beside the Google sign-in, a nav link, and a
   full-width band (`#iphone`) fanning the five App Store preview slides

@@ -6,6 +6,7 @@ import { importAlbum, createAlbum, resolveAlbum } from '../api'
 import type { AlbumSearchResult } from '../api'
 import { useAlbumSearch } from '../hooks/useAlbumSearch'
 import TracklistLoader from './TracklistLoader'
+import CoverImg from './CoverImg'
 
 export default function AddAlbumModal({ onClose, userId }: { onClose: () => void; userId: number }) {
   const [query, setQuery] = useState('')
@@ -148,7 +149,7 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
                       className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[#f5f5f5] transition-colors text-left border-b border-[#f0f0f0] last:border-0"
                     >
                       {r.cover_url ? (
-                        <img src={r.cover_url} alt="" className="w-9 h-9 rounded-md object-cover shrink-0" />
+                        <CoverImg url={r.cover_url} displayPx={36} alt="" className="w-9 h-9 rounded-md object-cover shrink-0" />
                       ) : (
                         <div className="w-9 h-9 rounded-md bg-[#e8e2d9] shrink-0 flex items-center justify-center">
                           <Music size={13} className="text-[#b0a090]" />
@@ -200,7 +201,7 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
             {selected && (
               <div className="flex items-center gap-3 bg-[#f5f5f5] rounded-xl px-3 py-2.5 border border-[#2d6a4f]/25">
                 {selected.cover_url ? (
-                  <img src={selected.cover_url} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                  <CoverImg url={selected.cover_url} displayPx={40} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
                 ) : (
                   <div className="w-10 h-10 rounded-lg bg-[#e8e2d9] shrink-0" />
                 )}

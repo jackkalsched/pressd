@@ -199,6 +199,25 @@ def init_db():
             "ALTER TABLE pressuser ALTER COLUMN created_at SET DEFAULT NOW()",
             "ALTER TABLE album ADD COLUMN created_at TIMESTAMPTZ",
             "ALTER TABLE album ALTER COLUMN created_at SET DEFAULT NOW()",
+            # ── Row-level security on every public table, last so it covers the
+            #    tables create_all just made. Supabase serves the public schema
+            #    over its REST API to anyone holding the project's publishable
+            #    key; with RLS off, that key read and wrote these tables directly
+            #    — pushtoken and post among them, until October 2026. Enabled
+            #    with no policies, so the REST roles (anon, authenticated) see
+            #    nothing. The backend is unaffected: it connects as `postgres`,
+            #    which has BYPASSRLS and owns every table. A new table arrives
+            #    without RLS, so this re-checks on every boot rather than naming
+            #    tables. FORCE ROW LEVEL SECURITY would lock the owner out too —
+            #    never add it here.
+            """DO $$
+            DECLARE t record;
+            BEGIN
+              FOR t IN SELECT tablename FROM pg_tables
+                       WHERE schemaname = 'public' AND NOT rowsecurity LOOP
+                EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t.tablename);
+              END LOOP;
+            END $$""",
         ]:
             _exec_migration(conn, stmt)
 

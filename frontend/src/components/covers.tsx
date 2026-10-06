@@ -5,6 +5,7 @@
 // They lived in ForYou first; they're here so both surfaces stay one system
 // rather than drifting into two near-identical looks.
 import { songScoreColor } from '../types'
+import CoverImg from './CoverImg'
 
 /** Stable hue per string, so an artist without cover art always gets the same
  *  placeholder colour. */
@@ -47,17 +48,21 @@ export function Cover({
   radius?: number
   fontSize?: number
 }) {
+  const hue = hueFromString(seed || '?')
   if (artUrl) {
+    // The placeholder colour sits behind the image, so a cover still loading —
+    // or one whose every address failed (CoverImg hides it) — reads as a tile.
     return (
-      <img
-        src={artUrl}
-        alt=""
-        loading="lazy"
-        style={{ width: size, height: size, borderRadius: radius, objectFit: 'cover', flexShrink: 0, display: 'block' }}
-      />
+      <div style={{ width: size, height: size, borderRadius: radius, flexShrink: 0, overflow: 'hidden', background: coverGradient(hue) }}>
+        <CoverImg
+          url={artUrl}
+          displayPx={size}
+          alt=""
+          style={{ width: size, height: size, objectFit: 'cover', display: 'block' }}
+        />
+      </div>
     )
   }
-  const hue = hueFromString(seed || '?')
   return (
     <div
       style={{

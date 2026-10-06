@@ -15,7 +15,6 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
-import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { ChevronDown, Search, Settings, Star, X } from 'lucide-react-native'
 import {
@@ -34,6 +33,7 @@ import ProfileBanner, { type PickKind } from '../../components/ProfileBanner'
 import SettingsSheet from '../../components/SettingsSheet'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+import CoverImage from '../../components/CoverImage'
 
 const GAP = 10
 // The recommendation accent, shared with the Recommend control on album detail.
@@ -572,7 +572,7 @@ function AlbumCell({
     <Pressable style={styles.cell} onPress={onPress}>
       <View style={styles.artWrap}>
         {album.albumArtUrl ? (
-          <Image source={{ uri: album.albumArtUrl }} style={styles.art} contentFit="cover" />
+          <CoverImage url={album.albumArtUrl} displayPx={130} style={styles.art} />
         ) : (
           <View style={[styles.art, styles.artFallback]}>
             <Text style={styles.artInitial}>{album.albumName[0]?.toUpperCase()}</Text>
@@ -620,7 +620,7 @@ function RatingRow({ album, rank, onPress }: { album: Album; rank: number; onPre
         {rank}
       </Text>
       {album.albumArtUrl ? (
-        <Image source={{ uri: album.albumArtUrl }} style={styles.ratingArt} contentFit="cover" />
+        <CoverImage url={album.albumArtUrl} displayPx={48} style={styles.ratingArt} />
       ) : (
         <View style={[styles.ratingArt, styles.artFallback]}>
           <Text style={styles.artInitial}>{album.albumName[0]?.toUpperCase()}</Text>

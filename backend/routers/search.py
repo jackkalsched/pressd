@@ -372,10 +372,12 @@ async def _resolve_mb(client: httpx.AsyncClient, rg_id: str) -> dict:
                         "artist": artist,
                     })
 
+    # 500px: this is the cover the album is saved with, and the album page draws
+    # it far larger than a search row. The search results above ask for 250.
     cover_url = None
     try:
         caa = await client.head(
-            f"{CAA_BASE}/release-group/{rg_id}/front-250", follow_redirects=True, timeout=4
+            f"{CAA_BASE}/release-group/{rg_id}/front-500", follow_redirects=True, timeout=4
         )
         if caa.status_code == 200:
             cover_url = str(caa.url)

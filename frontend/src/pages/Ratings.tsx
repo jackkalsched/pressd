@@ -5,6 +5,7 @@ import { fetchAlbums, fetchScatterData, fetchArtistStats } from '../api'
 import { useUser } from '../context/UserContext'
 import { Loader2, Music } from 'lucide-react'
 import { shortReleaseLabel } from '../types'
+import CoverImg from '../components/CoverImg'
 
 // ── Album table ───────────────────────────────────────────────────────────────
 
@@ -399,7 +400,7 @@ export default function Ratings({ embedded = false }: { embedded?: boolean } = {
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-[#e8dfd2] to-[#cfc3b0] flex items-center justify-center">
                               {album.albumArtUrl
-                                ? <img src={album.albumArtUrl} alt="" className="w-full h-full object-cover" />
+                                ? <CoverImg url={album.albumArtUrl} displayPx={36} alt="" className="w-full h-full object-cover" />
                                 : <Music size={14} className="text-[#b0a090]" strokeWidth={1.5} />}
                             </div>
                             <span className="text-[#1c1917] text-sm font-medium">{album.albumName}</span>

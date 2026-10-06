@@ -49,6 +49,7 @@ import { useAuth } from '../../lib/auth'
 import { markSocialSeen, latestFeedTime } from '../../lib/socialSeen'
 import { songScoreColor, avatarColor } from '@pressd/shared/types'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+import CoverImage from '../../components/CoverImage'
 
 const DOWN = '#c0392b'
 const CONTENT_W = Dimensions.get('window').width - spacing.lg * 2
@@ -115,7 +116,7 @@ function Avatar({ name, url, size, style }: { name: string; url?: string | null;
 }
 
 function AlbumTile({ name, url, size, style }: { name: string; url?: string | null; size: number; style?: object }) {
-  if (url) return <Image source={{ uri: url }} style={[{ width: size, height: size, borderRadius: radii.sm }, style]} contentFit="cover" />
+  if (url) return <CoverImage url={url} displayPx={size} style={[{ width: size, height: size, borderRadius: radii.sm }, style]} />
   return (
     <View style={[{ width: size, height: size, borderRadius: radii.sm, backgroundColor: avatarColor(name), alignItems: 'center', justifyContent: 'center' }, style]}>
       <Text style={{ fontFamily: fonts.display, fontSize: size * 0.42, color: 'rgba(255,255,255,0.92)' }}>{name[0]?.toUpperCase()}</Text>
@@ -491,7 +492,7 @@ function FeedPostRow({ item, onOpen }: { item: FeedPost; onOpen: () => void }) {
     >
       <View style={styles.fpHead}>
         {item.thread.artUrl ? (
-          <Image source={{ uri: item.thread.artUrl }} style={styles.fpArt} contentFit="cover" />
+          <CoverImage url={item.thread.artUrl} displayPx={38} style={styles.fpArt} />
         ) : (
           <View style={[styles.fpArt, { backgroundColor: colors.inset }]} />
         )}

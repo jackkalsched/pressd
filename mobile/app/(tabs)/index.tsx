@@ -16,7 +16,6 @@ import {
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { ArrowRight, ChevronDown, MessageCircle, Triangle } from 'lucide-react-native'
 import {
@@ -33,7 +32,7 @@ import {
   type TopReview,
   type TrendingAlbum,
 } from '../../lib/api'
-import { songScoreColor, type Album } from '@pressd/shared/types'
+import { MIN_RATED_ALBUMS, songScoreColor, type Album } from '@pressd/shared/types'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import RecommendationBanner from '../../components/RecommendationBanner'
 import PassItOnCell from '../../components/PassItOnCell'
@@ -52,6 +51,7 @@ import {
 import { useAuth } from '../../lib/auth'
 import { revealStyle } from '../../lib/scrollReveal'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+import CoverImage from '../../components/CoverImage'
 
 const WINDOW_H = Dimensions.get('window').height
 
@@ -126,6 +126,15 @@ export default function ForYou() {
     queryFn: () => fetchAlbums({ status: 'to_listen', userId }),
     enabled: userId > 0,
   })
+  const { data: rated = [], isSuccess: ratedLoaded, refetch: refetchRated } = useQuery({
+    queryKey: ['albums', 'rated', userId],
+    queryFn: () => fetchAlbums({ status: 'rated', userId }),
+    enabled: userId > 0,
+  })
+  // Below MIN_RATED_ALBUMS the server sends no picks and no predicted scores,
+  // so say how far off they are. Held until the count has loaded: a default
+  // of zero would flash "10 more" at someone who is one away.
+  const unlockLeft = ratedLoaded ? Math.max(0, MIN_RATED_ALBUMS - rated.length) : 0
   const { data: newReleases = [], refetch: refetchNew } = useQuery({
     queryKey: ['new-releases'],
     queryFn: () => fetchNewReleases(12),
@@ -265,15 +274,16 @@ export default function ForYou() {
   const refreshAll = useCallback(() => {
     refetchListening()
     refetchToListen()
+    refetchRated()
     refetchNew()
     refetchTrending()
     refetchTopReviews()
-  }, [refetchListening, refetchToListen, refetchNew, refetchTrending, refetchTopReviews])
+  }, [refetchListening, refetchToListen, refetchRated, refetchNew, refetchTrending, refetchTopReviews])
   useRefreshOnFocus(refreshAll)
 
   async function onRefresh() {
     setRefreshing(true)
-    await Promise.all([refetchListening(), refetchToListen(), refetchNew(), refetchTrending(), refetchTopReviews()])
+    await Promise.all([refetchListening(), refetchToListen(), refetchRated(), refetchNew(), refetchTrending(), refetchTopReviews()])
     setRefreshing(false)
   }
 
@@ -430,6 +440,19 @@ export default function ForYou() {
               </View>
               <ArrowRight size={18} color={colors.green} />
             </Pressable>
+          </View>
+        )}
+
+        {unlockLeft > 0 && (
+          <View style={styles.unlock}>
+            <View style={styles.unlockPips}>
+              {Array.from({ length: MIN_RATED_ALBUMS }, (_, i) => (
+                <View key={i} style={[styles.unlockPip, i < rated.length && styles.unlockPipOn]} />
+              ))}
+            </View>
+            <Text style={styles.unlockText}>
+              <Text style={styles.unlockCount}>{unlockLeft}</Text> more {unlockLeft === 1 ? 'album' : 'albums'} until picks unlock
+            </Text>
           </View>
         )}
 
@@ -718,7 +741,7 @@ function TrendRow({
 
 function Cover({ uri, seed, size, radius = radii.sm }: { uri?: string | null; seed: string; size: number; radius?: number }) {
   if (uri) {
-    return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: radius }} contentFit="cover" />
+    return <CoverImage url={uri} displayPx={size} style={{ width: size, height: size, borderRadius: radius }} />
   }
   return (
     <View style={[styles.coverFallback, { width: size, height: size, borderRadius: radius }]}>
@@ -780,6 +803,13 @@ const styles = StyleSheet.create({
   mediaText: { flex: 1, minWidth: 0 },
   rowTitle: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink },
   rowSub: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, marginTop: 1 },
+
+  unlock: { marginTop: spacing.xxl, gap: 10 },
+  unlockPips: { flexDirection: 'row', gap: 5 },
+  unlockPip: { flex: 1, maxWidth: 26, height: 6, borderRadius: 3, backgroundColor: colors.inset },
+  unlockPipOn: { backgroundColor: colors.green },
+  unlockText: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSecondary },
+  unlockCount: { fontFamily: fonts.bodyBold, color: colors.ink, fontVariant: ['tabular-nums'] },
 
   progressRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 8 },
   progressTrack: { flex: 1, maxWidth: 200, height: 4, borderRadius: 2, backgroundColor: colors.inset, overflow: 'hidden' },

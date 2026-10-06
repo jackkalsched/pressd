@@ -83,6 +83,12 @@ export interface ArtistStats {
 export const BANG_THRESHOLD = 8.0
 export const SKIP_THRESHOLD = 6.5
 
+/** Rated albums before Pressd predicts anything for a user — picks, predicted
+ *  scores, all of it. MIN_RATED_ALBUMS in backend/scoring.py, which carries the
+ *  reasoning and is the one that's enforced; change both. Both For You screens
+ *  count down to it. */
+export const MIN_RATED_ALBUMS = 10
+
 /** Where a score would land among a library's album scores, as a percentile
  *  label: "top 12%" in the upper half, "bottom 20%" in the lower — "top 90%"
  *  reads as praise for a record that is near the bottom.

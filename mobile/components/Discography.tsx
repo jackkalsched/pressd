@@ -7,13 +7,13 @@
 // only showed what you'd already rated couldn't tell you what you'd missed.
 import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
-import { Image } from 'expo-image'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { fetchAotyAlbums } from '../lib/api'
 import { songScoreColor } from '@pressd/shared/types'
 import type { ArtistDetail } from '@pressd/shared/api'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import CoverImage from './CoverImage'
 
 const GAP = 10
 // Three across is the target. A narrow screen — or a large Display Zoom, which
@@ -133,11 +133,10 @@ export default function Discography({
             >
               <View style={styles.art}>
                 {e.art ? (
-                  <Image
-                    source={{ uri: e.art }}
+                  <CoverImage
+                    url={e.art}
+                    displayPx={120}
                     style={styles.artImg}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
                     recyclingKey={e.art}
                   />
                 ) : (

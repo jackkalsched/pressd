@@ -35,6 +35,8 @@ import { songScoreColor, BANG_THRESHOLD, SKIP_THRESHOLD } from '../types'
 import { Cover } from '../components/covers'
 import RecommendModal from '../components/RecommendModal'
 import { useUser } from '../context/UserContext'
+import CoverImg from '../components/CoverImg'
+import { coverUrl } from '@pressd/shared/covers'
 
 const GREEN = '#2d6a4f'
 const RECOMMEND = '#ea7a2a'
@@ -189,7 +191,8 @@ export default function CommunityAlbum() {
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 h-[460px] opacity-[0.22] fade-in"
           style={{
-            backgroundImage: `url(${shown.album_art_url})`,
+            // Blurred 70px: a small image is all it needs.
+            backgroundImage: `url(${coverUrl(shown.album_art_url, 120)})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             filter: 'blur(70px) saturate(1.3)',
@@ -236,7 +239,7 @@ export default function CommunityAlbum() {
             <div className="lg:sticky lg:top-8">
               <div className="mx-auto w-full max-w-[380px] overflow-hidden rounded-[28px] shadow-[0_28px_60px_-28px_rgba(40,25,10,0.6)] pop-in">
                 {shown.album_art_url ? (
-                  <img src={shown.album_art_url} alt="" className="block aspect-square w-full object-cover" />
+                  <CoverImg url={shown.album_art_url} displayPx={380} loading="eager" alt="" className="block aspect-square w-full object-cover" />
                 ) : (
                   <Cover artUrl={null} seed={shown.artist} size={380} radius={0} fontSize={120} />
                 )}

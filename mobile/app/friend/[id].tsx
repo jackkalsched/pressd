@@ -14,7 +14,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Image } from 'expo-image'
 import { ArrowLeft, Check, ChevronDown, Plus } from 'lucide-react-native'
 import {
   fetchUsers,
@@ -39,6 +38,7 @@ import {
 } from '../../lib/rankings'
 import ProfileBanner from '../../components/ProfileBanner'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+import CoverImage from '../../components/CoverImage'
 
 const GAP = 10
 
@@ -389,7 +389,7 @@ function AlbumCell({ album, mu, sd, onPress }: { album: Album; mu: number; sd: n
     <Pressable style={styles.cell} onPress={onPress}>
       <View style={styles.artWrap}>
         {album.albumArtUrl ? (
-          <Image source={{ uri: album.albumArtUrl }} style={styles.art} contentFit="cover" />
+          <CoverImage url={album.albumArtUrl} displayPx={130} style={styles.art} />
         ) : (
           <View style={[styles.art, styles.artFallback]}>
             <Text style={styles.artInitial}>{album.albumName[0]?.toUpperCase()}</Text>

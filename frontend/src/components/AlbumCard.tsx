@@ -7,6 +7,7 @@ import { SKIP_THRESHOLD, shortReleaseLabel } from '../types'
 import RecommendModal from './RecommendModal'
 import { deleteAlbum, fetchScoreRange } from '../api'
 import { useUser } from '../context/UserContext'
+import CoverImg from './CoverImg'
 
 interface Props {
   album: Album
@@ -129,8 +130,9 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           )}
 
           {album.albumArtUrl ? (
-            <img
-              src={album.albumArtUrl}
+            <CoverImg
+              url={album.albumArtUrl}
+              displayPx={260}
               alt={album.albumName}
               className={`w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
               onLoad={() => setImgLoaded(true)}

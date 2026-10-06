@@ -41,7 +41,8 @@ _POINT_COLS = {
 # Enforced where predictions are made (worker/nightly_predict.py, the import-time
 # queue in routers/albums.py) and again where they are served (/discover/picks,
 # album reads), because rows written before the gate existed are still stored.
-# The mobile first-run tutorial (mobile/app/tutorial.tsx) quotes this number.
+# Restated as MIN_RATED_ALBUMS in shared/src/types.ts, which both For You
+# screens count down to, and quoted by both first-run tutorials — change all.
 MIN_RATED_ALBUMS = 10
 
 PREDICTION_FIELDS = (

@@ -6,6 +6,14 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Press'd</title>
+    <!-- Album covers come from these three hosts; opening the connections early
+         saves a DNS + TLS round trip on the first cover of every page load.
+         The Archive's storage machines vary per cover, so only the stable
+         coverartarchive.org front door can be warmed. -->
+    <link rel="preconnect" href="https://cdn-images.dzcdn.net" />
+    <link rel="preconnect" href="https://is1-ssl.mzstatic.com" />
+    <link rel="preconnect" href="https://coverartarchive.org" />
+    <link rel="dns-prefetch" href="https://archive.org" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet" />

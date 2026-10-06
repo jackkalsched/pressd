@@ -11,6 +11,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { Cover } from './covers'
+import CoverImg from './CoverImg'
 
 const TONES = {
   green: { ink: '#2d6a4f', wash: 'linear-gradient(115deg, #e6f0ea, #f6f4ef 70%)', ring: '#cfe0d6' },
@@ -68,8 +69,10 @@ export default function SpotlightCard({
       {/* The record's colour, as light rather than as a picture. Scaled past
           the edges so the blur has no hard border to fade against. */}
       {artUrl && (
-        <img
-          src={artUrl}
+        <CoverImg
+          url={artUrl}
+          // Blurred to a wash: a small image is all it needs.
+          displayPx={120}
           alt=""
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-10 h-full w-full scale-150 object-cover opacity-[0.22] blur-3xl saturate-150 transition-opacity duration-500 group-hover:opacity-[0.36]"
