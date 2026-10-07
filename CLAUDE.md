@@ -989,7 +989,8 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   card's colour; the whole card is the target. A new card of that kind goes through
   the same component rather than a fresh bordered row.
 - **Heated Discussions shows a verdict, not tags** (web): *Divided*, *Loved*, *Hated* or
-  *Lukewarm*, as a coloured badge, a glow under the cover and a meter of where the
+  *Lukewarm*, as a coloured badge with no text — crossed swords for *Divided*, a face for
+  the rest (laughing, angry, meh); the word is in the tooltip and aria-label — a glow under the cover and a meter of where the
   room's scores fall. The verdict is the server's flags (`discover.py`: `LOVED_MEAN`,
   `HATED_MEAN`, `CONTROVERSIAL_SPREAD`), never a client threshold, and *Divided* wins
   when a record is also loved or hated. Trending on Pressd stays a plain ranked list

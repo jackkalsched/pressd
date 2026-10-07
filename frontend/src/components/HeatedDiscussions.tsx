@@ -8,6 +8,8 @@
 // Each card shows how the room feels rather than labelling it. It used to carry
 // small text tags (LOVED / CONTROVERSIAL); now the verdict is something you see
 // before you read anything:
+//   - a badge with no words: crossed swords for a divided room, otherwise a
+//     face — laughing (loved), angry (hated), meh (lukewarm);
 //   - a glow under the cover in the verdict's colour — split red-to-green for a
 //     room that can't agree, so a divided record looks torn;
 //   - a "room meter": the 1–10 scale with a band over where the room's scores
@@ -19,7 +21,7 @@
 import type { CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Heart, HeartCrack, Swords, Thermometer, type LucideIcon } from 'lucide-react'
+import { Angry, Laugh, Meh, Swords, type LucideIcon } from 'lucide-react'
 import { fetchHeated } from '../api'
 import type { HeatedRecord } from '../types'
 import { songScoreColor } from '../types'
@@ -42,9 +44,10 @@ const VERDICTS: Record<Verdict, { label: string; icon: LucideIcon; ink: string; 
     glow: `linear-gradient(90deg, ${RED}, #d9a03b, ${GREEN})`,
     pill: `linear-gradient(90deg, ${RED}, #c47a2c 50%, ${GREEN})`,
   },
-  loved: { label: 'Loved', icon: Heart, ink: GREEN, glow: `linear-gradient(90deg, #3f8a63, ${GREEN})`, pill: GREEN },
-  hated: { label: 'Hated', icon: HeartCrack, ink: RED, glow: `linear-gradient(90deg, ${RED}, #a8482f)`, pill: RED },
-  lukewarm: { label: 'Lukewarm', icon: Thermometer, ink: '#9a7b2f', glow: 'linear-gradient(90deg, #d9b25b, #c9a24a)', pill: '#b08a2e' },
+  // The rest are the room's face.
+  loved: { label: 'Loved', icon: Laugh, ink: GREEN, glow: `linear-gradient(90deg, #3f8a63, ${GREEN})`, pill: GREEN },
+  hated: { label: 'Hated', icon: Angry, ink: RED, glow: `linear-gradient(90deg, ${RED}, #a8482f)`, pill: RED },
+  lukewarm: { label: 'Lukewarm', icon: Meh, ink: '#9a7b2f', glow: 'linear-gradient(90deg, #d9b25b, #c9a24a)', pill: '#b08a2e' },
 }
 
 function verdictOf(r: HeatedRecord): Verdict {
@@ -111,12 +114,14 @@ function Card({ record: r, index }: { record: HeatedRecord; index: number }) {
         />
         <div className={`relative ${COVER_LIFT}`} style={{ willChange: 'transform' }}>
           <Cover artUrl={r.albumArtUrl} seed={r.artist ?? r.albumName} size={184} radius={16} fontSize={56} />
+          {/* The verdict's word lives in the card's aria-label and the tooltip;
+              the badge itself is just the face. */}
           <span
-            className="absolute left-2 top-2 flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.06em] text-white shadow-[0_4px_12px_-4px_rgba(0,0,0,0.5)] transition-transform duration-300 ease-out group-hover:scale-[1.04]"
+            title={v.label}
+            className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-full text-white shadow-[0_4px_12px_-4px_rgba(0,0,0,0.5)] transition-transform duration-300 ease-out group-hover:scale-[1.04]"
             style={{ background: v.pill }}
           >
-            <Icon size={12} strokeWidth={2.6} fill={verdictOf(r) === 'loved' ? '#fff' : 'none'} />
-            {v.label}
+            <Icon size={18} strokeWidth={2.4} />
           </span>
           {r.isNew && (
             <span className="absolute right-2 top-2 rounded-full bg-[#1c1917] px-2 py-[3px] text-[9.5px] font-bold tracking-[0.08em] text-white">
