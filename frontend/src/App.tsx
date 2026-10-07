@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import { useQuery } from '@tanstack/react-query'
+import { Analytics } from '@vercel/analytics/react'
 import { fetchAlbums } from './api'
 import { UserProvider, useUser } from './context/UserContext'
 import Onboarding, { ONBOARDING_SKIP_KEY } from './pages/Onboarding'
@@ -120,6 +121,7 @@ export default function App() {
           <Route path="/*" element={<ProtectedRoutes />} />
         </Routes>
       </BrowserRouter>
+      <Analytics />
     </UserProvider>
     </GoogleOAuthProvider>
   )
