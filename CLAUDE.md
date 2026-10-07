@@ -684,6 +684,11 @@ has no default, so a hung request hangs the query. React Query is `retry: 1` on 
 platforms, which retries a 429 once, immediately. Cheapest fix: a `retry`/`retryDelay`
 function in the two `QueryClient` configs that backs off and skips 4xx. Two files.
 
+**Web page views** go to Vercel Web Analytics: `<Analytics />` from
+`@vercel/analytics/react`, mounted once in `frontend/src/main.tsx` (October 2026). It
+counts visits and routes only — no events, no user ids — and records nothing until Web
+Analytics is enabled on the Vercel project. Mobile has none.
+
 **If you add product analytics** (there is none today; `@react-native-firebase/analytics`
 ships in the mobile bundle unused): the seams already exist. Invite→signup at
 `users.py:209` with `Invite.accepted_at` already stored; recommend→rate at `albums.py:803`
