@@ -7,7 +7,7 @@
 // The web adaptations are input-shaped, not feature-shaped: mobile's long-press
 // action sheet becomes an overflow button that appears on hover or focus, and
 // the composer sends on Enter the way every other web composer here does.
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -19,7 +19,7 @@ import {
 } from '../api'
 import { songScoreColor } from '../types'
 import type {
-  DiscussionPost, SubjectRef, SubjectType, ThreadSort, ThreadSummary,
+  DiscussionPost, PostAuthor, SubjectRef, SubjectType, ThreadSort, ThreadSummary,
 } from '../types'
 import { threadKey } from '../lib/threads'
 import { timeAgo } from '../lib/format'
@@ -521,10 +521,12 @@ function PostRow({
       <div className="flex items-center gap-3 mb-1">
         {/* The person first and largest. Whose opinion this is matters more than
             what they scored it — so their face, then their name. */}
-        <Avatar name={post.author?.name ?? '?'} avatarUrl={post.author?.avatarUrl} size={30} />
-        <span className="text-[16px] font-semibold text-[#111] truncate">
-          {post.author?.name ?? 'Unknown'}
-        </span>
+        <AuthorLink author={post.author} gap="gap-3">
+          <Avatar name={post.author?.name ?? '?'} avatarUrl={post.author?.avatarUrl} size={30} />
+          <span className="text-[16px] font-semibold text-[#111] truncate group-hover/author:underline underline-offset-2">
+            {post.author?.name ?? 'Unknown'}
+          </span>
+        </AuthorLink>
         {post.createdAt && (
           <span className="text-[11px] text-[#c2b8ad] shrink-0">{timeAgo(post.createdAt)}</span>
         )}
@@ -637,10 +639,12 @@ function PostRow({
                 ) : (
                   <>
                     <div className="flex items-center gap-2.5 mb-0.5">
-                      <Avatar name={r.author?.name ?? '?'} avatarUrl={r.author?.avatarUrl} size={22} />
-                      <span className="text-[13.5px] font-semibold text-[#111] truncate">
-                        {r.author?.name ?? 'Unknown'}
-                      </span>
+                      <AuthorLink author={r.author} gap="gap-2.5">
+                        <Avatar name={r.author?.name ?? '?'} avatarUrl={r.author?.avatarUrl} size={22} />
+                        <span className="text-[13.5px] font-semibold text-[#111] truncate group-hover/author:underline underline-offset-2">
+                          {r.author?.name ?? 'Unknown'}
+                        </span>
+                      </AuthorLink>
                       {r.createdAt && (
                         <span className="text-[10.5px] text-[#c2b8ad] shrink-0">{timeAgo(r.createdAt)}</span>
                       )}
@@ -684,6 +688,21 @@ function PostRow({
 /** Someone's full rating of the record — beside the overflow menu on a post,
  *  and on a reply. An icon that drops down one named action, so the icon can
  *  stay quiet while what it opens is still spelled out, with whose it is. */
+/** A post's author, linking to their profile — public to every user, so the
+ *  name works whether or not you've friended them. */
+function AuthorLink({ author, gap, children }: { author: PostAuthor | null; gap: string; children: ReactNode }) {
+  if (!author) return <span className={`flex min-w-0 items-center ${gap}`}>{children}</span>
+  return (
+    <Link
+      to={`/u/${author.id}`}
+      className={`group/author flex min-w-0 items-center no-underline ${gap}`}
+      aria-label={`Open ${author.name}'s profile`}
+    >
+      {children}
+    </Link>
+  )
+}
+
 function FullReviewButton({
   name, onOpen, compact = false,
 }: {

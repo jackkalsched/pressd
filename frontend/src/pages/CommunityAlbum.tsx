@@ -22,7 +22,7 @@
 // beside it, with nothing boxed — the numbers sit on the page and spacing does
 // the grouping. Track rows pop up as they scroll into view. ?compare=1 opens
 // straight on the comparison.
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Check, Loader2, Plus, Play, Star, Trash2 } from 'lucide-react'
@@ -31,20 +31,14 @@ import {
   resolveDeezerAlbum, resolveReleaseByName,
 } from '../api'
 import type { CommunityAlbum as CommunityAlbumData, CommunityTrack } from '../api'
-import { songScoreColor, BANG_THRESHOLD, SKIP_THRESHOLD } from '../types'
+import { songScoreColor } from '../types'
 import { Cover } from '../components/covers'
 import RecommendModal from '../components/RecommendModal'
+import ThreadPreview from '../components/ThreadPreview'
 import { useUser } from '../context/UserContext'
 import CoverImg from '../components/CoverImg'
-import { coverUrl } from '@pressd/shared/covers'
-
-const GREEN = '#2d6a4f'
-const RECOMMEND = '#ea7a2a'
-const DANGER = '#b91c1c'
-
-function stagger(i: number): CSSProperties {
-  return { '--i': i } as CSSProperties
-}
+import { BangSkip, CoverWash, DANGER, GREEN, PILL, RECOMMEND, RevealRow, SECTION_LABEL, StatFigure } from '../components/albumView'
+import { stagger } from '../lib/format'
 
 export default function CommunityAlbum() {
   const { id } = useParams<{ id: string }>()
@@ -181,26 +175,9 @@ export default function CommunityAlbum() {
     }
   }
 
-  const pill = 'inline-flex items-center gap-1.5 rounded-full border border-[#e2dbd0] bg-white/80 px-3.5 py-1.5 text-[13px] font-semibold text-[#2d6a4f] hover:border-[#2d6a4f] hover:bg-white'
-
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-[#f9f8f6]">
-      {/* The record's colour, faintly, behind the top of the page. */}
-      {shown.album_art_url && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-[460px] opacity-[0.22] fade-in"
-          style={{
-            // Blurred 70px: a small image is all it needs.
-            backgroundImage: `url(${coverUrl(shown.album_art_url, 120)})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            filter: 'blur(70px) saturate(1.3)',
-            maskImage: 'linear-gradient(to bottom, black, transparent)',
-            WebkitMaskImage: 'linear-gradient(to bottom, black, transparent)',
-          }}
-        />
-      )}
+      <CoverWash url={shown.album_art_url} />
 
       <div className="relative mx-auto w-full max-w-[1400px] px-4 pb-24 md:px-12">
         {/* ── Top bar ──────────────────────────────────────────────── */}
@@ -212,10 +189,10 @@ export default function CommunityAlbum() {
             {/* Your rating and the side-by-side are different intentions, so
                 each gets its own control, in this corner as on every page. */}
             {canCompare && shown.your_album_id != null && (
-              <Link to={`/album/${shown.your_album_id}`} className={pill}>Your rating</Link>
+              <Link to={`/album/${shown.your_album_id}`} className={PILL}>Your rating</Link>
             )}
             {canCompare && (
-              <button onClick={() => setComparing((c) => !c)} className={pill}>
+              <button onClick={() => setComparing((c) => !c)} className={PILL}>
                 {comparing ? 'Average rating' : 'Compare'}
               </button>
             )}
@@ -236,7 +213,9 @@ export default function CommunityAlbum() {
         <div className="grid gap-10 lg:grid-cols-[380px_minmax(0,1fr)] xl:gap-16">
           {/* ── The record ─────────────────────────────────────────── */}
           <aside>
-            <div className="lg:sticky lg:top-8">
+            {/* Not pinned: the discussion preview under the title can run past
+                the bottom of the window, where a pinned column can't reach. */}
+            <div>
               <div className="mx-auto w-full max-w-[380px] overflow-hidden rounded-[28px] shadow-[0_28px_60px_-28px_rgba(40,25,10,0.6)] pop-in">
                 {shown.album_art_url ? (
                   <CoverImg url={shown.album_art_url} displayPx={380} loading="eager" alt="" className="block aspect-square w-full object-cover" />
@@ -260,6 +239,10 @@ export default function CommunityAlbum() {
                     <span key={s} className="rounded-full bg-[#efebe5] px-2.5 py-1 text-[11.5px] font-medium text-[#78716c]">{s}</span>
                   ))}
                 </div>
+              )}
+              {/* Off the by-name route: a release new to Pressd has no room yet. */}
+              {shown.album_id != null && (
+                <ThreadPreview album={shown.album_name} artist={shown.artist} index={1} />
               )}
             </div>
           </aside>
@@ -285,43 +268,6 @@ export default function CommunityAlbum() {
         </div>
       </div>
     </div>
-  )
-}
-
-/** A track row that pops up the first time it scrolls into view — mobile's
- *  tracklist is dealt out the same way. Rows that arrive together (the first
- *  screenful, or a fast scroll) are staggered by their position in that run,
- *  not by their place in the list, so row 14 doesn't wait behind thirteen
- *  delays. Under reduced motion every row is simply there. */
-function RevealRow({ index, children }: { index: number; children: ReactNode }) {
-  const ref = useRef<HTMLLIElement>(null)
-  const [shown, setShown] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-  )
-  useEffect(() => {
-    if (shown) return
-    const el = ref.current
-    if (!el) return
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setShown(true)
-          io.disconnect()
-        }
-      },
-      { threshold: 0.2, rootMargin: '0px 0px -6% 0px' },
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [shown])
-  return (
-    <li
-      ref={ref}
-      className={shown ? 'pop-in' : 'opacity-0'}
-      style={shown ? { animationDelay: `${(index % 6) * 45}ms` } : undefined}
-    >
-      {children}
-    </li>
   )
 }
 
@@ -429,12 +375,7 @@ function AveragedView({
       {factors.some((f) => f.value != null) && (
         <div className="mt-8 grid grid-cols-2 gap-y-5 sm:grid-cols-4">
           {factors.map((f, i) => (
-            <div key={f.label} className="rise-in" style={stagger(2 + i)}>
-              <p className="font-display m-0 text-[26px] font-bold leading-none tabular-nums" style={{ color: f.value != null ? songScoreColor(f.value) : '#c8c0b4' }}>
-                {f.value != null ? f.value.toFixed(1) : '—'}
-              </p>
-              <p className="m-0 mt-1.5 text-[12px] font-medium text-[#8a7f72]">{f.label}</p>
-            </div>
+            <StatFigure key={f.label} label={f.label} value={f.value} index={2 + i} />
           ))}
         </div>
       )}
@@ -469,7 +410,7 @@ function AveragedView({
         </div>
       )}
 
-      <p className="m-0 mb-2 mt-9 text-[11px] font-bold tracking-[0.16em] text-[#a8998a]">TRACKS</p>
+      <p className={`${SECTION_LABEL} mb-2 mt-9`}>TRACKS</p>
       <ol className="m-0 -mx-4 list-none p-0">
         {data.tracks.map((t, i) => (
           <RevealRow key={`${t.title}-${i}`} index={i}>
@@ -494,17 +435,6 @@ function AveragedView({
       </ol>
     </div>
   )
-}
-
-function BangSkip({ score }: { score: number | null }) {
-  if (score == null) return null
-  if (score >= BANG_THRESHOLD) {
-    return <span className="text-[10px] font-bold tracking-[0.08em]" style={{ color: songScoreColor(score) }}>BANG</span>
-  }
-  if (score < SKIP_THRESHOLD) {
-    return <span className="text-[10px] font-bold tracking-[0.08em]" style={{ color: songScoreColor(score) }}>SKIP</span>
-  }
-  return null
 }
 
 // ── The comparison ────────────────────────────────────────────────────────────
@@ -580,7 +510,7 @@ function CompareView({ data }: { data: CommunityAlbumData }) {
       </div>
 
       <div className="mb-2 mt-9 flex items-baseline justify-between">
-        <p className="m-0 text-[11px] font-bold tracking-[0.16em] text-[#a8998a]">TRACKS</p>
+        <p className={SECTION_LABEL}>TRACKS</p>
         <p className="m-0 text-[11px] font-bold tracking-[0.12em]">
           <span style={{ color: left.color }}>{left.label}</span>
           <span className="text-[#c2b8ad]"> / </span>

@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 // Presentation helpers with no markup of their own.
 //
 // Split from the Avatar component rather than sharing a file with it so fast
@@ -30,4 +31,9 @@ export function avatarColor(name: string): string {
   let h = 0
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % colors.length
   return colors[h]
+}
+
+/** The `--i` the motion classes in index.css (rise-in, grow-x) stagger by. */
+export function stagger(i: number): CSSProperties {
+  return { '--i': i } as CSSProperties
 }

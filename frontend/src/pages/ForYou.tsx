@@ -487,7 +487,10 @@ export default function ForYou() {
                   <TopReviewCard
                     key={`${rv.author.id}-${rv.album_id}`}
                     rv={rv}
-                    onOpen={() => navigate(`/album/${rv.album_id}`)}
+                    // The record, as the whole of Pressd rated it; the comments
+                    // live on the reviewer's own copy.
+                    onOpen={() => navigate(`/album/${rv.album_id}/community`)}
+                    onOpenComments={() => navigate(`/album/${rv.album_id}`)}
                     onOpenAuthor={() => navigate(`/u/${rv.author.id}`)}
                     onLike={() => handleLikeTop(rv.album_id)}
                   />
@@ -877,9 +880,10 @@ function PickCard({
 /** A userbase-wide review. Unlike a friend's, the author may be a stranger, so
  *  their name links through to their profile and the card carries the album's
  *  best and worst track — the context a reader has no other way to get. */
-function TopReviewCard({ rv, onOpen, onOpenAuthor, onLike }: {
+function TopReviewCard({ rv, onOpen, onOpenComments, onOpenAuthor, onLike }: {
   rv: TopReview
   onOpen: () => void
+  onOpenComments: () => void
   onOpenAuthor: () => void
   onLike: () => void
 }) {
@@ -887,13 +891,15 @@ function TopReviewCard({ rv, onOpen, onOpenAuthor, onLike }: {
   return (
     <article className="rounded-[18px] border border-[#e6ded2] bg-[#faf8f5] p-[18px]" style={{ boxShadow: '0 12px 34px -24px rgba(60,45,30,.4)' }}>
       <div className="flex items-center gap-2.5 mb-3">
-        {rv.author.avatar_url ? (
-          <img src={rv.author.avatar_url} alt="" style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }} />
-        ) : (
-          <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: coverGradient(hueFromString(rv.author.name)), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 15 }}>
-            {rv.author.name[0].toUpperCase()}
-          </div>
-        )}
+        <button onClick={onOpenAuthor} aria-label={`Open ${rv.author.name}'s profile`} className="shrink-0 rounded-full border-none bg-transparent p-0 cursor-pointer transition-transform hover:scale-[1.04]">
+          {rv.author.avatar_url ? (
+            <img src={rv.author.avatar_url} alt="" style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }} />
+          ) : (
+            <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: coverGradient(hueFromString(rv.author.name)), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 15 }}>
+              {rv.author.name[0].toUpperCase()}
+            </div>
+          )}
+        </button>
         <div className="flex-1 min-w-0">
           <p className="m-0 text-[13px] text-[#4a423a]">
             <button onClick={onOpenAuthor} className="bg-transparent border-none p-0 cursor-pointer font-semibold text-[#1c1917] hover:underline" style={{ font: 'inherit', fontWeight: 600 }}>{rv.author.name}</button> reviewed an album
@@ -902,10 +908,12 @@ function TopReviewCard({ rv, onOpen, onOpenAuthor, onLike }: {
         </div>
         {rv.score != null && <ScorePill score={rv.score} big />}
       </div>
-      <div className="flex gap-3.5 cursor-pointer" onClick={onOpen}>
-        <Cover artUrl={rv.album_art_url} seed={rv.artist} size={64} radius={12} fontSize={24} />
+      <div className="group/album flex gap-3.5 cursor-pointer" onClick={onOpen} role="link" aria-label={`Open ${rv.album_name}`}>
+        <div className="shrink-0 transition-transform duration-300 ease-out group-hover/album:scale-[1.04] group-hover/album:-rotate-1">
+          <Cover artUrl={rv.album_art_url} seed={rv.artist} size={64} radius={12} fontSize={24} />
+        </div>
         <div className="flex-1 min-w-0">
-          <p className="m-0 font-bold text-[15px]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{rv.album_name}</p>
+          <p className="m-0 font-bold text-[15px] group-hover/album:text-[#2d6a4f] group-hover/album:underline underline-offset-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{rv.album_name}</p>
           <p className="m-0 mt-0.5 mb-2 text-[12.5px] text-[#8a7f72]">{rv.artist}</p>
           <p className="m-0 text-[13.5px] leading-relaxed text-[#4a423a]" style={{ textWrap: 'pretty' } as React.CSSProperties}>&ldquo;{rv.review}&rdquo;</p>
           {(rv.top_song || rv.bottom_song) && (
@@ -931,7 +939,7 @@ function TopReviewCard({ rv, onOpen, onOpenAuthor, onLike }: {
           <Heart size={14} fill={liked ? 'currentColor' : 'none'} strokeWidth={liked ? 0 : 1.75} className="transition-transform active:scale-125" />
           {rv.like_count}
         </button>
-        <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#8a7f72] cursor-pointer" onClick={onOpen}>
+        <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#8a7f72] cursor-pointer hover:text-[#1c1917]" onClick={onOpenComments}>
           <MessageCircle size={14} strokeWidth={1.75} />
           {rv.comment_count}
         </span>

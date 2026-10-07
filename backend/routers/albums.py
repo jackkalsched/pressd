@@ -94,9 +94,18 @@ def list_albums(
     albums = session.exec(q.order_by(Album.score.desc())).all()
     if artist:
         albums = [a for a in albums if artist_in_album(a, artist)]
-    if not predictions_unlocked(session, target_id):
-        return [_hide_predictions(a.model_dump()) for a in albums]
-    return albums
+    hide = not predictions_unlocked(session, target_id)
+    return [_for_viewer(_hide_predictions(a.model_dump()) if hide else a.model_dump(), user.id)
+            for a in albums]
+
+
+def _for_viewer(row: dict, viewer_id: int) -> dict:
+    """Blank what only an album's owner should read. Libraries are public
+    (deps.authorize_view), but a note a friend wrote when recommending an album
+    was written to its recipient, not to whoever opens their To Listen."""
+    if row.get("user_id") == viewer_id:
+        return row
+    return {**row, "recommendation_note": None}
 
 
 def _hide_predictions(row: dict) -> dict:
@@ -178,7 +187,7 @@ def get_album(
                 s["carried_score"] = hit["score"]
                 s["carried_from_album_id"] = hit["from_album_id"]
                 s["carried_from_album_name"] = hit["from_album_name"]
-    row = album.model_dump()
+    row = _for_viewer(album.model_dump(), user.id)
     if not predictions_unlocked(session, album.user_id):
         row = _hide_predictions(row)
     return {

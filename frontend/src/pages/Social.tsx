@@ -658,6 +658,7 @@ function DiscussionsTab() {
 }
 
 function FeedPostCard({ post }: { post: FeedPost }) {
+  const navigate = useNavigate()
   const what = post.toMe
     ? ' replied to you'
     : post.isReply
@@ -698,7 +699,19 @@ function FeedPostCard({ post }: { post: FeedPost }) {
         )}
         <div className="min-w-0 flex-1">
           <p className="m-0 text-[12.5px] text-[#111]">
-            <span className="font-semibold">{post.author.name}</span>
+            {/* The card is a link to the thread; the name is a link inside it
+                to the author's profile, so it stops the card's own click. */}
+            <span
+              role="link"
+              tabIndex={0}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/u/${post.author.id}`) }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); navigate(`/u/${post.author.id}`) }
+              }}
+              className="font-semibold cursor-pointer hover:underline underline-offset-2"
+            >
+              {post.author.name}
+            </span>
             <span className="text-[#8a7f72]">{what}</span>
             {post.createdAt && <span className="text-[#c2b8ad]"> · {timeAgo(post.createdAt)}</span>}
           </p>

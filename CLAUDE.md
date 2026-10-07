@@ -342,9 +342,15 @@ are **plain ints, not FKs** (`:18-19`): a deleted album should blank the pick, n
 the delete.
 
 **`backend/deps.py`** — every endpoint touching user data depends on `current_user`;
-identity never comes from a client-supplied `user_id`. `authorize_view` /
-`viewable_user_id` gate friend-viewing and require an **accepted** friendship — pending
-grants nothing (`:83-89`). `thread_access` (`:121`) is stricter: you may read an album's
+identity never comes from a client-supplied `user_id`. **Profiles are public since
+October 2026:** `authorize_view` / `viewable_user_id` let any signed-in user read any
+user's library, album copies, ratings and stats (404 for a user that doesn't exist).
+Before that they required an accepted friendship, and a reviewer's name in For You or a
+thread led to "This profile isn't available" for nearly everyone. `authorize_friend`
+keeps the old rule — accepted friendship only, pending grants nothing — for what is a
+conversation between friends: comments on an album copy (`comments.py`), and the
+uncached Claude analysis (`/stats/analysis`, P10). A recommendation note is blanked for
+anyone but its recipient (`albums.py`, `_for_viewer`). `thread_access` (`:121`) is stricter: you may read an album's
 thread only if **you have rated that album**, because a thread on a record you're
 halfway through is the most spoiler-prone surface in the app. It is also the one gate
 under which a **non-friend's per-song scores** are visible: `GET /posts/{id}/rating`
@@ -924,8 +930,19 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   Never inline `(name.lower(), artist.lower())` — five places already did, and they now
   disagree with the threads (§11).
 - **Auth is the invariant.** Identity comes from `current_user`, never a client-supplied
-  `user_id`. Friend reads go through `viewable_user_id` / `authorize_view`, which require
-  an **accepted** friendship. New endpoints get a guard at the point they are written.
+  `user_id`. Reads of another user go through `viewable_user_id` / `authorize_view`
+  (any signed-in user — profiles are public); friends-only reads through
+  `authorize_friend` (an **accepted** friendship). New endpoints get a guard at the
+  point they are written, and anything private on a public row is blanked for non-owners.
+- **The album pages share one kit** (web): `components/albumView.tsx` — `CoverWash`,
+  `RevealRow`, `BangSkip`, `StatFigure`, `PILL`, `SECTION_LABEL` — used by
+  `AlbumDetail` (your or someone's rating) and `CommunityAlbum` (Pressd average,
+  Compare). Same layout on all three: sticky cover column, unboxed numbers, the three
+  views as pills in the top-right. A change to one view's look goes through the kit.
+  Under the title, Average rating previews the room's top three posts
+  (`ThreadPreview`, sort `popular`) — a locked line until you've rated the record, as
+  `thread_access` requires — and someone else's rating shows their review there. With
+  either in it the column isn't pinned, since it can outrun the window.
 - **Domain-shaped code belongs in `shared/`; platform-shaped code stays in the app**
   (localStorage vs SecureStore, routing). The API speaks snake_case; the shared client
   transforms to camelCase at the boundary. Don't leak snake_case into UI code, and don't

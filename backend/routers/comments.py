@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select, func
 
 from ..database import get_session
-from ..deps import current_user, authorize_view
+from ..deps import current_user, authorize_friend
 from ..models import Album, Comment, PressUser
 from ..threads import remove_comment_post, sync_comment_post
 
@@ -37,7 +37,7 @@ def list_comments(
     if not album:
         raise HTTPException(status_code=404, detail="Album not found")
     # You can read comments on an album you can view: your own or a friend's.
-    authorize_view(user, album.user_id, session)
+    authorize_friend(user, album.user_id, session)
 
     comments = session.exec(
         select(Comment).where(Comment.album_id == album_id).order_by(Comment.created_at.asc())
@@ -61,7 +61,7 @@ def create_comment(
     album = session.get(Album, album_id)
     if not album:
         raise HTTPException(status_code=404, detail="Album not found")
-    authorize_view(user, album.user_id, session)
+    authorize_friend(user, album.user_id, session)
 
     body = (data.get("body") or "").strip()
     if not body:

@@ -101,7 +101,24 @@ def are_friends(session: Session, a: int, b: int) -> bool:
 
 
 def authorize_view(viewer: PressUser, target_user_id: int, session: Session) -> None:
-    """Allow reading `target_user_id`'s data only if it's the viewer or a friend."""
+    """Allow reading `target_user_id`'s library, ratings and stats.
+
+    Any signed-in user may, as of October 2026: profiles are public, the way a
+    Letterboxd profile is. Until then this required an accepted friendship, so
+    a reviewer's name in For You or a discussion led to "This profile isn't
+    available" for everyone who hadn't friended them yet — most people, with
+    new users joining. What stays friends-only goes through `authorize_friend`
+    instead, and a note a friend attached to a recommendation is blanked for
+    anyone but its recipient (`routers/albums.py`, `_for_viewer`)."""
+    if target_user_id != viewer.id and session.get(PressUser, target_user_id) is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+
+def authorize_friend(viewer: PressUser, target_user_id: int, session: Session) -> None:
+    """Allow only the user themselves or an accepted friend. For what is a
+    conversation between friends rather than a profile — comments on an album
+    copy — and for the uncached Claude analysis (§10 P10), which public access
+    would turn into anyone's to spend."""
     if target_user_id != viewer.id and not are_friends(session, viewer.id, target_user_id):
         raise HTTPException(status_code=403, detail="Not authorized to view this user's data")
 
@@ -111,8 +128,8 @@ def viewable_user_id(
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ) -> int:
-    """Resolve the target user for a read endpoint: the caller by default, or a
-    friend if `?user_id=` is supplied and the friendship check passes."""
+    """Resolve the target user for a read endpoint: the caller by default, or
+    any user named by `?user_id=` (see `authorize_view`)."""
     target = user_id if user_id is not None else user.id
     authorize_view(user, target, session)
     return target

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, Loader2 } from 'lucide-react'
-import { fetchFriends, fetchSummary, fetchAlbums, removeFriend } from '../api'
+import { ArrowLeft, Check, Clock, Loader2, UserPlus } from 'lucide-react'
+import { acceptFriendRequest, addFriend, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, removeFriend } from '../api'
 import { useUser } from '../context/UserContext'
 import Library from './Library'
 import Stats from './Stats'
@@ -62,22 +62,45 @@ export default function FriendProfile() {
   const queryClient = useQueryClient()
   const { activeUser, setViewingUser } = useUser()
   const [tab, setTab] = useState<Tab>('library')
-  const [removing, setRemoving] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const valid = Number.isFinite(fid)
 
-  // My friends — locates this friend's identity and feeds the mutual count.
-  const { data: myFriends = [], isLoading: friendsLoading } = useQuery({
+  // Who this is. Profiles are public (backend/deps.py, authorize_view), so the
+  // identity comes from the profile endpoint rather than from your friends
+  // list — which is why a reviewer you hadn't friended used to read as
+  // "This profile isn't available".
+  const { data: profile, isLoading: profileLoading, isError: profileError } = useQuery({
+    queryKey: ['profile', fid],
+    queryFn: () => fetchProfile(fid),
+    enabled: valid,
+    staleTime: 60_000,
+  })
+  const person = profile
+    ? { id: profile.id, name: profile.name, avatarUrl: profile.avatar_url ?? undefined, bio: profile.bio }
+    : null
+
+  // Mine — whether we're friends, and the mutual count.
+  const { data: myFriends = [] } = useQuery({
     queryKey: ['friends', activeUser?.id],
     queryFn: () => fetchFriends(activeUser!.id),
     enabled: !!activeUser,
     staleTime: 60_000,
   })
-  const friend = myFriends.find(f => f.id === fid) ?? null
+  const isFriend = myFriends.some(f => f.id === fid)
+  const { data: requests } = useQuery({
+    queryKey: ['friend-requests', activeUser?.id],
+    queryFn: () => fetchFriendRequests(activeUser!.id),
+    enabled: !!activeUser && !isFriend,
+    staleTime: 60_000,
+  })
+  const requested = !!requests?.outgoing.some(u => u.id === fid)
+  const theyAsked = !!requests?.incoming.some(u => u.id === fid)
 
   // Their friends → mutual = intersection with mine (excluding myself).
   const { data: theirFriends = [] } = useQuery({
     queryKey: ['friends', fid],
     queryFn: () => fetchFriends(fid),
-    enabled: Number.isFinite(fid) && !!friend,
+    enabled: valid && !!person,
     staleTime: 60_000,
   })
   const myIds = new Set(myFriends.map(f => f.id))
@@ -86,7 +109,7 @@ export default function FriendProfile() {
   const { data: summary } = useQuery({
     queryKey: ['stats', 'summary', fid],
     queryFn: () => fetchSummary(fid),
-    enabled: Number.isFinite(fid) && !!friend,
+    enabled: valid && !!person,
     staleTime: 60_000,
   })
 
@@ -95,7 +118,7 @@ export default function FriendProfile() {
   const { data: rated = [] } = useQuery({
     queryKey: ['albums', 'rated', fid],
     queryFn: () => fetchAlbums({ status: 'rated', userId: fid }),
-    enabled: Number.isFinite(fid) && !!friend,
+    enabled: valid && !!person,
   })
   const weekAgo = Date.now() - 7 * 86_400_000
   const thisWeek = rated.filter(a => a.dateRated && new Date(a.dateRated).getTime() >= weekAgo).length
@@ -106,52 +129,58 @@ export default function FriendProfile() {
 
   // Drive the global "view-as" context so the embedded pages and album detail
   // render this friend's data (read-only).
+  const personId = person?.id
+  const personName = person?.name
+  const personAvatar = person?.avatarUrl
   useEffect(() => {
-    if (friend) setViewingUser({ id: friend.id, name: friend.name, avatarUrl: friend.avatarUrl })
-  }, [friend, setViewingUser])
+    if (personId != null && personName) setViewingUser({ id: personId, name: personName, avatarUrl: personAvatar })
+  }, [personId, personName, personAvatar, setViewingUser])
 
-  async function handleRemove() {
-    if (!friend || removing) return
-    if (!confirm(`Remove ${friend.name} as a friend?`)) return
-    setRemoving(true)
+  async function handleFriendButton() {
+    if (!person || busy || requested) return
+    if (isFriend && !confirm(`Remove ${person.name} as a friend?`)) return
+    setBusy(true)
     try {
-      await removeFriend(activeUser!.id, fid)
-      setViewingUser(activeUser)
+      if (isFriend) await removeFriend(activeUser!.id, fid)
+      else if (theyAsked) await acceptFriendRequest(activeUser!.id, fid)
+      else await addFriend(activeUser!.id, fid)
       queryClient.invalidateQueries({ queryKey: ['friends'] })
+      queryClient.invalidateQueries({ queryKey: ['friend-requests'] })
       queryClient.invalidateQueries({ queryKey: ['feed'] })
-      navigate('/social')
-    } catch {
-      setRemoving(false)
+    } catch { /* the button stays as it was */ } finally {
+      setBusy(false)
     }
   }
 
-  function exitToFriends() {
+  // Back to wherever you came from — For You, a thread, Social — now that a
+  // profile can be reached from more than the friends list.
+  function goBack() {
     setViewingUser(activeUser)
-    navigate('/social')
+    if (window.history.state?.idx > 0) navigate(-1)
+    else navigate('/social')
   }
 
   const backToFriends = (
     <button
-      onClick={exitToFriends}
+      onClick={goBack}
       className="flex items-center gap-1.5 text-[#57534e] hover:text-[#1c1917] text-sm transition-colors"
     >
-      <ArrowLeft size={16} /> Friends
+      <ArrowLeft size={16} /> Back
     </button>
   )
 
-  if (!Number.isFinite(fid) || (!friendsLoading && !friend)) {
+  if (!valid || profileError || (!profileLoading && !person)) {
     return (
       <div className="min-h-screen bg-[#f9f8f6] p-4 md:p-8">
         {backToFriends}
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <p className="text-[#78716c] text-sm">This profile isn't available.</p>
-          <p className="text-[#a8998a] text-xs mt-1">You can only view the profiles of your friends.</p>
         </div>
       </div>
     )
   }
 
-  if (!friend) {
+  if (!person) {
     return (
       <div className="min-h-screen bg-[#f9f8f6] p-4 md:p-8">
         {backToFriends}
@@ -174,12 +203,12 @@ export default function FriendProfile() {
 
       {/* ── Identity + stats ─────────────────────────────────────── */}
       <div className="flex items-start gap-5 md:gap-6 mb-8">
-        <Avatar name={friend.name} avatarUrl={friend.avatarUrl} size={104} />
+        <Avatar name={person.name} avatarUrl={person.avatarUrl} size={104} />
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="font-display text-3xl md:text-4xl font-bold text-[#1c1917] tracking-tight">
-              {friend.name}
+              {person.name}
             </h1>
             {mutualCount > 0 && (
               <span className="text-[13px] font-semibold text-[#2d6a4f] bg-[#2d6a4f]/10 px-3 py-1 rounded-full">
@@ -202,9 +231,9 @@ export default function FriendProfile() {
             <InlineStat value={String(thisWeek)} label="this week" />
           </div>
 
-          {friend.bio && (
+          {person.bio && (
             <p className="text-sm text-[#57534e] mt-3 max-w-xl whitespace-pre-line leading-relaxed">
-              {friend.bio}
+              {person.bio}
             </p>
           )}
 
@@ -230,13 +259,22 @@ export default function FriendProfile() {
         </div>
 
         <button
-          onClick={handleRemove}
-          disabled={removing}
-          title="You're friends — click to remove"
-          className="shrink-0 flex items-center gap-2 bg-[#2d6a4f] hover:bg-[#245c43] text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors disabled:opacity-60"
+          onClick={handleFriendButton}
+          disabled={busy || requested}
+          title={isFriend ? "You're friends — click to remove" : undefined}
+          // Adding someone is the thing this page should invite, so it gets the
+          // loud green; already being friends is the settled, quieter state.
+          className={`shrink-0 flex items-center gap-2 font-semibold text-sm px-5 py-2.5 rounded-xl transition-[background-color,transform,box-shadow] duration-200 ease-out disabled:opacity-60 ${
+            isFriend || requested
+              ? 'bg-[#2d6a4f]/10 text-[#2d6a4f] hover:bg-[#2d6a4f]/15'
+              : 'bg-[#2d6a4f] text-white shadow-[0_10px_24px_-10px_rgba(45,106,79,0.75)] hover:bg-[#245c43] hover:-translate-y-px hover:shadow-[0_14px_28px_-10px_rgba(45,106,79,0.8)]'
+          }`}
         >
-          {removing ? <Loader2 size={15} className="animate-spin" /> : <Check size={16} />}
-          Friends
+          {busy ? <Loader2 size={15} className="animate-spin" />
+            : isFriend ? <Check size={16} />
+            : requested ? <Clock size={15} />
+            : <UserPlus size={16} />}
+          {isFriend ? 'Friends' : requested ? 'Requested' : theyAsked ? 'Accept request' : 'Add friend'}
         </button>
       </div>
 

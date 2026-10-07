@@ -9,8 +9,8 @@ import json
 import os
 
 from ..database import get_session
-from ..deps import current_user, viewable_user_id
-from ..models import Album, ArtistMeta, Song
+from ..deps import authorize_friend, current_user, viewable_user_id
+from ..models import Album, ArtistMeta, PressUser, Song
 from ..trackkeys import _clean_album as _same_record
 from ..scoring import BANG_THRESHOLD, SKIP_THRESHOLD, compute_a_score, get_factor_stats
 
@@ -1071,8 +1071,15 @@ def tag_records(
 
 
 @router.get("/analysis")
-def analysis(user_id: int = Depends(viewable_user_id), session: Session = Depends(get_session)):
+def analysis(
+    user_id: int = Depends(viewable_user_id),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
     import anthropic
+    # Friends only, though every other stat here is public: this is an uncached
+    # Claude call per request (§10 P10), and public access would make it anyone's.
+    authorize_friend(user, user_id, session)
 
     rated_albums = session.exec(
         select(Album)
