@@ -199,6 +199,12 @@ def init_db():
             "ALTER TABLE pressuser ALTER COLUMN created_at SET DEFAULT NOW()",
             "ALTER TABLE album ADD COLUMN created_at TIMESTAMPTZ",
             "ALTER TABLE album ALTER COLUMN created_at SET DEFAULT NOW()",
+            # ── Per-kind notification switches. Defaulted on, existing rows
+            #    included: everyone who has a push token today asked for pushes,
+            #    and these only let them narrow that.
+            "ALTER TABLE pressuser ADD COLUMN notify_recommendations BOOLEAN NOT NULL DEFAULT TRUE",
+            "ALTER TABLE pressuser ADD COLUMN notify_friends BOOLEAN NOT NULL DEFAULT TRUE",
+            "ALTER TABLE pressuser ADD COLUMN notify_replies BOOLEAN NOT NULL DEFAULT TRUE",
             # ── Row-level security on every public table, last so it covers the
             #    tables create_all just made. Supabase serves the public schema
             #    over its REST API to anyone holding the project's publishable

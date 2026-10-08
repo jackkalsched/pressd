@@ -21,9 +21,9 @@
 import type { CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Angry, Laugh, Meh, Swords, type LucideIcon } from 'lucide-react'
+import { Angry, Laugh, Meh, Smile, Swords, type LucideIcon } from 'lucide-react'
 import { fetchHeated } from '../api'
-import type { HeatedRecord } from '../types'
+import type { HeatedMood, HeatedRecord } from '../types'
 import { songScoreColor } from '../types'
 import { Cover, COVER_LIFT } from './covers'
 import { threadPath } from '../lib/threads'
@@ -33,9 +33,7 @@ const SECTION_LABEL = 'text-[11px] font-semibold uppercase tracking-[0.16em] tex
 const GREEN = '#2d6a4f'
 const RED = '#c0392b'
 
-type Verdict = 'divided' | 'loved' | 'hated' | 'lukewarm'
-
-const VERDICTS: Record<Verdict, { label: string; icon: LucideIcon; ink: string; glow: string; pill: string }> = {
+const VERDICTS: Record<HeatedMood, { label: string; icon: LucideIcon; ink: string; glow: string; pill: string }> = {
   // A room that can't agree is the better story than where its average lands,
   // so divided wins when a record is also loved or hated. Its pill and glow run
   // red into green — the record looks pulled both ways.
@@ -44,17 +42,17 @@ const VERDICTS: Record<Verdict, { label: string; icon: LucideIcon; ink: string; 
     glow: `linear-gradient(90deg, ${RED}, #d9a03b, ${GREEN})`,
     pill: `linear-gradient(90deg, ${RED}, #c47a2c 50%, ${GREEN})`,
   },
-  // The rest are the room's face.
+  // The rest are the room's face, by its mean: laughing ≥ 8, smiling ≥ 7.25,
+  // meh ≥ 6.5, angry below (discover.py, _mood).
   loved: { label: 'Loved', icon: Laugh, ink: GREEN, glow: `linear-gradient(90deg, #3f8a63, ${GREEN})`, pill: GREEN },
+  liked: { label: 'Liked', icon: Smile, ink: '#4f7f3a', glow: 'linear-gradient(90deg, #8fbf6a, #6a9a45)', pill: '#5f8f42' },
   hated: { label: 'Hated', icon: Angry, ink: RED, glow: `linear-gradient(90deg, ${RED}, #a8482f)`, pill: RED },
   lukewarm: { label: 'Lukewarm', icon: Meh, ink: '#9a7b2f', glow: 'linear-gradient(90deg, #d9b25b, #c9a24a)', pill: '#b08a2e' },
 }
 
-function verdictOf(r: HeatedRecord): Verdict {
-  if (r.controversial) return 'divided'
-  if (r.loved) return 'loved'
-  if (r.hated) return 'hated'
-  return 'lukewarm'
+/** The server decides (the shared client covers a backend without `mood`). */
+function verdictOf(r: HeatedRecord): HeatedMood {
+  return r.mood
 }
 
 export default function HeatedDiscussions() {

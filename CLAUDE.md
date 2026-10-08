@@ -72,7 +72,7 @@ PLAN_*.md         gitignored design docs; code cites them by section
 | `backend/scoring.py` | framework 1: the user's own album score | 267 |
 | `backend/global_rating.py` | framework 2: the userbase-pooled rating | 155 |
 | `backend/trackkeys.py` | normalization keys; pure stdlib, imported everywhere | 163 |
-| `backend/routers/` | 14 routers, **107 endpoints** | 7,502 |
+| `backend/routers/` | 14 routers, **109 endpoints** | 7,502 |
 | `worker/` | `nightly_predict`, `catalog_predict`, `artist_clusters`, `audio_ingest`, `refresh_new_releases`, … | 2,149 |
 | `theme_predictor/` | `predict_single`, `personalize`, `global_factors`, `corpus`, … | 1,896 |
 | `shared/src/api.ts` | the single API client, 92 exported functions | 1,763 |
@@ -210,7 +210,7 @@ There is no Alembic and no version table. Adding a column means adding a SQLMode
           ┌──────────────────────┼───────────────────────────┐
           ▼                      ▼                           ▼
    routers/ (14)           scoring.py                trackkeys.py
-   105 endpoints           global_rating.py          (normalization —
+   109 endpoints           global_rating.py          (normalization —
                                  │                    imported by web,
                                  ▼                    worker, and scripts)
                           Postgres (Supabase)
@@ -376,7 +376,7 @@ the recipient's shell copy is missing, but leaves anything they've engaged with 
 ⚠️ **`GET /albums/` (the list) returns albums without their songs**; only
 `GET /albums/{id}` carries them. Anything that needs per-song state for a listed album —
 how many tracks are scored, say — must fetch the album itself. Both For You screens do
-this for the "Pick up where you left off" card; web counted songs on the list row until
+this for the "Pick this back up" card; web counted songs on the list row until
 September 2026 and so always read 0.
 
 **First run (both platforms).** Mobile's `app/(tabs)/_layout.tsx` and web's `AppGate`
@@ -839,7 +839,7 @@ for editing a review later, and both paths post into the thread through
 **Surfaces that exist on both, where web is the thinner one.**
 
 4. **Profile.** Mobile unifies library + stats + identity in `app/(tabs)/profile.tsx`
-   (849) with `ProfileBanner` (578): score ring, headline stats, taste chips, and
+   (849) with `ProfileBanner` (617): a cover-wash header — no green block since October 2026 — with the average ringing the avatar, headline stats, taste chips, and
    **My Picks** (`favorite_album/artist/song_id`, `setTopSong`). Web splits this across
    `Library.tsx` (168) and `Stats.tsx` (498) and has **no picks UI and no banner** —
    `Library.tsx` calls only `fetchAlbums`, where mobile also calls `fetchSummary`,
@@ -865,7 +865,8 @@ for editing a review later, and both paths post into the thread through
    `markTutorialSeen` closed, September 2026: `frontend/src/pages/Tutorial.tsx`. Web's
    `HowItWorks.tsx` is the signed-out marketing page, a different thing.)
 
-**Not gaps.** `registerPushToken`/`unregisterPushToken` (FCM, no web push today) and
+**Not gaps.** `registerPushToken`/`unregisterPushToken` and
+`fetchNotificationPrefs`/`updateNotificationPrefs` (FCM, no web push today), and
 `fetchMe`/`fetchProfile`/`fetchUsers` (web reaches the same state through
 `UserContext`). Mobile is behind on invites (`fetchInvite`, `acceptInvite`,
 `getInviteLink`), public marketing charts, `fetchFriendReviews`, `fetchFriendRatings`
@@ -984,17 +985,26 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   one setting, `VITE_IOS_APP_URL` (`frontend/src/lib/iosApp.ts`): unset, they scroll
   to the band and the page says "Coming to iOS soon" rather than offering a download
   that isn't there.
-- **For You's single-record cards share `SpotlightCard`** (web): Pass it on and Pick
-  up where you left off. No border and no box button — the cover, blurred, is the
-  card's colour; the whole card is the target. A new card of that kind goes through
-  the same component rather than a fresh bordered row.
-- **Heated Discussions shows a verdict, not tags** (web): *Divided*, *Loved*, *Hated* or
-  *Lukewarm*, as a coloured badge with no text — crossed swords for *Divided*, a face for
-  the rest (laughing, angry, meh); the word is in the tooltip and aria-label — a glow under the cover and a meter of where the
-  room's scores fall. The verdict is the server's flags (`discover.py`: `LOVED_MEAN`,
-  `HATED_MEAN`, `CONTROVERSIAL_SPREAD`), never a client threshold, and *Divided* wins
-  when a record is also loved or hated. Trending on Pressd stays a plain ranked list
-  (`TrendingBoard`): no rank gets special treatment.
+- **For You's single-record cards share `SpotlightCard`** (one per platform —
+  `frontend/src/components/` and `mobile/components/`): Pass it on and Pick this back
+  up. No border and no box button — the cover, blurred, is the card's
+  colour; the whole card is the target. A new card of that kind goes through the same
+  component rather than a fresh bordered row. Web sets the two side by side, mobile
+  stacks them with a smaller cover and a two-line title. Rate this next is
+  deliberately *not* one: on mobile it is a plain row, with no cell behind it.
+- **Heated Discussions shows a verdict, not tags** (both platforms, since October 2026
+  on mobile): *Divided*, *Loved*, *Liked*, *Lukewarm* or *Hated*, as a coloured badge
+  with no text — crossed swords for *Divided*, otherwise a face by the room's mean:
+  laughing ≥ 8, smiling ≥ 7.25, meh ≥ 6.5, angry below. The word is in the tooltip /
+  accessibility label; a glow under the cover and a meter of where the room's scores
+  fall complete it. Mobile has no blur, so its glow is coloured shadows, one per colour
+  stop, side by side. The verdict is the server's `mood` (`discover.py`: `_mood`,
+  `LOVED_MEAN`, `LIKED_MEAN`, `LUKEWARM_MEAN`, `CONTROVERSIAL_SPREAD`), never a client
+  threshold, and *Divided* wins whatever the mean. The old `controversial`/`loved`/
+  `hated` flags are still sent, on the same lines, for app builds that predate `mood`.
+  The colours and icons are duplicated in the two `HeatedDiscussions.tsx` files; change
+  both. Trending on Pressd stays a plain ranked list (`TrendingBoard`): no rank gets
+  special treatment.
 - **Hover feedback stays small.** `COVER_LIFT` is a 4% lift and a 1° lean on an
   ease-out; it was 13% and 3° on a springy curve and made rows of covers jump. Keep
   new hover scales in that range.
@@ -1006,6 +1016,16 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   all of them stop under `prefers-reduced-motion`. A horizontal scroller clips
   vertically, so a rail of `COVER_LIFT` covers needs room inside it
   (`HeatedDiscussions` pads `py-5` and gives it back with `-my-5`).
+- **Every push names its kind, and the recipient can switch each kind off.**
+  `push.tokens_for_user(session, user_id, kind)` returns no tokens when the
+  recipient's `PressUser.notify_<kind>` column is off (`NOTIFY_KINDS`: recommendation,
+  friend, reply; all default on). The switches are `GET`/`PUT /users/me/notifications`,
+  shown in mobile Settings once iOS permission is granted. A new kind of push adds a
+  column, a `NOTIFY_KINDS` entry and a Settings row — never a bare token lookup.
+- **Mobile device preferences live in `mobile/lib/prefs.ts`** (Keychain, loaded before
+  the app is ready): haptics on/off and which shelf Library opens on. Every buzz goes
+  through `mobile/lib/haptics.ts` (`selection` / `light` / `success`), which honours
+  the switch; don't import `expo-haptics` in a component.
 - **Changing a rule that is duplicated across platforms means changing every copy.**
   `EP_MAX_TRACKS` / `isEP` lives in `scoring.py` and both rating screens. The share
   card's geometry lives in both `ShareCard.tsx` files by the same rule — every mobile

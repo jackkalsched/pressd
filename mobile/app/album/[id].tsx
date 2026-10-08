@@ -20,7 +20,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
-import * as Haptics from 'expo-haptics'
+import * as haptics from '../../lib/haptics'
 import Svg, { Text as SvgText } from 'react-native-svg'
 import { ArrowLeft, Check, ChevronRight, Heart, Pencil, Share2, Star, Trash2 } from 'lucide-react-native'
 import {
@@ -211,7 +211,7 @@ export default function AlbumDetail() {
         crossedCount.current = crossed
         return
       }
-      if (crossed > crossedCount.current) Haptics.selectionAsync().catch(() => {})
+      if (crossed > crossedCount.current) haptics.selection()
       crossedCount.current = crossed
     },
   })

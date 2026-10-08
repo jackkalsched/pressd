@@ -3,6 +3,7 @@
 // sign-in / sign-out flows to screens.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import * as SecureStore from 'expo-secure-store'
+import { loadPrefs } from './prefs'
 import {
   signInWithGoogle,
   signInWithApple,
@@ -74,6 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
+      // Device prefs first: the first screen reads which Library shelf to open.
+      await loadPrefs()
       const token = await loadStoredToken()
       if (token) {
         try {

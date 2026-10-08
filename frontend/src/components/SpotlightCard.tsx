@@ -1,5 +1,5 @@
 // The "one record, one thing to do with it" card at the top of For You — used
-// by Pass it on and by Pick up where you left off.
+// by Pass it on and by Pick this back up.
 //
 // It replaced two bordered boxes with a rectangular button each, which read as
 // form rows. This one has no border and no box button: the record's own cover,

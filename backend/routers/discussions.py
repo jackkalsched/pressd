@@ -341,7 +341,7 @@ def create_reply(
     # response so a slow call to Google cannot hold up the reply, and a failed
     # one cannot fail it.
     if root.user_id is not None and root.user_id != user.id:
-        tokens = tokens_for_user(session, root.user_id)
+        tokens = tokens_for_user(session, root.user_id, "reply")
         if tokens:
             preview = payload.body.strip()
             background.add_task(

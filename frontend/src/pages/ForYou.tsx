@@ -341,7 +341,7 @@ export default function ForYou() {
                   index={showPass ? 1 : 0}
                   onClick={() => navigate(`/rate/${resume.album.id}`)}
                   ariaLabel={`Continue rating ${resume.album.albumName}${resume.done != null ? `: ${resume.done} of ${resume.total} tracks done` : ''}`}
-                  eyebrow="Pick up where you left off"
+                  eyebrow="Pick this back up"
                   title={resume.album.albumName}
                   artUrl={resume.album.albumArtUrl}
                   seed={resume.album.artist}

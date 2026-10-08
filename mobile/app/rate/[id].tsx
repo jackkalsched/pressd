@@ -21,7 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
-import * as Haptics from 'expo-haptics'
+import * as haptics from '../../lib/haptics'
 import { ArrowLeft, ArrowRight, Check, ListMusic, Trash2, X } from 'lucide-react-native'
 import {
   fetchAlbum,
@@ -284,7 +284,7 @@ export default function RatingScreen() {
   }
 
   function advance() {
-    Haptics.selectionAsync().catch(() => {})
+    haptics.selection()
     if (idx < sortedSongs.length - 1) setIdx(idx + 1)
     else setPhase('factors')
   }
@@ -405,7 +405,7 @@ export default function RatingScreen() {
     },
     onSuccess: async () => {
       setError(null)
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+      haptics.success()
       queryClient.invalidateQueries({ queryKey: ['albums'] })
       queryClient.invalidateQueries({ queryKey: ['stats'] })
       queryClient.invalidateQueries({ queryKey: ['album', albumId] })

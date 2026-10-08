@@ -85,6 +85,43 @@ def get_me(user: PressUser = Depends(current_user)):
     return own_user(user)
 
 
+# ── Notification switches ───────────────────────────────────────────────────
+# Declared before the /{user_id} routes so "me" is never read as an id. Always
+# the caller's own: nobody else's switches are anyone's business.
+
+def _notification_prefs(user: PressUser) -> dict:
+    return {
+        "recommendations": user.notify_recommendations,
+        "friends": user.notify_friends,
+        "replies": user.notify_replies,
+    }
+
+
+@router.get("/me/notifications")
+def get_notification_prefs(current: PressUser = Depends(current_user)):
+    return _notification_prefs(current)
+
+
+@router.put("/me/notifications")
+def update_notification_prefs(
+    data: dict,
+    current: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Set any of the three; keys left out keep their value."""
+    for key, column in (("recommendations", "notify_recommendations"),
+                        ("friends", "notify_friends"),
+                        ("replies", "notify_replies")):
+        if key in data:
+            if not isinstance(data[key], bool):
+                raise HTTPException(status_code=400, detail=f"{key} must be true or false")
+            setattr(current, column, data[key])
+    session.add(current)
+    session.commit()
+    session.refresh(current)
+    return _notification_prefs(current)
+
+
 @router.get("/search")
 def search_users(
     q: str = Query(""),
@@ -725,7 +762,7 @@ def _notify_accepted(session: Session, background: BackgroundTasks,
     Two endpoints reach this: accepting outright, and requesting back someone
     who had already asked, which is the same thing said differently.
     """
-    tokens = tokens_for_user(session, requester_id)
+    tokens = tokens_for_user(session, requester_id, "friend")
     if tokens:
         background.add_task(
             send_push, tokens,
@@ -776,7 +813,7 @@ def add_friend(
     else:
         # Only on a request that actually landed. The paths above return early
         # for a duplicate or an existing friendship, so nobody is told twice.
-        tokens = tokens_for_user(session, friend_id)
+        tokens = tokens_for_user(session, friend_id, "friend")
         if tokens:
             background.add_task(
                 send_push, tokens,

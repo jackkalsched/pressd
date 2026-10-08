@@ -848,7 +848,7 @@ def recommend_album(
     # reply notification passes. Read here, before either branch returns, since
     # the send runs after the response and this session will be gone.
     def notify_recipient() -> None:
-        tokens = tokens_for_user(session, friend_id)
+        tokens = tokens_for_user(session, friend_id, "recommendation")
         if tokens:
             background.add_task(
                 send_push, tokens,

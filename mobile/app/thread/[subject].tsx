@@ -23,7 +23,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as Clipboard from 'expo-clipboard'
-import * as Haptics from 'expo-haptics'
+import * as haptics from '../../lib/haptics'
 import { ArrowLeft, ChevronDown, ChevronUp, FileText, Lock, Send, Triangle } from 'lucide-react-native'
 import {
   createThreadPost,
@@ -126,7 +126,7 @@ export default function ThreadScreen() {
     onSuccess: () => {
       setDraft('')
       setReplyTo(null)
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+      haptics.light()
       invalidate()
     },
     onError: (e: Error) => Alert.alert('Could not post', e.message),
@@ -437,7 +437,7 @@ function PostRow({
     if (value === 'review') return afterMenu(() => setReviewOf(post.id))
     if (value === 'copy') {
       await Clipboard.setStringAsync(post.body)
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+      haptics.light()
       return
     }
     if (value === 'spoiler') {
@@ -490,7 +490,7 @@ function PostRow({
       )}
 
       <Pressable
-        onLongPress={system ? undefined : () => { Haptics.selectionAsync().catch(() => {}); setMenu(true) }}
+        onLongPress={system ? undefined : () => { haptics.selection(); setMenu(true) }}
         onPress={hidden ? () => setRevealed(true) : undefined}
         delayLongPress={300}
       >

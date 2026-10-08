@@ -1,7 +1,7 @@
 import type {
   Album, Song, ArtistStats, FactorStats, FactorPoints,
   DiscussionPost, SubjectRef, ThreadMeta, ThreadPage, ThreadSort,
-  FeedPost, HeatedRecord, SubjectType,
+  FeedPost, HeatedMood, HeatedRecord, SubjectType,
 } from './types'
 
 // ── Runtime configuration ─────────────────────────────────────────────────────
@@ -1114,6 +1114,30 @@ export async function fetchMe(): Promise<UserInfo> {
   return toUserInfo(await res.json())
 }
 
+/** Which kinds of push the signed-in user wants. Mobile only — web has no push. */
+export interface NotificationPrefs {
+  recommendations: boolean
+  friends: boolean
+  replies: boolean
+}
+
+export async function fetchNotificationPrefs(): Promise<NotificationPrefs> {
+  const res = await apiFetch(`${BASE()}/users/me/notifications`)
+  if (!res.ok) throw new Error('Failed to load notification settings')
+  return res.json()
+}
+
+/** Send only the switches that changed; the rest keep their value. */
+export async function updateNotificationPrefs(prefs: Partial<NotificationPrefs>): Promise<NotificationPrefs> {
+  const res = await apiFetch(`${BASE()}/users/me/notifications`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(prefs),
+  })
+  if (!res.ok) throw new Error('Failed to save notification settings')
+  return res.json()
+}
+
 export interface UserSearchResult {
   id: number
   name: string
@@ -1836,6 +1860,10 @@ export async function fetchHeated(limit = 10): Promise<HeatedRecord[]> {
     raters: (d.raters as number) ?? 0,
     meanScore: (d.mean_score as number | null) ?? null,
     spread: (d.spread as number) ?? 0,
+    // A backend that predates `mood` still sends the three flags; read those
+    // rather than show every room as lukewarm until it deploys.
+    mood: (d.mood as HeatedMood | undefined)
+      ?? (d.controversial ? 'divided' : d.loved ? 'loved' : d.hated ? 'hated' : 'lukewarm'),
     controversial: !!d.controversial,
     loved: !!d.loved,
     hated: !!d.hated,

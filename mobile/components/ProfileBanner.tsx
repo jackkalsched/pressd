@@ -1,25 +1,39 @@
-// The green profile header, shared by your own Profile tab and a friend's
-// page: identity, an average-score ring, four headline stats, taste chips
-// that straddle the banner's bottom edge, and the three picks below them. The
-// `action` slot holds whatever control belongs to the viewer (settings on your
-// own page, add/remove friend on someone else's).
+// The profile header, shared by your own Profile tab and a friend's page:
+// identity, the average score, four headline stats, taste chips, and the three
+// picks below them. The `action` slot holds whatever control belongs to the
+// viewer (settings on your own page, add/remove friend on someone else's).
+//
+// It used to be a solid green block with white type, the one slab of flat
+// colour left in the app. It now follows the rest of Pressd — For You's
+// spotlight cards and web's album pages: no box, the colour comes from a record.
+// Your favourite album (or the caller's stand-in, your top-rated one) is
+// blurred into light behind the header, over a soft green wash, and the whole
+// thing fades into the page instead of ending at an edge. The type is dark on
+// cream, the numbers unboxed in Playfair. The average is the headline figure,
+// set large in its own score colour, and also rings the avatar — the share of
+// 10 you rate at, drawn around who you are.
 import { useMemo, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { Image } from 'expo-image'
+import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Circle } from 'react-native-svg'
 import { useQuery } from '@tanstack/react-query'
 import type { Profile } from '@pressd/shared/api'
+import { avatarColor, songScoreColor } from '@pressd/shared/types'
 import { fetchArtistImage } from '../lib/api'
 import { colors, fonts, radii, spacing } from '../theme/tokens'
+import CoverImage from './CoverImage'
+import ScoreHistogram from './ScoreHistogram'
 
-// How far type in this header is allowed to scale. The banner is a fixed-shape
-// composition — a ring, a round avatar, and four stat columns sharing one row —
-// so past this the pieces stop being able to give way to each other. Text that
-// hits the cap then shrinks to fit rather than clipping.
+// The wash's top colour — the same green tint the green SpotlightCard starts
+// from. Pull-to-refresh exposes it above the header.
+const WASH_TOP = '#e6f0ea'
+
+// How far type in this header is allowed to scale. The header is a fixed-shape
+// composition — a ringed avatar beside the name, a headline figure beside a
+// grid of four — so past this the pieces stop being able to give way to each
+// other. Text that hits the cap then shrinks to fit rather than clipping.
 const HEADER_SCALE_CAP = 1.3
-// The ring is the one piece that grows with the setting instead of capping the
-// type inside it, so it gets a little more room than flat text does.
-const RING_SCALE_CAP = 1.35
 
 export interface BannerStatItem {
   value: string
@@ -40,6 +54,8 @@ export default function ProfileBanner({
   profile,
   picksHeading,
   onPickPress,
+  washArtUrl,
+  scores,
 }: {
   name: string
   avatarUrl?: string | null
@@ -61,6 +77,12 @@ export default function ProfileBanner({
   picksHeading?: string
   /** Only your own page passes this; a friend's cards are not editable. */
   onPickPress?: (kind: PickKind) => void
+  /** The cover blurred behind the header when no favourite album is set —
+   *  callers pass the top-rated record. */
+  washArtUrl?: string | null
+  /** Every rated album's score: drawn as a small distribution under the
+   *  average, the Stats tab's chart in miniature. */
+  scores?: number[]
 }) {
   const [expanded, setExpanded] = useState(false)
   const [rowW, setRowW] = useState(0)
@@ -78,9 +100,9 @@ export default function ProfileBanner({
 
   // Chip text width + its own horizontal padding/border; the count chip needs
   // room reserved on the line whenever anything is going to overflow.
-  const CHIP_PAD = 24
+  const CHIP_PAD = 22
   const GAP = 6
-  const MORE_W = 46
+  const MORE_W = 38
 
   const fitCount = useMemo(() => {
     if (!rowW || widths.length < tags.length || widths.some((w) => w == null)) return tags.length
@@ -107,44 +129,15 @@ export default function ProfileBanner({
   return (
     <>
       <View style={[styles.banner, { paddingTop: topInset + spacing.sm }]}>
-        {/* Pull-to-refresh drags the content down and exposes whatever sits
-            above it. Without this the screen's cream shows through and the
-            banner reads as a floating block, so carry the green up past the
-            top of the scroll view. */}
-        <View style={styles.overscroll} pointerEvents="none" />
+        <BannerWash artUrl={profile?.favorite_album?.album_art_url ?? washArtUrl} />
+
         <View style={styles.bannerTop}>
-          <View style={styles.avatar}>
-            {avatarUrl ? (
-              // The URL carries a ?v= stamp that only changes when the picture
-              // does, and the server marks it immutable — so this can be held
-              // on disk indefinitely and survive a cold launch.
-              <Image
-                source={{ uri: avatarUrl }}
-                style={styles.avatarImg}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                recyclingKey={avatarUrl}
-                transition={120}
-              />
-            ) : (
-              // A letter in a fixed disc: capped and allowed to shrink, rather
-              // than growing the disc. Unlike the ring's number, nobody needs to
-              // *read* an initial at a larger size — it's identity, not data.
-              <Text
-                style={styles.avatarInitial}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                maxFontSizeMultiplier={HEADER_SCALE_CAP}
-              >
-                {name[0]?.toUpperCase()}
-              </Text>
-            )}
-          </View>
+          <RingedAvatar name={name} avatarUrl={avatarUrl} avg={avg} />
           <View style={{ flex: 1, minWidth: 0 }}>
-            {/* Capped because this is the column that gives way when the ring
-                and the avatar grow beside it — uncapped, a long name at a large
+            {/* Capped because this is the column that gives way when the
+                avatar grows beside it — uncapped, a long name at a large
                 setting truncates to two or three characters. */}
-            <Text style={styles.name} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
+            <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
               {name}
             </Text>
             {since ? (
@@ -153,97 +146,112 @@ export default function ProfileBanner({
               </Text>
             ) : null}
           </View>
-          <AvgRing value={avg} />
           {action}
         </View>
 
-        <View style={styles.stats}>
-          {stats.map((s) => (
-            <View key={s.label} style={styles.statCol}>
-              {/* Four columns splitting one row, so each gets a quarter of the
-                  screen however wide the glyphs get. Held to one line and
-                  allowed to shrink: unbounded, "5,692" wrapped to two lines and
-                  pushed its own label out of line with the other three. */}
-              <Text
-                style={styles.statValue}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                maxFontSizeMultiplier={HEADER_SCALE_CAP}
-              >
-                {s.value}
-              </Text>
-              {/* The label may take two lines — "TASTE CENTER" needs them at a
-                  large setting — but never more, or one column drags the row. */}
-              <Text
-                style={styles.statLabel}
-                numberOfLines={2}
-                maxFontSizeMultiplier={HEADER_SCALE_CAP}
-              >
-                {s.label}
-              </Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* Taste chips ride the banner boundary: genres first (green outline),
-          then subgenres (gray). Only as many as actually fit the line are
-          shown — the rest collapse behind a count chip that reveals them
-          below, so the headline row is always exactly one line. */}
-      {tags.length > 0 && (
-        <>
-          {/* Off-screen pass that measures each chip at its natural width;
-              the visible row is sliced from these, so it never reflows. */}
-          <View style={styles.measure} pointerEvents="none">
-            {tags.map((t, i) => (
-              <View key={`m-${t.label}`} style={[styles.chip, styles.chipNatural, t.sub ? styles.chipSub : styles.chipGenre]}>
+        {/* The average leads, large and in its own score colour; the other
+            four share a grid beside it. Unboxed, like the album pages' figures. */}
+        <View style={styles.figures}>
+          <View style={styles.hero}>
+            <Text
+              style={[styles.heroValue, { color: avg != null ? songScoreColor(avg) : colors.inkMuted }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              maxFontSizeMultiplier={HEADER_SCALE_CAP}
+            >
+              {avg != null ? avg.toFixed(2) : '—'}
+            </Text>
+            <Text style={styles.statLabel} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
+              Avg score
+            </Text>
+            {scores && scores.length > 0 ? (
+              <View style={styles.heroChart}>
+                <ScoreHistogram scores={scores} height={26} axis={false} gap={2} />
+              </View>
+            ) : null}
+          </View>
+          <View style={styles.rule} />
+          <View style={styles.grid}>
+            {stats.map((s) => (
+              <View key={s.label} style={styles.statCell}>
+                {/* Held to one line and allowed to shrink: unbounded, "5,692"
+                    wrapped and pushed its own label out of line. */}
                 <Text
-                  style={t.sub ? styles.chipSubText : styles.chipGenreText}
-                  onLayout={(e) => {
-                    const w = e.nativeEvent.layout.width
-                    setWidths((prev) => {
-                      if (Math.abs((prev[i] ?? -1) - w) < 0.5) return prev
-                      const next = [...prev]
-                      next[i] = w
-                      return next
-                    })
-                  }}
+                  style={styles.statValue}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  maxFontSizeMultiplier={HEADER_SCALE_CAP}
                 >
-                  {t.label}
+                  {s.value}
+                </Text>
+                <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={HEADER_SCALE_CAP}>
+                  {s.label}
                 </Text>
               </View>
             ))}
           </View>
+        </View>
 
-          <View style={styles.chipsRow} onLayout={(e) => setRowW(e.nativeEvent.layout.width)}>
-            {shownTags.map((t) => (
-              <View key={t.label} style={[styles.chip, t.sub ? styles.chipSub : styles.chipGenre]}>
-                <Text style={t.sub ? styles.chipSubText : styles.chipGenreText} numberOfLines={1}>{t.label}</Text>
-              </View>
-            ))}
-            {(overflowCount > 0 || expanded) && (
-              <Pressable
-                style={[styles.chip, styles.chipMore]}
-                onPress={() => setExpanded((v) => !v)}
-                hitSlop={6}
-                accessibilityLabel={expanded ? 'Show fewer tags' : `Show ${overflowCount} more tags`}
-              >
-                <Text style={styles.chipMoreText}>{expanded ? 'Hide' : `+${overflowCount}`}</Text>
-              </Pressable>
-            )}
-          </View>
-
-          {expanded && overflowTags.length > 0 && (
-            <View style={styles.subRow}>
-              {overflowTags.map((t) => (
-                <View key={`o-${t.label}`} style={[styles.chip, t.sub ? styles.chipSub : styles.chipGenre]}>
-                  <Text style={t.sub ? styles.chipSubText : styles.chipGenreText} numberOfLines={1}>{t.label}</Text>
+        {/* Taste chips, last thing on the wash: genres first (green), then
+            subgenres (white). Borderless and translucent, so they read as part of
+            the header rather than as white boxes laid over it. Only as many as actually fit the line are
+            shown — the rest collapse behind a count chip that reveals them
+            below, so the headline row is always exactly one line. */}
+        {tags.length > 0 && (
+          <>
+            {/* Off-screen pass that measures each chip at its natural width;
+                the visible row is sliced from these, so it never reflows. */}
+            <View style={styles.measure} pointerEvents="none">
+              {tags.map((t, i) => (
+                <View key={`m-${t.label}`} style={[styles.chip, styles.chipNatural, t.sub ? styles.chipSub : styles.chipGenre]}>
+                  <Text
+                    style={t.sub ? styles.chipSubText : styles.chipGenreText}
+                    onLayout={(e) => {
+                      const w = e.nativeEvent.layout.width
+                      setWidths((prev) => {
+                        if (Math.abs((prev[i] ?? -1) - w) < 0.5) return prev
+                        const next = [...prev]
+                        next[i] = w
+                        return next
+                      })
+                    }}
+                  >
+                    {t.label}
+                  </Text>
                 </View>
               ))}
             </View>
-          )}
-        </>
-      )}
+
+            <View style={styles.chipsRow} onLayout={(e) => setRowW(e.nativeEvent.layout.width)}>
+              {shownTags.map((t) => (
+                <View key={t.label} style={[styles.chip, t.sub ? styles.chipSub : styles.chipGenre]}>
+                  <Text style={t.sub ? styles.chipSubText : styles.chipGenreText} numberOfLines={1}>{t.label}</Text>
+                </View>
+              ))}
+              {(overflowCount > 0 || expanded) && (
+                <Pressable
+                  style={[styles.chip, styles.chipMore]}
+                  onPress={() => setExpanded((v) => !v)}
+                  hitSlop={6}
+                  accessibilityLabel={expanded ? 'Show fewer tags' : `Show ${overflowCount} more tags`}
+                >
+                  <Text style={styles.chipMoreText}>{expanded ? 'Hide' : `+${overflowCount}`}</Text>
+                </Pressable>
+              )}
+            </View>
+
+            {expanded && overflowTags.length > 0 && (
+              <View style={styles.subRow}>
+                {overflowTags.map((t) => (
+                  <View key={`o-${t.label}`} style={[styles.chip, t.sub ? styles.chipSub : styles.chipGenre]}>
+                    <Text style={t.sub ? styles.chipSubText : styles.chipGenreText} numberOfLines={1}>{t.label}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+      </View>
 
       {bio ? <Text style={styles.bio}>{bio}</Text> : null}
 
@@ -253,6 +261,16 @@ export default function ProfileBanner({
 }
 
 export type PickKind = 'song' | 'album' | 'artist'
+
+/** The cover of the highest-scored record that has one — the header's
+ *  stand-in colour when no favourite album is set. */
+export function topRatedArt(albums: { score?: number | null; albumArtUrl?: string | null }[]): string | null {
+  let best: { score?: number | null; albumArtUrl?: string | null } | null = null
+  for (const a of albums) {
+    if (a.albumArtUrl && a.score != null && (best == null || a.score > (best.score ?? -1))) best = a
+  }
+  return best?.albumArtUrl ?? null
+}
 
 /** The three pinned favourites, under the taste chips.
  *
@@ -392,34 +410,59 @@ function PickCard({
   )
 }
 
-/** Average-score gauge: a ring filled to score/10, value centered. */
-function AvgRing({ value }: { value: number | null }) {
-  // The ring grows with the reader's text setting instead of holding a fixed
-  // 59pt while the numeral inside it scales — which is what pushed "7.22" and
-  // its AVG label out through the stroke at larger sizes.
-  //
-  // Circle and type scale by the *same* capped factor, so the numeral sits the
-  // same way inside the ring at every setting. Capped rather than unbounded
-  // because the ring shares a row with the name and the settings control, and
-  // past ~1.35 it starts eating the name it sits beside.
+/** The header's colour: a soft green wash, a record's cover blurred into light
+ *  over it, and a fade to the page at the bottom so the header has no edge.
+ *  Bled past the screen's padding and carried up above the top, so a
+ *  pull-to-refresh shows more of the wash rather than a cream gap. */
+function BannerWash({ artUrl }: { artUrl?: string | null }) {
+  return (
+    <View style={styles.wash} pointerEvents="none">
+      <View style={styles.overscroll} />
+      {/* Clipped: the cover is scaled past the header so its blur has no edge,
+          and unclipped it hung below the fade as a grey slab over the picks. */}
+      <View style={styles.washClip}>
+        <LinearGradient colors={[WASH_TOP, colors.bg]} style={StyleSheet.absoluteFill} />
+        {artUrl ? (
+          // Blurred to a wash: a small image is all it needs.
+          <CoverImage url={artUrl} displayPx={120} blurRadius={45} style={styles.washArt} accessible={false} />
+        ) : null}
+        <LinearGradient
+          colors={['rgba(249,248,246,0)', colors.bg]}
+          locations={[0.5, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+      </View>
+    </View>
+  )
+}
+
+/** The avatar, ringed by the average: the arc fills to score/10 in the
+ *  score's own colour. It grows with the reader's text setting — capped — so
+ *  it keeps its proportion to the name beside it. */
+function RingedAvatar({ name, avatarUrl, avg }: { name: string; avatarUrl?: string | null; avg: number | null }) {
   const { fontScale } = useWindowDimensions()
-  const k = Math.min(Math.max(fontScale, 1), RING_SCALE_CAP)
-  const R = 24 * k
-  const SW = 4.5 * k
-  const SIZE = (R + SW) * 2 + 2
+  const k = Math.min(Math.max(fontScale, 1), HEADER_SCALE_CAP)
+  const AV = 57 * k
+  const SW = 3.25
+  const GAP = 3.5
+  const SIZE = AV + (SW + GAP) * 2
+  const R = (SIZE - SW) / 2
   const C = 2 * Math.PI * R
-  const frac = value != null ? Math.max(0, Math.min(1, value / 10)) : 0
+  const frac = avg != null ? Math.max(0, Math.min(1, avg / 10)) : 0
   const mid = SIZE / 2
   return (
-    <View style={{ width: SIZE, height: SIZE }}>
-      <Svg width={SIZE} height={SIZE}>
-        <Circle cx={mid} cy={mid} r={R} stroke="rgba(255,255,255,0.18)" strokeWidth={SW} fill="none" />
-        {value != null && (
+    <View
+      style={{ width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' }}
+      accessibilityLabel={avg != null ? `Average score ${avg.toFixed(2)}` : undefined}
+    >
+      <Svg width={SIZE} height={SIZE} style={StyleSheet.absoluteFill}>
+        <Circle cx={mid} cy={mid} r={R} stroke="rgba(45,106,79,0.12)" strokeWidth={SW} fill="none" />
+        {avg != null && (
           <Circle
             cx={mid}
             cy={mid}
             r={R}
-            stroke="#a9d5b4"
+            stroke={songScoreColor(avg)}
             strokeWidth={SW}
             fill="none"
             strokeDasharray={`${C * frac} ${C}`}
@@ -428,25 +471,31 @@ function AvgRing({ value }: { value: number | null }) {
           />
         )}
       </Svg>
-      {/* Padded so the numeral can never touch the stroke, and allowed to
-          shrink inside that box — a three-digit score at the cap would
-          otherwise still reach the ring on the narrowest phones. */}
-      <View style={[styles.ringCenter, { padding: SW + 2 }]}>
-        <Text
-          style={[styles.ringValue, { fontSize: 13.5 * k }]}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          maxFontSizeMultiplier={RING_SCALE_CAP}
-        >
-          {value != null ? value.toFixed(2) : '—'}
-        </Text>
-        <Text
-          style={[styles.ringLabel, { fontSize: 7 * k }]}
-          numberOfLines={1}
-          maxFontSizeMultiplier={RING_SCALE_CAP}
-        >
-          AVG
-        </Text>
+      <View style={[styles.avatar, { width: AV, height: AV, borderRadius: AV / 2, backgroundColor: avatarColor(name) }]}>
+        {avatarUrl ? (
+          // The URL carries a ?v= stamp that only changes when the picture
+          // does, and the server marks it immutable — so this can be held
+          // on disk indefinitely and survive a cold launch.
+          <Image
+            source={{ uri: avatarUrl }}
+            style={styles.avatarImg}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={avatarUrl}
+            transition={120}
+          />
+        ) : (
+          // A letter in a fixed disc: capped and allowed to shrink. Nobody
+          // needs to *read* an initial at a larger size — it's identity.
+          <Text
+            style={[styles.avatarInitial, { fontSize: 24 * k }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            maxFontSizeMultiplier={1}
+          >
+            {name[0]?.toUpperCase()}
+          </Text>
+        )}
       </View>
     </View>
   )
@@ -454,49 +503,58 @@ function AvgRing({ value }: { value: number | null }) {
 
 const styles = StyleSheet.create({
   banner: {
-    backgroundColor: colors.green,
     marginHorizontal: -spacing.lg,
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg + 10,
+    paddingBottom: 20,
   },
+  wash: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  washClip: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' },
   // Taller than any realistic pull, and bled past both edges so it spans the
-  // full width regardless of the banner's own horizontal padding.
+  // full width regardless of the header's own horizontal padding.
   overscroll: {
     position: 'absolute',
     top: -600,
     left: -spacing.lg * 2,
     right: -spacing.lg * 2,
     height: 600,
-    backgroundColor: colors.green,
+    backgroundColor: WASH_TOP,
   },
+  // Scaled past the edges so the blur has no hard border to fade against.
+  washArt: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.3,
+    transform: [{ scale: 1.6 }],
+  },
+
   bannerTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.sm },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   avatarImg: { width: '100%', height: '100%' },
-  avatarInitial: { fontFamily: fonts.display, fontSize: 24, color: colors.green },
-  name: { fontFamily: fonts.displayBlack, fontSize: 25, color: '#ffffff', letterSpacing: 0.3 },
-  since: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
+  avatarInitial: { fontFamily: fonts.display, color: '#ffffff' },
+  name: { fontFamily: fonts.displayBlack, fontSize: 27, lineHeight: 33, color: colors.ink, letterSpacing: 0.2 },
+  since: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.inkTertiary, marginTop: 2 },
 
-  ringCenter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  ringValue: { fontFamily: fonts.display, fontSize: 13.5, color: '#ffffff' },
-  ringLabel: { fontFamily: fonts.bodyBold, fontSize: 7, letterSpacing: 1, color: 'rgba(255,255,255,0.65)' },
-
-  stats: { flexDirection: 'row', marginTop: spacing.lg },
-  statCol: { flex: 1, alignItems: 'flex-start' },
-  statValue: { fontFamily: fonts.display, fontSize: 22, color: '#ffffff' },
+  figures: { flexDirection: 'row', alignItems: 'center', marginTop: 20 },
+  hero: { width: '33%', paddingRight: spacing.md },
+  heroChart: { marginTop: 8 },
+  heroValue: { fontFamily: fonts.display, fontSize: 42, lineHeight: 48, fontVariant: ['tabular-nums'] },
+  rule: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: 'rgba(28,25,23,0.16)' },
+  grid: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', paddingLeft: 14, rowGap: 10 },
+  statCell: { width: '50%', paddingRight: spacing.sm },
+  statValue: { fontFamily: fonts.display, fontSize: 20, lineHeight: 25, color: colors.ink, fontVariant: ['tabular-nums'] },
   statLabel: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 9.5,
-    color: 'rgba(255,255,255,0.6)',
+    fontFamily: fonts.bodyBold,
+    fontSize: 9,
+    color: colors.inkMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: 1.05,
     marginTop: 2,
   },
 
@@ -505,28 +563,27 @@ const styles = StyleSheet.create({
     flexWrap: 'nowrap',
     alignItems: 'center',
     gap: 6,
-    marginTop: -14,
-    zIndex: 2,
+    marginTop: 16,
   },
   // Off-screen measuring row — natural widths, never painted.
   measure: { position: 'absolute', top: 0, left: 0, flexDirection: 'row', opacity: 0 },
   chipNatural: { flexShrink: 0 },
+  // No border: CHIP_PAD above is the horizontal padding alone.
   chip: {
-    backgroundColor: '#ffffff',
     borderRadius: radii.pill,
-    borderWidth: 1.5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
   },
-  chipGenre: { borderColor: colors.green },
-  chipGenreText: { fontFamily: fonts.bodySemiBold, fontSize: 12.5, color: colors.green },
-  // The count chip is filled rather than outlined, so it reads as a control
-  // next to the tag labels instead of another tag.
-  chipMore: { backgroundColor: colors.inset, borderColor: colors.inset },
-  chipMoreText: { fontFamily: fonts.bodySemiBold, fontSize: 12.5, color: colors.inkTertiary },
-  subRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: spacing.sm },
-  chipSub: { borderColor: '#c9c2b8' },
-  chipSubText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.inkTertiary },
+  // Genres in the brand's soft green — the same fill as For You's range chip.
+  chipGenre: { backgroundColor: 'rgba(45,106,79,0.12)' },
+  chipGenreText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },
+  // Subgenres as frosted white over the wash: present, but a step quieter.
+  chipSub: { backgroundColor: 'rgba(255,255,255,0.7)' },
+  chipSubText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary },
+  // The count reads as a control, not a tag: no fill, just the words.
+  chipMore: { paddingHorizontal: 8 },
+  chipMoreText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.inkTertiary },
+  subRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 7 },
 
   bio: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSecondary, lineHeight: 19, marginTop: spacing.md },
 

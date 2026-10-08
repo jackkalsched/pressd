@@ -6,7 +6,7 @@
 // reply it sends replaces the guess rather than being merged with it.
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import * as Haptics from 'expo-haptics'
+import * as haptics from '../lib/haptics'
 import { ThumbsDown, ThumbsUp } from 'lucide-react-native'
 import { votePost } from '../lib/api'
 import { colors, fonts, radii, spacing } from '../theme/tokens'
@@ -48,7 +48,7 @@ export default function VoteButtons({
     setVote(next)
     setUp(up - (vote === 1 ? 1 : 0) + (next === 1 ? 1 : 0))
     setDown(down - (vote === -1 ? 1 : 0) + (next === -1 ? 1 : 0))
-    Haptics.selectionAsync().catch(() => {})
+    haptics.selection()
     try {
       const r = await votePost(postId, value)
       setVote(r.myVote); setUp(r.likeCount); setDown(r.dislikeCount)

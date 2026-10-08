@@ -39,6 +39,14 @@ class PressUser(SQLModel, table=True):
     # tutorial shipped was stamped by the migration, so only new sign-ups see it.
     tutorial_seen_at: Optional[datetime] = None
 
+    # Which pushes this person wants, one switch per kind (backend/push.py,
+    # NOTIFY_KINDS). All on by default: the device-level permission is the
+    # first gate, and someone who granted it asked to be told. These let them
+    # keep the kinds they care about without turning the whole app off in iOS.
+    notify_recommendations: bool = Field(default=True)
+    notify_friends: bool = Field(default=True)
+    notify_replies: bool = Field(default=True)
+
     # When the account was made, so signups can be counted by day. Accounts that
     # predate the column are null — when they joined was never recorded, and a
     # guessed date would read as a burst of signups on the day it shipped.

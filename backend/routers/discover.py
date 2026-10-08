@@ -519,10 +519,30 @@ HEATED_WINDOW_DAYS = 3
 # grade apart on the same record. Below that it is rounding, not a controversy.
 CONTROVERSIAL_SPREAD = 1.0
 
-# The ends of the scale, well clear of the 6.5/8.0 lines a single album crosses,
-# so a tag says something about the room rather than about one generous rater.
-LOVED_MEAN = 8.5
-HATED_MEAN = 6.0
+# The room's mood, by its mean: hated below LUKEWARM_MEAN, lukewarm up to
+# LIKED_MEAN, liked up to LOVED_MEAN, loved from there. Drawn as a face on each
+# card. Set in October 2026 from how the app's scores actually spread — a 7.25
+# is a good record here, not a middling one — replacing a two-tier 8.5/6.0
+# split that left nearly every room lukewarm.
+LOVED_MEAN = 8.0
+LIKED_MEAN = 7.25
+LUKEWARM_MEAN = 6.5
+
+
+def _mood(mean: float | None, spread: float) -> str:
+    # A room that can't agree is the better story than where its average
+    # lands, so divided wins whatever the mean.
+    if spread >= CONTROVERSIAL_SPREAD:
+        return "divided"
+    if mean is None:
+        return "lukewarm"
+    if mean >= LOVED_MEAN:
+        return "loved"
+    if mean >= LIKED_MEAN:
+        return "liked"
+    if mean >= LUKEWARM_MEAN:
+        return "lukewarm"
+    return "hated"
 
 # "New" in the sense a listener means it, not a chart's.
 NEW_RELEASE_DAYS = 14
@@ -600,9 +620,12 @@ def heated(
             "raters": raters,
             "mean_score": round(mean_f, 2) if mean_f is not None else None,
             "spread": round(spread_f, 2),
+            "mood": _mood(mean_f, spread_f),
+            # The three flags `mood` replaced, kept for app builds that predate
+            # it; on the same lines, so an old build agrees where it can.
             "controversial": spread_f >= CONTROVERSIAL_SPREAD,
             "loved": mean_f is not None and mean_f >= LOVED_MEAN,
-            "hated": mean_f is not None and mean_f <= HATED_MEAN,
+            "hated": mean_f is not None and mean_f < LUKEWARM_MEAN,
             "is_new": bool(release_date and (today - release_date).days <= NEW_RELEASE_DAYS),
         })
     return out

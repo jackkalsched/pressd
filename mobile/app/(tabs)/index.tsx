@@ -36,6 +36,7 @@ import { MIN_RATED_ALBUMS, songScoreColor, type Album } from '@pressd/shared/typ
 import AnchoredMenu from '../../components/AnchoredMenu'
 import RecommendationBanner from '../../components/RecommendationBanner'
 import PassItOnCell from '../../components/PassItOnCell'
+import SpotlightCard from '../../components/SpotlightCard'
 import RecommendSheet from '../../components/RecommendSheet'
 import HeatedDiscussions from '../../components/HeatedDiscussions'
 import LikeButton from '../../components/LikeButton'
@@ -404,10 +405,35 @@ export default function ForYou() {
           />
         )}
 
-        {/* Beside the banner because it is the same exchange in the other
-            direction. Absent on most opens by design — see lib/passItOn. */}
-        {passItOn && passKey !== passSent && (
-          <PassItOnCell suggestion={passItOn} onPress={() => setPassSheetOpen(true)} />
+        {/* The two "one record, one thing to do" cards, stacked — web sets
+            them side by side. Pass it on sits beside the banner because it is
+            the same exchange in the other direction, and is absent on most
+            opens by design — see lib/passItOn. */}
+        {((passItOn && passKey !== passSent) || continueAlbum) && (
+          <View style={styles.spotlights}>
+            {passItOn && passKey !== passSent && (
+              <PassItOnCell suggestion={passItOn} onPress={() => setPassSheetOpen(true)} />
+            )}
+            {continueAlbum && (
+              <SpotlightCard
+                tone="green"
+                onPress={() => openRate(continueAlbum.id)}
+                accessibilityLabel={`Continue rating ${continueAlbum.albumName}${resumeTotal ? `: ${resumeDone} of ${resumeTotal} tracks done` : ''}`}
+                eyebrow="Pick this back up"
+                title={continueAlbum.albumName}
+                artUrl={continueAlbum.albumArtUrl}
+                seed={continueAlbum.albumName}
+                progress={resumeTotal ? (resumeDone / resumeTotal) * 100 : 0}
+              >
+                <Text style={styles.spotMeta} numberOfLines={1}>
+                  {continueAlbum.artist}{continueAlbum.year ? ` · ${continueAlbum.year}` : ''}
+                </Text>
+                <Text style={styles.spotLine} numberOfLines={1}>
+                  <Text style={styles.spotStrong}>{resumeDone}</Text> of {resumeTotal} tracks
+                </Text>
+              </SpotlightCard>
+            )}
+          </View>
         )}
         {passItOn && (
           <RecommendSheet
@@ -418,29 +444,6 @@ export default function ForYou() {
             onClose={() => setPassSheetOpen(false)}
             onSent={() => setPassSent(passKey)}
           />
-        )}
-
-        {/* Pick up where you left off */}
-        {continueAlbum && (
-          <View style={styles.block}>
-            <SectionHead label="PICK UP WHERE YOU LEFT OFF" />
-            <Pressable style={styles.mediaRow} onPress={() => openRate(continueAlbum.id)}>
-              <Cover uri={continueAlbum.albumArtUrl} seed={continueAlbum.albumName} size={64} />
-              <View style={styles.mediaText}>
-                <Text style={styles.rowTitle} numberOfLines={1}>{continueAlbum.albumName}</Text>
-                <Text style={styles.rowSub} numberOfLines={1}>
-                  {continueAlbum.artist}{continueAlbum.year ? ` · ${continueAlbum.year}` : ''}
-                </Text>
-                <View style={styles.progressRow}>
-                  <View style={styles.progressTrack}>
-                    <View style={[styles.progressFill, { width: `${resumeTotal ? (resumeDone / resumeTotal) * 100 : 0}%` }]} />
-                  </View>
-                  <Text style={styles.progressText}>{resumeDone}/{resumeTotal}</Text>
-                </View>
-              </View>
-              <ArrowRight size={18} color={colors.green} />
-            </Pressable>
-          </View>
         )}
 
         {unlockLeft > 0 && (
@@ -462,7 +465,7 @@ export default function ForYou() {
         {!suggestion && pick && (
           <View style={styles.block}>
             <SectionHead label="RATE THIS NEXT" />
-            <Pressable style={styles.suggestCell} onPress={() => openPick(pick)}>
+            <Pressable style={({ pressed }) => pressed && styles.trendRowPressed} onPress={() => openPick(pick)}>
               <View style={styles.mediaRow}>
                 <Cover uri={pick.coverUrl} seed={pick.albumName} size={64} />
                 <View style={styles.mediaText}>
@@ -485,11 +488,12 @@ export default function ForYou() {
           </View>
         )}
 
-        {/* Rate this next — held in a subtle cell so the CTA stands apart */}
+        {/* Rate this next — a plain row like the sections around it; the
+            spotlight cards above are the page's only boxed cells. */}
         {suggestion && (
           <View style={styles.block}>
             <SectionHead label="RATE THIS NEXT" />
-            <Pressable style={styles.suggestCell} onPress={() => openSuggestion(suggestion)}>
+            <Pressable style={({ pressed }) => pressed && styles.trendRowPressed} onPress={() => openSuggestion(suggestion)}>
               <View style={styles.mediaRow}>
                 <Cover uri={suggestion.albumArtUrl} seed={suggestion.albumName} size={64} />
                 <View style={styles.mediaText}>
@@ -811,17 +815,16 @@ const styles = StyleSheet.create({
   unlockText: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSecondary },
   unlockCount: { fontFamily: fonts.bodyBold, color: colors.ink, fontVariant: ['tabular-nums'] },
 
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 8 },
-  progressTrack: { flex: 1, maxWidth: 200, height: 4, borderRadius: 2, backgroundColor: colors.inset, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: colors.green, borderRadius: 2 },
-  progressText: { fontFamily: fonts.body, fontSize: 11, color: colors.inkTertiary },
+  spotlights: { marginTop: spacing.xl, gap: spacing.md },
+  spotMeta: { fontFamily: fonts.body, fontSize: 12.5, color: colors.inkTertiary, marginTop: 3 },
+  spotLine: { fontFamily: fonts.body, fontSize: 13.5, color: colors.inkSecondary, marginTop: 3, fontVariant: ['tabular-nums'] },
+  spotStrong: { fontFamily: fonts.bodyBold, color: colors.ink },
 
   suggestWhy: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted, fontStyle: 'italic', marginTop: 6 },
   predict: { alignItems: 'center', minWidth: 52 },
   predictScore: { fontFamily: fonts.bodyBold, fontSize: 22 },
   predictLabel: { fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 0.8, color: colors.inkMuted, marginTop: 1 },
-  suggestCell: { backgroundColor: colors.greenSoft, borderRadius: radii.lg, padding: spacing.lg, marginHorizontal: -spacing.sm },
-  suggestCta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(45,106,79,0.18)' },
+  suggestCta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.md },
   textCtaLabel: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
 
   rail: { marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg },

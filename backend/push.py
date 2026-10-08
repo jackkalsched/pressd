@@ -81,14 +81,30 @@ def _access_token() -> str | None:
     return creds.token
 
 
-def tokens_for_user(session: Session, user_id: int) -> list[str]:
-    """Every device this person has registered.
+# Each kind of push and the PressUser column that switches it. Every send names
+# its kind, so a person who turned one off is never sent it — checked here, once,
+# rather than at each call site, where the next notification would forget to.
+NOTIFY_KINDS = {
+    "recommendation": "notify_recommendations",
+    "friend": "notify_friends",
+    "reply": "notify_replies",
+}
+
+
+def tokens_for_user(session: Session, user_id: int, kind: str) -> list[str]:
+    """Every device this person has registered — or none, if they've switched
+    this kind of notification off.
 
     Read inside the request, before the response is sent, because the send
     itself happens afterwards on a background task and this session will be
     gone by then. A user can hold several — a phone, a tablet, a reinstall that
     left the old row behind.
     """
+    column = NOTIFY_KINDS[kind]  # a KeyError here is a typo at the call site
+    wanted = session.execute(_sql(
+        f"SELECT {column} FROM pressuser WHERE id = :u"), {"u": user_id}).scalar()
+    if not wanted:
+        return []
     return [r[0] for r in session.execute(_sql(
         "SELECT token FROM pushtoken WHERE user_id = :u"), {"u": user_id}).fetchall()]
 

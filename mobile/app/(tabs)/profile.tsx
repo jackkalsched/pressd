@@ -29,7 +29,8 @@ import { songScoreColor, type Album, type AlbumStatus } from '@pressd/shared/typ
 import { useAuth } from '../../lib/auth'
 import { useProfile } from '../../lib/picks'
 import StatsView from '../../components/StatsView'
-import ProfileBanner, { type PickKind } from '../../components/ProfileBanner'
+import ProfileBanner, { topRatedArt, type PickKind } from '../../components/ProfileBanner'
+import { getPrefs } from '../../lib/prefs'
 import SettingsSheet from '../../components/SettingsSheet'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
@@ -132,7 +133,8 @@ export default function Profile() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [tab, setTab] = useState<Tab>('library')
-  const [libStatus, setLibStatus] = useState<AlbumStatus>('rated')
+  // Opens on the shelf chosen in Settings → Preferences; Rated unless changed.
+  const [libStatus, setLibStatus] = useState<AlbumStatus>(() => getPrefs().libraryStart)
   const [rankMode, setRankMode] = useState<RankMode>('albums')
   const [rankMetric, setRankMetric] = useState('score')
   const [rankDir, setRankDir] = useState<'asc' | 'desc'>('desc')
@@ -208,6 +210,17 @@ export default function Profile() {
   })
 
   // Favorite tags: top three genres + top three subgenres, one scrolling line.
+  // The header's small distribution: one bar per whole point, over albums.
+  // Different artists rated — range, beside the volume of Albums and Songs.
+  // Case and spacing folded, so one artist's records don't count twice.
+  const artistCount = useMemo(
+    () => new Set(rated.map((a) => a.artist.trim().toLowerCase())).size,
+    [rated],
+  )
+  const albumScores = useMemo(
+    () => rated.flatMap((a) => (a.score != null ? [a.score] : [])),
+    [rated],
+  )
   const topGenres = useMemo(() => topTags(rated.map((a) => a.genre), 3), [rated])
   const topSubgenres = useMemo(
     () => topTags(rated.flatMap((a) => [a.subGenre1, a.subGenre2, a.subGenre3]), 3),
@@ -313,9 +326,9 @@ export default function Profile() {
         onScroll={onScroll}
         scrollEventThrottle={16}
         refreshControl={
-          // Cream, not the default gray: the spinner sits in the green the
-          // banner carries up over the pull, where a gray wheel disappears.
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.bg} />
+          // Green, not the default gray: the spinner sits in the header's
+          // pale green wash, carried up over the pull.
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.green} />
         }
         ListHeaderComponent={
           <View>
@@ -330,10 +343,7 @@ export default function Profile() {
                   value: summary?.total_songs_rated != null ? summary.total_songs_rated.toLocaleString() : '—',
                   label: 'SONGS',
                 },
-                {
-                  value: summary?.avg_release_year != null ? String(Math.round(summary.avg_release_year)) : '—',
-                  label: 'TASTE CENTER',
-                },
+                { value: artistCount.toLocaleString(), label: 'ARTISTS' },
                 { value: String(friends.length), label: 'FRIENDS' },
               ]}
               genres={topGenres}
@@ -341,12 +351,14 @@ export default function Profile() {
               topInset={insets.top}
               profile={profile}
               picksHeading="MY PICKS"
+              washArtUrl={topRatedArt(rated)}
+              scores={albumScores}
               onPickPress={(kind: PickKind) => router.push(`/favorite/${kind}`)}
               action={
                 // Sign out moved inside Settings, alongside the sign-in methods
                 // it belongs with.
                 <Pressable onPress={() => setSettingsOpen(true)} hitSlop={12} accessibilityLabel="Settings">
-                  <Settings size={18} color="rgba(255,255,255,0.75)" />
+                  <Settings size={20} color={colors.inkSecondary} />
                 </Pressable>
               }
             />
@@ -699,11 +711,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 20,
-    backgroundColor: colors.green,
+    backgroundColor: colors.bg,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
-  compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: '#ffffff', letterSpacing: 0.5 },
+  compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: colors.ink, letterSpacing: 0.5 },
 
   tabBar: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.xl },
   tab: { alignItems: 'center', gap: 6 },

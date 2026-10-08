@@ -7,12 +7,15 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
   Modal,
   Platform,
   Pressable,
   ScrollView,
   Share,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   useWindowDimensions,
@@ -21,11 +24,17 @@ import {
 import * as Google from 'expo-auth-session/providers/google'
 import * as AppleAuthentication from 'expo-apple-authentication'
 import * as ImagePicker from 'expo-image-picker'
+import * as Linking from 'expo-linking'
+import * as WebBrowser from 'expo-web-browser'
+import Constants from 'expo-constants'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Apple, Check, ChevronRight, LogOut, Trash2, X } from 'lucide-react-native'
 import { fetchLinkedProviders, unlinkProvider, deleteOwnAccount } from '../lib/api'
+import { fetchNotificationPrefs, updateNotificationPrefs, type NotificationPrefs } from '@pressd/shared/api'
+import type { AlbumStatus } from '@pressd/shared/types'
+import { setPref, usePrefs } from '../lib/prefs'
 import { currentPushToken, enablePush, pushPermissionStatus } from '../lib/push'
 import { useAuth } from '../lib/auth'
 import { useProfile } from '../lib/picks'
@@ -37,6 +46,23 @@ import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 // every byte costs a third more on the wire, and a camera-roll original is
 // several megabytes before compression.
 const AVATAR_UPLOAD_QUALITY = 0.8
+
+// The published privacy policy (frontend/src/pages/Privacy.tsx) and the
+// contact address it gives — support reaches the same inbox.
+const PRIVACY_URL = 'https://pressdmusic.com/privacy'
+const SUPPORT_EMAIL = 'jackkalsched@gmail.com'
+
+const NOTIFY_ROWS: { key: keyof NotificationPrefs; label: string }[] = [
+  { key: 'recommendations', label: 'Recommendations' },
+  { key: 'friends', label: 'Friend requests' },
+  { key: 'replies', label: 'Replies to your posts' },
+]
+
+const SHELVES: { key: AlbumStatus; label: string }[] = [
+  { key: 'rated', label: 'Rated' },
+  { key: 'listening', label: 'Listening' },
+  { key: 'to_listen', label: 'To Listen' },
+]
 
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
 
@@ -73,6 +99,29 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
   const [pushBusy, setPushBusy] = useState(false)
   const [pushToken, setPushToken] = useState<string | null>(null)
 
+  // The Modal's own "slide" carried the dim layer up with the sheet, so a grey
+  // slab rose from the bottom of the screen. Instead the Modal doesn't animate:
+  // the dim fades in where it is and only the sheet slides. `mounted` holds
+  // the Modal open through the closing animation, so the sheet can leave as
+  // it arrived instead of vanishing. It travels the screen's height (screenH,
+  // below), so it starts fully off-screen whatever the sheet's size.
+  const [progress] = useState(() => new Animated.Value(0))
+  const [mounted, setMounted] = useState(visible)
+  if (visible && !mounted) setMounted(true)
+  useEffect(() => {
+    if (!mounted) return
+    const anim = Animated.timing(progress, {
+      toValue: visible ? 1 : 0,
+      duration: visible ? 320 : 240,
+      easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    })
+    anim.start(({ finished }) => {
+      if (finished && !visible) setMounted(false)
+    })
+    return () => anim.stop()
+  }, [visible, mounted, progress])
+
   useEffect(() => {
     if (!visible) return
     pushPermissionStatus().then((st) => {
@@ -102,6 +151,28 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
   const [avatarBusy, setAvatarBusy] = useState(false)
   // Reset each time the sheet comes back up; see openPicker.
   const navigatingRef = useRef(false)
+
+  const devicePrefs = usePrefs()
+  // Per-kind switches live on the account, because the server is what sends.
+  const { data: notifyPrefs } = useQuery({
+    queryKey: ['notification-prefs'],
+    queryFn: fetchNotificationPrefs,
+    enabled: visible && !!user,
+  })
+  /** Flipped at once and saved behind it; put back if the save fails, so the
+   *  switch never claims a setting the server doesn't hold. */
+  async function setNotify(key: keyof NotificationPrefs, value: boolean) {
+    const before = qc.getQueryData<NotificationPrefs>(['notification-prefs'])
+    if (before) qc.setQueryData(['notification-prefs'], { ...before, [key]: value })
+    try {
+      qc.setQueryData(['notification-prefs'], await updateNotificationPrefs({ [key]: value }))
+    } catch {
+      if (before) qc.setQueryData(['notification-prefs'], before)
+      setError('Couldn’t save that notification setting')
+    }
+  }
+  const version = Constants.expoConfig?.version
+  const build = Constants.expoConfig?.ios?.buildNumber
   useEffect(() => {
     if (visible) navigatingRef.current = false
   }, [visible])
@@ -290,8 +361,16 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
   const linkedCount = (providers?.google ? 1 : 0) + (providers?.apple ? 1 : 0)
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+    <Modal visible={mounted} transparent animationType="none" onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <Animated.View style={[styles.dim, { opacity: progress }]}>
+          <Pressable style={styles.fill} onPress={onClose} accessibilityLabel="Close settings" />
+        </Animated.View>
+        <Animated.View
+          style={{
+            transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [screenH, 0] }) }],
+          }}
+        >
         <Pressable style={styles.sheet}>
           <View style={styles.sheetHead}>
             <Text style={styles.sheetTitle}>Settings</Text>
@@ -414,15 +493,6 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
               </>
             )}
 
-            <Text style={styles.sectionLabel}>HELP</Text>
-            <Pressable style={styles.settingRow} onPress={openTutorial} accessibilityRole="button">
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.providerLabel}>How Pressd works</Text>
-                <Text style={styles.settingValue} numberOfLines={1}>Replay the intro</Text>
-              </View>
-              <ChevronRight size={17} color={colors.inkMuted} />
-            </Pressable>
-
             <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
             <Text style={styles.sectionHint}>
               Get told when a friend sends you a record. iOS only asks once, so if you
@@ -453,6 +523,42 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
                 </Text>
               </Pressable>
             ) : null}
+            {/* Only once iOS will deliver anything: before that, a switch per
+                kind would be a promise the phone can't keep. */}
+            {pushState === 'granted' && notifyPrefs
+              ? NOTIFY_ROWS.map((r) => (
+                  <ToggleRow
+                    key={r.key}
+                    label={r.label}
+                    value={notifyPrefs[r.key]}
+                    onChange={(v) => setNotify(r.key, v)}
+                  />
+                ))
+              : null}
+
+            <Text style={styles.sectionLabel}>PREFERENCES</Text>
+            <ToggleRow label="Haptics" value={devicePrefs.haptics} onChange={(v) => setPref('haptics', v)} />
+            <View style={styles.settingRow}>
+              <Text style={[styles.providerLabel, { flex: 1 }]} numberOfLines={1}>Library opens on</Text>
+              <View style={styles.shelves}>
+                {SHELVES.map((sh) => {
+                  const on = devicePrefs.libraryStart === sh.key
+                  return (
+                    <Pressable
+                      key={sh.key}
+                      onPress={() => setPref('libraryStart', sh.key)}
+                      style={[styles.shelf, on && styles.shelfOn]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                    >
+                      <Text style={[styles.shelfText, on && styles.shelfTextOn]} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+                        {sh.label}
+                      </Text>
+                    </Pressable>
+                  )
+                })}
+              </View>
+            </View>
 
             <Text style={styles.sectionLabel}>SIGN-IN METHODS</Text>
             <Text style={styles.sectionHint}>
@@ -530,6 +636,23 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
               <Text style={styles.signOutText}>Sign out</Text>
             </Pressable>
 
+            <Text style={styles.sectionLabel}>ABOUT</Text>
+            <LinkRow label="How Pressd works" onPress={openTutorial} />
+            <LinkRow label="Privacy policy" onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL).catch(() => {})} />
+            <LinkRow
+              label="Contact support"
+              onPress={() =>
+                Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Pressd support')}`).catch(() =>
+                  setError(`Write to ${SUPPORT_EMAIL}`),
+                )
+              }
+            />
+            {version ? (
+              <Text style={styles.versionLine}>
+                Pressd {version}{build ? ` (${build})` : ''}
+              </Text>
+            ) : null}
+
             <Text style={styles.sectionLabel}>DANGER ZONE</Text>
             <Text style={styles.sectionHint}>
               Deleting removes your ratings, reviews, comments, and friend connections for good.
@@ -549,8 +672,34 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
             {user ? <Text style={styles.idHint}>Signed in as {user.name}</Text> : null}
           </ScrollView>
         </Pressable>
-      </Pressable>
+        </Animated.View>
+      </View>
     </Modal>
+  )
+}
+
+/** A labelled switch, in the sheet's card row. */
+function ToggleRow({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <View style={styles.settingRow}>
+      <Text style={[styles.providerLabel, { flex: 1 }]} numberOfLines={1}>{label}</Text>
+      <Switch
+        value={value}
+        onValueChange={onChange}
+        trackColor={{ true: colors.green, false: colors.inset }}
+        accessibilityLabel={label}
+      />
+    </View>
+  )
+}
+
+/** A row that goes somewhere: a label and a chevron. */
+function LinkRow({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable style={styles.settingRow} onPress={onPress} accessibilityRole="button">
+      <Text style={[styles.providerLabel, { flex: 1 }]} numberOfLines={1}>{label}</Text>
+      <ChevronRight size={17} color={colors.inkMuted} />
+    </Pressable>
   )
 }
 
@@ -627,7 +776,9 @@ function ProviderRow({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.35)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, justifyContent: 'flex-end' },
+  dim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(28,25,23,0.35)' },
+  fill: { flex: 1 },
   sheet: {
     backgroundColor: colors.bg,
     borderTopLeftRadius: radii.xl,
@@ -704,6 +855,12 @@ const styles = StyleSheet.create({
   },
   settingValue: { fontFamily: fonts.body, fontSize: 12.5, color: colors.inkSecondary, marginTop: 1 },
   settingValueEmpty: { color: colors.inkTertiary },
+  shelves: { flexDirection: 'row', gap: 4 },
+  shelf: { borderRadius: radii.pill, paddingHorizontal: 9, paddingVertical: 5 },
+  shelfOn: { backgroundColor: colors.greenSoft },
+  shelfText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.inkTertiary },
+  shelfTextOn: { fontFamily: fonts.bodySemiBold, color: colors.green },
+  versionLine: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted, marginTop: spacing.md, textAlign: 'center' },
   nameInput: {
     fontFamily: fonts.body,
     fontSize: 14,

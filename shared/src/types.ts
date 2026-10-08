@@ -316,6 +316,11 @@ export interface ThreadPage {
 /** A record people are actively writing about (PLAN_discussions.md §8).
  *  The tag booleans are decided server-side so the two clients cannot drift
  *  apart on what "controversial" means. */
+/** The room's mood, decided by the server (discover.py, `_mood`): divided when
+ *  scores spread a point or more, otherwise by the mean — loved ≥ 8, liked
+ *  ≥ 7.25, lukewarm ≥ 6.5, hated below. */
+export type HeatedMood = 'divided' | 'loved' | 'liked' | 'lukewarm' | 'hated'
+
 export interface HeatedRecord {
   subjectKey: string
   albumName: string
@@ -326,6 +331,7 @@ export interface HeatedRecord {
   raters: number
   meanScore: number | null
   spread: number
+  mood: HeatedMood
   controversial: boolean
   loved: boolean
   hated: boolean

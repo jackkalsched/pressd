@@ -15,7 +15,7 @@
 // connection, and the parent still reconciles from the server afterwards.
 import { useEffect, useRef, useState } from 'react'
 import { Animated, Pressable, StyleSheet, Text } from 'react-native'
-import * as Haptics from 'expo-haptics'
+import * as haptics from '../lib/haptics'
 import { Heart } from 'lucide-react-native'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
@@ -49,7 +49,7 @@ export default function LikeButton({
     // Only on the way in. A pop when you *un*like reads as the app celebrating
     // a thing you just took back.
     if (next) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+      haptics.light()
       scale.setValue(0.8)
       Animated.spring(scale, {
         toValue: 1,

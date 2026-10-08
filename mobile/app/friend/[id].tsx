@@ -36,7 +36,7 @@ import {
   ALBUM_METRICS, ARTIST_METRICS, QUALIFIED, cmpVals, defaultMetricFor,
   type ArtistRank, type RankDir, type RankMode,
 } from '../../lib/rankings'
-import ProfileBanner from '../../components/ProfileBanner'
+import ProfileBanner, { topRatedArt } from '../../components/ProfileBanner'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 
@@ -142,6 +142,17 @@ export default function FriendProfile() {
   const person = friendFromList ?? allUsers.find((u) => u.id === fid)
   const isFriend = !!friendFromList
 
+  // The header's small distribution: one bar per whole point, over albums.
+  // Different artists rated — range, beside the volume of Albums and Songs.
+  // Case and spacing folded, so one artist's records don't count twice.
+  const artistCount = useMemo(
+    () => new Set(rated.map((a) => a.artist.trim().toLowerCase())).size,
+    [rated],
+  )
+  const albumScores = useMemo(
+    () => rated.flatMap((a) => (a.score != null ? [a.score] : [])),
+    [rated],
+  )
   const topGenres = useMemo(() => topTags(rated.map((a) => a.genre), 3), [rated])
   const topSubgenres = useMemo(
     () => topTags(rated.flatMap((a) => [a.subGenre1, a.subGenre2, a.subGenre3]), 3),
@@ -236,10 +247,10 @@ export default function FriendProfile() {
         <Text style={styles.compactTitle} numberOfLines={1}>{person.name}</Text>
       </Animated.View>
 
-      {/* Back sits above the banner, tinted for the green field. */}
+      {/* Back sits above the header's wash. */}
       <View style={[styles.backWrap, { top: insets.top + 6 }]}>
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-          <ArrowLeft size={18} color="#ffffff" />
+          <ArrowLeft size={18} color={colors.ink} />
           <Text style={styles.backText}>Back</Text>
         </Pressable>
       </View>
@@ -269,10 +280,7 @@ export default function FriendProfile() {
                   value: summary?.total_songs_rated != null ? summary.total_songs_rated.toLocaleString() : '—',
                   label: 'SONGS',
                 },
-                {
-                  value: summary?.avg_release_year != null ? String(Math.round(summary.avg_release_year)) : '—',
-                  label: 'TASTE CENTER',
-                },
+                { value: artistCount.toLocaleString(), label: 'ARTISTS' },
                 { value: String(theirFriends.length), label: 'FRIENDS' },
               ]}
               genres={topGenres}
@@ -281,6 +289,8 @@ export default function FriendProfile() {
               bio={person.bio}
               profile={profile}
               picksHeading={`${possessive(person.name)} picks`}
+              washArtUrl={topRatedArt(rated)}
+              scores={albumScores}
               action={
                 <Pressable
                   style={[styles.friendBtn, isFriend && styles.friendBtnOn]}
@@ -289,9 +299,9 @@ export default function FriendProfile() {
                   accessibilityLabel={isFriend ? 'Remove friend' : 'Add friend'}
                 >
                   {isFriend ? (
-                    <Check size={18} color="#ffffff" strokeWidth={2.6} />
+                    <Check size={18} color={colors.green} strokeWidth={2.6} />
                   ) : (
-                    <Plus size={18} color={colors.green} strokeWidth={2.6} />
+                    <Plus size={18} color="#ffffff" strokeWidth={2.6} />
                   )}
                 </Pressable>
               }
@@ -436,15 +446,17 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 20,
-    backgroundColor: colors.green,
+    backgroundColor: colors.bg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
   },
-  compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: '#ffffff', letterSpacing: 0.5 },
+  compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: colors.ink, letterSpacing: 0.5 },
 
   backWrap: { position: 'absolute', left: spacing.lg, zIndex: 30 },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  backText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: '#ffffff' },
+  backText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.ink },
 
   // Icon-only status control: a check when you're already friends, a plus to
   // add. Circular so it reads as a single toggle rather than a labelled button.
@@ -454,9 +466,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.green,
   },
-  friendBtnOn: { backgroundColor: 'rgba(255,255,255,0.2)' },
+  friendBtnOn: { backgroundColor: colors.greenSoft },
 
   bio: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSecondary, lineHeight: 19, marginTop: spacing.md },
 

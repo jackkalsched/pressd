@@ -4,7 +4,7 @@
 import { useRef } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import Slider from '@react-native-community/slider'
-import * as Haptics from 'expo-haptics'
+import * as haptics from '../lib/haptics'
 import { songScoreColor } from '@pressd/shared/types'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
@@ -23,7 +23,7 @@ export default function ScoreSlider({
     const rounded = Math.round(raw * 10) / 10
     if (rounded !== lastTick.current) {
       lastTick.current = rounded
-      Haptics.selectionAsync().catch(() => {})
+      haptics.selection()
     }
     onChange(rounded)
   }
