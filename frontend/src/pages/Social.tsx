@@ -5,7 +5,7 @@ import { Loader2, Music, Search, UserPlus, Check, Heart, X, Clock, MessageCircle
 import {
   fetchFeed, searchUsers, addFriend, toggleLike,
   fetchFriendRequests, acceptFriendRequest, declineFriendRequest,
-  fetchFriends, fetchFriendReviews, fetchDiscussionFeed,
+  fetchFriends, fetchFriendReviews, fetchDiscussionFeed, fetchCompare,
 } from '../api'
 import type { FeedItem, UserSearchResult, FriendReview } from '../api'
 import type { FeedPost } from '../types'
@@ -14,6 +14,7 @@ import { useUser } from '../context/UserContext'
 import CommentThread from '../components/CommentThread'
 import { threadPath } from '../lib/threads'
 import CoverImg from '../components/CoverImg'
+import CompareCard from '../components/CompareCard'
 
 function timeAgo(dateStr?: string): string {
   if (!dateStr) return ''
@@ -657,6 +658,40 @@ function DiscussionsTab() {
   )
 }
 
+/** Albums you and at least one friend have both rated, every score on one
+ *  line. The server orders them and flags the widest disagreement. */
+function CompareTab() {
+  const { activeUser } = useUser()
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: ['compare', activeUser?.id],
+    queryFn: fetchCompare,
+    enabled: !!activeUser,
+    staleTime: 60_000,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-[#aaa]">
+        <Loader2 size={16} className="animate-spin" /> Loading…
+      </div>
+    )
+  }
+  if (items.length === 0) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-[#bbb] text-sm">Nothing to compare yet.</p>
+        <p className="text-[#ccc] text-xs mt-1">When you and a friend both rate an album, it shows up here.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+      {items.map((item) => <CompareCard key={item.album_id} item={item} />)}
+    </div>
+  )
+}
+
 function FeedPostCard({ post }: { post: FeedPost }) {
   const navigate = useNavigate()
   const what = post.toMe
@@ -724,9 +759,11 @@ function FeedPostCard({ post }: { post: FeedPost }) {
   )
 }
 
+type SocialTab = 'activity' | 'reviews' | 'compare' | 'discussions'
+
 export default function Social() {
   const { activeUser } = useUser()
-  const [tab, setTab] = useState<'activity' | 'reviews' | 'discussions'>('activity')
+  const [tab, setTab] = useState<SocialTab>('activity')
 
   const { data: feed = [], isLoading } = useQuery({
     queryKey: ['feed', activeUser?.id],
@@ -735,7 +772,7 @@ export default function Social() {
     staleTime: 60_000,
   })
 
-  const tabBtn = (key: 'activity' | 'reviews' | 'discussions', label: string) => (
+  const tabBtn = (key: SocialTab, label: string) => (
     <button
       onClick={() => setTab(key)}
       className={`text-sm font-semibold px-1 py-2 border-b-2 transition-colors ${
@@ -759,11 +796,14 @@ export default function Social() {
       <div className="flex items-center gap-5 border-b border-[#eee] mb-6">
         {tabBtn('activity', 'Activity')}
         {tabBtn('reviews', 'Reviews')}
+        {tabBtn('compare', 'Compare')}
         {tabBtn('discussions', 'Discussions')}
       </div>
 
       {tab === 'reviews' ? (
         <ReviewsTab />
+      ) : tab === 'compare' ? (
+        <CompareTab />
       ) : tab === 'discussions' ? (
         <DiscussionsTab />
       ) : isLoading ? (

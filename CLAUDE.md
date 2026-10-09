@@ -784,7 +784,7 @@ backend: `/users/` rows carry only `id`, `name`, `avatar_url`, `bio`.
 ### Parity — what web is still missing (audited 2026-09-23)
 
 Counted by resolving every export in `shared/src/api.ts` against both clients:
-**16 client functions are mobile-only, 11 web-only.** Every mobile-only function is
+**16 client functions were mobile-only, 11 web-only** (two of the 16, the Apple sign-in wrappers, have since been deleted). Every mobile-only function is
 already backed by a shipped endpoint and already transformed by the shared client, so
 **closing these gaps is UI work in `frontend/src/` only** — no router, no migration, no
 `shared/` change. Ordered by how much of a feature is missing, not by effort.
@@ -824,11 +824,18 @@ for editing a review later, and both paths post into the thread through
    and a rated album you own offers *Compare with Pressd* when someone else has rated
    it. Before this, web's Charts and Trending linked to whichever user's copy ranked —
    friends-only, so they failed for everyone else.
-2. **Compare / taste overlap.** `fetchCompare` (`/social/compare`), `fetchRankedSongs`,
-   and the board behind it (`SongGapChart`, `ScoreKdeCompare`, `app/splits/[name].tsx`).
-   Web Social has Activity, Reviews and Discussions, but no Compare tab.
-3. **Account management.** `deleteOwnAccount`, `signInWithApple`/`linkApple`,
-   `fetchLinkedProviders`/`unlinkProvider`, `deleteAvatar`. Mobile's `SettingsSheet`
+2. **Compare / taste overlap.** The Compare tab closed, October 2026: web Social's
+   fourth tab draws `fetchCompare` (`/social/compare`) as
+   [CompareCard.tsx](frontend/src/components/CompareCard.tsx) — mobile's card, every
+   rater on one 5–10 line, then each score and review; the title opens your own copy.
+   Still mobile-only: `fetchRankedSongs` and the split charts (`SongGapChart`,
+   `ScoreKdeCompare`, `app/splits/[name].tsx`), which on mobile hang off the artist
+   and favourite-song screens rather than this tab.
+3. **Account management.** `deleteOwnAccount`,
+   `fetchLinkedProviders`/`unlinkProvider`, `deleteAvatar`. (Sign in with Apple was
+   removed from mobile in October 2026 after App Review found its button unresponsive;
+   mobile signs in with Google only, and `POST /auth/apple` survives for older builds.
+   See `mobile/TESTFLIGHT.md` → Sign-in, including the Guideline 4.8 risk.) Mobile's `SettingsSheet`
    (808 LOC) has Account / Sign-in methods / Notifications / Danger zone; web's whole
    settings surface is the Edit Profile modal in `Layout.tsx`. Account deletion being
    mobile-only is the one with a compliance edge to it.
@@ -1048,4 +1055,4 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
 | A new scoring input | `backend/scoring.py` only — `global_rating.py` and both workers compose through it |
 | A new ML stage | `worker/nightly_predict.run_user`; build anything userbase-wide in `main()` and pass it down |
 | A new theme axis | append to `THEME_AXES`, then re-analyse every album and refit every model |
-| Closing the web/mobile gap | `frontend/src/` only — every mobile-only function already has an endpoint and a shared-client wrapper (§11 lists the remaining 16) |
+| Closing the web/mobile gap | `frontend/src/` only — every mobile-only function already has an endpoint and a shared-client wrapper (§11 lists what remains) |
