@@ -37,6 +37,7 @@ import type { AlbumStatus } from '@pressd/shared/types'
 import { setPref, usePrefs } from '../lib/prefs'
 import { currentPushToken, enablePush, pushPermissionStatus } from '../lib/push'
 import { useAuth } from '../lib/auth'
+import { requestAppleCredential } from '../lib/appleSignIn'
 import { useProfile } from '../lib/picks'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
@@ -211,19 +212,11 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
   async function handleAppleConnect() {
     setError(null)
     try {
-      const cred = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      })
-      if (!cred.identityToken) throw new Error('No identity token from Apple')
-      const fullName = [cred.fullName?.givenName, cred.fullName?.familyName].filter(Boolean).join(' ') || undefined
+      const { identityToken, fullName } = await requestAppleCredential()
       setBusy('apple')
-      await linkAppleToken(cred.identityToken, fullName)
+      await linkAppleToken(identityToken, fullName)
       refresh()
     } catch (e) {
-      if (e instanceof Error && e.message.includes('canceled')) return
       setError(e instanceof Error ? e.message : 'Apple sign-in failed')
     } finally {
       setBusy(null)

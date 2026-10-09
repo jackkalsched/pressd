@@ -6,6 +6,7 @@ import * as WebBrowser from 'expo-web-browser'
 import * as Google from 'expo-auth-session/providers/google'
 import * as AppleAuthentication from 'expo-apple-authentication'
 import { useAuth } from '../lib/auth'
+import { requestAppleCredential } from '../lib/appleSignIn'
 import { colors, fonts, radii, spacing } from '../theme/tokens'
 
 WebBrowser.maybeCompleteAuthSession()
@@ -72,18 +73,10 @@ export default function SignIn() {
   async function handleApple() {
     setError(null)
     try {
-      const cred = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      })
-      if (!cred.identityToken) throw new Error('No identity token from Apple')
-      const fullName = [cred.fullName?.givenName, cred.fullName?.familyName].filter(Boolean).join(' ') || undefined
+      const { identityToken, fullName } = await requestAppleCredential()
       setBusy(true)
-      await signInWithAppleToken(cred.identityToken, fullName)
+      await signInWithAppleToken(identityToken, fullName)
     } catch (e) {
-      if (e instanceof Error && e.message.includes('canceled')) return
       setError(e instanceof Error ? e.message : 'Apple sign-in failed')
     } finally {
       setBusy(false)

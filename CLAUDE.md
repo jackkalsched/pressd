@@ -679,8 +679,10 @@ Current → risk → cheapest fix. Rows marked fixed have been implemented; the 
 | **P10** | `GET /stats/analysis` is an uncached, untimed, unbounded Claude call in a blocking `def`, reachable for a **friend's** library (`stats.py:1070`) | MEDIUM, latent (no client calls it) | delete, or cap + cache |
 
 **Client degradation.** `apiFetch` handles **401 only** (`shared/src/api.ts:36`);
-everything else is per-call `if (!res.ok) throw`. No timeouts anywhere — browser `fetch`
-has no default, so a hung request hangs the query. React Query is `retry: 1` on both
+everything else is per-call `if (!res.ok) throw`. No timeouts anywhere except sign-in —
+browser `fetch` has no default, so a hung request hangs the query. Sign-in (`postAuth`)
+skips `apiFetch` and aborts after 20s: there a 401 means a refused provider token, not a
+stale session. React Query is `retry: 1` on both
 platforms, which retries a 429 once, immediately. Cheapest fix: a `retry`/`retryDelay`
 function in the two `QueryClient` configs that backs off and skips 4xx. Two files.
 
@@ -784,7 +786,7 @@ backend: `/users/` rows carry only `id`, `name`, `avatar_url`, `bio`.
 ### Parity — what web is still missing (audited 2026-09-23)
 
 Counted by resolving every export in `shared/src/api.ts` against both clients:
-**16 client functions were mobile-only, 11 web-only** (two of the 16, the Apple sign-in wrappers, have since been deleted). Every mobile-only function is
+**16 client functions are mobile-only, 11 web-only.** Every mobile-only function is
 already backed by a shipped endpoint and already transformed by the shared client, so
 **closing these gaps is UI work in `frontend/src/` only** — no router, no migration, no
 `shared/` change. Ordered by how much of a feature is missing, not by effort.
@@ -831,11 +833,13 @@ for editing a review later, and both paths post into the thread through
    Still mobile-only: `fetchRankedSongs` and the split charts (`SongGapChart`,
    `ScoreKdeCompare`, `app/splits/[name].tsx`), which on mobile hang off the artist
    and favourite-song screens rather than this tab.
-3. **Account management.** `deleteOwnAccount`,
-   `fetchLinkedProviders`/`unlinkProvider`, `deleteAvatar`. (Sign in with Apple was
-   removed from mobile in October 2026 after App Review found its button unresponsive;
-   mobile signs in with Google only, and `POST /auth/apple` survives for older builds.
-   See `mobile/TESTFLIGHT.md` → Sign-in, including the Guideline 4.8 risk.) Mobile's `SettingsSheet`
+3. **Account management.** `deleteOwnAccount`, `signInWithApple`/`linkApple`,
+   `fetchLinkedProviders`/`unlinkProvider`, `deleteAvatar`. On mobile, every Sign in with
+   Apple attempt goes through `mobile/lib/appleSignIn.ts`. App Review rejected build 5
+   (October 2026) because the button seemed to do nothing. On a device with no Apple
+   Account, iOS sends the person to Settings and the original request returns error 1000;
+   the next tap works. Every failure now shows a line saying what to do, and the module's
+   error code doesn't reach JS in Release, so failures are classified by message. Mobile's `SettingsSheet`
    (808 LOC) has Account / Sign-in methods / Notifications / Danger zone; web's whole
    settings surface is the Edit Profile modal in `Layout.tsx`. Account deletion being
    mobile-only is the one with a compliance edge to it.

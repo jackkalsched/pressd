@@ -1022,12 +1022,39 @@ export async function refreshAotyArtist(artist: string): Promise<void> {
  *  swapped in. `link: true` attaches the identity to the account the current
  *  token belongs to instead of signing in — the server takes the target user
  *  from that token, never from the request body. */
+/** How long a sign-in may wait on the backend before it gives up and says so. */
+const AUTH_TIMEOUT_MS = 20_000
+
+/**
+ * Sign-in deliberately bypasses apiFetch. There, a 401 means a stale session and
+ * reads "Session expired"; here it means the provider token was refused, and the
+ * server's reason is the useful message. It also carries a timeout: with none, a
+ * stalled request left the sign-in screen on a spinner forever, which App Review
+ * reported as a button that does nothing.
+ */
 async function postAuth(path: string, body: Record<string, unknown>): Promise<UserInfo> {
-  const res = await apiFetch(`${BASE()}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  const headers = new Headers({ 'Content-Type': 'application/json' })
+  const token = config.getToken() // present when linking a provider to this account
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS)
+  let res: Response
+  try {
+    res = await fetch(`${BASE()}${path}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+  } catch {
+    throw new Error(
+      controller.signal.aborted
+        ? 'Pressd took too long to respond. Check your connection and try again.'
+        : 'Couldn’t reach Pressd. Check your connection and try again.',
+    )
+  } finally {
+    clearTimeout(timer)
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { detail?: string }).detail ?? 'Sign in failed')
