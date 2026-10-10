@@ -830,9 +830,8 @@ for editing a review later, and both paths post into the thread through
    fourth tab draws `fetchCompare` (`/social/compare`) as
    [CompareCard.tsx](frontend/src/components/CompareCard.tsx) — mobile's card, every
    rater on one 5–10 line, then each score and review; the title opens your own copy.
-   Still mobile-only: `fetchRankedSongs` and the split charts (`SongGapChart`,
-   `ScoreKdeCompare`, `app/splits/[name].tsx`), which on mobile hang off the artist
-   and favourite-song screens rather than this tab.
+   Still mobile-only: `fetchRankedSongs`. The split charts reached web in October 2026
+   on the artist page's Compare view (item 6).
 3. **Account management.** `deleteOwnAccount`, `signInWithApple`/`linkApple`,
    `fetchLinkedProviders`/`unlinkProvider`, `deleteAvatar`. On mobile, every Sign in with
    Apple attempt goes through `mobile/lib/appleSignIn.ts`. App Review rejected build 5
@@ -860,9 +859,20 @@ for editing a review later, and both paths post into the thread through
    [TagBoard.tsx](frontend/src/pages/TagBoard.tsx) at `/stats/:kind/:tag?user=&owner=`
    over `fetchTagRecords` — mobile's `app/genre/[tag].tsx`, plus each record's rank in
    the whole library. Bang vs skip and most-rated artists came across with it.
-6. **Artist page.** Web lacks `fetchSimilarArtistComparisons` and `fetchArtistImage`, so
-   no artist photo and no neighbour comparisons. (Web *is* ahead here on `fetchAotyAlbums`
-   and `refreshAotyArtist`.)
+6. **Artist page.** Closed but for the photo (`fetchArtistImage` is mobile-only), October
+   2026. Web has mobile's three scopes, as pills and `?mode=` in the URL: *mine*, *Pressd
+   avg* (`population=global`: every copy pooled, ranked site-wide, with the popularity
+   ranks) and *Compare* (`both`: the two song averages side by side, *Where you split*,
+   both distributions as curves, and `fetchSimilarArtistComparisons`), drawn from
+   [artistCompare.tsx](frontend/src/components/artistCompare.tsx). Mobile's full splits
+   page is an inline "See all" there. In the Pressd scope an album row is one record
+   pooled across copies (`stats._artist_album_rows`, keyed on `_clean_album`, scored as
+   the plain mean of copies — the community page's own PRESSD AVG), so both clients
+   open the record's community page from it, not one owner's copy. Both pages list
+   records newest first and nothing else: the discography grids (web's
+   `DiscographyGrid`, mobile's `Discography.tsx`, deleted) and web's Discover list went,
+   along with the releases nobody on Pressd had added. So `fetchAotyAlbums` and
+   `refreshAotyArtist`, and the `/aoty` router behind them, have no caller left.
 7. **For You.** Web lacks `RecommendationBanner`. ("Pass it on" closed, September 2026:
    `frontend/src/lib/passItOn.ts` + `PassItOnCell`, and web's `RecommendModal` gained
    the preselected friend and the recommendation note it had been missing.)

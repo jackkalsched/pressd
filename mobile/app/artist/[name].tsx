@@ -18,7 +18,6 @@ import { useAuth } from '../../lib/auth'
 import ScoreHistogram from '../../components/ScoreHistogram'
 import SongGapChart from '../../components/SongGapChart'
 import ScoreKdeCompare from '../../components/ScoreKdeCompare'
-import Discography from '../../components/Discography'
 import SimilarArtistComparisons from '../../components/SimilarArtistComparisons'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
@@ -105,6 +104,12 @@ export default function ArtistPage() {
   })
 
   const albums = data ? [...data.albums].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)) : []
+  // Newest first; undated records last.
+  const chronological = data
+    ? [...data.albums].sort(
+        (a, b) => (b.year ?? -Infinity) - (a.year ?? -Infinity) || a.album_name.localeCompare(b.album_name),
+      )
+    : []
 
   // The hero takes its wash from the artist's best-rated album, reusing the
   // same dominant-color endpoint the album pages use — so an artist's page
@@ -145,6 +150,14 @@ export default function ArtistPage() {
   const fade = fadeRamp(
     photoHeight && catalogY != null ? clamp01((catalogY - FADE_LEAD) / photoHeight) : 0.55,
   )
+
+  // Pooled rows are one per record, so they open the record's community page;
+  // your own rows open your copy.
+  const openAlbum = (id: number) =>
+    router.push({
+      pathname: '/album/[id]',
+      params: mode === 'pressd' ? { id: String(id), community: '1' } : { id: String(id) },
+    })
 
   // Reaching this page by deep link or notification leaves nothing on the
   // stack, and a bare router.back() then throws "The action 'GO_BACK' was not
@@ -283,7 +296,7 @@ export default function ArtistPage() {
             <CatalogStrip
               albums={albums}
               catalog={(data.catalog_art ?? []).map((c) => ({ title: c.album_name, cover_url: c.album_art_url }))}
-              onOpen={(id) => router.push({ pathname: '/album/[id]', params: { id: String(id) } })}
+              onOpen={openAlbum}
             />
           </View>
         </View>
@@ -298,15 +311,19 @@ export default function ArtistPage() {
             <View style={styles.statRow}>
               <StatCell
                 value={data.song_plus_rank != null ? `#${data.song_plus_rank}` : '—'}
-                label="SONG+"
+                label="Song+ rank"
                 accent
               />
               <StatCell
                 value={data.w_song_plus_rank != null ? `#${data.w_song_plus_rank}` : '—'}
-                label="WSONG+"
+                label="wSong+ rank"
                 accent
               />
-              <StatCell value={fmt2(data.avg_song_score)} label="AVG SONG" />
+              <StatCell
+                value={fmt2(data.avg_song_score)}
+                label="Avg song"
+                color={data.avg_song_score != null ? songScoreColor(data.avg_song_score) : undefined}
+              />
             </View>
           )}
 
@@ -376,30 +393,26 @@ export default function ArtistPage() {
                   theirs={data.global?.song_scores ?? []}
                 />
               ) : (
-                <ScoreHistogram scores={data.song_scores} />
+                <ScoreHistogram scores={data.song_scores} binWidth={0.5} gap={3} />
               )}
             </>
           )}
 
-          {/* Discography — the desktop grid's counterpart: your rated copies
-              in colour with their score, the rest of the catalog from
-              MusicBrainz knocked back, newest first. Replaces the flat list of
-              rated albums, which could only ever show what you'd already heard. */}
-          <View style={styles.sectionSolo}>
-            <Discography
-              albums={data.albums}
-              artist={data.artist}
-              onOpenAlbum={(id) => router.push({ pathname: '/album/[id]', params: { id: String(id) } })}
-              // The id segment is unused when name+artist are present, but the
-              // route requires one — same shape openPick uses on For You.
-              onPreviewAlbum={(albumName) =>
-                router.push({
-                  pathname: '/album/[id]',
-                  params: { id: '0', name: albumName, artist: data.artist },
-                })
-              }
-            />
-          </View>
+          {/* The records, newest first, as on web. A discography grid stood
+              here until October 2026, merging these with the artist's releases
+              nobody on Pressd had added. */}
+          <RecordList
+            label="RECORDS"
+            albums={chronological.filter((a) => !a.is_ep)}
+            pooled={mode === 'pressd'}
+            onOpen={openAlbum}
+          />
+          <RecordList
+            label="EPS"
+            albums={chronological.filter((a) => a.is_ep)}
+            pooled={mode === 'pressd'}
+            onOpen={openAlbum}
+          />
 
           {/* Neighbours worth comparing, only where a comparison exists. */}
           {mode === 'compare' && similar.length > 0 && (
@@ -483,10 +496,11 @@ function heroRamp(color?: string | null, color2?: string | null): [string, strin
   ]
 }
 
-// Continuous red→green gradient, matching the desktop PercentileBar.
+// Continuous red→green gradient, matching the web PercentileBar — the album
+// pages' warmer register, not a traffic light.
 function barColor(pct: number): string {
   const hue = Math.round(pct * 1.3) // 0 → red, 100 → forest green
-  return `hsl(${hue}, 65%, 28%)`
+  return `hsl(${hue}, 48%, 36%)`
 }
 
 // Overlapping strip of the artist's covers, mirroring the website header's
@@ -561,16 +575,22 @@ function StatCell({
   value,
   label,
   accent = false,
+  color,
 }: {
   value: string
   label: string
   accent?: boolean
+  /** A score's own colour, as the web stat row sets it. */
+  color?: string
 }) {
   // The accent is the rank's own emphasis — an absent one stays a muted dash.
   const missing = value === '—'
   return (
     <View style={styles.statCell}>
-      <Text style={[styles.statValue, accent && !missing && styles.statValueAccent, missing && styles.statValueMissing]}>
+      <Text
+        style={[styles.statValue, accent && !missing && styles.statValueAccent, color && !missing ? { color } : null, missing && styles.statValueMissing]}
+        maxFontSizeMultiplier={NUM_SCALE_CAP}
+      >
         {value}
       </Text>
       <Text style={styles.statLabel} numberOfLines={1}>{label}</Text>
@@ -751,6 +771,57 @@ function PercentileBar({
   )
 }
 
+type ArtistAlbum = NonNullable<Awaited<ReturnType<typeof fetchArtistDetail>>>['albums'][number]
+
+function RecordList({ label, albums, pooled, onOpen }: {
+  label: string
+  albums: ArtistAlbum[]
+  /** Pressd's pooled rows — each says how many people's copies it holds. */
+  pooled: boolean
+  onOpen: (id: number) => void
+}) {
+  if (albums.length === 0) return null
+  return (
+    <View style={styles.sectionSolo}>
+      <Text style={styles.sectionLabel}>{label}</Text>
+      <View style={styles.records}>
+        {albums.map((a) => (
+          <Pressable
+            key={a.id}
+            onPress={() => onOpen(a.id)}
+            style={({ pressed }) => [styles.recordRow, pressed && styles.recordRowPressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${a.album_name}${a.score != null ? `, ${a.score.toFixed(2)}` : ''}`}
+          >
+            <View style={styles.recordArtShadow}>
+              <View style={styles.recordArt}>
+                {a.album_art_url ? (
+                  <CoverImage url={a.album_art_url} displayPx={54} style={StyleSheet.absoluteFill} recyclingKey={a.album_art_url} />
+                ) : (
+                  <Text style={styles.recordInitial} maxFontSizeMultiplier={NUM_SCALE_CAP}>{a.album_name[0]?.toUpperCase()}</Text>
+                )}
+              </View>
+            </View>
+            <View style={styles.recordText}>
+              <Text style={styles.recordName} numberOfLines={1}>{a.album_name}</Text>
+              <Text style={styles.recordYear}>
+                {a.year ?? '—'}
+                {pooled && a.rater_count != null ? ` · ${a.rater_count} ${a.rater_count === 1 ? 'rater' : 'raters'}` : ''}
+              </Text>
+            </View>
+            <Text
+              style={[styles.recordScore, { color: a.score != null ? songScoreColor(a.score) : colors.inkMuted }]}
+              maxFontSizeMultiplier={NUM_SCALE_CAP}
+            >
+              {a.score != null ? a.score.toFixed(2) : '—'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
@@ -797,18 +868,18 @@ const styles = StyleSheet.create({
 
   // Headline ranks — the ProfileBanner stat treatment (Playfair figure over a
   // small uppercase label), with no card or rules around them.
+  // Web's stat figure: a Playfair number over a small sentence-case label,
+  // left-set, no card or rules.
   statRow: { flexDirection: 'row', paddingTop: spacing.xs },
-  statCell: { flex: 1, alignItems: 'center', paddingHorizontal: spacing.xs },
-  statValue: { fontFamily: fonts.display, fontSize: 26, color: colors.ink },
-  statValueAccent: { color: colors.green },
-  statValueMissing: { color: colors.inkMuted },
+  statCell: { flex: 1, paddingRight: spacing.sm },
+  statValue: { fontFamily: fonts.display, fontSize: 26, lineHeight: 30, color: colors.ink, fontVariant: ['tabular-nums'] },
+  statValueAccent: { color: colors.ink },
+  statValueMissing: { color: '#c8c0b4' },
   statLabel: {
     fontFamily: fonts.bodyMedium,
-    fontSize: 9.5,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    color: colors.inkTertiary,
-    marginTop: 2,
+    fontSize: 12,
+    color: '#8a7f72',
+    marginTop: 6,
   },
   sampleNote: {
     fontFamily: fonts.bodyMedium,
@@ -828,7 +899,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   legend: { flexDirection: 'row', gap: spacing.md },
-  legendItem: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 0.8 },
+  legendItem: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.2 },
   heroBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   heroActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 0 },
   // Reads on a photo of any brightness: translucent white over the hero's own
@@ -871,32 +942,29 @@ const styles = StyleSheet.create({
 
   // Absolute scores, not percentiles, so this row wears no track — it sits in
   // the bars' rhythm but shouldn't read as one of them.
+  // Unruled, as on web: the two figures and the space around them are enough.
   vsBlock: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    // Takes the headline row's place in compare mode, so it carries that row's
-    // vertical rhythm rather than a list row's.
     marginTop: spacing.sm,
     marginBottom: spacing.lg,
-    paddingBottom: spacing.lg,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
   },
   vsCol: { flex: 1, alignItems: 'center' },
-  vsLabel: { fontFamily: fonts.bodyBold, fontSize: 9.5, letterSpacing: 1, color: colors.inkMuted },
-  vsScore: { fontFamily: fonts.display, fontSize: 30, lineHeight: 34, marginTop: 2 },
+  vsLabel: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.6, color: '#44403c', marginTop: 6 },
+  vsScore: { fontFamily: fonts.display, fontSize: 40, lineHeight: 44, fontVariant: ['tabular-nums'] },
   vsMiddle: { alignItems: 'center', gap: 1, flexShrink: 0 },
   // Set in the display face like the scores it separates, but small and muted —
   // it's a conjunction, not a third value.
   vsWord: { fontFamily: fonts.display, fontSize: 15, color: colors.inkMuted },
   vsDiff: { fontFamily: fonts.bodyBold, fontSize: 11 },
 
-  pctRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 7 },
-  pctLabel: { width: 84, textAlign: 'right', fontFamily: fonts.bodyMedium, fontSize: 11, lineHeight: 13, color: colors.inkMuted },
-  pctTrack: { flex: 1, height: 14, borderRadius: 7, backgroundColor: colors.inset, position: 'relative', justifyContent: 'center' },
-  pctFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 7, overflow: 'hidden' },
+  // Web's bar: a thin warm track, the badge doing the reading.
+  pctRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 9 },
+  pctLabel: { width: 84, textAlign: 'right', fontFamily: fonts.body, fontSize: 12.5, lineHeight: 15, color: colors.inkSecondary },
+  pctTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: '#ebe5dc', position: 'relative', justifyContent: 'center' },
+  pctFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 4, overflow: 'hidden' },
   // The track is 14 tall; contentFit="contain" on a ~2:1 mark fits by width, so
   // a 42-wide box renders about 21 tall — half again the bar's height, which is
   // what makes it sit *on* the percentile rather than inside it. Width is the
@@ -927,31 +995,72 @@ const styles = StyleSheet.create({
   // swamping its thinner strokes.
   pctGlobalOutline: { position: 'absolute', top: -2.5, left: -2.5, right: -2.5, bottom: -2.5 },
   pctGlobalMark: { width: '100%', height: '100%' },
+  // A cream keyline and a soft drop, as on web, so the badge sits on the bar
+  // rather than being punched into it. The number is the blocky body face.
   pctBadge: {
     position: 'absolute',
     top: '50%',
-    marginTop: -11,
-    marginLeft: -11,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: '#ffffff',
+    marginTop: -13,
+    marginLeft: -13,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2.5,
+    borderColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
+    shadowColor: '#28190a',
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 3 },
   },
-  pctBadgeText: { fontFamily: fonts.bodyBold, fontSize: 9, color: '#ffffff' },
-  pctDash: { textAlign: 'center', color: colors.inkMuted, fontSize: 10 },
-  pctValue: { width: 46, textAlign: 'right', fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.ink, fontVariant: ['tabular-nums'] },
+  pctBadgeText: { fontFamily: fonts.bodyBold, fontSize: 10.5, letterSpacing: -0.2, color: '#ffffff', fontVariant: ['tabular-nums'] },
+  pctDash: { textAlign: 'center', color: '#c8c0b4', fontSize: 11 },
+  pctValue: { width: 48, textAlign: 'right', fontFamily: fonts.display, fontSize: 14, color: colors.ink, fontVariant: ['tabular-nums'] },
   pctValueSmall: { color: colors.inkMuted },
 
+  // Web's SECTION_LABEL: small caps, widely tracked, warm grey.
   sectionLabel: {
     fontFamily: fonts.bodyBold,
     fontSize: 11,
-    letterSpacing: 1.2,
+    letterSpacing: 1.76,
     color: colors.inkMuted,
   },
   sectionSolo: { marginTop: spacing.xl, marginBottom: spacing.sm },
+
+  records: { marginTop: spacing.sm, marginHorizontal: -spacing.sm },
+  recordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: 8,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.lg,
+  },
+  recordRowPressed: { backgroundColor: '#f2eee7' },
+  // Web's cover: rounded, with the same soft warm drop beneath it. The shadow
+  // lives on a wrapper because overflow:hidden clips it on iOS.
+  recordArtShadow: {
+    borderRadius: radii.md,
+    shadowColor: '#28190a',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  recordArt: {
+    width: 54,
+    height: 54,
+    borderRadius: radii.md,
+    overflow: 'hidden',
+    backgroundColor: '#ebe5dc',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recordInitial: { fontFamily: fonts.display, fontSize: 20, color: colors.inkMuted },
+  recordText: { flex: 1, minWidth: 0 },
+  recordName: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.ink },
+  recordYear: { fontFamily: fonts.body, fontSize: 12.5, color: '#8a7f72', marginTop: 2 },
+  recordScore: { fontFamily: fonts.display, fontSize: 22, fontVariant: ['tabular-nums'] },
 
 })

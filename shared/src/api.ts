@@ -914,6 +914,8 @@ export interface ArtistDetail {
     avg_external: number | null
     is_ep: boolean
     status: string
+    /** How many people's copies the row pools — 1 in a single library. */
+    rater_count?: number
   }[]
   all_artists: {
     artist: string

@@ -64,20 +64,23 @@ export function ScoreHistogram({ scores, height = 120 }: { scores: number[]; hei
   )
 }
 
-// ── Fine bins with a KDE overlay ──────────────────────────────────────────────
+// ── Half-point bins with a KDE overlay ────────────────────────────────────────
 
 // Below this the curve is mostly bandwidth artifact, not shape.
 const KDE_MIN_SONGS = 30
 
+// Half a point wide: [1, 1.5), [1.5, 2) … [9.5, 10]. Until October 2026 these
+// were 0.1 wide — 91 slivers, most holding one or two songs, which read as
+// noise rather than a shape. A perfect 10 folds into the last bin.
+const BIN_WIDTH = 0.5
+const BIN_COUNT = 9 / BIN_WIDTH
+
+/** `score` is the bin's centre — where its colour is taken and the curve is
+ *  sampled. */
 function buildBins(scores: number[]): { score: number; count: number }[] {
-  const counts = new Map<string, number>()
+  const bins = Array.from({ length: BIN_COUNT }, (_, i) => ({ score: 1 + (i + 0.5) * BIN_WIDTH, count: 0 }))
   for (const s of scores) {
-    const key = (Math.round(s * 10) / 10).toFixed(1)
-    counts.set(key, (counts.get(key) ?? 0) + 1)
-  }
-  const bins: { score: number; count: number }[] = []
-  for (let v = 10; v <= 100; v++) {
-    bins.push({ score: v / 10, count: counts.get((v / 10).toFixed(1)) ?? 0 })
+    bins[Math.max(0, Math.min(BIN_COUNT - 1, Math.floor((s - 1) / BIN_WIDTH)))].count += 1
   }
   return bins
 }
@@ -96,9 +99,8 @@ function kdeOverlay(scores: number[], bins: { score: number }[]): number[] {
   // narrower bandwidth just draws spikes on the quantization grid.
   const h = Math.max(0.9 * spread * Math.pow(n, -0.2), 0.15)
   const K = (u: number) => Math.exp(-0.5 * u * u) / Math.sqrt(2 * Math.PI)
-  const binWidth = 0.1
   return bins.map(
-    (b) => (scores.reduce((acc, s) => acc + K((b.score - s) / h), 0) / (n * h)) * n * binWidth,
+    (b) => (scores.reduce((acc, s) => acc + K((b.score - s) / h), 0) / (n * h)) * n * BIN_WIDTH,
   )
 }
 
@@ -118,8 +120,8 @@ function useWidth<T extends HTMLElement>() {
   return [ref, w] as const
 }
 
-/** An artist's full spread: 1.0–10.0 in 0.1 bins, with a smoothed density
- *  curve once there are enough songs for it to mean anything. */
+/** An artist's full spread: 1.0–10.0 in half-point bins, with a smoothed
+ *  density curve once there are enough songs for it to mean anything. */
 export function ScoreDistribution({
   scores,
   height = 200,
@@ -158,13 +160,13 @@ export function ScoreDistribution({
             b.count > 0 ? (
               <rect
                 key={i}
-                x={x(i) + 0.5}
+                x={x(i) + 1.5}
                 y={y(b.count)}
-                width={Math.max(1, barW - 1)}
+                width={Math.max(1, barW - 3)}
                 height={padTop + plotH - y(b.count)}
                 fill={barColor(b.score)}
                 opacity={0.85}
-                rx={0.5}
+                rx={3}
               />
             ) : null,
           )}
@@ -172,23 +174,28 @@ export function ScoreDistribution({
             <path d={kdePath.trim()} stroke="#57534e" strokeWidth={2} strokeOpacity={0.75} fill="none" />
           )}
           <line x1={0} y1={padTop + plotH} x2={width} y2={padTop + plotH} stroke={RULE} strokeWidth={1} />
+          {/* On the bin edges, so a bar's range is read off the two numbers
+              either side of it; the end labels hug the edges they sit on. */}
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
             <text
               key={n}
-              x={x((n - 1) * 10) + barW / 2}
+              x={x((n - 1) / BIN_WIDTH)}
               y={height - 6}
               fontSize={9}
               fill={MUTED}
-              textAnchor="middle"
+              textAnchor={n === 1 ? 'start' : n === 10 ? 'end' : 'middle'}
             >
               {n}
             </text>
           ))}
         </svg>
       )}
-      <p className="text-center" style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>
-        {caption}{showKde ? ' — curve: smoothed density (KDE)' : ''}
-      </p>
+      {/* An empty caption drops the line, for a page that labels the chart itself. */}
+      {caption && (
+        <p className="text-center" style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>
+          {caption}{showKde ? ' — curve: smoothed density (KDE)' : ''}
+        </p>
+      )}
     </div>
   )
 }

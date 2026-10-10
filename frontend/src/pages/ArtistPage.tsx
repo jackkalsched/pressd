@@ -1,49 +1,78 @@
-import { useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2, RefreshCw, Plus, Check } from 'lucide-react'
-import { fetchArtistDetail, fetchAotyAlbums, refreshAotyArtist, importAlbum, createAlbum, resolveAlbum } from '../api'
-import { searchAlbumsRanked, normalizeTitle } from '@pressd/shared/albumSearch'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { ArrowLeft, Loader2 } from 'lucide-react'
+import { fetchArtistDetail, fetchSimilarArtistComparisons } from '../api'
+import type { ArtistPopulation } from '../api'
 import { useUser } from '../context/UserContext'
-import type { AotyAlbum, ArtistDetail } from '../api'
 import { ScoreDistribution } from '../components/histograms'
 import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
   ScatterChart, Scatter, ZAxis,
 } from 'recharts'
 import CoverImg from '../components/CoverImg'
+import { Cover, COVER_LIFT } from '../components/covers'
+import { CoverWash, GREEN, PILL, RevealRow, SECTION_LABEL } from '../components/albumView'
+import { ScoreKdeCompare, ScoreVersus, SimilarArtistComparisons, SongGapChart } from '../components/artistCompare'
+import { songScoreColor } from '../types'
+import { stagger } from '../lib/format'
+
+const INK = '#1c1917'
+
+/** Which rating set the page is showing — mobile's three scopes.
+ *   mine    — this library's ratings, ranked among its own artists
+ *   pressd  — every user's pooled, ranked globally
+ *   compare — this library's, against the userbase's
+ *  Kept in the URL (?mode=), so a comparison card can link straight to one. */
+type Mode = 'mine' | 'pressd' | 'compare'
+const POPULATION: Record<Mode, ArtistPopulation> = { mine: 'me', pressd: 'global', compare: 'both' }
+
+// Mirrors SMALL_SAMPLE in backend/routers/stats.py — the song count at which an
+// artist's percentiles and ranks start being published.
+const SMALL_SAMPLE = 15
+
+/** 1st, 2nd, 3rd, 4th — the teens take "th" whatever the last digit. */
+function ordinal(n: number): string {
+  const tens = n % 100
+  if (tens >= 11 && tens <= 13) return `${n}th`
+  return `${n}${['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`
+}
+
+function possessive(name: string): string {
+  return name.endsWith('s') ? `${name}’` : `${name}’s`
+}
 
 // ── Percentile bar ────────────────────────────────────────────────────────────
 
-// Continuous gradient: 0 = dark rich red, 100 = dark rich forest green
+// Continuous gradient, 0 = red to 100 = green, in the album pages' warmer register.
 function barColor(pct: number) {
   const hue = Math.round(pct * 1.3) // 0 → hue 0 (red), 100 → hue 130 (green)
-  return `hsl(${hue}, 65%, 28%)`
+  return `hsl(${hue}, 48%, 36%)`
 }
 
 function PercentileBar({
-  label, value, percentile, invert = false, smallSample = false,
+  label, value, percentile, invert = false, smallSample = false, index = 0,
 }: {
   label: string
   value: string
   percentile: number | null
   invert?: boolean
   smallSample?: boolean
+  index?: number
 }) {
   const display    = percentile !== null ? (invert ? 100 - percentile : percentile) : null
-  const color      = display !== null ? barColor(display) : '#ccc'
+  const color      = display !== null ? barColor(display) : '#c8c0b4'
   const circlePct  = display !== null ? Math.max(3, Math.min(97, display)) : 50
 
   const fillStyle: React.CSSProperties = smallSample
     ? {
         width: `${display ?? 0}%`,
         backgroundImage: `repeating-linear-gradient(-45deg, ${color} 0px, ${color} 3px, transparent 3px, transparent 8px)`,
-        opacity: 0.55,
+        opacity: 0.7,
       }
     : {
         width: `${display ?? 0}%`,
         backgroundColor: color,
-        opacity: 0.75,
+        opacity: 0.85,
       }
 
   const badgeStyle: React.CSSProperties = {
@@ -54,26 +83,26 @@ function PercentileBar({
   }
 
   return (
-    <div className="flex items-center gap-4 py-2.5 border-b border-dashed border-[#e5e5e5] last:border-0">
-      <span className="text-[#999] text-xs w-32 text-right shrink-0 leading-tight">{label}</span>
+    <div className="flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-[#f2eee7] rise-in" style={stagger(index)}>
+      <span className="text-[#57534e] text-[13.5px] w-32 text-right shrink-0 leading-tight">{label}</span>
 
-      <div className="flex-1 relative h-3.5 bg-[#eaeaea] rounded-full">
+      <div className="flex-1 relative h-2 bg-[#ebe5dc] rounded-full">
         {display !== null ? (
           <>
-            <div className="absolute inset-y-0 left-0 rounded-full transition-all" style={fillStyle} />
+            <div className="grow-x absolute inset-y-0 left-0 rounded-full" style={{ ...fillStyle, ...stagger(index) }} />
             <div
-              className="absolute top-1/2 w-[26px] h-[26px] rounded-full flex items-center justify-center text-[10px] font-bold text-white border-2 border-white z-10"
+              className="absolute top-1/2 w-[30px] h-[30px] rounded-full flex items-center justify-center text-[12.5px] font-extrabold tracking-tight leading-none text-white border-[2.5px] border-[#f9f8f6] shadow-[0_6px_14px_-8px_rgba(40,25,10,0.7)] z-10 tabular-nums"
               style={badgeStyle}
             >
               {Math.round(display)}
             </div>
           </>
         ) : (
-          <span className="absolute inset-0 flex items-center justify-center text-[#ccc] text-[10px]">—</span>
+          <span className="absolute inset-0 flex items-center justify-center text-[#c8c0b4] text-[11px]">—</span>
         )}
       </div>
 
-      <span className={`text-xs w-14 text-right shrink-0 tabular-nums ${smallSample ? 'text-[#aaa]' : 'text-[#111]'}`}>
+      <span className={`font-display text-[15px] font-bold w-14 text-right shrink-0 tabular-nums ${smallSample ? 'text-[#a8998a]' : 'text-[#1c1917]'}`}>
         {value}
       </span>
     </div>
@@ -82,35 +111,35 @@ function PercentileBar({
 
 function PercentilesSection({ data, smallSample }: { data: ReturnType<typeof buildStats>; smallSample: boolean }) {
   return (
-    <div className="mb-10">
-      <h2 className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-4">
-        Percentile Rankings
-      </h2>
+    <div className="mb-12">
+      <p className={`${SECTION_LABEL} mb-4`}>PERCENTILE RANKINGS</p>
 
       {/* POOR / AVERAGE / GREAT header */}
-      <div className="flex items-end gap-4 mb-1">
+      <div className="flex items-end gap-4 mb-1 px-4">
         <span className="w-32 shrink-0" />
         <div className="flex-1 relative flex justify-between px-0.5">
-          <span className="text-[9px] font-bold flex flex-col items-center gap-0.5" style={{ color: barColor(0) }}>
+          <span className="text-[10px] font-bold tracking-[0.12em] flex flex-col items-center gap-0.5" style={{ color: barColor(0) }}>
             <span>▲</span>POOR
           </span>
-          <span className="text-[9px] font-bold flex flex-col items-center gap-0.5" style={{ color: barColor(50) }}>
+          <span className="text-[10px] font-bold tracking-[0.12em] flex flex-col items-center gap-0.5" style={{ color: barColor(50) }}>
             <span>▲</span>AVERAGE
           </span>
-          <span className="text-[9px] font-bold flex flex-col items-center gap-0.5" style={{ color: barColor(100) }}>
+          <span className="text-[10px] font-bold tracking-[0.12em] flex flex-col items-center gap-0.5" style={{ color: barColor(100) }}>
             <span>▲</span>GREAT
           </span>
         </div>
         <span className="w-14 shrink-0" />
       </div>
 
-      <PercentileBar label="Avg Song Score" value={data.avgSongScore} percentile={data.pct.avg_song_score} smallSample={smallSample} />
-      <PercentileBar label="Song+"          value={data.songPlus}     percentile={data.pct.song_plus}      smallSample={smallSample} />
-      <PercentileBar label="wSong+"         value={data.wSongPlus}    percentile={data.pct.w_song_plus}    smallSample={smallSample} />
-      <PercentileBar label="Avg External"   value={data.avgExternal}  percentile={data.pct.avg_external}   smallSample={smallSample} />
-      <PercentileBar label="Bang%"          value={data.bangPct}      percentile={data.pct.bang_pct}       smallSample={smallSample} />
-      <PercentileBar label="Skip%"          value={data.skipPct}      percentile={data.pct.skip_pct}       smallSample={smallSample} invert />
-      <PercentileBar label="Consistency+"   value={data.consistencyPlus} percentile={data.pct.consistency_plus} smallSample={smallSample} />
+      <div className="-mx-4">
+        <PercentileBar label="Avg Song Score" value={data.avgSongScore} percentile={data.pct.avg_song_score} smallSample={smallSample} index={0} />
+        <PercentileBar label="Song+"          value={data.songPlus}     percentile={data.pct.song_plus}      smallSample={smallSample} index={1} />
+        <PercentileBar label="wSong+"         value={data.wSongPlus}    percentile={data.pct.w_song_plus}    smallSample={smallSample} index={2} />
+        <PercentileBar label="Avg External"   value={data.avgExternal}  percentile={data.pct.avg_external}   smallSample={smallSample} index={3} />
+        <PercentileBar label="Bang%"          value={data.bangPct}      percentile={data.pct.bang_pct}       smallSample={smallSample} index={4} />
+        <PercentileBar label="Skip%"          value={data.skipPct}      percentile={data.pct.skip_pct}       smallSample={smallSample} invert index={5} />
+        <PercentileBar label="Consistency+"   value={data.consistencyPlus} percentile={data.pct.consistency_plus} smallSample={smallSample} index={6} />
+      </div>
     </div>
   )
 }
@@ -141,356 +170,136 @@ function buildStats(data: Awaited<ReturnType<typeof fetchArtistDetail>>) {
   }
 }
 
-// ── AOTY Discover ─────────────────────────────────────────────────────────────
-
-type AddState = 'idle' | 'loading' | 'done' | 'error'
-
-function DiscoverRow({ album, artistName }: { album: AotyAlbum; artistName: string }) {
-  const [toListenState, setToListenState] = useState<AddState>('idle')
-  const [rateNowState, setRateNowState]   = useState<'idle' | 'loading' | 'error'>('idle')
-  const queryClient = useQueryClient()
-  const navigate    = useNavigate()
-
-  const busy = toListenState === 'loading' || rateNowState === 'loading'
-  const used = toListenState === 'done'
-
-  /** Best catalog match for this discography entry, or null when nothing
-   *  credibly matches. The previous version imported the first search hit
-   *  blind, which happily added a different artist's album of the same name. */
-  async function findMatch() {
-    const results = await searchAlbumsRanked(`${album.title} ${artistName}`, 8)
-    const wantArtist = normalizeTitle(artistName)
-    const wantTitle = normalizeTitle(album.title)
-    const match = results.find(
-      (r) => normalizeTitle(r.artist) === wantArtist && normalizeTitle(r.album_name) === wantTitle,
-    ) ?? results.find((r) => normalizeTitle(r.artist) === wantArtist)
-    return match ? await resolveAlbum(match) : null
-  }
-
-  async function handleToListen() {
-    setToListenState('loading')
-    try {
-      const match = await findMatch()
-      if (match) {
-        await importAlbum(match, 'to_listen')
-      } else {
-        // Nothing matched the artist — add the shell rather than the wrong album.
-        await createAlbum({
-          albumName: album.title,
-          artist: artistName,
-          year: album.year ?? undefined,
-          status: 'to_listen',
-        })
-      }
-      queryClient.invalidateQueries({ queryKey: ['albums'] })
-      setToListenState('done')
-    } catch {
-      setToListenState('error')
-    }
-  }
-
-  async function handleRateNow() {
-    setRateNowState('loading')
-    try {
-      const match = await findMatch()
-      if (!match) { setRateNowState('error'); return }
-      const imported = await importAlbum(match, 'listening')
-      queryClient.invalidateQueries({ queryKey: ['albums'] })
-      navigate(`/rate/${imported.id}`)
-    } catch {
-      setRateNowState('error')
-    }
-  }
-
-  return (
-    <div className="flex items-center gap-3 py-2.5 border-b border-[#f0f0f0] last:border-0">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-[#111] text-sm font-medium truncate">{album.title}</span>
-          <span className="text-[10px] font-medium text-[#999] bg-[#f0f0f0] px-1.5 py-0.5 rounded shrink-0">
-            {album.type}
-          </span>
-        </div>
-        <span className="text-[#aaa] text-xs">{album.year ?? '—'}</span>
-      </div>
-
-      <div className="flex gap-2 shrink-0">
-        {/* + To Listen */}
-        <button
-          onClick={handleToListen}
-          disabled={busy || used}
-          className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${
-            used
-              ? 'bg-[#2d6a4f]/10 text-[#2d6a4f] cursor-default'
-              : toListenState === 'error'
-              ? 'bg-red-50 text-[#c0392b] hover:bg-red-100'
-              : 'bg-[#f0f0f0] hover:bg-[#e8e8e8] text-[#555] disabled:opacity-40'
-          }`}
-        >
-          {toListenState === 'loading' ? <Loader2 size={11} className="animate-spin" /> :
-           used                         ? <Check size={11} /> :
-                                          <Plus size={11} />}
-          {used ? 'Added' : toListenState === 'error' ? 'Error' : 'To Listen'}
-        </button>
-
-        {/* + Rate Now */}
-        <button
-          onClick={handleRateNow}
-          disabled={busy || used}
-          className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${
-            rateNowState === 'error'
-              ? 'bg-red-50 text-[#c0392b] hover:bg-red-100'
-              : 'bg-[#2d6a4f] hover:bg-[#245a42] text-white disabled:opacity-40'
-          }`}
-        >
-          {rateNowState === 'loading' ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
-          {rateNowState === 'error' ? 'Error' : 'Rate Now'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function DiscoverSection({ artistName }: { artistName: string }) {
-  const [refreshKey, setRefreshKey] = useState(0)
-  const [refreshing, setRefreshing] = useState(false)
-  const queryClient = useQueryClient()
-
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['aoty', artistName, refreshKey],
-    queryFn: () => fetchAotyAlbums(artistName),
-    retry: false,
-    staleTime: 1000 * 60 * 60, // 1 hour — backend caches for 7 days anyway
-  })
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    await refreshAotyArtist(artistName)
-    queryClient.invalidateQueries({ queryKey: ['aoty', artistName] })
-    setRefreshKey(k => k + 1)
-    setRefreshing(false)
-  }
-
-  return (
-    <div className="mt-10">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className="text-xs font-semibold text-[#999] uppercase tracking-widest">
-            Discover — Not Yet in Library
-          </h2>
-          {data && (
-            <p className="text-[#bbb] text-[10px] mt-0.5">
-              {data.unrated.length} of {data.total_on_mb} releases not in library
-            </p>
-          )}
-        </div>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="text-[#bbb] hover:text-[#555] transition-colors disabled:opacity-40"
-          title="Refresh from AOTY"
-        >
-          <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
-        </button>
-      </div>
-
-      {isLoading ? (
-        <div className="flex items-center gap-2 text-[#aaa] text-sm py-4">
-          <Loader2 size={14} className="animate-spin" /> Fetching discography from Discogs…
-        </div>
-      ) : error ? (
-        <p className="text-[#bbb] text-sm py-2">Artist not found on Discogs.</p>
-      ) : data?.unrated.length === 0 ? (
-        <p className="text-[#bbb] text-sm py-2">All releases are already in your library.</p>
-      ) : (
-        <div>
-          {data!.unrated.map((album) => (
-            <DiscoverRow key={album.mb_id} album={album} artistName={artistName} />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Discography Grid ─────────────────────────────────────────────────────────
-
-type GridEntry =
-  | { kind: 'rated'; id: number; name: string; year: number | null; art: string | null; score: number | null }
-  | { kind: 'unrated'; mb_id: string; name: string; year: number | null; art: string | null; type: string }
-
-function Tile({ entry }: { entry: GridEntry }) {
-  const [imgError, setImgError] = useState(false)
-  const navigate = useNavigate()
-  const isRated = entry.kind === 'rated'
-
-  const inner = (
-    <div className="relative w-full aspect-square rounded-lg overflow-hidden bg-[#e8e8e8]">
-      {entry.art && !imgError ? (
-        <CoverImg
-          url={entry.art}
-          displayPx={200}
-          alt={entry.name}
-          className="w-full h-full object-cover"
-          style={isRated ? undefined : { filter: 'grayscale(100%) brightness(0.7)' }}
-          onError={() => setImgError(true)}
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center text-[#bbb] text-xl font-bold select-none">
-          {entry.name[0]}
-        </div>
-      )}
-
-      {isRated && entry.score !== null && (
-        <div className="absolute bottom-1.5 right-1.5 bg-black/60 rounded px-1.5 py-0.5 text-[10px] font-bold text-white tabular-nums leading-none">
-          {entry.score.toFixed(2)}
-        </div>
-      )}
-
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/55 transition-all flex items-end p-1.5 pointer-events-none opacity-0 group-hover:opacity-100">
-        <div>
-          <p className="text-white text-[10px] font-medium leading-tight">{entry.name}</p>
-          {entry.year && <p className="text-white/65 text-[9px] mt-0.5">{entry.year}</p>}
-        </div>
-      </div>
-    </div>
-  )
-
-  if (isRated) {
-    return (
-      <button
-        onClick={() => navigate(`/album/${entry.id}`)}
-        className="group block w-full hover:scale-105 transition-transform duration-150"
-      >
-        {inner}
-      </button>
-    )
-  }
-  return <div className="group w-full">{inner}</div>
-}
-
-function DiscographyGrid({
-  ratedAlbums,
-  artistName,
-}: {
-  ratedAlbums: ArtistDetail['albums']
-  artistName: string
-}) {
-  const { data, isLoading } = useQuery({
-    queryKey: ['aoty', artistName],
-    queryFn: () => fetchAotyAlbums(artistName),
-    retry: false,
-    staleTime: 1000 * 60 * 60,
-  })
-
-  const rated: GridEntry[] = ratedAlbums
-    .filter(a => a.status === 'rated')
-    .map(a => ({
-      kind: 'rated' as const,
-      id: a.id,
-      name: a.album_name,
-      year: a.year ?? null,
-      art: a.album_art_url ?? null,
-      score: a.score,
-    }))
-
-  const unrated: GridEntry[] = (data?.unrated ?? []).map(a => ({
-    kind: 'unrated' as const,
-    mb_id: a.mb_id,
-    name: a.title,
-    year: a.year ?? null,
-    art: a.cover_url ?? null,
-    type: a.type,
-  }))
-
-  const all = [...rated, ...unrated].sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
-
-  if (rated.length === 0 && !isLoading && unrated.length === 0) return null
-
-  return (
-    <div className="mb-10">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xs font-semibold text-[#999] uppercase tracking-widest">Discography</h2>
-        <div className="flex items-center gap-2">
-          {isLoading && <Loader2 size={11} className="text-[#bbb] animate-spin" />}
-          <span className="text-[#bbb] text-[10px]">
-            {rated.length} rated · {isLoading ? '…' : unrated.length} unrated
-          </span>
-        </div>
-      </div>
-      <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-7 gap-2">
-        {all.map(entry => (
-          <Tile
-            key={entry.kind === 'rated' ? `r-${entry.id}` : `u-${entry.mb_id}`}
-            entry={entry}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ArtistPage() {
   const { name } = useParams<{ name: string }>()
   const navigate  = useNavigate()
-  const { viewingUser } = useUser()
+  const { viewingUser, isViewingFriend } = useUser()
   const userId = viewingUser!.id
+  const [params, setParams] = useSearchParams()
+  const mode: Mode = params.get('mode') === 'compare' ? 'compare' : params.get('mode') === 'pressd' ? 'pressd' : 'mine'
+  // Both controls toggle, so the button that opened a scope closes it.
+  const toggle = (m: Mode) =>
+    setParams((p) => {
+      if (mode === m) p.delete('mode')
+      else p.set('mode', m)
+      return p
+    }, { replace: true })
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['artist', name, userId],
-    queryFn:  () => fetchArtistDetail(name!, userId),
+    queryKey: ['artist', name, userId, mode],
+    queryFn:  () => fetchArtistDetail(name!, userId, POPULATION[mode]),
     enabled:  !!name,
+    // Keeps the previous scope's numbers up while the next loads.
+    placeholderData: (prev) => prev,
+  })
+
+  // Only Compare reads this, so it's only fetched there.
+  const { data: similar = [] } = useQuery({
+    queryKey: ['artist-similar', name, userId],
+    queryFn: () => fetchSimilarArtistComparisons(name!, userId),
+    enabled: !!name && mode === 'compare',
+    staleTime: 5 * 60_000,
   })
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64 text-[#aaa] gap-2">
+      <div className="flex items-center justify-center h-64 text-[#8a7f72] gap-2">
         <Loader2 size={16} className="animate-spin" /> Loading…
       </div>
     )
   }
-  if (error || !data) return <div className="p-8 text-[#aaa]">Artist not found.</div>
+  if (error || !data) return <div className="p-8 text-[#8a7f72]">Artist not found.</div>
 
   const stats    = buildStats(data)
   const others   = data.all_artists.filter(
     (a) => a.artist !== data.artist && a.avg_song_score !== null && a.avg_external !== null,
   )
   const selfPoint = data.all_artists.find((a) => a.artist === data.artist) ?? null
+  const owner = isViewingFriend ? viewingUser!.name : null
+  // Pooled rows are one per record, so they open the record's community page;
+  // a library's rows open that library's copy.
+  const albumHref = (id: number) => (mode === 'pressd' ? `/album/${id}/community` : `/album/${id}`)
 
-  const inlineStats = [
-    { label: 'Avg Song Score', value: stats.avgSongScore },
+  // Scores in the score colour, rates in bang green / skip red, as on the album
+  // page. The "100 = avg" notes went in October 2026 with the album pages' look.
+  const inlineStats: { label: string; value: string | number; sub?: string; color?: string }[] = [
+    { label: 'Avg Song Score', value: stats.avgSongScore,
+      color: data.avg_song_score !== null ? songScoreColor(data.avg_song_score) : '#c8c0b4' },
     { label: 'Songs Rated',    value: data.song_count },
     { label: 'Song Score Rank',
       value: data.song_score_rank !== null ? `#${data.song_score_rank}` : '—',
-      sub: `of ${data.song_score_rank_of}` },
+      sub: data.song_score_rank !== null ? `of ${data.song_score_rank_of}` : undefined },
     { label: 'Ext. Factors Rank',
       value: data.external_rank !== null ? `#${data.external_rank}` : '—',
-      sub: `of ${data.external_rank_of}` },
-    { label: 'Song+',   value: stats.songPlus,  sub: '100 = avg' },
-    { label: 'wSong+',  value: stats.wSongPlus, sub: '100 = avg' },
-    { label: 'Bang%',         value: stats.bangPct },
-    { label: 'Skip%',         value: stats.skipPct },
-    { label: 'Consistency+',  value: stats.consistencyPlus, sub: '100 = avg' },
+      sub: data.external_rank !== null ? `of ${data.external_rank_of}` : undefined },
+    { label: 'Song+',   value: stats.songPlus },
+    { label: 'wSong+',  value: stats.wSongPlus },
+    { label: 'Bang%',         value: stats.bangPct, color: GREEN },
+    { label: 'Skip%',         value: stats.skipPct, color: '#c0392b' },
+    { label: 'Consistency+',  value: stats.consistencyPlus },
   ]
 
   return (
-    <div className="p-4 md:p-8 md:pr-8 max-w-6xl">
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-2 text-[#777] hover:text-[#111] text-sm mb-6 transition-colors"
-      >
-        <ArrowLeft size={15} /> Back
-      </button>
+    <div className="relative min-h-screen overflow-x-hidden bg-[#f9f8f6]">
+    {/* The best-scored record's colour, faintly, as on the album pages. */}
+    <CoverWash url={[...data.albums].sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).find(a => a.album_art_url)?.album_art_url} />
+    <div className="relative p-4 md:p-8 md:pr-8 max-w-6xl">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-1.5 text-[13px] font-medium text-[#57534e] hover:text-[#111] transition-colors"
+        >
+          <ArrowLeft size={16} /> Back
+        </button>
+        {/* Which rating set you're reading — the album pages' pills. */}
+        <div className="flex items-center gap-2">
+          {(['compare', 'pressd'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => toggle(m)}
+              aria-pressed={mode === m}
+              className={mode === m
+                ? 'inline-flex items-center gap-1.5 rounded-full border border-[#2d6a4f] bg-[#2d6a4f] px-3.5 py-1.5 text-[13px] font-semibold text-white pop'
+                : PILL}
+            >
+              {m === 'compare' ? 'Compare' : 'Pressd avg'}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 mb-8">
-        <div>
-          <h1 className="font-display text-3xl font-bold text-[#111]">{data.artist}</h1>
-          <p className="text-[#aaa] text-sm mt-1">
-            {data.album_count} rated {data.album_count === 1 ? 'album' : 'albums'}
-          </p>
+      <div className="flex items-start justify-between gap-4 mb-10">
+        <div className="rise-in" style={stagger(0)}>
+          <h1 className="font-display m-0 text-[40px] font-bold leading-tight text-[#1c1917]">{data.artist}</h1>
+          {/* A library's page counts what it has rated; the pooled page leads
+              with how much of Pressd's listening the artist accounts for. */}
+          {mode === 'pressd' ? (
+            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[14px] text-[#57534e]">
+              {data.popularity_rank != null && (
+                <span><span className="font-bold text-[#1c1917]">{ordinal(data.popularity_rank)}</span>/{data.popularity_of} most rated artist on Pressd</span>
+              )}
+              {data.genre_popularity_rank != null && data.popularity_genre && (
+                <span><span className="font-bold text-[#1c1917]">{ordinal(data.genre_popularity_rank)}</span>/{data.genre_popularity_of} in {data.popularity_genre}</span>
+              )}
+            </div>
+          ) : (
+            <p className="m-0 text-[#57534e] text-[15px] mt-1.5">
+              {data.album_count} rated {data.album_count === 1 ? 'album' : 'albums'}
+            </p>
+          )}
+          {(data.genre || data.subgenres.length > 0) && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {data.genre && (
+                <span className="rounded-full bg-[#2d6a4f]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[#2d6a4f]">{data.genre}</span>
+              )}
+              {data.subgenres.map((s) => (
+                <span key={s} className="rounded-full bg-[#efebe5] px-2.5 py-1 text-[11.5px] font-medium text-[#78716c]">{s}</span>
+              ))}
+            </div>
+          )}
         </div>
         {(() => {
           const ratedAlbums = data.albums.filter(a => a.status === 'rated' && a.album_art_url)
@@ -501,12 +310,12 @@ export default function ArtistPage() {
               {shown.map((a, i) => (
                 <Link
                   key={a.id}
-                  to={`/album/${a.id}`}
+                  to={albumHref(a.id)}
                   title={a.album_name}
-                  className="w-20 h-20 rounded-xl overflow-hidden border-2 border-[#f9f8f6] hover:scale-110 hover:z-10 transition-transform relative"
-                  style={{ marginLeft: i === 0 ? 0 : '-10px', zIndex: shown.length - i }}
+                  className="group relative block w-20 h-20 rounded-2xl overflow-hidden border-[2.5px] border-[#f9f8f6] shadow-[0_14px_28px_-16px_rgba(40,25,10,0.6)] hover:z-10 pop-in"
+                  style={{ marginLeft: i === 0 ? 0 : '-12px', zIndex: shown.length - i, animationDelay: `${i * 45}ms` }}
                 >
-                  <CoverImg url={a.album_art_url} displayPx={80} alt={a.album_name} className="w-full h-full object-cover" />
+                  <CoverImg url={a.album_art_url} displayPx={80} alt={a.album_name} className={`w-full h-full object-cover ${COVER_LIFT}`} />
                 </Link>
               ))}
             </div>
@@ -514,38 +323,73 @@ export default function ArtistPage() {
         })()}
       </div>
 
-      {/* Inline stat row */}
-      <div className="flex flex-wrap gap-x-10 gap-y-5 mb-10">
-        {inlineStats.map(({ label, value, sub }) => (
-          <div key={label}>
-            <p className="text-[#999] text-xs uppercase tracking-widest mb-0.5">{label}</p>
-            <p className="text-[#111] font-semibold text-xl tabular-nums">{value}</p>
-            {sub && <p className="text-[#aaa] text-[10px] mt-0.5">{sub}</p>}
+      {data.small_sample && (
+        <p className="m-0 mb-6 text-[13.5px] font-medium text-[#2d6a4f]">
+          Rate at least {SMALL_SAMPLE} songs to see advanced stats!
+        </p>
+      )}
+
+      {/* Compare holds the two averages against each other instead: a rank is
+          a place in one league table, and yours against the userbase's would be
+          two different tables. */}
+      {mode === 'compare' ? (
+        <ScoreVersus
+          mine={data.avg_song_score}
+          theirs={data.global?.avg_song_score ?? null}
+          mineLabel={owner ? `${possessive(owner).toUpperCase()} AVG SONG` : 'MY AVG SONG'}
+        />
+      ) : (
+      <div className="flex flex-wrap gap-x-12 gap-y-6 mb-12">
+        {inlineStats.map(({ label, value, sub, color }, i) => (
+          <div key={label} className="rise-in" style={stagger(i + 1)}>
+            <p className="font-display m-0 text-[26px] font-bold leading-none tabular-nums" style={{ color: color ?? INK }}>
+              {value}
+              {sub && <span className="ml-1 font-sans text-[13px] font-medium text-[#a8998a]">{sub}</span>}
+            </p>
+            <p className="m-0 mt-1.5 text-[12px] font-medium text-[#8a7f72]">{label}</p>
           </div>
         ))}
       </div>
+      )}
 
-      {/* Percentile bars */}
-      <PercentilesSection data={stats} smallSample={data.small_sample} />
+      {/* Compare answers one question — which songs do I hear differently — so
+          the gap chart takes the percentile bars' place there. */}
+      {mode === 'compare' ? (
+        <div className="mb-12">
+          <p className={`${SECTION_LABEL} mb-4`}>WHERE YOU SPLIT</p>
+          <SongGapChart gaps={data.song_gaps ?? []} artist={data.artist} />
+        </div>
+      ) : (
+        <PercentilesSection data={stats} smallSample={data.small_sample} />
+      )}
 
-      {/* Histogram */}
-      <div className="mb-10">
-        <h2 className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-4">
-          Song Score Distribution
-        </h2>
-        <ScoreDistribution scores={data.song_scores} />
-      </div>
+      {/* Histogram — or, comparing, both distributions on one pair of axes. */}
+      {data.song_scores.length > 0 && (
+        <div className="mb-12">
+          <p className={`${SECTION_LABEL} mb-4`}>SONG SCORE DISTRIBUTION</p>
+          {mode === 'compare' ? (
+            <ScoreKdeCompare
+              mine={data.song_scores}
+              theirs={data.global?.song_scores ?? []}
+              mineLabel={owner ?? 'You'}
+            />
+          ) : (
+            <ScoreDistribution scores={data.song_scores} caption="" />
+          )}
+        </div>
+      )}
 
-      {/* Scatterplot */}
-      <div className="mb-10">
-        <h2 className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-1">
-          Song Score vs External Factors — All Artists
-        </h2>
-        <p className="text-[#aaa] text-xs mb-4">
-          <span className="text-[#2d6a4f]">●</span> {data.artist}
-          &nbsp;·&nbsp;
-          <span style={{ color: '#ccc' }}>●</span> others
-        </p>
+      {/* Scatterplot — not in Compare, which is about you against the userbase,
+          not this artist against the rest of a library. */}
+      {mode !== 'compare' && (
+      <div className="mb-12">
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+          <p className={SECTION_LABEL}>SONG SCORE VS EXTERNAL FACTORS — ALL ARTISTS</p>
+          <p className="m-0 flex items-center gap-3 text-[12px] text-[#8a7f72]">
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: GREEN }} />{data.artist}</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#d6cdc0]" />others</span>
+          </p>
+        </div>
         <ResponsiveContainer width="100%" height={420}>
           <ScatterChart margin={{ left: -10, right: 20, bottom: 20 }}>
             <XAxis
@@ -553,106 +397,114 @@ export default function ArtistPage() {
               dataKey="avg_song_score"
               name="Avg Song Score"
               domain={[1, 10]}
-              tick={{ fill: '#aaa', fontSize: 11 }}
+              tick={{ fill: '#a8998a', fontSize: 11 }}
               axisLine={false}
               tickLine={false}
-              label={{ value: 'Avg Song Score', fill: '#bbb', fontSize: 10, position: 'insideBottom', offset: -12 }}
+              label={{ value: 'Avg Song Score', fill: '#a8998a', fontSize: 11, position: 'insideBottom', offset: -12 }}
             />
             <YAxis
               type="number"
               dataKey="avg_external"
               name="Avg External"
               domain={['auto', 'auto']}
-              tick={{ fill: '#aaa', fontSize: 11 }}
+              tick={{ fill: '#a8998a', fontSize: 11 }}
               axisLine={false}
               tickLine={false}
-              label={{ value: 'Avg External', fill: '#bbb', fontSize: 10, angle: -90, position: 'insideLeft', offset: 14 }}
+              label={{ value: 'Avg External', fill: '#a8998a', fontSize: 11, angle: -90, position: 'insideLeft', offset: 14 }}
             />
-            <ZAxis range={[25, 25]} />
+            <ZAxis range={[28, 28]} />
+            {/* Recharts slides its tooltip between points, and on the first
+                hover it slides in from the chart's top-left corner. So the
+                slide is off, and each point's tag fades in where it lands,
+                keyed by artist so moving to a neighbour fades rather than jumps. */}
             <Tooltip
-              contentStyle={{ background: '#fff', border: '1px solid #e2e2e2', borderRadius: 8, color: '#111', fontSize: 12 }}
-              cursor={{ strokeDasharray: '3 3', stroke: '#e2e2e2' }}
+              isAnimationActive={false}
+              cursor={{ strokeDasharray: '3 3', stroke: '#e2dbd0' }}
               content={({ payload }) => {
                 if (!payload?.length) return null
                 const d = payload[0].payload as { artist: string; avg_song_score: number; avg_external: number }
                 return (
-                  <div className="text-xs p-2 space-y-0.5">
-                    <p className="font-medium text-[#111]">{d.artist}</p>
-                    <p className="text-[#777]">Song: {d.avg_song_score?.toFixed(2)}</p>
-                    <p className="text-[#777]">Ext: {d.avg_external?.toFixed(2)}</p>
+                  <div key={d.artist} className="fade-in rounded-xl border border-[#e2dbd0] bg-white px-3 py-2 text-[12px] shadow-sm">
+                    <p className="m-0 font-semibold text-[#1c1917]">{d.artist}</p>
+                    <p className="m-0 mt-0.5 tabular-nums text-[#8a7f72]">Song {d.avg_song_score?.toFixed(2)} · Ext {d.avg_external?.toFixed(2)}</p>
                   </div>
                 )
               }}
             />
-            <Scatter data={others} fill="#ccc" opacity={0.7} />
+            <Scatter data={others} fill="#d6cdc0" opacity={0.85} />
             {selfPoint && (
               <Scatter
                 data={[selfPoint]}
                 shape={(props: { cx?: number; cy?: number }) => (
-                  <circle cx={props.cx} cy={props.cy} r={7} fill="#2d6a4f" />
+                  <circle cx={props.cx} cy={props.cy} r={8} fill={GREEN} stroke="#fff" strokeWidth={2.5} />
                 )}
               />
             )}
           </ScatterChart>
         </ResponsiveContainer>
       </div>
+      )}
 
-      {/* Discography Grid */}
-      <DiscographyGrid ratedAlbums={data.albums} artistName={data.artist} />
 
       {/* Album list */}
       {(() => {
-        const fullAlbums = data.albums.filter((a) => !a.is_ep)
-        const eps = data.albums.filter((a) => a.is_ep)
+        // Newest first; undated records last.
+        const chronological = [...data.albums].sort(
+          (a, b) => (b.year ?? -Infinity) - (a.year ?? -Infinity) || a.album_name.localeCompare(b.album_name),
+        )
+        const fullAlbums = chronological.filter((a) => !a.is_ep)
+        const eps = chronological.filter((a) => a.is_ep)
         const AlbumCard = ({ album, ep = false }: { album: typeof data.albums[0]; ep?: boolean }) => (
           <Link
-            key={album.id}
-            to={`/album/${album.id}`}
-            className={`flex items-center gap-4 rounded-xl p-4 transition-colors border ${
-              ep
-                ? 'bg-transparent border-dashed border-[#e2e2e2] hover:border-[#bbb] opacity-70 hover:opacity-100'
-                : 'bg-[#f5f5f5] border-[#e2e2e2] hover:border-[#c8c8c8]'
-            }`}
+            to={albumHref(album.id)}
+            className={`group flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-[#f2eee7] ${ep ? 'opacity-80 hover:opacity-100' : ''}`}
           >
-            <div className="w-12 h-12 shrink-0 bg-[#e8e8e8] rounded-lg overflow-hidden flex items-center justify-center text-[#aaa] text-lg font-bold">
+            <div className={`w-14 h-14 shrink-0 overflow-hidden rounded-xl shadow-[0_10px_22px_-14px_rgba(40,25,10,0.6)] ${COVER_LIFT}`}>
               {album.album_art_url
-                ? <CoverImg url={album.album_art_url} displayPx={48} alt={album.album_name} className="w-full h-full object-cover" />
-                : album.album_name[0]}
+                ? <CoverImg url={album.album_art_url} displayPx={56} alt={album.album_name} className="w-full h-full object-cover" />
+                : <Cover artUrl={null} seed={album.album_name} size={56} radius={0} fontSize={20} />}
             </div>
             <div className="flex-1 min-w-0">
-              <p className={`text-sm font-medium truncate ${ep ? 'text-[#777]' : 'text-[#111]'}`}>{album.album_name}</p>
-              <p className="text-[#aaa] text-xs mt-0.5">{album.year ?? '—'}</p>
+              <p className={`m-0 text-[14.5px] font-semibold truncate ${ep ? 'text-[#57534e]' : 'text-[#1c1917]'}`}>{album.album_name}</p>
+              <p className="m-0 text-[#8a7f72] text-[12.5px] mt-0.5">
+                {album.year ?? '—'}
+                {mode === 'pressd' && album.rater_count != null && ` · ${album.rater_count} ${album.rater_count === 1 ? 'rater' : 'raters'}`}
+              </p>
             </div>
             <div className="text-right shrink-0">
-              <p className={`font-semibold text-sm tabular-nums ${ep ? 'text-[#aaa]' : 'text-[#2d6a4f]'}`}>
+              <p
+                className="font-display m-0 text-[22px] font-bold leading-none tabular-nums"
+                style={{ color: album.score != null ? songScoreColor(album.score) : '#c8c0b4' }}
+              >
                 {album.score?.toFixed(2) ?? '—'}
               </p>
               {album.avg_external !== null && (
-                <p className="text-[#aaa] text-xs">ext {album.avg_external.toFixed(2)}</p>
+                <p className="m-0 mt-1 text-[#8a7f72] text-[12px] tabular-nums">ext {album.avg_external.toFixed(2)}</p>
               )}
             </div>
           </Link>
         )
         return (
           <>
-            <h2 className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-3">Albums</h2>
-            <div className="flex flex-col gap-2 mb-6">
-              {fullAlbums.map((a) => <AlbumCard key={a.id} album={a} />)}
-            </div>
+            <p className={`${SECTION_LABEL} mb-2`}>ALBUMS</p>
+            <ol className="m-0 -mx-4 mb-8 list-none p-0">
+              {fullAlbums.map((a, i) => <RevealRow key={a.id} index={i}><AlbumCard album={a} /></RevealRow>)}
+            </ol>
             {eps.length > 0 && (
               <>
-                <h2 className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-3">EPs</h2>
-                <div className="flex flex-col gap-2">
-                  {eps.map((a) => <AlbumCard key={a.id} album={a} ep />)}
-                </div>
+                <p className={`${SECTION_LABEL} mb-2`}>EPS</p>
+                <ol className="m-0 -mx-4 list-none p-0">
+                  {eps.map((a, i) => <RevealRow key={a.id} index={i}><AlbumCard album={a} ep /></RevealRow>)}
+                </ol>
               </>
             )}
           </>
         )
       })()}
 
-      {/* AOTY Discover */}
-      <DiscoverSection artistName={data.artist} />
+      {/* Neighbours worth comparing, only where a comparison exists. */}
+      {mode === 'compare' && <SimilarArtistComparisons rows={similar} />}
+    </div>
     </div>
   )
 }

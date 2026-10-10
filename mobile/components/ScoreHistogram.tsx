@@ -1,5 +1,6 @@
-// Song-score distribution: nine whole-point buckets — [1,2), [2,3) … [9,10] —
-// each bar tinted along the app's red→green score gradient. Labels sit on the
+// Song-score distribution: whole-point buckets — [1,2), [2,3) … [9,10] — or
+// half-point ones where `binWidth` asks (the artist page, matching web), each
+// bar tinted along the app's red→green score gradient. Labels sit on the
 // bucket *edges*, so a bar's range is read off the two numbers bracketing it
 // (a perfect 10 folds into the last bucket, the usual closed-top-edge
 // treatment). Shared by Profile → Stats, the artist pages, and — small and
@@ -8,13 +9,12 @@ import { StyleSheet, Text, View } from 'react-native'
 import { songScoreColor } from '@pressd/shared/types'
 import { colors, fonts } from '../theme/tokens'
 
-const BUCKETS = 9
-
 export default function ScoreHistogram({
   scores,
   height = 120,
   axis = true,
   gap = 4,
+  binWidth = 1,
 }: {
   scores: number[]
   height?: number
@@ -22,10 +22,13 @@ export default function ScoreHistogram({
    *  which end is which. */
   axis?: boolean
   gap?: number
+  /** Points per bucket: 1 (nine buckets) or 0.5 (eighteen). */
+  binWidth?: 1 | 0.5
 }) {
-  const bins = Array.from({ length: BUCKETS }, () => 0)
+  const buckets = Math.round(9 / binWidth)
+  const bins = Array.from({ length: buckets }, () => 0)
   for (const s of scores) {
-    bins[Math.max(0, Math.min(BUCKETS - 1, Math.floor(s) - 1))] += 1
+    bins[Math.max(0, Math.min(buckets - 1, Math.floor((s - 1) / binWidth)))] += 1
   }
   const maxBin = Math.max(1, ...bins)
 
@@ -39,7 +42,7 @@ export default function ScoreHistogram({
                 styles.bar,
                 {
                   height: Math.max(count > 0 ? Math.min(6, height * 0.2) : 2, (count / maxBin) * height),
-                  backgroundColor: songScoreColor(i + 1),
+                  backgroundColor: songScoreColor(1 + i * binWidth),
                 },
               ]}
             />

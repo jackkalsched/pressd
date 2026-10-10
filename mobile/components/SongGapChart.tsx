@@ -145,7 +145,7 @@ export default function SongGapChart({
           <Text style={[styles.tileValue, { color: summary.mean >= 0 ? UP : DOWN }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>
             {summary.mean >= 0 ? '+' : ''}{summary.mean.toFixed(2)}
           </Text>
-          <Text style={styles.tileLabel}>AVG GAP VS PRESS&apos;D</Text>
+          <Text style={styles.tileLabel}>Average gap vs Pressd</Text>
         </View>
         {/* Right-set, so the pair reads as one line with the two figures
             pushed to opposite edges rather than both crowding the left. */}
@@ -163,7 +163,7 @@ export default function SongGapChart({
           >
             {summary.hottest.title}
           </Text>
-          <Text style={[styles.tileLabel, styles.textRight]} numberOfLines={1}>HOTTEST TAKE</Text>
+          <Text style={[styles.tileLabel, styles.textRight]} numberOfLines={1}>Hottest take</Text>
         </View>
       </View>
 
@@ -196,28 +196,22 @@ const styles = StyleSheet.create({
   // pair the same height whatever the song is called.
   tileSong: { fontFamily: fonts.display, fontSize: 28, lineHeight: 32, letterSpacing: -0.5 },
   textRight: { textAlign: 'right' },
+  // Web's stat label: sentence case under the figure.
   tileLabel: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 8.5,
-    letterSpacing: 0.9,
-    color: colors.inkTertiary,
-    marginTop: 2,
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+    color: '#8a7f72',
+    marginTop: 6,
   },
 
   dirRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },
-  dirLabel: { fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 0.8 },
+  dirLabel: { fontFamily: fonts.bodyBold, fontSize: 9.5, letterSpacing: 1.2 },
 
-  card: {
-    backgroundColor: colors.raised,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
+  // Unboxed, as on web: the rows sit on the page, the axis holds them together.
+  card: { paddingVertical: spacing.xs },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm },
   titleCol: { width: '40%', paddingRight: spacing.sm },
-  title: { fontFamily: fonts.bodyMedium, fontSize: 13.5, color: colors.ink },
+  title: { fontFamily: fonts.body, fontSize: 14, color: colors.ink },
 
   plot: { flex: 1, height: 26, justifyContent: 'center' },
   // The zero line the bars read against, full row height so the column reads
@@ -228,7 +222,7 @@ const styles = StyleSheet.create({
     top: -spacing.sm,
     bottom: -spacing.sm,
     width: 1,
-    backgroundColor: colors.border,
+    backgroundColor: '#e6ded2',
   },
   bar: {
     position: 'absolute',

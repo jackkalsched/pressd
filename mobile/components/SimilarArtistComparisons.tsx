@@ -41,6 +41,7 @@ export default function SimilarArtistComparisons({
             accessibilityRole="button"
             accessibilityLabel={`Compare ${r.artist}`}
           >
+            <View style={styles.artShadow}>
             <View style={styles.art}>
               {/* The initial sits underneath, so an artist Deezer has no photo
                   for still reads as a filled cell rather than a hole. */}
@@ -55,6 +56,7 @@ export default function SimilarArtistComparisons({
                   transition={140}
                 />
               ) : null}
+            </View>
             </View>
             <Text style={styles.name} numberOfLines={1}>{r.artist}</Text>
             {/* Prose inside a fixed square tile, so the line budget is the
@@ -75,21 +77,31 @@ export default function SimilarArtistComparisons({
 }
 
 const styles = StyleSheet.create({
-  strip: { gap: spacing.md, paddingRight: spacing.lg, paddingBottom: spacing.xs },
+  // Vertical room inside the scroller, or it clips the tiles' shadows.
+  strip: { gap: spacing.md, paddingRight: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.md },
+  // Web's tile: rounder corners and a soft warm drop. The shadow is on the cell
+  // because the art clips its own (overflow:hidden) on iOS.
   cell: { width: CELL },
+  artShadow: {
+    borderRadius: radii.lg,
+    shadowColor: '#28190a',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 8 },
+  },
   art: {
     width: CELL,
     height: CELL,
-    borderRadius: radii.md,
-    backgroundColor: colors.inset,
+    borderRadius: radii.lg,
+    backgroundColor: '#ebe5dc',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   artImg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   initial: { fontFamily: fonts.display, fontSize: 44, color: colors.inkMuted },
-  name: { fontFamily: fonts.bodySemiBold, fontSize: 13.5, color: colors.ink, marginTop: 7 },
-  note: { fontFamily: fonts.body, fontSize: 11, lineHeight: 15.5, color: colors.inkTertiary, marginTop: 2 },
+  name: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.ink, marginTop: 10 },
+  note: { fontFamily: fonts.body, fontSize: 12, lineHeight: 16, color: '#8a7f72', marginTop: 2 },
   noteSong: { fontFamily: fonts.bodyMedium, color: colors.inkSecondary },
   noteDiff: { fontFamily: fonts.bodyBold },
 })

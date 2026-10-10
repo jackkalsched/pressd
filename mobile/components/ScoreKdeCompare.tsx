@@ -12,7 +12,7 @@ import { colors, fonts, spacing } from '../theme/tokens'
 
 const YOU = '#f97316'    // orange — you
 const THEM = '#2d6a4f'   // green  — everyone else
-const FILL = 0.28        // low enough that the overlap reads as a third tone
+const FILL = 0.22        // low enough that the overlap reads as a third tone — web's value
 
 const LO = 1
 const HI = 10
@@ -124,8 +124,8 @@ export default function ScoreKdeCompare({
 const styles = StyleSheet.create({
   legend: { flexDirection: 'row', gap: spacing.lg, marginBottom: spacing.sm },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  swatch: { width: 10, height: 10, borderRadius: 2 },
-  legendText: { fontFamily: fonts.bodyMedium, fontSize: 11.5, color: colors.inkTertiary },
+  swatch: { width: 10, height: 10, borderRadius: 5 },
+  legendText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: '#8a7f72' },
   plot: { height: HEIGHT, width: '100%' },
   axis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   tick: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted },
