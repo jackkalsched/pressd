@@ -72,7 +72,7 @@ PLAN_*.md         gitignored design docs; code cites them by section
 | `backend/scoring.py` | framework 1: the user's own album score | 267 |
 | `backend/global_rating.py` | framework 2: the userbase-pooled rating | 155 |
 | `backend/trackkeys.py` | normalization keys; pure stdlib, imported everywhere | 163 |
-| `backend/routers/` | 14 routers, **109 endpoints** | 7,502 |
+| `backend/routers/` | 14 routers, **112 endpoints** | 7,502 |
 | `worker/` | `nightly_predict`, `catalog_predict`, `artist_clusters`, `audio_ingest`, `refresh_new_releases`, … | 2,149 |
 | `theme_predictor/` | `predict_single`, `personalize`, `global_factors`, `corpus`, … | 1,896 |
 | `shared/src/api.ts` | the single API client, 92 exported functions | 1,763 |
@@ -86,7 +86,8 @@ on for every public table, with no policies**, so Supabase's auto-generated REST
 the tables and has `BYPASSRLS`, so it is unaffected. The last migration in `init_db()`
 enables it on any table that lacks it, so a new table is covered on the next boot. Never
 add `FORCE ROW LEVEL SECURITY` — that would bind the owner too. Firebase is
-**FCM push only**, not a datastore (`push.py`). React 19 / Vite 8 / TanStack Query 5 /
+**FCM push and phone-number verification only**, not a datastore (`push.py`,
+`phone.py`). React 19 / Vite 8 / TanStack Query 5 /
 Tailwind 4 on web; Expo 57 / RN 0.86 / expo-router on mobile. Plain REST, JSON,
 snake_case on the wire, camelCase at the client boundary.
 
@@ -175,10 +176,15 @@ creeps earlier each day. `pmset -g log` shows the dark wakes if it recurs.
 `PG_PASSWORD`; `JWT_SECRET`, `TOKEN_TTL_DAYS`, `APP_URL`, `ANTHROPIC_API_KEY`,
 `LASTFM_API_KEY`, `DISCOGS_TOKEN`, `GENIUS_ACCESS_TOKEN`, `THEME_LLM_MODEL`,
 `APPLE_BUNDLE_ID`, `FIREBASE_PROJECT_ID`, `FIREBASE_CREDENTIALS_JSON` (Render) |
-`FIREBASE_CREDENTIALS_FILE` (local), `SMTP_*`.
+`FIREBASE_CREDENTIALS_FILE` (local), `SMTP_*`, `PHONE_HASH_KEY` (the HMAC key phone
+numbers are stored under — **the same value on Render and in local `.env`**, since both
+write the production database; unset, adding a number answers 503, and there is no
+fallback literal, on purpose).
 Web: `VITE_API_URL`, `VITE_GOOGLE_CLIENT_ID`, `VITE_IOS_APP_URL` (the TestFlight or App
 Store link the public pages' iPhone buttons open; unset, they say it is coming to iOS soon —
-`frontend/src/lib/iosApp.ts`). Mobile: `EXPO_PUBLIC_API_URL`,
+`frontend/src/lib/iosApp.ts`), `VITE_FIREBASE_API_KEY` / `_AUTH_DOMAIN` / `_PROJECT_ID` /
+`_APP_ID` (the Firebase web app's config, for phone verification; unset, web hides the
+phone prompt and Settings row). Mobile: `EXPO_PUBLIC_API_URL`,
 `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`.
 Files: `.env` at root, `frontend/.env.local`, `mobile/.env`.
 `EXPO_PUBLIC_*` vars are **inlined into the shipped iOS bundle** — never secrets.
@@ -218,7 +224,7 @@ There is no Alembic and no version table. Adding a column means adding a SQLMode
           ┌──────────────────────┼───────────────────────────┐
           ▼                      ▼                           ▼
    routers/ (14)           scoring.py                trackkeys.py
-   109 endpoints           global_rating.py          (normalization —
+   112 endpoints           global_rating.py          (normalization —
                                  │                    imported by web,
                                  ▼                    worker, and scripts)
                           Postgres (Supabase)
@@ -386,6 +392,27 @@ the recipient's shell copy is missing, but leaves anything they've engaged with 
 how many tracks are scored, say — must fetch the album itself. Both For You screens do
 this for the "Pick this back up" card; web counted songs on the list row until
 September 2026 and so always read 0.
+
+**Phone numbers (both platforms, October 2026)** — for finding friends from contacts,
+which hold numbers far more often than the emails Pressd has. Verified with **Firebase
+Phone Auth on the client** (`mobile/lib/phoneVerify.ts`, `frontend/src/lib/phoneVerify.ts`):
+Firebase texts and checks the code, and the client sends `POST /users/me/phone` the ID
+token that comes back — never the number. `backend/phone.py` reads the number out of
+that Google-signed token (provider `phone`, verified within 10 minutes) and stores only
+`PressUser.phone_hash`, an HMAC-SHA256 under `PHONE_HASH_KEY` (a plain hash of a
+ten-billion-number space is reversed by brute force), plus `phone_last4` for Settings.
+One account per number (a partial unique index; 409 otherwise). `DELETE /users/me/phone`
+forgets it. A **one-time prompt** asks every account that hasn't answered
+(`phone_prompt` null — existing accounts included, unlike the tutorial), after the
+tutorial, never over What's New on mobile: *Add* records `added` via the add itself,
+*Not now* records `skipped` via `POST /users/me/phone-prompt`, each with
+`phone_prompt_at`. `own_user` carries `phone_prompt_done` and `phone_last4`. Both
+clients refresh `GET /users/me` behind the stored session — mobile at launch, web
+whenever the signed-in id changes — because a session stored before the fields existed
+would otherwise never see the prompt. UI: `PhoneSheet` (mobile; Settings → Account) and
+`PhoneDialog` (web; the Edit Profile dialog). Setup outside the repo: Phone sign-in on
+in the Firebase console, `PHONE_HASH_KEY` on Render, and the four `VITE_FIREBASE_*` on
+Vercel with the site's domains authorised. Contact matching itself is not built yet.
 
 **First run (both platforms).** Mobile's `app/(tabs)/_layout.tsx` and web's `AppGate`
 (`frontend/src/App.tsx`) send an account whose `tutorialSeen` is explicitly `false` to

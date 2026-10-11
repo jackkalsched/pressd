@@ -1117,16 +1117,74 @@ export interface UserInfo {
    *  another user, or a session stored before the field existed — must read as
    *  "seen", so the first-run gate checks for an explicit false. */
   tutorialSeen?: boolean
+  /** Own record only, like tutorialSeen: whether the one-time phone-number
+   *  prompt has been answered. Absent reads as answered, so the prompt checks
+   *  for an explicit false. */
+  phonePromptDone?: boolean
+  /** Own record only: the last four digits of the verified number on file. */
+  phoneLast4?: string | null
 }
 
-function toUserInfo(u: { id: number; name: string; avatar_url?: string | null; bio?: string | null; tutorial_seen?: boolean }): UserInfo {
+function toUserInfo(u: {
+  id: number; name: string; avatar_url?: string | null; bio?: string | null
+  tutorial_seen?: boolean; phone_prompt_done?: boolean; phone_last4?: string | null
+}): UserInfo {
   return {
     id: u.id,
     name: u.name,
     avatarUrl: u.avatar_url ?? undefined,
     bio: u.bio ?? undefined,
     tutorialSeen: u.tutorial_seen,
+    phonePromptDone: u.phone_prompt_done,
+    phoneLast4: u.phone_last4,
   }
+}
+
+// ── Phone number ──────────────────────────────────────────────────────────────
+// The number itself never goes to Pressd: each app verifies it with Firebase
+// Phone Auth and sends the ID token that comes back (backend/phone.py).
+
+async function ownUserFrom(res: Response, fallback: string): Promise<UserInfo> {
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? fallback)
+  }
+  return toUserInfo(await res.json())
+}
+
+/** Put the number a Firebase phone verification proved on this account. */
+export async function addPhone(firebaseIdToken: string): Promise<UserInfo> {
+  const res = await apiFetch(`${BASE()}/users/me/phone`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id_token: firebaseIdToken }),
+  })
+  return ownUserFrom(res, 'Couldn’t save that number')
+}
+
+export async function removePhone(): Promise<UserInfo> {
+  const res = await apiFetch(`${BASE()}/users/me/phone`, { method: 'DELETE' })
+  return ownUserFrom(res, 'Couldn’t remove that number')
+}
+
+/** Answer the one-time prompt with "not now". Adding a number answers it too. */
+export async function skipPhonePrompt(): Promise<UserInfo> {
+  const res = await apiFetch(`${BASE()}/users/me/phone-prompt`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decision: 'skipped' }),
+  })
+  return ownUserFrom(res, 'Couldn’t save that')
+}
+
+/** A typed number as E.164, or null. Ten digits read as a US number; anything
+ *  else has to say its country with a leading +. */
+export function toE164(input: string): string | null {
+  const digits = input.replace(/[^\d]/g, '')
+  if (input.trim().startsWith('+')) return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : null
+  if (digits.length === 10) return `+1${digits}`
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
+  return null
 }
 
 /** Every account's public fields — id, name, avatar, bio, nothing else. */

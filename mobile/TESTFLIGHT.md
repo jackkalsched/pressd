@@ -45,7 +45,10 @@ in `frontend/src/App.tsx` and a public URL to paste into App Store Connect.
 
 The questionnaire needs honest answers about what Pressd collects. Currently that is:
 name and email (via Sign in with Apple), user-generated content (ratings, reviews,
-comments), and the social graph. No analytics SDK, no ads, no tracking across apps.
+comments), the social graph, and — optional, since October 2026 — a phone number,
+verified by text and stored only as a keyed hash plus its last four digits, used to
+help friends find each other. In App Store Connect that is *Phone Number* under Contact
+Info, linked to the user, for App Functionality, not for tracking. No analytics SDK, no ads, no tracking across apps.
 
 ---
 

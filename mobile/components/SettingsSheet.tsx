@@ -38,6 +38,7 @@ import { setPref, usePrefs } from '../lib/prefs'
 import { currentPushToken, enablePush, pushPermissionStatus } from '../lib/push'
 import { useAuth } from '../lib/auth'
 import { requestAppleCredential } from '../lib/appleSignIn'
+import PhoneSheet from './PhoneSheet'
 import { useProfile } from '../lib/picks'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
@@ -95,7 +96,29 @@ function GoogleConnectButton({
 }
 
 export default function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { user, signOut, linkGoogleToken, linkAppleToken, updateProfile, uploadAvatarImage, removeAvatar } = useAuth()
+  const { user, signOut, linkGoogleToken, linkAppleToken, updateProfile, uploadAvatarImage, removeAvatar, removePhoneNumber } = useAuth()
+  const [phoneOpen, setPhoneOpen] = useState(false)
+  const [phoneBusy, setPhoneBusy] = useState(false)
+
+  function confirmRemovePhone() {
+    Alert.alert('Remove phone number?', 'Friends won’t be able to find you by your number.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          setPhoneBusy(true)
+          try {
+            await removePhoneNumber()
+          } catch (e) {
+            setError(e instanceof Error ? e.message : 'Couldn’t remove that number')
+          } finally {
+            setPhoneBusy(false)
+          }
+        },
+      },
+    ])
+  }
   const [pushState, setPushState] = useState<'granted' | 'denied' | 'undetermined'>('undetermined')
   const [pushBusy, setPushBusy] = useState(false)
   const [pushToken, setPushToken] = useState<string | null>(null)
@@ -601,9 +624,9 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
               </>
             )}
 
+            <Text style={styles.sectionLabel}>ACCOUNT</Text>
             {providers?.email ? (
               <>
-                <Text style={styles.sectionLabel}>ACCOUNT</Text>
                 <View style={styles.emailRow}>
                   <Text style={styles.emailText} numberOfLines={1}>{providers.email}</Text>
                 </View>
@@ -615,6 +638,26 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
                 ) : null}
               </>
             ) : null}
+            {/* Only the last four digits ever come back from the server: the
+                number itself is stored as a keyed hash (backend/phone.py). */}
+            <View style={styles.settingRow}>
+              <Text style={[styles.providerLabel, { flex: 1 }]} numberOfLines={1}>Phone number</Text>
+              {phoneBusy ? (
+                <ActivityIndicator color={colors.green} />
+              ) : user?.phoneLast4 ? (
+                <View style={styles.phoneOnFile}>
+                  <Text style={styles.phoneDigits} maxFontSizeMultiplier={NUM_SCALE_CAP}>•••• {user.phoneLast4}</Text>
+                  <Pressable onPress={confirmRemovePhone} hitSlop={8} accessibilityLabel="Remove phone number">
+                    <Text style={styles.phoneRemove}>Remove</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable style={styles.connectBtn} onPress={() => setPhoneOpen(true)}>
+                  <Text style={styles.connectBtnText}>Add</Text>
+                </Pressable>
+              )}
+            </View>
+            <PhoneSheet visible={phoneOpen} mode="settings" onClose={() => setPhoneOpen(false)} />
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -902,6 +945,9 @@ const styles = StyleSheet.create({
   connectBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: '#ffffff' },
   removeText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary },
   onlyMethod: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted },
+  phoneOnFile: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  phoneDigits: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary, fontVariant: ['tabular-nums'] },
+  phoneRemove: { fontFamily: fonts.bodySemiBold, fontSize: 13.5, color: '#b91c1c' },
   unavailable: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted },
 
   emailRow: {

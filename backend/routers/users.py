@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..database import get_session
+from ..phone import PhoneNotConfigured, PhoneTokenInvalid, phone_hash, verified_number
 from ..push import send_push, tokens_for_user
 from ..deps import current_user, optional_user, authorize_view, auth_response, own_user, public_user
 from ..models import (
@@ -120,6 +121,86 @@ def update_notification_prefs(
     session.commit()
     session.refresh(current)
     return _notification_prefs(current)
+
+
+# ── Phone number ──────────────────────────────────────────────────────────────
+# Also before /{user_id}. The number never arrives as a field: the client sends
+# the Firebase ID token its code verification produced, and the number is read
+# out of that (backend/phone.py).
+
+@router.post("/me/phone")
+def add_phone(
+    data: dict,
+    current: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Attach the number a fresh Firebase phone sign-in proved. Replaces any
+    number already on the account, and answers the one-time prompt."""
+    token = data.get("id_token")
+    if not isinstance(token, str) or not token:
+        raise HTTPException(status_code=400, detail="id_token is required")
+    try:
+        number = verified_number(token)
+        hashed = phone_hash(number)
+    except PhoneNotConfigured as e:
+        print(f"[phone] not configured: {e}")
+        raise HTTPException(status_code=503, detail="Phone numbers aren’t available yet")
+    except PhoneTokenInvalid as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    taken = session.exec(
+        select(PressUser).where(PressUser.phone_hash == hashed, PressUser.id != current.id)
+    ).first()
+    if taken:
+        raise HTTPException(status_code=409, detail="That number is already on another Pressd account")
+
+    now = datetime.utcnow()
+    current.phone_hash = hashed
+    current.phone_last4 = number[-4:]
+    current.phone_verified_at = now
+    if current.phone_prompt is None:
+        current.phone_prompt, current.phone_prompt_at = "added", now
+    session.add(current)
+    try:
+        session.commit()
+    except IntegrityError:
+        # Two accounts verifying the same number at once: the index decides.
+        session.rollback()
+        raise HTTPException(status_code=409, detail="That number is already on another Pressd account")
+    session.refresh(current)
+    return own_user(current)
+
+
+@router.delete("/me/phone")
+def remove_phone(
+    current: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Forget the number. The prompt's answer stays: it was asked once."""
+    current.phone_hash = current.phone_last4 = current.phone_verified_at = None
+    session.add(current)
+    session.commit()
+    session.refresh(current)
+    return own_user(current)
+
+
+@router.post("/me/phone-prompt")
+def answer_phone_prompt(
+    data: dict,
+    current: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Record "skip" on the one-time prompt. Adding a number records "added"
+    by itself (add_phone), so skipping is the only answer sent here. The first
+    answer stands; asking again is a no-op."""
+    if data.get("decision") != "skipped":
+        raise HTTPException(status_code=400, detail="decision must be 'skipped'")
+    if current.phone_prompt is None and current.phone_hash is None:
+        current.phone_prompt, current.phone_prompt_at = "skipped", datetime.utcnow()
+        session.add(current)
+        session.commit()
+        session.refresh(current)
+    return own_user(current)
 
 
 @router.get("/search")

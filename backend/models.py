@@ -47,6 +47,21 @@ class PressUser(SQLModel, table=True):
     notify_friends: bool = Field(default=True)
     notify_replies: bool = Field(default=True)
 
+    # A verified phone number, for finding friends from contacts — stored only
+    # as an HMAC under PHONE_HASH_KEY, never the number (backend/phone.py). Set
+    # only after Firebase has proved the number, so the hash is never a claim.
+    # Unique among accounts by a partial index in init_db. The last four digits
+    # let Settings say which number is on file.
+    phone_hash: Optional[str] = None
+    phone_last4: Optional[str] = None
+    phone_verified_at: Optional[datetime] = None
+    # The one-time "add your phone number" prompt: 'added' or 'skipped', and
+    # when. Null means it is still owed — every account that existed when it
+    # shipped starts there, unlike tutorial_seen_at, because the point is to
+    # ask the people already here.
+    phone_prompt: Optional[str] = None
+    phone_prompt_at: Optional[datetime] = None
+
     # When the account was made, so signups can be counted by day. Accounts that
     # predate the column are null — when they joined was never recorded, and a
     # guessed date would read as a burst of signups on the day it shipped.

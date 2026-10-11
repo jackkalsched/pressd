@@ -14,6 +14,9 @@ import {
   uploadAvatar,
   deleteAvatar,
   markTutorialSeen,
+  addPhone,
+  removePhone,
+  skipPhonePrompt,
   type Profile,
   type UserInfo,
 } from '@pressd/shared/api'
@@ -48,6 +51,11 @@ interface AuthContextValue {
   removeAvatar: () => Promise<void>
   /** Close out the first-run tutorial, finished or skipped. */
   completeTutorial: () => void
+  /** Phone number: attach the one a Firebase verification proved (the ID token
+   *  it returned), remove it, or answer the one-time prompt with "not now". */
+  addPhoneNumber: (firebaseIdToken: string) => Promise<void>
+  removePhoneNumber: () => Promise<void>
+  skipPhoneNumber: () => Promise<void>
   signOut: () => void
 }
 
@@ -85,6 +93,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch { /* stale user blob — sign-in screen will show */ }
       }
       if (!cancelled) setReady(true)
+      // Then the account itself, behind the cached copy: a session stored
+      // before a field existed (phonePromptDone, say) never learns it any
+      // other way, because nobody signs in again on a phone they stay signed
+      // in on. A failure keeps the cached copy; a 401 signs out via the shared
+      // client's handler.
+      if (token) {
+        try {
+          const fresh = await fetchMe()
+          if (!cancelled) {
+            setUser(fresh)
+            SecureStore.setItemAsync(USER_KEY, JSON.stringify(fresh)).catch(() => {})
+          }
+        } catch { /* offline — the cached copy stands */ }
+      }
     })()
     return () => { cancelled = true }
   }, [])
@@ -141,7 +163,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }): Promise<Profile> => {
       if (!user) throw new Error('Not signed in')
       const profile = await updateUser(user.id, data)
+      // Spread over the session rather than rebuilt from the profile, which
+      // doesn't carry the first-run or phone state — rebuilding dropped them.
       persistUser({
+        ...user,
         id: profile.id,
         name: profile.name,
         avatarUrl: profile.avatar_url ?? undefined,
@@ -176,6 +201,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     markTutorialSeen(user.id).catch(() => {})
   }, [user, persistUser])
 
+  const addPhoneNumber = useCallback(async (firebaseIdToken: string) => {
+    persistUser(await addPhone(firebaseIdToken))
+  }, [persistUser])
+
+  const removePhoneNumber = useCallback(async () => {
+    persistUser(await removePhone())
+  }, [persistUser])
+
+  // Local first, like completeTutorial: the prompt closes on this render, and a
+  // failed save only means it may ask once more.
+  const skipPhoneNumber = useCallback(async () => {
+    if (!user) return
+    persistUser({ ...user, phonePromptDone: true })
+    await skipPhonePrompt().catch(() => {})
+  }, [user, persistUser])
+
   const value = useMemo(
     () => ({
       user,
@@ -189,6 +230,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       uploadAvatarImage,
       removeAvatar,
       completeTutorial,
+      addPhoneNumber,
+      removePhoneNumber,
+      skipPhoneNumber,
       signOut,
     }),
     [
@@ -203,6 +247,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       uploadAvatarImage,
       removeAvatar,
       completeTutorial,
+      addPhoneNumber,
+      removePhoneNumber,
+      skipPhoneNumber,
       signOut,
     ],
   )

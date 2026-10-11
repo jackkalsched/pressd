@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import { markTutorialSeen } from '../api'
+import { addPhone, fetchMe, markTutorialSeen, removePhone, skipPhonePrompt } from '../api'
 
 export interface UserInfo {
   id: number
@@ -10,6 +10,11 @@ export interface UserInfo {
    *  session stored before the field existed — must read as "seen", so the
    *  first-run gate checks for an explicit false. */
   tutorialSeen?: boolean
+  /** Own record only: whether the one-time phone-number prompt is answered.
+   *  Absent reads as answered — the prompt checks for an explicit false. */
+  phonePromptDone?: boolean
+  /** Own record only: the last four digits of the verified number on file. */
+  phoneLast4?: string | null
 }
 
 interface UserContextValue {
@@ -20,6 +25,11 @@ interface UserContextValue {
   isViewingFriend: boolean
   /** Close out the first-run tutorial, finished or skipped. */
   completeTutorial: () => void
+  /** Phone number: attach the one a Firebase verification proved (its ID
+   *  token), remove it, or answer the one-time prompt with "not now". */
+  addPhoneNumber: (firebaseIdToken: string) => Promise<void>
+  removePhoneNumber: () => Promise<void>
+  skipPhoneNumber: () => void
   signOut: () => void
 }
 
@@ -51,6 +61,44 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setActiveUserState(user)
   }
 
+  // The account itself, behind the stored copy, whenever who's signed in
+  // changes — at load and after any sign-in. The sign-in sites each pass a few
+  // fields by hand, and a session stored before a field existed never learns
+  // it otherwise; this is how the phone fields reach everyone. A failure keeps
+  // what's stored.
+  const activeId = activeUser?.id
+  useEffect(() => {
+    if (activeId == null) return
+    let cancelled = false
+    fetchMe()
+      .then((me) => {
+        if (cancelled) return
+        setActiveUserState((prev) => (prev && prev.id === me.id ? { ...prev, ...me } : prev))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [activeId])
+
+  function mergeOwn(me: UserInfo) {
+    setActiveUserState((prev) => (prev && prev.id === me.id ? { ...prev, ...me } : prev))
+  }
+
+  async function addPhoneNumber(firebaseIdToken: string) {
+    mergeOwn(await addPhone(firebaseIdToken))
+  }
+
+  async function removePhoneNumber() {
+    mergeOwn(await removePhone())
+  }
+
+  // Local first, like completeTutorial: the prompt closes on this render, and
+  // a failed save only means it may ask once more.
+  function skipPhoneNumber() {
+    if (!activeUser) return
+    setActiveUserState({ ...activeUser, phonePromptDone: true })
+    skipPhonePrompt().catch(() => {})
+  }
+
   // Local first, so the gate in App lets the user through on this render
   // instead of waiting on the network. A failed save only means another device
   // may show the tutorial once more — not worth holding anyone here for.
@@ -75,6 +123,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setViewingUser,
         isViewingFriend: !!activeUser && !!viewingUser && viewingUser.id !== activeUser.id,
         completeTutorial,
+        addPhoneNumber,
+        removePhoneNumber,
+        skipPhoneNumber,
         signOut,
       }}
     >

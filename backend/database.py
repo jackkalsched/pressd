@@ -214,6 +214,16 @@ def init_db():
             "ALTER TABLE pressuser ADD COLUMN notify_recommendations BOOLEAN NOT NULL DEFAULT TRUE",
             "ALTER TABLE pressuser ADD COLUMN notify_friends BOOLEAN NOT NULL DEFAULT TRUE",
             "ALTER TABLE pressuser ADD COLUMN notify_replies BOOLEAN NOT NULL DEFAULT TRUE",
+            # ── Phone numbers, for finding friends from contacts (backend/
+            #    phone.py). Null for every existing account on purpose: a null
+            #    phone_prompt is what shows them the one-time prompt. One
+            #    account per verified number, enforced by the partial index.
+            "ALTER TABLE pressuser ADD COLUMN phone_hash VARCHAR",
+            "ALTER TABLE pressuser ADD COLUMN phone_last4 VARCHAR",
+            "ALTER TABLE pressuser ADD COLUMN phone_verified_at TIMESTAMPTZ",
+            "ALTER TABLE pressuser ADD COLUMN phone_prompt VARCHAR",
+            "ALTER TABLE pressuser ADD COLUMN phone_prompt_at TIMESTAMPTZ",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_pressuser_phone_hash ON pressuser (phone_hash) WHERE phone_hash IS NOT NULL",
             # ── Row-level security on every public table, last so it covers the
             #    tables create_all just made. Supabase serves the public schema
             #    over its REST API to anyone holding the project's publishable

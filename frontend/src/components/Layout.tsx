@@ -8,6 +8,8 @@ import { useUser } from '../context/UserContext'
 import { fetchFriends, getInviteLink, updateUser, linkGoogle, removeFriend } from '../api'
 import type { UserInfo } from '../api'
 import AddAlbumModal from './AddAlbumModal'
+import PhoneDialog from './PhoneDialog'
+import { phoneVerifyConfigured } from '../lib/phoneVerify'
 
 function avatarColor(name: string): string {
   const colors = ['#2d6a4f', '#1d4ed8', '#7c3aed', '#b45309', '#0f766e', '#be185d', '#c2410c']
@@ -152,7 +154,21 @@ function resizeImageToBase64(file: File, size = 200): Promise<string> {
 }
 
 function ProfileModal({ onClose }: { onClose: () => void }) {
-  const { activeUser, setActiveUser, signOut } = useUser()
+  const { activeUser, setActiveUser, signOut, removePhoneNumber } = useUser()
+  const [phoneOpen, setPhoneOpen] = useState(false)
+  const [phoneBusy, setPhoneBusy] = useState(false)
+
+  async function removeNumber() {
+    if (!window.confirm('Remove your phone number? Friends won’t be able to find you by it.')) return
+    setPhoneBusy(true)
+    try {
+      await removePhoneNumber()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Couldn’t remove that number')
+    } finally {
+      setPhoneBusy(false)
+    }
+  }
   const navigate = useNavigate()
   const [name, setName] = useState(activeUser?.name ?? '')
   const [avatarUrl, setAvatarUrl] = useState(activeUser?.avatarUrl ?? '')
@@ -167,7 +183,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
         // Links to whoever the stored session token belongs to; the server no
         // longer accepts a user id from the client here.
         const user = await linkGoogle(tokenResponse.access_token)
-        setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl, tutorialSeen: user.tutorialSeen })
+        setActiveUser({ ...activeUser, id: user.id, name: user.name, avatarUrl: user.avatarUrl, tutorialSeen: user.tutorialSeen })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to link Google account')
       }
@@ -292,6 +308,30 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
               Link Google Account
             </button>
           )}
+          {/* Mobile's Settings → Account → Phone number. Only the last four
+              digits ever come back: the number is stored as a keyed hash. */}
+          {phoneVerifyConfigured && (
+            <div className="flex w-full items-center gap-2 px-3 py-2">
+              <span className="flex-1 text-sm font-medium text-[#111]">Phone number</span>
+              {phoneBusy ? (
+                <Loader2 size={14} className="animate-spin text-[#2d6a4f]" />
+              ) : activeUser.phoneLast4 ? (
+                <>
+                  <span className="text-sm tabular-nums text-[#57534e]">•••• {activeUser.phoneLast4}</span>
+                  <button onClick={removeNumber} className="ml-2 text-sm font-semibold text-[#b91c1c] hover:underline underline-offset-2">
+                    Remove
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setPhoneOpen(true)}
+                  className="rounded-full border border-[#e2dbd0] bg-white px-3 py-1 text-[13px] font-semibold text-[#2d6a4f] hover:border-[#2d6a4f]"
+                >
+                  Add
+                </button>
+              )}
+            </div>
+          )}
           {/* Mobile's Settings → How Pressd works. This dialog is the web's
               settings surface, so the replay lives here. */}
           <button
@@ -312,6 +352,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
+      {phoneOpen && <PhoneDialog mode="settings" onClose={() => setPhoneOpen(false)} />}
     </div>
   )
 }
@@ -497,6 +538,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+      {/* The one-time ask. Layout only renders past the tutorial and welcome
+          gates, so it never lands on a first run's first screen. An explicit
+          false: a session that hasn't heard of the field waits for the refresh
+          in UserContext. Hidden where Firebase isn't configured for web. */}
+      {phoneVerifyConfigured && activeUser?.phonePromptDone === false && (
+        <PhoneDialog mode="prompt" onClose={() => {}} />
+      )}
       {showAddAlbum && activeUser && (
         <AddAlbumModal onClose={() => setShowAddAlbum(false)} userId={activeUser.id} />
       )}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Stack, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
@@ -29,6 +29,7 @@ import { attachPushListeners, syncPushToken } from '../lib/push'
 import { wireAppStateFocus } from '../lib/refresh'
 import { getMessaging, setBackgroundMessageHandler } from '@react-native-firebase/messaging'
 import WhatsNewSheet from '../components/WhatsNewSheet'
+import PhoneSheet from '../components/PhoneSheet'
 import { colors } from '../theme/tokens'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
@@ -52,6 +53,11 @@ const queryClient = new QueryClient({
 
 function RootNavigator() {
   const { user, ready } = useAuth()
+  // Whether the release notes are up, so the phone prompt can wait its turn.
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false)
+  // And whether that's known yet — until the Keychain answers, the notes may
+  // still be about to open.
+  const whatsNewKnown = useWhatsNewHydrated()
   const router = useRouter()
 
   const [fontsLoaded] = useFonts({
@@ -112,12 +118,22 @@ function RootNavigator() {
 
   if (!fontsLoaded || !ready) return null // splash stays up
 
+  const pastFirstRun = !!user && user.tutorialSeen !== false
   return (
     <>
     {/* Held back while the first-run tutorial is owed: a new account has no
         previous build to compare against, and the tutorial marks the current
         build's notes read when it closes. */}
-    <WhatsNew signedIn={!!user && user.tutorialSeen !== false} />
+    <WhatsNew signedIn={pastFirstRun} onOpenChange={setWhatsNewOpen} />
+    {/* The one-time phone-number ask, after the tutorial and never on top of
+        the release notes — the build that brings it also brings those. An
+        explicit false: a session that hasn't heard of the field yet waits
+        for the launch refresh in lib/auth rather than asking twice. */}
+    <PhoneSheet
+      mode="prompt"
+      visible={pastFirstRun && user.phonePromptDone === false && whatsNewKnown && !whatsNewOpen}
+      onClose={() => {}}
+    />
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Protected guard={!!user}>
         <Stack.Screen name="(tabs)" />
@@ -152,7 +168,7 @@ function RootNavigator() {
  *  Held until the Keychain has answered, so it never flashes up on a build
  *  whose notes were already read.
  */
-function WhatsNew({ signedIn }: { signedIn: boolean }) {
+function WhatsNew({ signedIn, onOpenChange }: { signedIn: boolean; onOpenChange: (open: boolean) => void }) {
   const seen = useWhatsNewSeen()
   const hydrated = useWhatsNewHydrated()
   const build = currentBuild()
@@ -166,15 +182,22 @@ function WhatsNew({ signedIn }: { signedIn: boolean }) {
   // render once with the sheet closed and again with it open for no reason.
   const due = signedIn && hydrated && !!release && build > seen
   // Pinned the first time it comes due, so marking it read — which moves `seen`
-  // and makes `due` false — doesn't yank the sheet out mid-read.
-  const pinned = useRef(false)
-  if (due) pinned.current = true
+  // and makes `due` false — doesn't yank the sheet out mid-read. State set
+  // during render rather than a ref: React re-renders straight away, and the
+  // parent can be told the sheet is open (the phone prompt waits on it).
+  const [pinned, setPinned] = useState(false)
+  if (due && !pinned) setPinned(true)
+
+  const open = !!release && pinned && !dismissed
+  useEffect(() => {
+    onOpenChange(open)
+  }, [open, onOpenChange])
 
   if (!release) return null
   return (
     <WhatsNewSheet
       release={release}
-      visible={pinned.current && !dismissed}
+      visible={open}
       onClose={() => {
         setDismissed(true)
         markWhatsNewSeen(build)
