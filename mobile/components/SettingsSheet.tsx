@@ -31,7 +31,7 @@ import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Apple, Check, ChevronRight, LogOut, Trash2, X } from 'lucide-react-native'
-import { fetchLinkedProviders, unlinkProvider, deleteOwnAccount } from '../lib/api'
+import { fetchLinkedProviders, unlinkProvider, deleteOwnAccount, uploadBanner, deleteBanner, type Profile } from '../lib/api'
 import { fetchNotificationPrefs, updateNotificationPrefs, type NotificationPrefs } from '@pressd/shared/api'
 import type { AlbumStatus } from '@pressd/shared/types'
 import { setPref, usePrefs } from '../lib/prefs'
@@ -39,7 +39,7 @@ import { currentPushToken, enablePush, pushPermissionStatus } from '../lib/push'
 import { useAuth } from '../lib/auth'
 import { requestAppleCredential } from '../lib/appleSignIn'
 import PhoneSheet from './PhoneSheet'
-import { useProfile } from '../lib/picks'
+import { profileKey, useProfile } from '../lib/picks'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
 // The server owns the avatar's final shape — it crops, resizes to 512², strips
@@ -48,6 +48,9 @@ import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 // every byte costs a third more on the wire, and a camera-roll original is
 // several megabytes before compression.
 const AVATAR_UPLOAD_QUALITY = 0.8
+// The banner is stored at 480×200 and only ever shown blurred, so even less
+// survives to the screen; a rougher upload costs nothing visible.
+const BANNER_UPLOAD_QUALITY = 0.6
 
 // The published privacy policy (frontend/src/pages/Privacy.tsx) and the
 // contact address it gives — support reaches the same inbox.
@@ -173,6 +176,7 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
   const [nameDraft, setNameDraft] = useState<string | null>(null) // non-null while editing
   const [savingName, setSavingName] = useState(false)
   const [avatarBusy, setAvatarBusy] = useState(false)
+  const [bannerBusy, setBannerBusy] = useState(false)
   // Reset each time the sheet comes back up; see openPicker.
   const navigatingRef = useRef(false)
 
@@ -313,6 +317,57 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
     }
   }
 
+  /** The profile header reads banner_url off the shared profile query, so
+   *  the new URL goes straight into that cache and the header swaps at once. */
+  function setBannerUrl(url: string | null) {
+    if (!user) return
+    qc.setQueryData<Profile>(profileKey(user.id), (old) => (old ? { ...old, banner_url: url } : old))
+  }
+
+  async function pickBanner() {
+    if (!user) return
+    setError(null)
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [12, 5],
+      quality: BANNER_UPLOAD_QUALITY,
+      base64: true,
+    })
+    if (result.canceled || !result.assets[0]) return
+    const asset = result.assets[0]
+    if (!asset.base64) {
+      setError('Could not read that image')
+      return
+    }
+    setBannerBusy(true)
+    try {
+      const { banner_url } = await uploadBanner(user.id, {
+        base64: asset.base64,
+        contentType: asset.mimeType ?? 'image/jpeg',
+      })
+      setBannerUrl(banner_url)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not set your banner')
+    } finally {
+      setBannerBusy(false)
+    }
+  }
+
+  async function clearBanner() {
+    if (!user) return
+    setBannerBusy(true)
+    setError(null)
+    try {
+      await deleteBanner(user.id)
+      setBannerUrl(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove your banner')
+    } finally {
+      setBannerBusy(false)
+    }
+  }
+
   /** The pickers are full screens, and this sheet sits above the navigator —
    *  so it has to get out of the way before the push lands, and it has to stop
    *  taking taps in the gap while it animates out. Without the guard a second
@@ -431,6 +486,42 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
                   </Pressable>
                   {user?.avatarUrl ? (
                     <Pressable onPress={clearAvatar} hitSlop={8}>
+                      <Text style={styles.removeText}>Remove</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              )}
+            </View>
+
+            <View style={styles.avatarRow}>
+              <Pressable onPress={pickBanner} disabled={bannerBusy} accessibilityLabel="Change profile banner">
+                <View style={styles.bannerThumb}>
+                  {profile?.banner_url ? (
+                    <Image
+                      source={{ uri: profile.banner_url }}
+                      style={styles.avatarImg}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      recyclingKey={profile.banner_url}
+                    />
+                  ) : null}
+                </View>
+              </Pressable>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.providerLabel}>Banner</Text>
+                <Text style={styles.notConnectedText}>
+                  {profile?.banner_url ? 'Washed behind your profile header' : 'Your favourite album\'s cover'}
+                </Text>
+              </View>
+              {bannerBusy ? (
+                <ActivityIndicator color={colors.green} />
+              ) : (
+                <View style={styles.avatarActions}>
+                  <Pressable onPress={pickBanner} hitSlop={8}>
+                    <Text style={styles.linkAction}>{profile?.banner_url ? 'Change' : 'Add'}</Text>
+                  </Pressable>
+                  {profile?.banner_url ? (
+                    <Pressable onPress={clearBanner} hitSlop={8}>
                       <Text style={styles.removeText}>Remove</Text>
                     </Pressable>
                   ) : null}
@@ -927,6 +1018,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   avatarImg: { width: '100%', height: '100%' },
+  bannerThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.sm,
+    backgroundColor: colors.inset,
+    overflow: 'hidden',
+  },
   avatarInitial: { fontFamily: fonts.display, fontSize: 20, color: colors.green },
   avatarActions: { alignItems: 'flex-end', gap: 4 },
   linkAction: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },

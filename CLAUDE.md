@@ -414,6 +414,19 @@ would otherwise never see the prompt. UI: `PhoneSheet` (mobile; Settings → Acc
 in the Firebase console, `PHONE_HASH_KEY` on Render, and the four `VITE_FIREBASE_*` on
 Vercel with the site's domains authorised.
 
+**Custom profile banners (mobile only, October 2026)** — the profile header's wash
+can be an uploaded picture instead of the favourite album's cover. It is still drawn
+blurred, so there's nothing to moderate and the server stores it at 480×200
+(`BANNER_SIZE`, ~15 KB) through the same decode path as avatars (`_normalize_image` in
+`users.py`: EXIF stripped, rotation applied, pixel-bomb guard). `UserBanner` holds the
+bytes and `PressUser.banner_url` points at them. The endpoints are
+`POST`/`DELETE /users/{id}/banner`, plus an unauthenticated `GET` for the same `<Image>`
+reason as avatars. `banner_url` rides on `GET /users/{id}/profile`, and `ProfileBanner`
+washes `banner_url ?? favourite album ?? top-rated art`. It's set in Settings → Profile,
+which writes the new URL straight into the `['profile', id]` cache. Account deletion
+now removes both picture rows; before this it never removed `UserAvatar`, whose
+foreign key blocked deleting any account that had a photo.
+
 **Finding friends from contacts (mobile only, October 2026)** — the section under the
 search box in Social → *Find friends* while nothing is typed. It asks in its own words
 before the iOS prompt (Apple wants the reason first), reads names and numbers through
@@ -902,7 +915,8 @@ for editing a review later, and both paths post into the thread through
    **My Picks** (`favorite_album/artist/song_id`, `setTopSong`). Web splits this across
    `Library.tsx` (168) and `Stats.tsx` (498) and has **no picks UI and no banner** —
    `Library.tsx` calls only `fetchAlbums`, where mobile also calls `fetchSummary`,
-   `fetchScoreRange`, `fetchArtistStats`, `fetchScatterData`.
+   `fetchScoreRange`, `fetchArtistStats`, `fetchScatterData`. Custom banners
+   (`uploadBanner`/`deleteBanner`) are mobile-only with it, by choice for now.
 5. **Stats.** Closed, September 2026: web's Stats ranks genres and subgenres
    (`GenreBreakdown`, by count or by average), each row opening
    [TagBoard.tsx](frontend/src/pages/TagBoard.tsx) at `/stats/:kind/:tag?user=&owner=`
@@ -1104,7 +1118,7 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   `cd frontend && npm run typecheck`. Mobile: `cd mobile && npm run typecheck`. Backend:
   import the app (`python -c "import backend.main"`). `cd frontend && npx eslint .`
   currently reports **15 problems — 11 errors and 4 warnings**, and mobile `eslint .`
-  reports **130 errors
+  reports **127 errors
   and 7 warnings** (mostly `react-hooks/refs` on `useRef(...).current`; hold an
   `Animated.Value` in `useState(() => …)` instead) — if your change doesn't add to
   those counts, you haven't regressed them.

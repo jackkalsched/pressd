@@ -224,6 +224,9 @@ def init_db():
             "ALTER TABLE pressuser ADD COLUMN phone_prompt VARCHAR",
             "ALTER TABLE pressuser ADD COLUMN phone_prompt_at TIMESTAMPTZ",
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_pressuser_phone_hash ON pressuser (phone_hash) WHERE phone_hash IS NOT NULL",
+            # ── Custom profile header (UserBanner). Null means the header keeps
+            #    washing in the favourite album's cover.
+            "ALTER TABLE pressuser ADD COLUMN banner_url VARCHAR",
             # ── Row-level security on every public table, last so it covers the
             #    tables create_all just made. Supabase serves the public schema
             #    over its REST API to anyone holding the project's publishable

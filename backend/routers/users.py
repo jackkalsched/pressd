@@ -30,6 +30,7 @@ from ..models import (
     Comment,
     WorkerRun,
     UserAvatar,
+    UserBanner,
 )
 from ..scoring import (
     get_user_points,
@@ -505,6 +506,7 @@ def _profile_payload(session: Session, user: PressUser) -> dict:
         "id": user.id,
         "name": user.name,
         "avatar_url": user.avatar_url,
+        "banner_url": user.banner_url,
         "bio": user.bio,
         # The client hides the picks row entirely below the threshold rather
         # than showing three empty slots on a new profile.
@@ -648,6 +650,11 @@ def delete_own_account(
         session.delete(row)
     for row in session.exec(select(WorkerRun).where(WorkerRun.user_id == uid)).all():
         session.delete(row)
+    # The uploaded pictures hang off the user row by foreign key too.
+    for model in (UserAvatar, UserBanner):
+        row = session.get(model, uid)
+        if row:
+            session.delete(row)
 
     session.delete(current)
     session.commit()
@@ -741,6 +748,19 @@ def _normalize_avatar(raw: bytes) -> bytes:
     add bars that then get cut. Re-encoding also drops all metadata, which is
     the point as much as the resize is.
     """
+    return _normalize_image(raw, (AVATAR_EDGE, AVATAR_EDGE), AVATAR_JPEG_QUALITY)
+
+
+# A banner is only ever drawn blurred (radius 45, from a 120px fetch) behind
+# the profile header, so it is stored at the size the wash needs rather than
+# the size the photo arrived at — about 15 KB. Wide, because the header is.
+BANNER_SIZE = (480, 200)
+BANNER_JPEG_QUALITY = 75
+
+
+def _normalize_image(raw: bytes, size: tuple[int, int], quality: int) -> bytes:
+    """The shared decode → orient → flatten → crop → re-encode path for every
+    uploaded picture, so avatar and banner get the same EXIF and bomb guards."""
     try:
         img = Image.open(io.BytesIO(raw))
         if (img.size[0] * img.size[1]) > AVATAR_MAX_PIXELS:
@@ -760,7 +780,7 @@ def _normalize_avatar(raw: bytes) -> bytes:
             img = flat
         else:
             img = img.convert("RGB")
-        img = ImageOps.fit(img, (AVATAR_EDGE, AVATAR_EDGE), method=Image.Resampling.LANCZOS)
+        img = ImageOps.fit(img, size, method=Image.Resampling.LANCZOS)
     except HTTPException:
         raise
     except (UnidentifiedImageError, OSError, ValueError):
@@ -768,7 +788,7 @@ def _normalize_avatar(raw: bytes) -> bytes:
 
     out = io.BytesIO()
     # No exif= argument, so nothing from the original survives the round trip.
-    img.save(out, format="JPEG", quality=AVATAR_JPEG_QUALITY, optimize=True, progressive=True)
+    img.save(out, format="JPEG", quality=quality, optimize=True, progressive=True)
     return out.getvalue()
 
 
@@ -849,6 +869,80 @@ def delete_avatar(
     user = session.get(PressUser, user_id)
     if user:
         user.avatar_url = None
+        session.add(user)
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/{user_id}/banner")
+def upload_banner(
+    user_id: int,
+    data: dict,
+    request: Request,
+    current: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Store a profile header picture and point banner_url at it. Same shape
+    and guards as upload_avatar, cache-buster included."""
+    if user_id != current.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    user = session.get(PressUser, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        raw = base64.b64decode(data.get("data") or "", validate=True)
+    except (BinasciiError, ValueError):
+        raise HTTPException(status_code=400, detail="Image data is not valid base64")
+    if not raw:
+        raise HTTPException(status_code=400, detail="Image is empty")
+    if len(raw) > AVATAR_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Image is too large — resize it first")
+
+    stored = _normalize_image(raw, BANNER_SIZE, BANNER_JPEG_QUALITY)
+
+    row = session.get(UserBanner, user_id)
+    if row:
+        row.content_type, row.data, row.updated_at = "image/jpeg", stored, datetime.utcnow()
+    else:
+        row = UserBanner(user_id=user_id, content_type="image/jpeg", data=stored)
+    session.add(row)
+
+    stamp = int(row.updated_at.timestamp())
+    user.banner_url = f"{str(request.base_url).rstrip('/')}/users/{user_id}/banner?v={stamp}"
+    session.add(user)
+    session.commit()
+    return {"banner_url": user.banner_url, "bytes": len(stored), "received_bytes": len(raw)}
+
+
+@router.get("/{user_id}/banner")
+def get_banner(user_id: int, session: Session = Depends(get_session)):
+    """Unauthenticated for the same reason as get_avatar: an <Image> source
+    carries no bearer token."""
+    row = session.get(UserBanner, user_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="No banner")
+    return Response(
+        content=row.data,
+        media_type=row.content_type,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
+@router.delete("/{user_id}/banner")
+def delete_banner(
+    user_id: int,
+    current: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    if user_id != current.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    row = session.get(UserBanner, user_id)
+    if row:
+        session.delete(row)
+    user = session.get(PressUser, user_id)
+    if user:
+        user.banner_url = None
         session.add(user)
     session.commit()
     return {"ok": True}

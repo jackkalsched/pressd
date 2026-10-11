@@ -1365,6 +1365,9 @@ export interface Profile {
   id: number
   name: string
   avatar_url: string | null
+  /** An uploaded header picture, washed in place of the favourite album's
+   *  cover; null keeps the cover. */
+  banner_url: string | null
   bio: string | null
   /** False until `picks_required` albums are rated; the picks row stays hidden. */
   picks_unlocked: boolean
@@ -1480,6 +1483,29 @@ export async function uploadAvatar(
 export async function deleteAvatar(userId: number): Promise<void> {
   const res = await apiFetch(`${BASE()}/users/${userId}/avatar`, { method: 'DELETE' })
   if (!res.ok) throw new Error('Failed to remove picture')
+}
+
+/** Upload a profile header picture as base64. Like uploadAvatar, adopt the
+ *  returned banner_url — its stamp is what makes the new picture show. */
+export async function uploadBanner(
+  userId: number,
+  image: { base64: string; contentType: string },
+): Promise<{ banner_url: string }> {
+  const res = await apiFetch(`${BASE()}/users/${userId}/banner`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: image.base64, content_type: image.contentType }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? 'Failed to upload banner')
+  }
+  return res.json()
+}
+
+export async function deleteBanner(userId: number): Promise<void> {
+  const res = await apiFetch(`${BASE()}/users/${userId}/banner`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to remove banner')
 }
 
 /** Permanently erase the signed-in account and everything attached to it.

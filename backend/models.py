@@ -10,6 +10,9 @@ class PressUser(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
     avatar_url: Optional[str] = None
+    # The profile header's wash: an uploaded picture (UserBanner), shown blurred
+    # in place of the favourite album's cover. Null falls back to that cover.
+    banner_url: Optional[str] = None
     bio: Optional[str] = None
 
     # Three picks the user pins to their profile. Albums and songs are stored by
@@ -102,6 +105,17 @@ class UserAvatar(SQLModel, table=True):
     Bytes in Postgres rather than object storage because there is no bucket
     configured and 33 users' avatars is not a storage problem. If that changes,
     this table becomes the migration source and avatar_url stops pointing here.
+    """
+    user_id: int = Field(primary_key=True, foreign_key="pressuser.id")
+    content_type: str
+    data: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class UserBanner(SQLModel, table=True):
+    """An uploaded profile header picture, stored as bytes — UserAvatar's twin,
+    in its own table for the same reason. Kept tiny: the header only ever draws
+    it blurred to a wash, so the detail a full-size photo carries is never seen.
     """
     user_id: int = Field(primary_key=True, foreign_key="pressuser.id")
     content_type: str

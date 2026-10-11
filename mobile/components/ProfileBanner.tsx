@@ -129,7 +129,7 @@ export default function ProfileBanner({
   return (
     <>
       <View style={[styles.banner, { paddingTop: topInset + spacing.sm }]}>
-        <BannerWash artUrl={profile?.favorite_album?.album_art_url ?? washArtUrl} />
+        <BannerWash artUrl={profile?.banner_url ?? profile?.favorite_album?.album_art_url ?? washArtUrl} />
 
         <View style={styles.bannerTop}>
           <RingedAvatar name={name} avatarUrl={avatarUrl} avg={avg} />
