@@ -155,6 +155,14 @@ one did, advanced in few-second bursts with the lid shut, and finished 22h later
 `lockf` lock stops the two running at once; finding it held exits 0. `audio-health`
 forgives a run stuck at `running` while a success is under 36h old.
 
+A run that *starts* awake can still have the lid shut under it. It then advances in
+dark-wake bursts, which is slow but harmless, except to a database call in flight: on
+Oct 11 a `COMMIT` landed on the server, its reply was lost in the sleep, and libpq sat
+in `poll()` for eleven hours holding the lock. The engine now sets TCP keepalives
+(`database.py`, `_build_engine`), so a dead connection raises about a minute after the
+next wake instead. A hung run otherwise needs killing by hand (`pgrep -f
+worker.audio_ingest`), and its `workerrun` row marking `error`.
+
 The catch-up replaced a login-only agent (`.login`, which `install.sh` now removes)
 after Oct 3–5 2026: the Mac slept on battery through 00:30, macOS spent the missed run on
 a 5–9 s "DarkWake" maintenance wake with no Wi-Fi, and the run failed at its database

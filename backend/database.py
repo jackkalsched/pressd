@@ -25,7 +25,16 @@ def _build_engine():
             port=int(os.getenv("PG_PORT", "5432")),
             database=os.getenv("PG_DB", "postgres"),
         )
-    return create_engine(url, pool_size=5, max_overflow=10, pool_pre_ping=True, echo=False)
+    # TCP keepalives, so a connection whose far end has gone fails instead of
+    # waiting forever. libpq sets no timeout on a query in flight, and without
+    # keepalives a socket the pooler dropped still reads ESTABLISHED. On Oct 11
+    # 2026 the nightly audio ingest sent a COMMIT, the lid shut, the commit
+    # landed on the server and its reply never came back: the job sat in poll()
+    # for eleven hours holding the run lock. With these, a dead peer is found
+    # about a minute after the Mac wakes and the call raises.
+    return create_engine(url, pool_size=5, max_overflow=10, pool_pre_ping=True, echo=False,
+                         connect_args={"keepalives": 1, "keepalives_idle": 30,
+                                       "keepalives_interval": 10, "keepalives_count": 3})
 
 
 engine = _build_engine()
