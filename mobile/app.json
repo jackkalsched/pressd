@@ -64,7 +64,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Pressd uses your photos so you can set a profile picture.",
+          "photosPermission": "Pressd uses your photos so you can set a profile picture and banner.",
           "cameraPermission": false
         }
       ],

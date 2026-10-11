@@ -270,6 +270,26 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
     }
   }
 
+  /** Ask for the photo library before opening it. iOS's picker runs out of
+   *  process and would open without asking, but asking first means the
+   *  choice is the user's and shows up under Pressd in Settings. Limited
+   *  access counts as yes — the picker shows whatever was shared. Once
+   *  refused, iOS won't ask again, so the only way back is Settings. */
+  async function ensurePhotoAccess(): Promise<boolean> {
+    let perm = await ImagePicker.getMediaLibraryPermissionsAsync()
+    if (!perm.granted && perm.canAskAgain) perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (perm.granted) return true
+    Alert.alert(
+      'Allow access to your photos',
+      'Pressd needs your photos to set a profile picture or banner.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Open Settings', onPress: () => Linking.openSettings().catch(() => {}) },
+      ],
+    )
+    return false
+  }
+
   /** Pick a square from the library and send it up.
    *
    *  `allowsEditing` gives the user the crop rather than letting the server
@@ -279,6 +299,7 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
    */
   async function pickAvatar() {
     setError(null)
+    if (!(await ensurePhotoAccess())) return
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -327,6 +348,7 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
   async function pickBanner() {
     if (!user) return
     setError(null)
+    if (!(await ensurePhotoAccess())) return
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -473,9 +495,6 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
               </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.providerLabel}>Profile picture</Text>
-                <Text style={styles.notConnectedText}>
-                  {user?.avatarUrl ? 'Shown on your profile and in the feed' : 'No picture set'}
-                </Text>
               </View>
               {avatarBusy ? (
                 <ActivityIndicator color={colors.green} />
@@ -509,9 +528,6 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
               </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.providerLabel}>Banner</Text>
-                <Text style={styles.notConnectedText}>
-                  {profile?.banner_url ? 'Washed behind your profile header' : 'Your favourite album\'s cover'}
-                </Text>
               </View>
               {bannerBusy ? (
                 <ActivityIndicator color={colors.green} />
