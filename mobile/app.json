@@ -56,6 +56,12 @@
       ],
       "expo-sharing",
       [
+        "expo-contacts",
+        {
+          "contactsPermission": "Pressd checks your contacts' phone numbers against Pressd accounts so you can find friends who are already here, and invite the rest. Your contacts aren't stored."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Pressd uses your photos so you can set a profile picture.",

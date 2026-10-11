@@ -203,6 +203,91 @@ def answer_phone_prompt(
     return own_user(current)
 
 
+def _relationships(session: Session, uid: int) -> dict[str, set[int]]:
+    """The caller's friendships, split three ways: accepted, requested by
+    them, and requested of them."""
+    rel: dict[str, set[int]] = {"friends": set(), "sent": set(), "received": set()}
+    for f in session.exec(
+        select(Friendship).where((Friendship.user_id_a == uid) | (Friendship.user_id_b == uid))
+    ).all():
+        other = f.user_id_b if f.user_id_a == uid else f.user_id_a
+        if f.status == "accepted":
+            rel["friends"].add(other)
+        elif f.requested_by == uid:
+            rel["sent"].add(other)
+        else:
+            rel["received"].add(other)
+    return rel
+
+
+def _with_relationship(u: PressUser, rel: dict[str, set[int]]) -> dict:
+    """A person as a find-friends row: who they are, and where you stand."""
+    return {
+        "id": u.id,
+        "name": u.name,
+        "avatar_url": u.avatar_url,
+        "already_friends": u.id in rel["friends"],
+        "request_sent": u.id in rel["sent"],
+        "request_received": u.id in rel["received"],
+    }
+
+
+# More numbers than any address book holds; the cap is what stops this being
+# a lookup service for whether arbitrary numbers are on Pressd.
+MAX_CONTACT_NUMBERS = 5000
+
+
+@router.post("/me/contacts/match")
+def match_contacts(
+    data: dict,
+    current: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Which of the caller's contacts are on Pressd, by phone number.
+
+    The app sends the numbers from the address book, in E.164. Each is hashed
+    under PHONE_HASH_KEY in memory and compared against verified numbers, then
+    dropped: nothing about the contacts is stored or logged. Phone only, never
+    email — a number is what people agreed to be found by when they added it
+    (the prompt says so), and nobody was told that about their email.
+
+    Answers one row per account found, in the search rows' shape plus
+    `phone_index`: the position of the first number that matched, so the app
+    can show which contact it was.
+    """
+    phones = data.get("phones")
+    if not isinstance(phones, list):
+        raise HTTPException(status_code=400, detail="phones must be a list")
+    if len(phones) > MAX_CONTACT_NUMBERS:
+        raise HTTPException(status_code=400, detail=f"At most {MAX_CONTACT_NUMBERS} numbers at a time")
+    try:
+        by_hash: dict[str, int] = {}
+        for i, p in enumerate(phones):
+            # E.164 only: a "+" and 8–15 digits. The app normalises; anything
+            # else can't equal a stored number, so it's skipped, not an error.
+            if isinstance(p, str) and p.startswith("+") and p[1:].isdigit() and 8 <= len(p) - 1 <= 15:
+                by_hash.setdefault(phone_hash(p), i)
+    except PhoneNotConfigured as e:
+        print(f"[contacts] not configured: {e}")
+        raise HTTPException(status_code=503, detail="Finding friends from contacts isn’t available yet")
+    if not by_hash:
+        return []
+
+    found = session.exec(
+        select(PressUser).where(
+            PressUser.phone_hash.in_(list(by_hash)),
+            PressUser.phone_verified_at.is_not(None),
+            PressUser.id != current.id,
+        )
+    ).all()
+    rel = _relationships(session, current.id)
+    rows = [{**_with_relationship(u, rel), "phone_index": by_hash[u.phone_hash]} for u in found]
+    # People you can still act on first: requests to answer, then new faces,
+    # then the ones already sent or already friends.
+    order = lambda r: (not r["request_received"], r["already_friends"] or r["request_sent"], r["name"].lower())
+    return sorted(rows, key=order)
+
+
 @router.get("/search")
 def search_users(
     q: str = Query(""),
@@ -220,35 +305,8 @@ def search_users(
         ).limit(20)
     ).all()
 
-    # Partition the requester's friendships into accepted vs pending
-    friendships = session.exec(
-        select(Friendship).where(
-            (Friendship.user_id_a == exclude_user_id) | (Friendship.user_id_b == exclude_user_id)
-        )
-    ).all()
-    friend_ids: set[int] = set()
-    pending_out: set[int] = set()  # I requested them
-    pending_in: set[int] = set()   # they requested me
-    for f in friendships:
-        other = f.user_id_b if f.user_id_a == exclude_user_id else f.user_id_a
-        if f.status == "accepted":
-            friend_ids.add(other)
-        elif f.requested_by == exclude_user_id:
-            pending_out.add(other)
-        else:
-            pending_in.add(other)
-
-    return [
-        {
-            "id": u.id,
-            "name": u.name,
-            "avatar_url": u.avatar_url,
-            "already_friends": u.id in friend_ids,
-            "request_sent": u.id in pending_out,
-            "request_received": u.id in pending_in,
-        }
-        for u in users
-    ]
+    rel = _relationships(session, exclude_user_id)
+    return [_with_relationship(u, rel) for u in users]
 
 
 @router.post("/")

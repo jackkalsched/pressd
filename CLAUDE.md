@@ -72,7 +72,7 @@ PLAN_*.md         gitignored design docs; code cites them by section
 | `backend/scoring.py` | framework 1: the user's own album score | 267 |
 | `backend/global_rating.py` | framework 2: the userbase-pooled rating | 155 |
 | `backend/trackkeys.py` | normalization keys; pure stdlib, imported everywhere | 163 |
-| `backend/routers/` | 14 routers, **112 endpoints** | 7,502 |
+| `backend/routers/` | 14 routers, **113 endpoints** | 7,502 |
 | `worker/` | `nightly_predict`, `catalog_predict`, `artist_clusters`, `audio_ingest`, `refresh_new_releases`, … | 2,149 |
 | `theme_predictor/` | `predict_single`, `personalize`, `global_factors`, `corpus`, … | 1,896 |
 | `shared/src/api.ts` | the single API client, 92 exported functions | 1,763 |
@@ -224,7 +224,7 @@ There is no Alembic and no version table. Adding a column means adding a SQLMode
           ┌──────────────────────┼───────────────────────────┐
           ▼                      ▼                           ▼
    routers/ (14)           scoring.py                trackkeys.py
-   112 endpoints           global_rating.py          (normalization —
+   113 endpoints           global_rating.py          (normalization —
                                  │                    imported by web,
                                  ▼                    worker, and scripts)
                           Postgres (Supabase)
@@ -412,7 +412,21 @@ whenever the signed-in id changes — because a session stored before the fields
 would otherwise never see the prompt. UI: `PhoneSheet` (mobile; Settings → Account) and
 `PhoneDialog` (web; the Edit Profile dialog). Setup outside the repo: Phone sign-in on
 in the Firebase console, `PHONE_HASH_KEY` on Render, and the four `VITE_FIREBASE_*` on
-Vercel with the site's domains authorised. Contact matching itself is not built yet.
+Vercel with the site's domains authorised.
+
+**Finding friends from contacts (mobile only, October 2026)** — the section under the
+search box in Social → *Find friends* while nothing is typed. It asks in its own words
+before the iOS prompt (Apple wants the reason first), reads names and numbers through
+`mobile/lib/contacts.ts` (`expo-contacts/legacy`; numbers without a country code read as
+US), and sends only the numbers, as E.164, to `POST /users/me/contacts/match`. The server
+hashes each under `PHONE_HASH_KEY` in memory, compares against **verified** numbers, and
+keeps and logs nothing; it caps a request at `MAX_CONTACT_NUMBERS` (5000) so it can't serve
+as a lookup for arbitrary numbers. **Phone only, never email** — a number is what people
+agreed to be found by in the prompt; nobody was told that about their email. Matches come
+back as search rows (`_with_relationship`, shared with `/users/search`) plus
+`phone_index`, so the app can say which contact it was; everyone else gets *Invite*, an
+`sms:` text carrying the caller's permanent invite link (`getInviteLink`). Web has no
+address book to read, so this is a platform difference, not parity drift.
 
 **First run (both platforms).** Mobile's `app/(tabs)/_layout.tsx` and web's `AppGate`
 (`frontend/src/App.tsx`) send an account whose `tutorialSeen` is explicitly `false` to

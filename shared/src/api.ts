@@ -1234,6 +1234,27 @@ export interface UserSearchResult {
   request_received: boolean  // they requested me
 }
 
+/** A contact who is on Pressd: the search row, plus which of the numbers sent
+ *  matched (its position in the list), so the app can say which contact. */
+export interface ContactMatch extends UserSearchResult {
+  phone_index: number
+}
+
+/** Which of these numbers (E.164) belong to people on Pressd. Phone only — the
+ *  server hashes each one in memory, compares, and keeps nothing. */
+export async function matchContacts(phones: string[]): Promise<ContactMatch[]> {
+  const res = await apiFetch(`${BASE()}/users/me/contacts/match`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phones }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? 'Couldn’t check your contacts')
+  }
+  return res.json()
+}
+
 export async function searchUsers(q: string, excludeUserId: number): Promise<UserSearchResult[]> {
   const res = await apiFetch(`${BASE()}/users/search?q=${encodeURIComponent(q)}&exclude_user_id=${excludeUserId}`)
   if (!res.ok) return []

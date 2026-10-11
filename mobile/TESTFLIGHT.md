@@ -48,7 +48,12 @@ name and email (via Sign in with Apple), user-generated content (ratings, review
 comments), the social graph, and — optional, since October 2026 — a phone number,
 verified by text and stored only as a keyed hash plus its last four digits, used to
 help friends find each other. In App Store Connect that is *Phone Number* under Contact
-Info, linked to the user, for App Functionality, not for tracking. No analytics SDK, no ads, no tracking across apps.
+Info, linked to the user, for App Functionality, not for tracking. Contacts are read
+on the phone and their numbers checked against Pressd in real time
+(`POST /users/me/contacts/match`) without being stored, which Apple's definition of
+"collect" excludes — but the privacy policy should still say it happens.
+`NSContactsUsageDescription` is in `ios/Pressd/Info.plist` and in the `expo-contacts`
+plugin entry in `app.json`, so a prebuild keeps it. No analytics SDK, no ads, no tracking across apps.
 
 ---
 

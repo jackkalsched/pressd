@@ -10,9 +10,11 @@ import {
   Animated,
   Dimensions,
   FlatList,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   TextInput,
@@ -23,7 +25,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { Search, UserPlus, X } from 'lucide-react-native'
+import { BookUser, Search, UserPlus, X } from 'lucide-react-native'
 import {
   fetchFeed,
   fetchDiscussionFeed,
@@ -37,6 +39,9 @@ import {
   fetchFriendRequests,
   acceptFriendRequest,
   declineFriendRequest,
+  getInviteLink,
+  matchContacts,
+  type ContactMatch,
   type FeedItem,
   type CompareItem,
   type UserInfo,
@@ -47,6 +52,13 @@ import { type FeedPost } from '@pressd/shared/types'
 import { useRefreshOnFocus } from '../../lib/refresh'
 import { useAuth } from '../../lib/auth'
 import { markSocialSeen, latestFeedTime } from '../../lib/socialSeen'
+import {
+  contactsAccess,
+  readAddressBook,
+  requestContactsAccess,
+  type AddressBookEntry,
+  type ContactsAccess,
+} from '../../lib/contacts'
 import { songScoreColor, avatarColor } from '@pressd/shared/types'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
@@ -629,6 +641,13 @@ function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onC
           </>
         )}
 
+        {q.trim().length < 2 ? (
+          <ContactFriends
+            onOpenProfile={openProfile}
+            onRequest={request}
+            onAccept={accept}
+          />
+        ) : (
         <FlatList
           data={results}
           keyExtractor={(u) => String(u.id)}
@@ -647,15 +666,147 @@ function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onC
             </View>
           )}
           ListEmptyComponent={
-            q.trim().length >= 2 && !isFetching ? (
-              <Text style={styles.empty}>No users found.</Text>
-            ) : !showRequests ? (
-              <Text style={styles.empty}>Search for friends by name.</Text>
-            ) : null
+            !isFetching ? <Text style={styles.empty}>No users found.</Text> : null
           }
         />
+        )}
       </SafeAreaView>
     </Modal>
+  )
+}
+
+/** Find friends from the address book, under the search box while nothing is
+ *  typed. Asks first in its own words — Apple wants the reason before any
+ *  contact leaves the phone — then shows who's on Pressd (matched by phone
+ *  number on the server, which keeps nothing; lib/contacts.ts) and offers an
+ *  invite text to everyone else. */
+function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
+  onOpenProfile: (id: number) => void
+  onRequest: (id: number) => Promise<void>
+  onAccept: (id: number) => Promise<void>
+}) {
+  const { user } = useAuth()
+  const [access, setAccess] = useState<ContactsAccess | null>(null)
+  useEffect(() => {
+    contactsAccess().then(setAccess).catch(() => setAccess('undetermined'))
+  }, [])
+
+  const granted = access === 'granted'
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['contact-matches', user?.id],
+    queryFn: async () => {
+      const book = await readAddressBook()
+      const phones: string[] = []
+      const owner: number[] = [] // phones[i] belongs to book[owner[i]]
+      book.forEach((c, ci) => c.numbers.forEach((n) => { phones.push(n); owner.push(ci) }))
+      const matches = phones.length ? await matchContacts(phones) : []
+      const matchedContacts = new Set(matches.map((m) => owner[m.phone_index]))
+      return {
+        onPressd: matches.map((m) => ({ ...m, contactName: book[owner[m.phone_index]]?.name ?? '' })),
+        invite: book.filter((_, ci) => !matchedContacts.has(ci)),
+      }
+    },
+    enabled: !!user && granted,
+    staleTime: 5 * 60_000,
+  })
+
+  const { data: invite } = useQuery({
+    queryKey: ['invite-link', user?.id],
+    queryFn: () => getInviteLink(user!.id),
+    enabled: !!user && granted,
+    staleTime: Infinity,
+  })
+
+  async function connect() {
+    setAccess(await requestContactsAccess())
+  }
+
+  function sendInvite(c: AddressBookEntry) {
+    if (!invite) return
+    const body = `I’m rating albums on Pressd — come compare taste with me: ${invite.link}`
+    // iOS reads "sms:<number>&body=…"; the number as the contact stores it.
+    Linking.openURL(`sms:${encodeURIComponent(c.rawNumbers[0] ?? '')}&body=${encodeURIComponent(body)}`).catch(() => {})
+  }
+
+  if (access === null) return null
+
+  if (!granted) {
+    return (
+      <View style={styles.contactsCard}>
+        <View style={styles.contactsIcon}><BookUser size={20} color={colors.green} /></View>
+        <Text style={styles.contactsTitle}>Find friends from your contacts</Text>
+        <Text style={styles.contactsBody}>
+          Pressd checks the phone numbers in your contacts against people who’ve added theirs, and
+          lets you invite the rest. Your contacts aren’t stored.
+        </Text>
+        {access === 'denied' ? (
+          <Pressable style={styles.contactsBtn} onPress={() => Linking.openSettings().catch(() => {})}>
+            <Text style={styles.contactsBtnText}>Allow contacts in Settings</Text>
+          </Pressable>
+        ) : (
+          <Pressable style={styles.contactsBtn} onPress={connect}>
+            <Text style={styles.contactsBtnText}>Connect contacts</Text>
+          </Pressable>
+        )}
+      </View>
+    )
+  }
+
+  if (isLoading) return <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xl }} />
+  if (error || !data) {
+    return (
+      <Pressable onPress={() => refetch()}>
+        <Text style={styles.empty}>{error instanceof Error ? error.message : 'Couldn’t check your contacts.'} Tap to try again.</Text>
+      </Pressable>
+    )
+  }
+
+  type Row = (ContactMatch & { contactName: string }) | AddressBookEntry
+  const sections: { key: string; title: string; data: Row[] }[] = [
+    { key: 'on', title: 'ON PRESSD', data: data.onPressd },
+    { key: 'invite', title: 'INVITE TO PRESSD', data: data.invite },
+  ].filter((sec) => sec.data.length > 0)
+
+  return (
+    <SectionList<Row>
+      sections={sections}
+      keyExtractor={(r) => ('phone_index' in r ? `u${r.id}` : `c${r.id}`)}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingBottom: 130 }}
+      stickySectionHeadersEnabled={false}
+      renderSectionHeader={({ section }) => <Text style={styles.sectionLabel}>{section.title}</Text>}
+      ListHeaderComponent={
+        data.onPressd.length === 0 ? (
+          <Text style={styles.contactsNone}>None of your contacts are on Pressd yet.</Text>
+        ) : null
+      }
+      renderItem={({ item }) =>
+        'phone_index' in item ? (
+          <View style={styles.userRow}>
+            <Pressable style={styles.userInfo} onPress={() => onOpenProfile(item.id)}>
+              <Avatar name={item.name} url={item.avatar_url} size={36} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.userName} numberOfLines={1}>{item.name}</Text>
+                {item.contactName && item.contactName !== item.name ? (
+                  <Text style={styles.contactSub} numberOfLines={1}>{item.contactName}</Text>
+                ) : null}
+              </View>
+            </Pressable>
+            <FriendAction u={item} onRequest={() => onRequest(item.id).then(() => refetch())} onAccept={() => onAccept(item.id).then(() => refetch())} />
+          </View>
+        ) : (
+          <View style={styles.userRow}>
+            <View style={styles.userInfo}>
+              <Avatar name={item.name} size={36} />
+              <Text style={[styles.userName, { flex: 1 }]} numberOfLines={1}>{item.name}</Text>
+            </View>
+            <Pressable style={styles.inviteBtn} onPress={() => sendInvite(item)} disabled={!invite} accessibilityLabel={`Invite ${item.name}`}>
+              <Text style={styles.inviteBtnText}>Invite</Text>
+            </Pressable>
+          </View>
+        )
+      }
+    />
   )
 }
 
@@ -1010,5 +1161,15 @@ const styles = StyleSheet.create({
   declineBtn: { backgroundColor: colors.inset, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radii.pill },
   declineText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkSecondary },
   friendsTag: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary },
+  contactsCard: { marginHorizontal: spacing.lg, marginTop: spacing.lg, padding: spacing.lg, borderRadius: radii.lg, backgroundColor: colors.greenSoft, alignItems: 'flex-start' },
+  contactsIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
+  contactsTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.ink, marginTop: spacing.md },
+  contactsBody: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.inkSecondary, marginTop: 6 },
+  contactsBtn: { marginTop: spacing.lg, backgroundColor: colors.green, paddingHorizontal: 18, paddingVertical: 11, borderRadius: radii.pill },
+  contactsBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 14.5, color: '#fff' },
+  contactsNone: { fontFamily: fonts.body, fontSize: 14, color: colors.inkTertiary, paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  contactSub: { fontFamily: fonts.body, fontSize: 12.5, color: colors.inkTertiary, marginTop: 1 },
+  inviteBtn: { borderWidth: 1, borderColor: colors.green, paddingHorizontal: 14, paddingVertical: 7, borderRadius: radii.pill },
+  inviteBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
   pendingTag: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkMuted },
 })
