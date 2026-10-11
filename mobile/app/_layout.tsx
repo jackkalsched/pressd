@@ -137,6 +137,7 @@ function RootNavigator() {
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Protected guard={!!user}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="username" options={{ gestureEnabled: false }} />
         <Stack.Screen name="tutorial" options={{ gestureEnabled: false }} />
         <Stack.Screen name="welcome" />
         <Stack.Screen name="add" options={{ presentation: 'modal' }} />

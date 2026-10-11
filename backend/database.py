@@ -227,6 +227,10 @@ def init_db():
             # ── Custom profile header (UserBanner). Null means the header keeps
             #    washing in the favourite album's cover.
             "ALTER TABLE pressuser ADD COLUMN banner_url VARCHAR",
+            # ── First-run username step. Stamped then undefaulted exactly as
+            #    tutorial_seen_at is, so existing accounts are never asked.
+            "ALTER TABLE pressuser ADD COLUMN username_chosen_at TIMESTAMP DEFAULT NOW()",
+            "ALTER TABLE pressuser ALTER COLUMN username_chosen_at DROP DEFAULT",
             # ── Row-level security on every public table, last so it covers the
             #    tables create_all just made. Supabase serves the public schema
             #    over its REST API to anyone holding the project's publishable

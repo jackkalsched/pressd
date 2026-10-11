@@ -10,6 +10,9 @@ export interface UserInfo {
    *  session stored before the field existed — must read as "seen", so the
    *  first-run gate checks for an explicit false. */
   tutorialSeen?: boolean
+  /** Own record only, like tutorialSeen: whether a username has been picked.
+   *  Absent reads as picked — the gate checks for an explicit false. */
+  usernameChosen?: boolean
   /** Own record only: whether the one-time phone-number prompt is answered.
    *  Absent reads as answered — the prompt checks for an explicit false. */
   phonePromptDone?: boolean

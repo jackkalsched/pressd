@@ -33,7 +33,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Apple, Check, ChevronRight, LogOut, Trash2, X } from 'lucide-react-native'
 import { fetchLinkedProviders, unlinkProvider, deleteOwnAccount, uploadBanner, deleteBanner, type Profile } from '../lib/api'
 import { fetchNotificationPrefs, updateNotificationPrefs, type NotificationPrefs } from '@pressd/shared/api'
-import type { AlbumStatus } from '@pressd/shared/types'
+import { cleanUsername, type AlbumStatus } from '@pressd/shared/types'
 import { setPref, usePrefs } from '../lib/prefs'
 import { currentPushToken, enablePush, pushPermissionStatus } from '../lib/push'
 import { useAuth } from '../lib/auth'
@@ -264,7 +264,7 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
     } catch (e) {
       // Names are unique, so this is usually "already taken" — worth showing
       // verbatim rather than flattening to a generic failure.
-      setError(e instanceof Error ? e.message : 'Could not save your name')
+      setError(e instanceof Error ? e.message : 'Could not save your username')
     } finally {
       setSavingName(false)
     }
@@ -545,24 +545,26 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
               )}
             </View>
 
-            {/* Display name edits in place rather than on its own screen — it's
+            {/* Username edits in place rather than on its own screen — it's
                 one field, and the name is right there to check against. */}
             <View style={styles.settingRow}>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.providerLabel}>Display name</Text>
+                <Text style={styles.providerLabel}>Username</Text>
                 {nameDraft === null ? (
                   <Text style={styles.settingValue} numberOfLines={1}>{user?.name}</Text>
                 ) : (
                   <TextInput
                     style={styles.nameInput}
                     value={nameDraft}
-                    onChangeText={setNameDraft}
+                    onChangeText={(t) => setNameDraft(cleanUsername(t))}
                     autoFocus
+                    autoCapitalize="none"
                     autoCorrect={false}
-                    maxLength={40}
+                    spellCheck={false}
+                    maxLength={20}
                     returnKeyType="done"
                     onSubmitEditing={saveName}
-                    placeholder="Your name"
+                    placeholder="Username"
                     placeholderTextColor={colors.inkTertiary}
                   />
                 )}
@@ -570,7 +572,7 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
               {savingName ? (
                 <ActivityIndicator color={colors.green} />
               ) : nameDraft === null ? (
-                <Pressable onPress={() => setNameDraft(user?.name ?? '')} hitSlop={8}>
+                <Pressable onPress={() => setNameDraft(cleanUsername(user?.name ?? ''))} hitSlop={8}>
                   <Text style={styles.linkAction}>Edit</Text>
                 </Pressable>
               ) : (

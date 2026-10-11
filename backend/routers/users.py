@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..database import get_session
+from ..usernames import USERNAME_RE, USERNAME_RULE
 from ..phone import PhoneNotConfigured, PhoneTokenInvalid, phone_hash, verified_number
 from ..push import send_push, tokens_for_user
 from ..deps import current_user, optional_user, authorize_view, auth_response, own_user, public_user
@@ -540,13 +541,19 @@ def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if "name" in data:
-        name = (data["name"] or "").strip()
-        if not name:
-            raise HTTPException(status_code=400, detail="name cannot be empty")
-        existing = session.exec(select(PressUser).where(PressUser.name == name, PressUser.id != user_id)).first()
+        name = (data["name"] or "").strip().lower()
+        if not USERNAME_RE.match(name):
+            raise HTTPException(status_code=400, detail=USERNAME_RULE)
+        existing = session.exec(
+            select(PressUser).where(func.lower(PressUser.name) == name, PressUser.id != user_id)
+        ).first()
         if existing:
-            raise HTTPException(status_code=409, detail="Name already taken")
+            raise HTTPException(status_code=409, detail="That username is taken")
         user.name = name
+        # Saving one, even the suggestion unchanged, is the choice the
+        # first-run username step waits for.
+        if user.username_chosen_at is None:
+            user.username_chosen_at = datetime.utcnow()
     if "avatar_url" in data:
         user.avatar_url = (data["avatar_url"] or "").strip() or None
     if "bio" in data:

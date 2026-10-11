@@ -77,7 +77,7 @@ export default function Join() {
       try {
         const user = await signInWithGoogle(tokenResponse.access_token)
         // Log in first — invite accept is best-effort
-        setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl, tutorialSeen: user.tutorialSeen })
+        setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl, tutorialSeen: user.tutorialSeen, usernameChosen: user.usernameChosen })
         await finishJoin(user.id)
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Something went wrong.'

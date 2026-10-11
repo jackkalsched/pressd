@@ -1117,6 +1117,9 @@ export interface UserInfo {
    *  another user, or a session stored before the field existed — must read as
    *  "seen", so the first-run gate checks for an explicit false. */
   tutorialSeen?: boolean
+  /** Own record only, like tutorialSeen: whether a username has been picked.
+   *  New accounts start on a suggestion and are asked to confirm it first. */
+  usernameChosen?: boolean
   /** Own record only, like tutorialSeen: whether the one-time phone-number
    *  prompt has been answered. Absent reads as answered, so the prompt checks
    *  for an explicit false. */
@@ -1127,7 +1130,8 @@ export interface UserInfo {
 
 function toUserInfo(u: {
   id: number; name: string; avatar_url?: string | null; bio?: string | null
-  tutorial_seen?: boolean; phone_prompt_done?: boolean; phone_last4?: string | null
+  tutorial_seen?: boolean; username_chosen?: boolean
+  phone_prompt_done?: boolean; phone_last4?: string | null
 }): UserInfo {
   return {
     id: u.id,
@@ -1135,6 +1139,7 @@ function toUserInfo(u: {
     avatarUrl: u.avatar_url ?? undefined,
     bio: u.bio ?? undefined,
     tutorialSeen: u.tutorial_seen,
+    usernameChosen: u.username_chosen,
     phonePromptDone: u.phone_prompt_done,
     phoneLast4: u.phone_last4,
   }

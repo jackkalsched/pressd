@@ -365,3 +365,13 @@ export interface FeedPost {
     artUrl: string | null
   }
 }
+
+// ── Usernames ────────────────────────────────────────────────────────────────
+// The rule itself is backend/usernames.py's USERNAME_RE — change both.
+export const USERNAME_RE = /^[a-z0-9._]{3,20}$/
+
+/** Typed characters the server would refuse never reach the field, so the
+ *  only thing left to get wrong is length or a name already taken. */
+export function cleanUsername(raw: string): string {
+  return raw.toLowerCase().replace(/[^a-z0-9._]/g, '').slice(0, 20)
+}

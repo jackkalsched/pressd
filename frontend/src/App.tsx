@@ -23,6 +23,7 @@ import PublicCharts from './pages/PublicCharts'
 import Charts from './pages/Charts'
 import HowItWorks from './pages/HowItWorks'
 import Tutorial from './pages/Tutorial'
+import Username from './pages/Username'
 import TagBoard from './pages/TagBoard'
 import CommunityAlbum from './pages/CommunityAlbum'
 
@@ -38,8 +39,8 @@ function RequireUser({ children }: { children: ReactElement }) {
   return children
 }
 
-/** The app shell plus the first-login gates. A new account sees the tutorial
- *  first; the check is for an explicit false, because sessions stored before
+/** The app shell plus the first-login gates. A new account picks a username,
+ *  then sees the tutorial; the check is for an explicit false, because sessions stored before
  *  the field existed carry nothing and those accounts are past their first run.
  *  Then: no rated albums yet → rate one before reaching the main site
  *  (skippable per session). /rate/:id stays reachable — it's the flow the
@@ -57,6 +58,7 @@ function AppGate({ children }: { children: ReactElement }) {
     enabled: !!activeUser && !skipped,
   })
   if (!activeUser) return <Navigate to="/" replace />
+  if (activeUser.usernameChosen === false) return <Navigate to="/username" replace />
   if (activeUser.tutorialSeen === false) return <Navigate to="/tutorial" replace />
   if (!skipped) {
     if (isLoading) return null
@@ -106,6 +108,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<PublicHome />} />
           <Route path="/rate/:id" element={<RequireUser><RatingScreen /></RequireUser>} />
+          <Route path="/username" element={<RequireUser><Username /></RequireUser>} />
           <Route path="/tutorial" element={<RequireUser><Tutorial /></RequireUser>} />
           <Route path="/welcome" element={<RequireUser><Onboarding /></RequireUser>} />
           <Route path="/join" element={<Join />} />

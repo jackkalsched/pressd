@@ -4,11 +4,13 @@ import httpx
 import jwt
 from jwt import PyJWKClient
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ..database import get_session
 from ..deps import auth_response, current_user, optional_user
 from ..models import PressUser
+from ..usernames import suggest_username
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -55,9 +57,12 @@ def _link_provider(
 
 
 def _unique_name(session: Session, base: str) -> str:
+    """A free username to start a new account on. It is only a suggestion: the
+    app asks the person to confirm or change it before anything else."""
+    base = suggest_username(base)
     name, suffix = base, 1
-    while session.exec(select(PressUser).where(PressUser.name == name)).first():
-        name = f"{base}{suffix}"
+    while session.exec(select(PressUser).where(func.lower(PressUser.name) == name)).first():
+        name = f"{base[:20 - len(str(suffix))]}{suffix}"
         suffix += 1
     return name
 

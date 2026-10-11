@@ -171,6 +171,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: profile.name,
         avatarUrl: profile.avatar_url ?? undefined,
         bio: profile.bio ?? undefined,
+        // The server stamps the choice on any saved name; mirror it so the
+        // first-run gate lets the person through on this render.
+        ...(data.name !== undefined ? { usernameChosen: true } : {}),
       })
       return profile
     },

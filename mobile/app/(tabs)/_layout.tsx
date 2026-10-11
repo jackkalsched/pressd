@@ -18,6 +18,12 @@ export default function TabsLayout() {
     enabled: !!user,
   })
 
+  // A new account confirms its username first, then the tutorial, then the
+  // first-album screen. Explicit false, for the same reason as the tutorial.
+  if (user?.usernameChosen === false) {
+    return <Redirect href="/username" />
+  }
+
   // A new account sees the tutorial before the first-album screen. The check
   // is for an explicit false: sessions stored before the field existed carry
   // nothing, and those accounts are past their first run.

@@ -460,6 +460,20 @@ nothing. Web keeps the flag in `UserContext`, so every web sign-in site must pas
 `tutorialSeen` through. The last card promises predictions after
 10 rated albums, restating `MIN_RATED_ALBUMS` — change both.
 
+**Usernames (October 2026).** `PressUser.name` is a username, not a display name: 3–20
+characters of lowercase letters, numbers, `.` and `_`, unique regardless of case
+(`backend/usernames.py`; the client copy is `USERNAME_RE` / `cleanUsername` in
+`shared/src/types.ts` — change both). `PATCH /users/{id}` enforces it on every name
+set from then on; names from before keep their spaces and capitals until changed. A new
+account starts on a suggestion made from the Google name or email ("Jack Kalsched" →
+`jackkalsched`), and meets a username page **before** the tutorial, prefilled with
+it: `mobile/app/username.tsx` and web's `frontend/src/pages/Username.tsx` at
+`/username`, gated by `(tabs)/_layout` and `AppGate`. Saving any name stamps `PressUser.username_chosen_at`, returned as
+`username_chosen` by `own_user`; its migration stamps every existing account, as the
+tutorial's did. Sign in with Apple no longer requests `FULL_NAME`. Every web sign-in site
+passes `usernameChosen` through alongside `tutorialSeen`, and web's Edit Profile field
+filters input through `cleanUsername`.
+
 **`backend/routers/public.py`** — the **intended** only unauthenticated surface
 (marketing charts). It deliberately duplicates rather than shares `discover.py`'s charts:
 no auth, aggregates only, never who rated what. Nothing per-user may ever go there.

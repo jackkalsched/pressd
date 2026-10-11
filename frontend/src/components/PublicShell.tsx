@@ -109,7 +109,7 @@ export default function PublicShell({
     onSuccess: async (tokenResponse) => {
       try {
         const user = await signInWithGoogle(tokenResponse.access_token)
-        setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl, tutorialSeen: user.tutorialSeen })
+        setActiveUser({ id: user.id, name: user.name, avatarUrl: user.avatarUrl, tutorialSeen: user.tutorialSeen, usernameChosen: user.usernameChosen })
         navigate('/for-you', { replace: true })
       } catch {
         setLoading(false)

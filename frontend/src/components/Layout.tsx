@@ -7,6 +7,7 @@ import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
 import { fetchFriends, getInviteLink, updateUser, linkGoogle, removeFriend } from '../api'
 import type { UserInfo } from '../api'
+import { cleanUsername } from '../types'
 import AddAlbumModal from './AddAlbumModal'
 import PhoneDialog from './PhoneDialog'
 import { phoneVerifyConfigured } from '../lib/phoneVerify'
@@ -183,7 +184,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
         // Links to whoever the stored session token belongs to; the server no
         // longer accepts a user id from the client here.
         const user = await linkGoogle(tokenResponse.access_token)
-        setActiveUser({ ...activeUser, id: user.id, name: user.name, avatarUrl: user.avatarUrl, tutorialSeen: user.tutorialSeen })
+        setActiveUser({ ...activeUser, id: user.id, name: user.name, avatarUrl: user.avatarUrl, tutorialSeen: user.tutorialSeen, usernameChosen: user.usernameChosen })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to link Google account')
       }
@@ -227,6 +228,8 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
         ...activeUser,
         id: updated.id,
         name: updated.name,
+        // The server stamps the choice on any saved name.
+        ...(name.trim() !== activeUser.name ? { usernameChosen: true } : {}),
         avatarUrl: updated.avatar_url ?? undefined,
         bio: updated.bio ?? undefined,
       })
@@ -264,8 +267,10 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
             <label className="text-xs text-[#888] mb-1 block">Username</label>
             <input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => setName(cleanUsername(e.target.value))}
               placeholder="Pick a username"
+              autoCapitalize="none"
+              spellCheck={false}
               className="w-full bg-[#f5f5f5] border border-[#e2e2e2] text-[#111] text-sm px-4 py-2.5 rounded-lg focus:outline-none focus:border-[#2d6a4f] transition-colors"
             />
             <p className="text-[11px] text-[#999] mt-1">

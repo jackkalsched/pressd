@@ -41,6 +41,10 @@ class PressUser(SQLModel, table=True):
     # second phone doesn't replay it. Every account that existed before the
     # tutorial shipped was stamped by the migration, so only new sign-ups see it.
     tutorial_seen_at: Optional[datetime] = None
+    # When the person confirmed a username (backend/usernames.py); null means
+    # the first-run username step is owed. Stamped for every account that
+    # existed when it shipped, like tutorial_seen_at, so only new sign-ups see it.
+    username_chosen_at: Optional[datetime] = None
 
     # Which pushes this person wants, one switch per kind (backend/push.py,
     # NOTIFY_KINDS). All on by default: the device-level permission is the

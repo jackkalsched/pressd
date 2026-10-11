@@ -33,10 +33,9 @@ export async function requestAppleCredential(): Promise<AppleCredential> {
   let cred: AppleAuthentication.AppleAuthenticationCredential
   try {
     cred = await AppleAuthentication.signInAsync({
-      requestedScopes: [
-        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-        AppleAuthentication.AppleAuthenticationScope.EMAIL,
-      ],
+      // No FULL_NAME: Pressd asks for a username itself (app/username.tsx),
+      // and a real name has nowhere to go on a public profile.
+      requestedScopes: [AppleAuthentication.AppleAuthenticationScope.EMAIL],
     })
   } catch (e) {
     const failure = classify(e)
