@@ -428,8 +428,10 @@ now removes both picture rows; before this it never removed `UserAvatar`, whose
 foreign key blocked deleting any account that had a photo.
 
 **Finding friends from contacts (mobile only, October 2026)** — the section under the
-search box in Social → *Find friends* while nothing is typed. It asks in its own words
-before the iOS prompt (Apple wants the reason first), reads names and numbers through
+search box in Social → *Find friends* while nothing is typed: a *Connect contacts* card,
+then — once connected — a *Contacts* row that opens the list (straight away only on the
+visit that connected). The reason Apple wants before any contact leaves the phone is
+the iOS prompt's own text (`NSContactsUsageDescription`). It reads names and numbers through
 `mobile/lib/contacts.ts` (`expo-contacts/legacy`; numbers without a country code read as
 US), and sends only the numbers, as E.164, to `POST /users/me/contacts/match`. The server
 hashes each under `PHONE_HASH_KEY` in memory, compares against **verified** numbers, and
@@ -1106,6 +1108,16 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   friend, reply; all default on). The switches are `GET`/`PUT /users/me/notifications`,
   shown in mobile Settings once iOS permission is granted. A new kind of push adds a
   column, a `NOTIFY_KINDS` entry and a Settings row — never a bare token lookup.
+- **An Expo module's version must match the app's `expo-modules-core`, not just the
+  SDK.** Expo ships modules precompiled (`EXPO_USE_PRECOMPILED_MODULES`), so a module
+  built against a newer core links fine and then **crashes at launch** with
+  `Symbol not found … ExpoModulesCore`. `npx expo install` picks a module's newest patch,
+  which may be built against a newer core than this app's (Expo 57.0.4, core 57.0.3):
+  `expo-contacts` 57.0.6 did exactly that in October 2026, and is pinned to `57.0.0`
+  — exact, because `~` drifts back. Add a module at a version released no later than
+  the installed core, and run the Release build before pushing. Don't add Firebase in
+  Xcode as a Swift package either: React Native Firebase brings it through CocoaPods
+  (`$RNFirebaseDisableSPM`), and two copies fail with `redefinition of module 'Firebase'`.
 - **Mobile device preferences live in `mobile/lib/prefs.ts`** (Keychain, loaded before
   the app is ready): haptics on/off and which shelf Library opens on. Every buzz goes
   through `mobile/lib/haptics.ts` (`selection` / `light` / `success`), which honours

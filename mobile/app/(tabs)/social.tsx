@@ -25,7 +25,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { BookUser, Search, UserPlus, X } from 'lucide-react-native'
+import { BookUser, ChevronLeft, ChevronRight, Search, UserPlus, X } from 'lucide-react-native'
 import {
   fetchFeed,
   fetchDiscussionFeed,
@@ -676,10 +676,15 @@ function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onC
 }
 
 /** Find friends from the address book, under the search box while nothing is
- *  typed. Asks first in its own words — Apple wants the reason before any
- *  contact leaves the phone — then shows who's on Pressd (matched by phone
+ *  typed. The reason Apple wants before any contact leaves the phone is in the
+ *  iOS permission prompt (NSContactsUsageDescription). Then it shows who's on
+ *  Pressd (matched by phone
  *  number on the server, which keeps nothing; lib/contacts.ts) and offers an
- *  invite text to everyone else. */
+ *  invite text to everyone else.
+ *
+ *  Once connected, the list sits behind a Contacts row rather than filling the
+ *  sheet every time it opens — it's opened straight away only on the visit
+ *  that connected, which is the one time it was just asked for. */
 function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
   onOpenProfile: (id: number) => void
   onRequest: (id: number) => Promise<void>
@@ -687,6 +692,7 @@ function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
 }) {
   const { user } = useAuth()
   const [access, setAccess] = useState<ContactsAccess | null>(null)
+  const [open, setOpen] = useState(false)
   useEffect(() => {
     contactsAccess().then(setAccess).catch(() => setAccess('undetermined'))
   }, [])
@@ -718,12 +724,14 @@ function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
   })
 
   async function connect() {
-    setAccess(await requestContactsAccess())
+    const next = await requestContactsAccess()
+    setAccess(next)
+    if (next === 'granted') setOpen(true)
   }
 
   function sendInvite(c: AddressBookEntry) {
     if (!invite) return
-    const body = `I’m rating albums on Pressd — come compare taste with me: ${invite.link}`
+    const body = `I’m rating albums on Pressd — come compare music taste with me: ${invite.link}`
     // iOS reads "sms:<number>&body=…"; the number as the contact stores it.
     Linking.openURL(`sms:${encodeURIComponent(c.rawNumbers[0] ?? '')}&body=${encodeURIComponent(body)}`).catch(() => {})
   }
@@ -734,11 +742,9 @@ function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
     return (
       <View style={styles.contactsCard}>
         <View style={styles.contactsIcon}><BookUser size={20} color={colors.green} /></View>
+        {/* No explanation here: iOS's own prompt carries it
+            (NSContactsUsageDescription), and nothing is read before it. */}
         <Text style={styles.contactsTitle}>Find friends from your contacts</Text>
-        <Text style={styles.contactsBody}>
-          Pressd checks the phone numbers in your contacts against people who’ve added theirs, and
-          lets you invite the rest. Your contacts aren’t stored.
-        </Text>
         {access === 'denied' ? (
           <Pressable style={styles.contactsBtn} onPress={() => Linking.openSettings().catch(() => {})}>
             <Text style={styles.contactsBtnText}>Allow contacts in Settings</Text>
@@ -752,12 +758,45 @@ function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
     )
   }
 
-  if (isLoading) return <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xl }} />
+  if (!open) {
+    const found = data?.onPressd.length ?? 0
+    return (
+      <Pressable
+        style={({ pressed }) => [styles.contactsRow, pressed && styles.contactsRowPressed]}
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Open contacts"
+      >
+        <View style={styles.contactsRowIcon}><BookUser size={18} color={colors.green} /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.userName}>Contacts</Text>
+          {data && (
+            <Text style={styles.contactSub}>
+              {found === 0 ? 'None on Pressd yet' : `${found} on Pressd`}
+            </Text>
+          )}
+        </View>
+        <ChevronRight size={18} color={colors.inkMuted} />
+      </Pressable>
+    )
+  }
+
+  const back = (
+    <Pressable style={styles.contactsBack} onPress={() => setOpen(false)} hitSlop={8} accessibilityRole="button">
+      <ChevronLeft size={18} color={colors.green} />
+      <Text style={styles.contactsBackText}>Contacts</Text>
+    </Pressable>
+  )
+
+  if (isLoading) return <View>{back}<ActivityIndicator color={colors.green} style={{ marginTop: spacing.xl }} /></View>
   if (error || !data) {
     return (
-      <Pressable onPress={() => refetch()}>
-        <Text style={styles.empty}>{error instanceof Error ? error.message : 'Couldn’t check your contacts.'} Tap to try again.</Text>
-      </Pressable>
+      <View>
+        {back}
+        <Pressable onPress={() => refetch()}>
+          <Text style={styles.empty}>{error instanceof Error ? error.message : 'Couldn’t check your contacts.'} Tap to try again.</Text>
+        </Pressable>
+      </View>
     )
   }
 
@@ -776,9 +815,12 @@ function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
       stickySectionHeadersEnabled={false}
       renderSectionHeader={({ section }) => <Text style={styles.sectionLabel}>{section.title}</Text>}
       ListHeaderComponent={
-        data.onPressd.length === 0 ? (
-          <Text style={styles.contactsNone}>None of your contacts are on Pressd yet.</Text>
-        ) : null
+        <>
+          {back}
+          {data.onPressd.length === 0 ? (
+            <Text style={styles.contactsNone}>None of your contacts are on Pressd yet.</Text>
+          ) : null}
+        </>
       }
       renderItem={({ item }) =>
         'phone_index' in item ? (
@@ -1164,10 +1206,14 @@ const styles = StyleSheet.create({
   contactsCard: { marginHorizontal: spacing.lg, marginTop: spacing.lg, padding: spacing.lg, borderRadius: radii.lg, backgroundColor: colors.greenSoft, alignItems: 'flex-start' },
   contactsIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
   contactsTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.ink, marginTop: spacing.md },
-  contactsBody: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.inkSecondary, marginTop: 6 },
   contactsBtn: { marginTop: spacing.lg, backgroundColor: colors.green, paddingHorizontal: 18, paddingVertical: 11, borderRadius: radii.pill },
   contactsBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 14.5, color: '#fff' },
   contactsNone: { fontFamily: fonts.body, fontSize: 14, color: colors.inkTertiary, paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  contactsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, marginTop: spacing.sm },
+  contactsRowPressed: { backgroundColor: colors.inset },
+  contactsRowIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.greenSoft, alignItems: 'center', justifyContent: 'center' },
+  contactsBack: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: spacing.md, paddingTop: spacing.md, alignSelf: 'flex-start' },
+  contactsBackText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.green },
   contactSub: { fontFamily: fonts.body, fontSize: 12.5, color: colors.inkTertiary, marginTop: 1 },
   inviteBtn: { borderWidth: 1, borderColor: colors.green, paddingHorizontal: 14, paddingVertical: 7, borderRadius: radii.pill },
   inviteBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
