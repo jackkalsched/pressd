@@ -420,16 +420,42 @@ would otherwise never see the prompt. UI: `PhoneSheet` (mobile; Settings → Acc
 in the Firebase console, `PHONE_HASH_KEY` on Render, and the four `VITE_FIREBASE_*` on
 Vercel with the site's domains authorised.
 
-**Custom profile banners (mobile only, October 2026)** — the profile header's wash
-can be an uploaded picture instead of the favourite album's cover. It is still drawn
-blurred, so there's nothing to moderate and the server stores it at 480×200
-(`BANNER_SIZE`, ~15 KB) through the same decode path as avatars (`_normalize_image` in
-`users.py`: EXIF stripped, rotation applied, pixel-bomb guard). `UserBanner` holds the
+**Custom profile banners (both platforms, October 2026)** — an uploaded picture,
+stored **24:5 at 1920×400** (`BANNER_SIZE`) through the same decode path as
+avatars (`_normalize_image` in `users.py`: EXIF stripped, rotation applied, pixel-bomb
+guard). Web shows it **sharp**, as the strip across the top of the profile page (Pressd
+green when there's none), with *Edit banner* on your own; mobile blurs it into its header
+wash in place of the favourite album's cover. It was 480×200 while it was only ever
+blurred — no banner had been uploaded when it changed. Both apps crop to 24:5 before
+uploading (mobile's picker `aspect: [24, 5]`; web's `BannerCropper`, drag and zoom,
+opened whenever the picked picture isn't already 24:5 — `lib/banner.ts`, and
+`lib/useBanner.tsx`, which Settings and the profile's button share),
+so what someone frames is what's kept. Sharp means seen as uploaded: avatars were
+already in that position, and there is no moderation of either. `UserBanner` holds the
 bytes and `PressUser.banner_url` points at them. The endpoints are
 `POST`/`DELETE /users/{id}/banner`, plus an unauthenticated `GET` for the same `<Image>`
 reason as avatars. `banner_url` rides on `GET /users/{id}/profile`, and `ProfileBanner`
 washes `banner_url ?? favourite album ?? top-rated art`. It's set in Settings → Profile,
-which writes the new URL straight into the `['profile', id]` cache. Account deletion
+which writes the new URL straight into the `['profile', id]` cache. Web sets it in
+Settings (`SettingsDialog.tsx`). Web draws no blurred wash on its profile or Library
+pages — the banner strip, or Pressd green, is the colour.
+
+**Your own profile on web (October 2026)** is `FriendProfile` at `/u/{your id}` — the
+sidebar's name and the small-screen *Profile* button open it. The header: the banner
+strip, the avatar riding up over its edge, the name with "@handle • bio • Pressing since"
+(the earliest album's month, as mobile works it out) under it, the bio on its own line,
+the album-score distribution (`ScoreHistogram`, no axis) under the avatar, and a stat
+row between two rules in mobile's order: Avg score, Albums, Artists (distinct,
+case-folded), Songs and Friends. When it's you, the friend button becomes **Share profile** (your invite link,
+through the share sheet or the clipboard — a profile itself is behind sign-in) and
+**Settings** (`components/SettingsDialog.tsx`, which was the Edit Profile
+modal inside `Layout.tsx`): photo, banner, username, bio, phone, Google link, the
+tutorial replay, sign-out. Every profile now shows **My Picks**
+(`components/ProfilePicks.tsx`) — favourite song, album and artist, editable on your own
+through a picker over the same sources as mobile's `app/favorite/*` (rated albums best
+first, `fetchRankedSongs`, `fetchArtistStats`), saved with `PATCH /users/{id}`. The picks
+are columns on the account, so one set shows on both platforms; hidden below ten rated
+albums, as on mobile. Account deletion
 now removes both picture rows; before this it never removed `UserAvatar`, whose
 foreign key blocked deleting any account that had a photo.
 
@@ -948,11 +974,13 @@ for editing a review later, and both paths post into the thread through
 
 4. **Profile.** Mobile unifies library + stats + identity in `app/(tabs)/profile.tsx`
    (849) with `ProfileBanner` (617): a cover-wash header — no green block since October 2026 — with the average ringing the avatar, headline stats, taste chips, and
-   **My Picks** (`favorite_album/artist/song_id`, `setTopSong`). Web splits this across
-   `Library.tsx` (168) and `Stats.tsx` (498) and has **no picks UI and no banner** —
+   **My Picks** (`favorite_album/artist/song_id`, `setTopSong`). Web's profile page
+   gained My Picks, the banner and Settings in October 2026 (§5), but still splits
+   library and stats across `Library.tsx` and `Stats.tsx` tabs and draws no score ring —
    `Library.tsx` calls only `fetchAlbums`, where mobile also calls `fetchSummary`,
    `fetchScoreRange`, `fetchArtistStats`, `fetchScatterData`. Custom banners
-   (`uploadBanner`/`deleteBanner`) are mobile-only with it, by choice for now.
+   (`uploadBanner`/`deleteBanner`) reached web in October 2026, as the wash behind the
+   profile and Library headers.
 5. **Stats.** Closed, September 2026: web's Stats ranks genres and subgenres
    (`GenreBreakdown`, by count or by average), each row opening
    [TagBoard.tsx](frontend/src/pages/TagBoard.tsx) at `/stats/:kind/:tag?user=&owner=`
@@ -1163,7 +1191,7 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
 - **There is no test suite, so verification is typecheck + lint + running it.** Web:
   `cd frontend && npm run typecheck`. Mobile: `cd mobile && npm run typecheck`. Backend:
   import the app (`python -c "import backend.main"`). `cd frontend && npx eslint .`
-  currently reports **15 problems — 11 errors and 4 warnings**, and mobile `eslint .`
+  currently reports **14 problems — 10 errors and 4 warnings**, and mobile `eslint .`
   reports **127 errors
   and 7 warnings** (mostly `react-hooks/refs` on `useRef(...).current`; hold an
   `Animated.Value` in `useState(() => …)` instead) — if your change doesn't add to

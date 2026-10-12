@@ -48,9 +48,10 @@ import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 // every byte costs a third more on the wire, and a camera-roll original is
 // several megabytes before compression.
 const AVATAR_UPLOAD_QUALITY = 0.8
-// The banner is stored at 480×200 and only ever shown blurred, so even less
-// survives to the screen; a rougher upload costs nothing visible.
-const BANNER_UPLOAD_QUALITY = 0.6
+// The banner is stored 24:5 at 1920×400 and shown sharp across the top of the
+// web profile (backend/routers/users.py, BANNER_SIZE), so it gets the avatar's
+// quality rather than the rougher one a blurred-only banner could afford.
+const BANNER_UPLOAD_QUALITY = 0.8
 
 // The published privacy policy (frontend/src/pages/Privacy.tsx) and the
 // contact address it gives — support reaches the same inbox.
@@ -352,7 +353,8 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
-      aspect: [12, 5],
+      // The stored shape — web frames the same 24:5, so a banner set here fits there.
+      aspect: [24, 5],
       quality: BANNER_UPLOAD_QUALITY,
       base64: true,
     })

@@ -1,13 +1,11 @@
 import { useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useGoogleLogin } from '@react-oauth/google'
-import { Library, BarChart2, List, Mail, X, Loader2, MessageCircle, Pencil, Users, Plus, Sparkles, TrendingUp, ChevronRight } from 'lucide-react'
+import { Library, BarChart2, List, Mail, X, Loader2, MessageCircle, Users, Plus, Sparkles, TrendingUp, ChevronDown } from 'lucide-react'
 import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
-import { fetchFriends, getInviteLink, updateUser, linkGoogle, removeFriend } from '../api'
+import { fetchFriends, getInviteLink, removeFriend } from '../api'
 import type { UserInfo } from '../api'
-import { cleanUsername } from '../types'
 import AddAlbumModal from './AddAlbumModal'
 import PhoneDialog from './PhoneDialog'
 import { phoneVerifyConfigured } from '../lib/phoneVerify'
@@ -133,234 +131,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-function resizeImageToBase64(file: File, size = 200): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    const url = URL.createObjectURL(file)
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      canvas.width = size
-      canvas.height = size
-      const ctx = canvas.getContext('2d')!
-      const min = Math.min(img.width, img.height)
-      const sx = (img.width - min) / 2
-      const sy = (img.height - min) / 2
-      ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size)
-      URL.revokeObjectURL(url)
-      resolve(canvas.toDataURL('image/jpeg', 0.85))
-    }
-    img.onerror = reject
-    img.src = url
-  })
-}
-
-function ProfileModal({ onClose }: { onClose: () => void }) {
-  const { activeUser, setActiveUser, signOut, removePhoneNumber } = useUser()
-  const [phoneOpen, setPhoneOpen] = useState(false)
-  const [phoneBusy, setPhoneBusy] = useState(false)
-
-  async function removeNumber() {
-    if (!window.confirm('Remove your phone number? Friends won’t be able to find you by it.')) return
-    setPhoneBusy(true)
-    try {
-      await removePhoneNumber()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Couldn’t remove that number')
-    } finally {
-      setPhoneBusy(false)
-    }
-  }
-  const navigate = useNavigate()
-  const [name, setName] = useState(activeUser?.name ?? '')
-  const [avatarUrl, setAvatarUrl] = useState(activeUser?.avatarUrl ?? '')
-  const [bio, setBio] = useState(activeUser?.bio ?? '')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const googleLink = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      setError(null)
-      try {
-        // Links to whoever the stored session token belongs to; the server no
-        // longer accepts a user id from the client here.
-        const user = await linkGoogle(tokenResponse.access_token)
-        setActiveUser({ ...activeUser, id: user.id, name: user.name, avatarUrl: user.avatarUrl, tutorialSeen: user.tutorialSeen, usernameChosen: user.usernameChosen })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to link Google account')
-      }
-    },
-    onError: () => setError('Google sign in was cancelled or failed.'),
-  })
-
-  function handleSignOut() {
-    signOut()
-    onClose()
-    navigate('/', { replace: true })
-  }
-
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (!file.type.startsWith('image/')) { setError('Please choose an image file'); return }
-    try {
-      const base64 = await resizeImageToBase64(file)
-      setAvatarUrl(base64)
-      setError(null)
-    } catch {
-      setError('Failed to process image')
-    }
-  }
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    if (!activeUser) return
-    setLoading(true)
-    setError(null)
-    try {
-      // The endpoint answers with the whole profile now — picks included — but
-      // this dialog only edits identity, so it keeps the fields it knows.
-      const updated = await updateUser(activeUser.id, {
-        name: name.trim() !== activeUser.name ? name.trim() : undefined,
-        avatarUrl: avatarUrl !== (activeUser.avatarUrl ?? '') ? avatarUrl : undefined,
-        bio: bio.trim() !== (activeUser.bio ?? '') ? bio.trim() : undefined,
-      })
-      setActiveUser({
-        ...activeUser,
-        id: updated.id,
-        name: updated.name,
-        // The server stamps the choice on any saved name.
-        ...(name.trim() !== activeUser.name ? { usernameChosen: true } : {}),
-        avatarUrl: updated.avatar_url ?? undefined,
-        bio: updated.bio ?? undefined,
-      })
-      onClose()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (!activeUser) return null
-  const preview: UserInfo = { id: activeUser.id, name: name || activeUser.name, avatarUrl: avatarUrl || undefined }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm fade-in" onClick={onClose} />
-      <div className="relative bg-white border border-[#e2e2e2] rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl pop-in">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-[#111] font-semibold">Edit Profile</h2>
-          <button onClick={onClose} className="text-[#aaa] hover:text-[#555] transition-colors"><X size={18} /></button>
-        </div>
-
-        {/* Avatar preview + upload button */}
-        <div className="flex flex-col items-center gap-2 mb-5">
-          <Avatar user={preview} size={80} />
-          <label className="cursor-pointer text-xs font-medium text-[#2d6a4f] hover:text-[#245c43] transition-colors">
-            Upload photo
-            <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
-          </label>
-        </div>
-
-        <form onSubmit={handleSave} className="flex flex-col gap-3">
-          <div>
-            <label className="text-xs text-[#888] mb-1 block">Username</label>
-            <input
-              value={name}
-              onChange={(e) => setName(cleanUsername(e.target.value))}
-              placeholder="Pick a username"
-              autoCapitalize="none"
-              spellCheck={false}
-              className="w-full bg-[#f5f5f5] border border-[#e2e2e2] text-[#111] text-sm px-4 py-2.5 rounded-lg focus:outline-none focus:border-[#2d6a4f] transition-colors"
-            />
-            <p className="text-[11px] text-[#999] mt-1">
-              This is the name friends see — it doesn't have to be your real name.
-            </p>
-          </div>
-          <div>
-            <label className="text-xs text-[#888] mb-1 block">Bio</label>
-            <textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value.slice(0, 240))}
-              placeholder="A line about your taste…"
-              rows={3}
-              className="w-full bg-[#f5f5f5] border border-[#e2e2e2] text-[#111] text-sm px-4 py-2.5 rounded-lg focus:outline-none focus:border-[#2d6a4f] transition-colors resize-none"
-            />
-            <p className="text-[11px] text-[#999] mt-1 text-right">{bio.length}/240</p>
-          </div>
-          {error && <p className="text-[#c0392b] text-xs">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading || !name.trim()}
-            className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#2d6a4f] hover:bg-[#245c43] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {loading ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save'}
-          </button>
-        </form>
-
-        <div className="mt-4 pt-4 border-t border-[#f0f0f0] flex flex-col gap-2">
-          {!activeUser?.avatarUrl && (
-            <button
-              onClick={() => googleLink()}
-              className="w-full flex items-center justify-center gap-2 bg-[#111] hover:bg-[#222] text-white text-sm font-medium py-2 rounded-xl transition-colors"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-              </svg>
-              Link Google Account
-            </button>
-          )}
-          {/* Mobile's Settings → Account → Phone number. Only the last four
-              digits ever come back: the number is stored as a keyed hash. */}
-          {phoneVerifyConfigured && (
-            <div className="flex w-full items-center gap-2 px-3 py-2">
-              <span className="flex-1 text-sm font-medium text-[#111]">Phone number</span>
-              {phoneBusy ? (
-                <Loader2 size={14} className="animate-spin text-[#2d6a4f]" />
-              ) : activeUser.phoneLast4 ? (
-                <>
-                  <span className="text-sm tabular-nums text-[#57534e]">•••• {activeUser.phoneLast4}</span>
-                  <button onClick={removeNumber} className="ml-2 text-sm font-semibold text-[#b91c1c] hover:underline underline-offset-2">
-                    Remove
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setPhoneOpen(true)}
-                  className="rounded-full border border-[#e2dbd0] bg-white px-3 py-1 text-[13px] font-semibold text-[#2d6a4f] hover:border-[#2d6a4f]"
-                >
-                  Add
-                </button>
-              )}
-            </div>
-          )}
-          {/* Mobile's Settings → How Pressd works. This dialog is the web's
-              settings surface, so the replay lives here. */}
-          <button
-            onClick={() => { onClose(); navigate('/tutorial?replay=1') }}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left hover:bg-[#f5f5f5] transition-colors"
-          >
-            <span className="flex-1 min-w-0">
-              <span className="block text-sm font-medium text-[#111]">How Pressd works</span>
-              <span className="block text-xs text-[#999]">Replay the intro</span>
-            </span>
-            <ChevronRight size={16} className="text-[#bbb]" />
-          </button>
-          <button
-            onClick={handleSignOut}
-            className="w-full py-2 rounded-xl text-sm font-medium text-[#c0392b] hover:bg-[#fdf0ee] transition-colors"
-          >
-            Sign out
-          </button>
-        </div>
-      </div>
-      {phoneOpen && <PhoneDialog mode="settings" onClose={() => setPhoneOpen(false)} />}
-    </div>
-  )
-}
+const FRIENDS_OPEN_KEY = 'pressd_sidebar_friends_open'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { activeUser, viewingUser, setViewingUser, isViewingFriend } = useUser()
@@ -368,8 +139,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation()
   const queryClient = useQueryClient()
   const [showInvite, setShowInvite] = useState(false)
-  const [showProfile, setShowProfile] = useState(false)
   const [showAddAlbum, setShowAddAlbum] = useState(false)
+  // The sidebar's friends list folds away; remembered per browser, so a long
+  // list stays out of the way across visits. Storage can be unavailable.
+  const [friendsOpen, setFriendsOpen] = useState(() => {
+    try { return localStorage.getItem(FRIENDS_OPEN_KEY) !== '0' } catch { return true }
+  })
+  function toggleFriends() {
+    setFriendsOpen((open) => {
+      try { localStorage.setItem(FRIENDS_OPEN_KEY, open ? '0' : '1') } catch { /* ignore */ }
+      return !open
+    })
+  }
 
   const { data: friends = [] } = useQuery({
     queryKey: ['friends', activeUser?.id],
@@ -381,6 +162,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   function viewFriend(id: number, name: string, avatarUrl?: string) {
     setViewingUser({ id, name, avatarUrl })
     navigate(`/u/${id}`)
+  }
+
+  // Your own name opens your profile, where Settings lives (top right).
+  function openOwnProfile() {
+    if (!activeUser) return
+    setViewingUser(activeUser)
+    navigate(`/u/${activeUser.id}`)
   }
 
   function returnToSelf() {
@@ -430,7 +218,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {/* Friends section */}
         <div className="mt-6 pt-5 border-t border-[#e2e2e2]">
           <div className="flex items-center justify-between px-2 mb-2">
-            <span className="text-[10px] font-semibold text-[#aaa] uppercase tracking-wider">Friends</span>
+            <button
+              onClick={toggleFriends}
+              aria-expanded={friendsOpen}
+              className="flex items-center gap-1 text-[10px] font-semibold text-[#aaa] uppercase tracking-wider hover:text-[#555] transition-colors"
+            >
+              <ChevronDown size={12} className={clsx('transition-transform', !friendsOpen && '-rotate-90')} />
+              Friends
+              {!friendsOpen && friends.length > 0 && (
+                <span className="ml-1 normal-case tracking-normal font-medium text-[#bbb]">{friends.length}</span>
+              )}
+            </button>
             <button
               onClick={() => setShowInvite(true)}
               title="Invite someone"
@@ -440,7 +238,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </button>
           </div>
 
-          {friends.length === 0 ? (
+          {!friendsOpen ? null : friends.length === 0 ? (
             <p className="text-[11px] text-[#bbb] px-2">No friends yet — invite someone!</p>
           ) : (
             <div className="flex flex-col gap-0.5">
@@ -480,12 +278,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {/* Active user at bottom — always your own profile */}
         <div className="mt-auto pt-4 border-t border-[#e2e2e2]">
           <button
-            onClick={() => setShowProfile(true)}
-            className="flex items-center gap-2 px-2 w-full group hover:bg-[#f5f5f5] rounded-lg py-1.5 transition-colors"
+            onClick={openOwnProfile}
+            aria-label="Your profile"
+            className={clsx(
+              'flex items-center gap-2 px-2 w-full group rounded-lg py-1.5 transition-colors',
+              location.pathname === `/u/${activeUser?.id}` ? 'bg-[#2d6a4f]/10' : 'hover:bg-[#f5f5f5]',
+            )}
           >
             <Avatar user={activeUser} size={26} />
             <span className="text-sm text-[#777] group-hover:text-[#111] transition-colors flex-1 text-left truncate">{activeUser?.name}</span>
-            <Pencil size={12} className="text-[#ccc] group-hover:text-[#aaa] transition-colors shrink-0" />
           </button>
         </div>
       </aside>
@@ -521,7 +322,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         ))}
         {/* Profile button */}
         <button
-          onClick={() => setShowProfile(true)}
+          onClick={openOwnProfile}
           className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium text-[#aaa] transition-colors"
         >
           <Avatar user={activeUser} size={22} />
@@ -542,7 +343,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       )}
 
       {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
-      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
       {/* The one-time ask. Layout only renders past the tutorial and welcome
           gates, so it never lands on a first run's first screen. An explicit
           false: a session that hasn't heard of the field waits for the refresh

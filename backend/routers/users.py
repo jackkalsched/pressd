@@ -758,11 +758,14 @@ def _normalize_avatar(raw: bytes) -> bytes:
     return _normalize_image(raw, (AVATAR_EDGE, AVATAR_EDGE), AVATAR_JPEG_QUALITY)
 
 
-# A banner is only ever drawn blurred (radius 45, from a 120px fetch) behind
-# the profile header, so it is stored at the size the wash needs rather than
-# the size the photo arrived at — about 15 KB. Wide, because the header is.
-BANNER_SIZE = (480, 200)
-BANNER_JPEG_QUALITY = 75
+# A banner is drawn two ways: sharp, as the strip across the top of the web
+# profile, and blurred into mobile's header wash. Stored 24:5 at 1920×400 — the
+# web profile's shape — because the sharp one needs the pixels (it was 480×200
+# while banners were only ever blurred; no banner had been uploaded when either
+# changed, October 2026). Both apps crop to 24:5 before uploading, so what
+# someone frames is what's kept; ImageOps.fit centre-crops anything else.
+BANNER_SIZE = (1920, 400)
+BANNER_JPEG_QUALITY = 82
 
 
 def _normalize_image(raw: bytes, size: tuple[int, int], quality: int) -> bytes:

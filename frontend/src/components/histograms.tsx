@@ -29,7 +29,13 @@ const BUCKETS = 9
 /** Nine buckets — [1,2), [2,3) … [9,10]. Labels sit on the bucket *edges*, so a
  *  bar's range is read off the two numbers bracketing it (a perfect 10 folds
  *  into the last bucket, the usual closed-top-edge treatment). */
-export function ScoreHistogram({ scores, height = 120 }: { scores: number[]; height?: number }) {
+export function ScoreHistogram({ scores, height = 120, axis = true }: {
+  scores: number[]
+  height?: number
+  /** Off where the chart is a thumbnail (the profile's stat row); the
+   *  colours still say which end is which. Mobile's has the same switch. */
+  axis?: boolean
+}) {
   const bins = Array.from({ length: BUCKETS }, () => 0)
   for (const s of scores) {
     bins[Math.max(0, Math.min(BUCKETS - 1, Math.floor(s) - 1))] += 1
@@ -55,11 +61,11 @@ export function ScoreHistogram({ scores, height = 120 }: { scores: number[]; hei
       </div>
       {/* space-between lands each label on a bar boundary — first at the left
           edge, last at the right — matching the app's axis treatment. */}
-      <div className="flex justify-between" style={{ marginTop: 5 }}>
+      {axis && <div className="flex justify-between" style={{ marginTop: 5 }}>
         {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
           <span key={n} style={{ fontSize: 10, color: MUTED }}>{n}</span>
         ))}
-      </div>
+      </div>}
     </div>
   )
 }
