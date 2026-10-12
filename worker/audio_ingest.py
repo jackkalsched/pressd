@@ -25,6 +25,15 @@ recorded status 'ok'. Two things made that invisible, and both are now closed:
     process exits nonzero, and worker/audio_health.py turns a failed or stale
     run into a red job in GitHub Actions.
 
+A track that fails stops being retried every night. Until October 2026 every
+track without audio was tried on every run, forever: the same ~24 (age-gated
+explicit tracks, classical movements no search matches, titles mangled into
+dates) failed nightly, the worst for 30 nights running. Each failure is now
+counted on its Track; after MAX_TRIES it waits RETRY_AFTER_DAYS between
+attempts, and a success resets it. The canary is what keeps a broken toolchain
+from counting against every track — a run that can't download stops before
+it tries any.
+
 Usage:
     ./run_audio_ingest.sh [--limit N]      # wrapper: sets PATH for yt-dlp/node/ffmpeg
     ./run_audio_ingest.sh --preflight      # check everything, analyze nothing
@@ -32,6 +41,7 @@ Usage:
 """
 import argparse
 import glob
+import json
 import os
 import pathlib
 import re
@@ -40,6 +50,8 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
@@ -67,6 +79,19 @@ _PENDING = """
                 WHERE ta.track_id = s.track_id AND ta.bpm IS NOT NULL)
 """
 
+# A track that has failed this many runs in a row waits RETRY_AFTER_DAYS
+# between further attempts — a YouTube upload can appear later, so it isn't
+# dropped for good. Three, so one bad night (a flaky network, a briefly
+# refused download) never benches a track on its own.
+MAX_TRIES = 3
+RETRY_AFTER_DAYS = 7
+# Due for an attempt: not yet failed MAX_TRIES times, or rested long enough.
+# Needs `track t` joined.
+_DUE = f"""
+    (t.audio_failures < {MAX_TRIES}
+     OR t.audio_failed_at < NOW() - INTERVAL '{RETRY_AFTER_DAYS} days')
+"""
+
 
 class ToolchainError(RuntimeError):
     """The environment cannot download or analyze anything. Aborts the run:
@@ -82,7 +107,7 @@ def albums_needing_audio(con, limit: int | None = None):
         FROM album a
         JOIN song s ON s.album_id = a.id
         JOIN track t ON t.id = s.track_id
-        WHERE {_PENDING}
+        WHERE {_PENDING} AND {_DUE}
         ORDER BY a.id
     """
     rows = con.execute(text(sql)).fetchall()
@@ -157,13 +182,15 @@ def analyze_album(album_id: int, artist: str, album_name: str) -> tuple[int, int
         todo = con.execute(text(f"""
             SELECT s.track_id, s.title, s.track_number
             FROM song s
-            WHERE s.album_id = :id AND s.track_id IS NOT NULL AND {_PENDING}
+            JOIN track t ON t.id = s.track_id
+            WHERE s.album_id = :id AND {_PENDING} AND {_DUE}
             ORDER BY s.track_number
         """), {"id": album_id}).fetchall()
     if not todo:
         return 0, 0
 
     results = []
+    failed: list[tuple[int, str]] = []  # (track_id, reason)
     with tempfile.TemporaryDirectory() as tmpdir:
         why: dict[int, str] = {}
         for track_id, title, track_number in todo:
@@ -181,13 +208,27 @@ def analyze_album(album_id: int, artist: str, album_name: str) -> tuple[int, int
         for track_id, title, track_number in todo:
             audio_path = file_by_track.get(track_number or 0)
             if not audio_path:
-                print(f"[audio_ingest] no audio for {title}: "
-                      f"{why.get(track_number or 0, 'no file produced')}")
+                reason = why.get(track_number or 0, 'no file produced')
+                print(f"[audio_ingest] no audio for {title}: {reason}")
+                failed.append((track_id, reason))
                 continue
             try:
                 results.append((track_id, title, _analyze_file(audio_path)))
             except Exception as e:
                 print(f"[audio_ingest] analysis failed for {title}: {e}")
+                failed.append((track_id, f"analysis failed: {e}"))
+
+    if failed:
+        with engine.connect() as con:
+            for track_id, reason in failed:
+                # Once per night at most: a record several people own is tried
+                # once per copy, and that's one bad night, not three.
+                con.execute(text(
+                    "UPDATE track SET audio_failures = audio_failures"
+                    " + CASE WHEN audio_failed_at > NOW() - INTERVAL '12 hours' THEN 0 ELSE 1 END,"
+                    " audio_failed_at = NOW(), audio_fail_reason = :r WHERE id = :tid"),
+                    {"tid": track_id, "r": reason[:240]})
+            con.commit()
 
     if not results:
         return 0, len(todo)
@@ -205,6 +246,9 @@ def analyze_album(album_id: int, artist: str, album_name: str) -> tuple[int, int
                     f" ON CONFLICT (track_id) DO UPDATE SET {set_cols},"
                     f" analyzed_at = NOW(), source = 'yt_full'"),
                     {"tid": track_id, **{c: features.get(c) for c in _FEATURE_COLS}})
+                con.execute(text(
+                    "UPDATE track SET audio_failures = 0, audio_failed_at = NULL,"
+                    " audio_fail_reason = NULL WHERE id = :tid"), {"tid": track_id})
                 con.commit()
                 analyzed += 1
                 print(f"[audio_ingest] analyzed: {title}")
@@ -244,14 +288,56 @@ def preflight() -> bool:
     check("canary download + analysis", passed, detail)
     try:
         with engine.connect() as con:
-            n_alb, n_trk = con.execute(text(f"""
-                SELECT COUNT(DISTINCT s.album_id), COUNT(DISTINCT s.track_id)
-                FROM song s WHERE s.track_id IS NOT NULL AND {_PENDING}""")).first()
-        check("database reachable", True, f"{n_trk} tracks pending across {n_alb} albums")
+            n_alb, n_trk, n_rest = con.execute(text(f"""
+                SELECT COUNT(DISTINCT s.album_id) FILTER (WHERE {_DUE}),
+                       COUNT(DISTINCT s.track_id) FILTER (WHERE {_DUE}),
+                       COUNT(DISTINCT s.track_id) FILTER (WHERE NOT {_DUE})
+                FROM song s JOIN track t ON t.id = s.track_id
+                WHERE {_PENDING}""")).first()
+        check("database reachable", True,
+              f"{n_trk} tracks due across {n_alb} albums; {n_rest} resting after {MAX_TRIES} failures")
     except Exception as e:
         check("database reachable", False, str(e).splitlines()[0][:160])
     print(f"[audio_ingest] preflight {'passed' if ok else 'FAILED'}")
     return ok
+
+
+# The GitHub workflow this hands off to once audio is in.
+PREDICT_WORKFLOW = "nightly-predict.yml"
+GITHUB_REPO = os.getenv("PRESSD_GITHUB_REPO", "jackkalsched/pressd")
+
+
+def start_predictions() -> None:
+    """Start tonight's prediction run on GitHub now that the audio is in.
+
+    The workflow's own cron fired 5–9 hours late through October 2026 —
+    GitHub's scheduler, not the Mac: the six-hourly new-releases workflow,
+    which never touches the Mac, slipped just as far. Starting it from here
+    makes predictions follow the audio they read, minutes after it lands. The
+    cron stays as the fallback for a night the Mac doesn't run, and skips
+    itself when this already has (nightly_predict --skip-if-ran-within).
+
+    Needs GITHUB_DISPATCH_TOKEN in .env: a fine-grained token for this
+    repository with "Actions: read and write" and nothing else. Without one, or
+    if GitHub refuses, it says so and the night still counts — the cron will
+    run predictions later, as before."""
+    token = os.getenv("GITHUB_DISPATCH_TOKEN")
+    if not token:
+        print("[audio_ingest] no GITHUB_DISPATCH_TOKEN; predictions wait for GitHub's schedule")
+        return
+    req = urllib.request.Request(
+        f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/{PREDICT_WORKFLOW}/dispatches",
+        data=json.dumps({"ref": "main"}).encode(), method="POST",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
+                 "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "pressd-audio-ingest"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            print(f"[audio_ingest] started tonight's predictions on GitHub (HTTP {resp.status})")
+    except urllib.error.HTTPError as e:
+        print(f"[audio_ingest] GitHub refused to start predictions: HTTP {e.code} "
+              f"{e.read()[:200].decode(errors='replace')}")
+    except Exception as e:
+        print(f"[audio_ingest] couldn't reach GitHub to start predictions: {e}")
 
 
 def main() -> int:
@@ -285,6 +371,8 @@ def main() -> int:
 
         if not albums:
             finish("ok", pending_albums=0)
+            if commit:  # the nightly run, not one by hand
+                start_predictions()
             return 0
 
         passed, detail = canary()
@@ -312,6 +400,8 @@ def main() -> int:
         finish("ok", pending_albums=len(albums))
         print(f"[audio_ingest] done: {stats['tracks']} of {stats['tracks_attempted']} tracks "
               f"across {stats['albums']} albums ({stats['failed_or_empty']} with none)")
+        if commit:  # the nightly run, not one by hand
+            start_predictions()
         return 0
     except BaseException as e:
         # Includes KeyboardInterrupt: a killed run must not sit at 'running'.

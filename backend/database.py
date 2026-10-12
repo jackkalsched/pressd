@@ -231,6 +231,12 @@ def init_db():
             #    tutorial_seen_at is, so existing accounts are never asked.
             "ALTER TABLE pressuser ADD COLUMN username_chosen_at TIMESTAMP DEFAULT NOW()",
             "ALTER TABLE pressuser ALTER COLUMN username_chosen_at DROP DEFAULT",
+            # ── The audio ingest's failed attempts per recording, so a track with
+            #    no usable YouTube match stops being retried every night
+            #    (worker/audio_ingest.py). Existing rows start at zero failures.
+            "ALTER TABLE track ADD COLUMN audio_failures INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE track ADD COLUMN audio_failed_at TIMESTAMPTZ",
+            "ALTER TABLE track ADD COLUMN audio_fail_reason VARCHAR",
             # ── Row-level security on every public table, last so it covers the
             #    tables create_all just made. Supabase serves the public schema
             #    over its REST API to anyone holding the project's publishable

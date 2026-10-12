@@ -38,6 +38,7 @@ recognisable by construction, padded with Deezer's album chart.
 No FastAPI in here: the worker imports it, and its requirements carry none.
 """
 import asyncio
+from collections import Counter
 import html as _html
 import json
 import re
@@ -64,6 +65,14 @@ LASTFM_PER_SECOND = 4.5    # Last.fm allows 5/s averaged over five minutes
 # listeners than this is an outage, not a quiet week — fail, and keep serving
 # the last good list, rather than store an arbitrary order.
 MIN_RANKED = 12
+
+
+# How the last build's Last.fm lookups went, outcome by outcome — found, not
+# found, rate limited, server error, network error… The worker stores it with
+# each run. Until October 2026 a failed lookup was just a 0, so a run that
+# failed with "only 8 releases had Last.fm listeners" couldn't say whether
+# Last.fm was down, throttling GitHub's shared runners, or refusing the key.
+LAST_LASTFM_TALLY: dict[str, int] = {}
 
 
 class NoReleases(RuntimeError):
@@ -274,31 +283,47 @@ def _merge(*lists: list[dict]) -> list[dict]:
 # ── ranking and resolution ────────────────────────────────────────────────────
 
 async def lastfm_listeners(client: httpx.AsyncClient, pacer: _Pacer, key: str,
-                           artist: str, album: str) -> int:
-    """Listeners of this album on Last.fm; 0 when it is unknown there."""
+                           artist: str, album: str, tally: Counter | None = None) -> int:
+    """Listeners of this album on Last.fm; 0 when it is unknown there.
+    `tally` counts each lookup's final outcome (see LAST_LASTFM_TALLY)."""
+    tally = tally if tally is not None else Counter()
     params = {"method": "album.getinfo", "artist": artist, "album": album,
               "api_key": key, "format": "json", "autocorrect": 1}
+    last = "network error"
     for attempt in range(3):
         await pacer.wait()
         try:
             resp = await client.get(LASTFM_API, params=params, headers={"User-Agent": UA})
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            last = f"network error ({type(e).__name__})"
             continue
         if resp.status_code == 404:           # "Album not found"
+            tally["not found"] += 1
             return 0
         if resp.status_code == 429 or resp.status_code >= 500:
+            last = "rate limited (HTTP 429)" if resp.status_code == 429 else f"HTTP {resp.status_code}"
             await asyncio.sleep(2 * (attempt + 1))
             continue
         try:
             body = resp.json()
         except ValueError:
+            tally["unreadable reply"] += 1
             return 0
-        if body.get("error") in (8, 11, 16, 29):   # transient, or rate limited
+        err = body.get("error")
+        if err in (8, 11, 16, 29):   # transient, or rate limited
+            last = "rate limited (error 29)" if err == 29 else f"Last.fm error {err}"
             await asyncio.sleep(2 * (attempt + 1))
             continue
-        if body.get("error") or not resp.is_success:
+        if err == 6:                  # "Album not found", sent as a 200
+            tally["not found"] += 1
             return 0
-        return int((body.get("album") or {}).get("listeners") or 0)
+        if err or not resp.is_success:
+            tally[f"Last.fm error {err}" if err else f"HTTP {resp.status_code}"] += 1
+            return 0
+        n = int((body.get("album") or {}).get("listeners") or 0)
+        tally["found" if n else "no listeners"] += 1
+        return n
+    tally[f"gave up: {last}"] += 1
     return 0
 
 
@@ -381,18 +406,22 @@ async def build(lastfm_key: str | None, limit: int = MAX_RELEASES) -> tuple[list
             raise NoReleases("ListenBrainz and Apple returned nothing")
 
         pacer, sem = _Pacer(LASTFM_PER_SECOND), asyncio.Semaphore(8)
+        tally: Counter = Counter()
 
         async def listeners(c):
             async with sem:
-                c["listeners"] = await lastfm_listeners(client, pacer, lastfm_key, c["artist"], c["album_name"])
+                c["listeners"] = await lastfm_listeners(client, pacer, lastfm_key, c["artist"], c["album_name"], tally)
 
         started = time.monotonic()
         await asyncio.gather(*[listeners(c) for c in candidates])
         ranked = sorted((c for c in candidates if c["listeners"]), key=lambda c: c["listeners"], reverse=True)
+        LAST_LASTFM_TALLY.clear()
+        LAST_LASTFM_TALLY.update(tally)
+        outcomes = ", ".join(f"{k} {v}" for k, v in tally.most_common())
         print(f"[new-releases] {len(candidates)} candidates ({len(apple)} from Apple), "
-              f"{len(ranked)} known to Last.fm, {time.monotonic() - started:.0f}s")
+              f"{len(ranked)} known to Last.fm, {time.monotonic() - started:.0f}s; Last.fm: {outcomes}")
         if len(ranked) < MIN_RANKED:
-            raise NoReleases(f"only {len(ranked)} releases had Last.fm listeners — Last.fm is likely failing")
+            raise NoReleases(f"only {len(ranked)} releases had Last.fm listeners ({outcomes})")
 
         out = await _resolve_in_order(client, ranked, limit)
         if len(out) < MIN_RANKED:

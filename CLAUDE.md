@@ -179,7 +179,10 @@ creeps earlier each day. `pmset -g log` shows the dark wakes if it recurs.
 `FIREBASE_CREDENTIALS_FILE` (local), `SMTP_*`, `PHONE_HASH_KEY` (the HMAC key phone
 numbers are stored under — **the same value on Render and in local `.env`**, since both
 write the production database; unset, adding a number answers 503, and there is no
-fallback literal, on purpose).
+fallback literal, on purpose). `GITHUB_DISPATCH_TOKEN` (the Mac's `.env` only — a
+fine-grained token for this repo with *Actions: read and write*; the nightly ingest uses
+it to start the prediction workflow, and without it predictions wait for GitHub's cron;
+re-run `ops/launchd/install.sh` after adding it, since the job reads a copy of `.env`).
 Web: `VITE_API_URL`, `VITE_GOOGLE_CLIENT_ID`, `VITE_IOS_APP_URL` (the TestFlight or App
 Store link the public pages' iPhone buttons open; unset, they say it is coming to iOS soon —
 `frontend/src/lib/iosApp.ts`), `VITE_FIREBASE_API_KEY` / `_AUTH_DOMAIN` / `_PROJECT_ID` /
@@ -265,7 +268,10 @@ every 6h, GitHub Actions          .github/workflows/new-releases.yml
         ∪ Apple Music most-played albums released in the window
         → Last.fm album.getinfo listeners for each, paced 4.5/s   ~3.5 min
         → top 45 resolved on Deezer for importable ids; 30 stored in cachedfeed
-     fails (exit 1, workerrun 'error') rather than store a thin list; the last one stays
+     fails (exit 1, workerrun 'error') rather than store a thin list; the last one stays.
+     Each run's workerrun row carries `lastfm`, the count of every lookup outcome
+     (found / not found / rate limited / gave up…), so a "too few releases" failure —
+     5 of ~40 runs in early October 2026 — says what Last.fm actually did
 GET /discover/new-releases        discover.py
   a. in-memory dict               re-read from the row every 30 min
   b. cachedfeed row               served while under 3 days old
@@ -603,12 +609,26 @@ Audio ingest (phase A) runs on the Mac, nightly under launchd from a deploy clon
 `main` (`ops/launchd/`, §3), because yt-dlp is bot-blocked from datacenter IPs. It cannot be a self-hosted runner: **the repo
 is public**, and a fork's pull request could run code on the machine holding `.env`.
 Prediction (phase B) runs in
-[.github/workflows/nightly-predict.yml](.github/workflows/nightly-predict.yml), whose
+[.github/workflows/nightly-predict.yml](.github/workflows/nightly-predict.yml), **started by
+the Mac** the moment its ingest succeeds (`audio_ingest.start_predictions`, a
+`workflow_dispatch` with `GITHUB_DISPATCH_TOKEN`). GitHub's own cron ran 5–9 hours late
+through October 2026 — the scheduler, not the Mac: the new-releases workflow, which
+never touches the Mac, slipped as far — so the cron is now only the fallback for a night
+the Mac doesn't run, and passes `--skip-if-ran-within 20` so it stands down when a full
+run (a `rescore_scores` row for all users) already happened. The workflow's
 independent `audio-health` job reads the ingest's `workerrun` row and goes red if the
 last run errored, died mid-run, or is more than 36h old — the ingest's only channel into
 GitHub. Every ingest run starts with a **canary** download through the real yt-dlp
 invocation, because a broken toolchain and a track with no YouTube match look identical
-per track, and about twenty albums have no match on any night. `run_audio_ingest.sh`
+per track, and about twenty albums have no match on any night. A track that fails stops
+being retried every night: each failure is counted on its `Track` (`audio_failures`,
+`audio_failed_at`, `audio_fail_reason`; at most one a night, since a record several
+people own is tried once per copy), and after `MAX_TRIES` (3) it waits `RETRY_AFTER_DAYS`
+(7) between attempts; success resets it. Until October 2026 the same ~24 tracks —
+age-gated explicit songs, classical movements no search matches — were retried nightly,
+the worst for 30 nights. Four of them were titles Excel had turned into dates and times
+on the spreadsheet import (`March 14` as `2024-03-14 00:00:00`); those were corrected and
+re-keyed. `run_audio_ingest.sh`
 puts `/usr/local/bin` (node, ffmpeg, ffprobe) on PATH; without it yt-dlp still searches
 but produces nothing.
 

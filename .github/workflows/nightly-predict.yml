@@ -14,6 +14,12 @@ name: Nightly predictions
 # `predict` on purpose: predictions still run on whatever audio exists, and a
 # dead ingest goes red on its own instead of silently for weeks.
 
+# Normally started by the Mac the moment its audio ingest succeeds (worker/
+# audio_ingest.py, start_predictions — a workflow_dispatch). The cron is the
+# fallback for a night the Mac doesn't run; it skips itself if a full run
+# finished in the last 20 hours. GitHub ran this schedule 5–9 hours late
+# through October 2026.
+
 on:
   schedule:
     - cron: "30 9 * * *" # 2:30am PT
@@ -46,6 +52,8 @@ jobs:
         run: |
           if [ -n "${{ inputs.user }}" ]; then
             python -m worker.nightly_predict --user "${{ inputs.user }}"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            python -m worker.nightly_predict --skip-if-ran-within 20
           else
             python -m worker.nightly_predict
           fi

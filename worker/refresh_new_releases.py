@@ -24,6 +24,7 @@ from sqlmodel import Session
 
 import backend.models  # noqa: F401 — registers tables in SQLModel.metadata
 from backend.database import engine
+from backend import new_releases
 from backend.new_releases import build, write_stored
 from worker import runlog
 
@@ -47,7 +48,7 @@ def main() -> int:
         releases, source = asyncio.run(build(os.getenv("LASTFM_API_KEY")))
     except Exception as e:
         print(f"[new-releases] FAILED, stored list left as it was: {type(e).__name__}: {e}")
-        finish("error", error=f"{type(e).__name__}: {e}"[:500])
+        finish("error", error=f"{type(e).__name__}: {e}"[:500], lastfm=dict(new_releases.LAST_LASTFM_TALLY))
         return 1
 
     print(f"[new-releases] {len(releases)} releases from {source}:")
@@ -60,7 +61,8 @@ def main() -> int:
     with Session(engine) as session:
         write_stored(session, releases)
     finish("ok", source=source, releases=len(releases),
-           top=f"{releases[0]['artist']} — {releases[0]['album_name']}")
+           top=f"{releases[0]['artist']} — {releases[0]['album_name']}",
+           lastfm=dict(new_releases.LAST_LASTFM_TALLY))
     return 0
 
 

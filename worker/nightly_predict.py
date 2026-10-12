@@ -420,7 +420,26 @@ def main():
                     help="skip Claude theme/distinctness calls (dry runs)")
     ap.add_argument("--force", action="store_true",
                     help="refit even for users whose ratings haven't changed")
+    ap.add_argument("--skip-if-ran-within", type=float, metavar="HOURS",
+                    help="exit at once if a full run finished this recently")
     args = ap.parse_args()
+
+    # The scheduled run is the fallback. Normally the Mac starts this as soon
+    # as its audio ingest succeeds (worker/audio_ingest.py, start_predictions),
+    # and GitHub's cron then fires hours later still: its schedule ran 5–9 hours
+    # behind in October 2026. A full run is marked by rescore_scores for all
+    # users (user_id null), the first thing a run records.
+    if args.skip_if_ran_within and not args.user:
+        with engine.connect() as con:
+            recent = con.execute(text(
+                "SELECT started_at FROM workerrun WHERE job = 'rescore_scores'"
+                " AND user_id IS NULL AND status = 'ok'"
+                " AND started_at > NOW() - make_interval(secs => :s)"
+                " ORDER BY started_at DESC LIMIT 1"),
+                {"s": args.skip_if_ran_within * 3600}).scalar()
+        if recent:
+            print(f"[nightly_predict] a full run already finished at {recent}; skipping")
+            return
 
     if args.user:
         user_ids = [args.user]

@@ -306,6 +306,13 @@ class Track(SQLModel, table=True):
     title_norm: str
     duration_ms: Optional[int] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    # The nightly ingest's failed attempts at this recording — no YouTube match,
+    # an age-gated video, a refused download — so it can stop retrying the same
+    # tracks every night (worker/audio_ingest.py, MAX_TRIES / RETRY_AFTER_DAYS).
+    # Reset on success.
+    audio_failures: int = Field(default=0)
+    audio_failed_at: Optional[datetime] = None
+    audio_fail_reason: Optional[str] = None
 
 
 class TrackAudio(SQLModel, table=True):
