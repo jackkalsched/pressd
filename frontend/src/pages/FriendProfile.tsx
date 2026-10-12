@@ -369,7 +369,12 @@ export default function FriendProfile() {
       </div>
 
       {/* Favourite song, album and artist — editable on your own page. */}
-      {profile && <ProfilePicks profile={profile} editable={isSelf} />}
+      {/* Same inset as the genres above, so the two share a left edge. */}
+      {profile && (
+        <div className="px-2 md:px-6">
+          <ProfilePicks profile={profile} editable={isSelf} />
+        </div>
+      )}
 
       {/* ── Tab switcher ─────────────────────────────────────────── */}
       <div className="flex items-center border-t border-[#e8e2d9] pt-5 mb-6">
