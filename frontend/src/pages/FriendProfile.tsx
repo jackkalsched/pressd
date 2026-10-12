@@ -371,7 +371,7 @@ export default function FriendProfile() {
       {/* Favourite song, album and artist — editable on your own page. */}
       {/* Same inset as the genres above, so the two share a left edge. */}
       {profile && (
-        <div className="px-2 md:px-6">
+        <div className="mt-8 px-2 md:px-6">
           <ProfilePicks profile={profile} editable={isSelf} />
         </div>
       )}
