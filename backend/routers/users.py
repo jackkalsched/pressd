@@ -10,7 +10,7 @@ from datetime import datetime
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -26,10 +26,6 @@ from ..models import (
     Friendship,
     Album,
     Song,
-    SongAudioFeatures,
-    Like,
-    Comment,
-    WorkerRun,
     UserAvatar,
     UserBanner,
 )
@@ -608,62 +604,73 @@ def delete_own_account(
     users' predictions depend on it.
     """
     uid = current.id
+    p = {"u": uid}
 
-    album_ids = [a.id for a in session.exec(select(Album).where(Album.user_id == uid)).all()]
-    song_ids: list[int] = []
-    if album_ids:
-        song_ids = [
-            s.id for s in session.exec(select(Song).where(Song.album_id.in_(album_ids))).all()
-        ]
+    def run(sql: str) -> None:
+        session.execute(text(sql), p)
 
-    if song_ids:
-        for row in session.exec(
-            select(SongAudioFeatures).where(SongAudioFeatures.song_id.in_(song_ids))
-        ).all():
-            session.delete(row)
+    # Set-based, a statement per table. Loading and deleting row by row cost a
+    # round trip per song: minutes for a large library, long enough to time out.
+    mine = "SELECT id FROM album WHERE user_id = :u"
+    run(f"DELETE FROM songaudiofeatures WHERE song_id IN (SELECT id FROM song WHERE album_id IN ({mine}))")
 
     # Push tokens go with the account. A device left registered would keep
     # receiving anything addressed to a user id that no longer exists, and the
     # next person to sign in on that phone would inherit it.
-    for row in session.exec(select(PushToken).where(PushToken.user_id == uid)).all():
-        session.delete(row)
+    run("DELETE FROM pushtoken WHERE user_id = :u")
 
     # Comments and likes are deleted both ways: the ones this user wrote, and
     # everyone else's on the albums about to disappear (they would dangle).
-    for row in session.exec(select(Comment).where(Comment.user_id == uid)).all():
-        session.delete(row)
-    for row in session.exec(select(Like).where(Like.user_id == uid)).all():
-        session.delete(row)
-    if album_ids:
-        for row in session.exec(select(Comment).where(Comment.album_id.in_(album_ids))).all():
-            session.delete(row)
-        for row in session.exec(select(Like).where(Like.album_id.in_(album_ids))).all():
-            session.delete(row)
-        for row in session.exec(select(Song).where(Song.album_id.in_(album_ids))).all():
-            session.delete(row)
-    for row in session.exec(select(Album).where(Album.user_id == uid)).all():
-        session.delete(row)
+    run(f"DELETE FROM comment WHERE user_id = :u OR album_id IN ({mine})")
+    run(f'DELETE FROM "like" WHERE user_id = :u OR album_id IN ({mine})')
+    run(f"DELETE FROM song WHERE album_id IN ({mine})")
+    run("DELETE FROM album WHERE user_id = :u")
 
-    for row in session.exec(
-        select(Friendship).where(
-            (Friendship.user_id_a == uid)
-            | (Friendship.user_id_b == uid)
-            | (Friendship.requested_by == uid)
-        )
-    ).all():
-        session.delete(row)
+    run("DELETE FROM friendship WHERE user_id_a = :u OR user_id_b = :u OR requested_by = :u")
+    run("DELETE FROM invite WHERE invited_by = :u")
+    run("DELETE FROM workerrun WHERE user_id = :u")
 
-    for row in session.exec(select(Invite).where(Invite.invited_by == uid)).all():
-        session.delete(row)
-    for row in session.exec(select(WorkerRun).where(WorkerRun.user_id == uid)).all():
-        session.delete(row)
+    # Predictions are about this person's taste, so they go.
+    run("DELETE FROM albumprediction WHERE user_id = :u")
+
+    # Thread posts are tombstoned rather than removed — the same soft delete
+    # DELETE /posts/{id} does — because other people's replies hang off them.
+    # The body and the author go; the row stays to anchor the replies. Until
+    # October 2026 these four tables were missed, and deleting any account
+    # that had posted or held predictions failed on a foreign key.
+    run("""
+        UPDATE thread t SET post_count = GREATEST(0, t.post_count - n.c)
+        FROM (SELECT thread_id, COUNT(*) AS c FROM post
+              WHERE user_id = :u AND deleted_at IS NULL GROUP BY thread_id) n
+        WHERE t.id = n.thread_id""")
+    run("""
+        UPDATE post SET user_id = NULL, body = '', deleted_at = COALESCE(deleted_at, NOW())
+        WHERE user_id = :u""")
+    # Their votes come off, and the counters on what they voted are recounted
+    # from the rows that remain, as vote_post does.
+    voted = [r[0] for r in session.execute(
+        text("DELETE FROM postlike WHERE user_id = :u RETURNING post_id"), p).all()]
+    if voted:
+        session.execute(text("""
+            UPDATE post SET
+              like_count    = (SELECT COUNT(*) FROM postlike l WHERE l.post_id = post.id AND l.value > 0),
+              dislike_count = (SELECT COUNT(*) FROM postlike l WHERE l.post_id = post.id AND l.value < 0)
+            WHERE id = ANY(:ids)"""), {"ids": voted})
+    run("DELETE FROM postreport WHERE user_id = :u")
+
+    # Recommendations they sent stay in friends' To Listen, but no longer name
+    # them or carry their note.
+    run("UPDATE album SET recommended_by = NULL, recommendation_note = NULL WHERE recommended_by = :u")
+
     # The uploaded pictures hang off the user row by foreign key too.
-    for model in (UserAvatar, UserBanner):
-        row = session.get(model, uid)
-        if row:
-            session.delete(row)
+    run("DELETE FROM useravatar WHERE user_id = :u")
+    run("DELETE FROM userbanner WHERE user_id = :u")
 
-    session.delete(current)
+    # The ORM still holds `current`; expunge it so the raw delete below isn't
+    # followed by a stale flush of the same row.
+    if current in session:
+        session.expunge(current)
+    run("DELETE FROM pressuser WHERE id = :u")
     session.commit()
     return {"deleted": True}
 

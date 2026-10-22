@@ -206,8 +206,8 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
     if (visible) navigatingRef.current = false
   }, [visible])
   const { data: profile } = useProfile(visible ? user?.id : undefined)
-  // Sized to the device rather than a fixed height: with the danger zone added,
-  // a constant cap pushed "Delete my account" below the fold on every phone.
+  // Sized to the device rather than a fixed height: a constant cap pushed the
+  // foot of the sheet below the fold on every phone.
   const { height: screenH } = useWindowDimensions()
 
   useEffect(() => {
@@ -444,8 +444,15 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
       await deleteOwnAccount()
       // The token is dead server-side; drop the local session so the app
       // returns to the sign-in screen rather than 401-ing on every screen.
+      // The alert is the confirmation that it happened — without it the person
+      // lands on sign-in with no word that anything was deleted. It waits for
+      // the sheet's modal to finish closing, since iOS won't present an alert
+      // over a view controller that is being dismissed.
       onClose()
       signOut()
+      setTimeout(() => {
+        Alert.alert('Account deleted', 'Your account and everything in it have been permanently deleted.')
+      }, 500)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete account')
     } finally {
@@ -782,6 +789,18 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
               <LogOut size={17} color="#b91c1c" />
               <Text style={styles.signOutText}>Sign out</Text>
             </Pressable>
+            {/* Beside Sign out rather than at the foot of the sheet: App Review
+                rejected build 6 (Guideline 5.1.1(v)) without finding it there. */}
+            <Pressable style={styles.deleteBtn} onPress={confirmDelete} disabled={deleting} accessibilityLabel="Delete account">
+              {deleting ? (
+                <ActivityIndicator color="#b91c1c" />
+              ) : (
+                <>
+                  <Trash2 size={16} color="#b91c1c" />
+                  <Text style={styles.deleteText}>Delete account</Text>
+                </>
+              )}
+            </Pressable>
 
             <Text style={styles.sectionLabel}>ABOUT</Text>
             <LinkRow label="How Pressd works" onPress={openTutorial} />
@@ -799,22 +818,6 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
                 Pressd {version}{build ? ` (${build})` : ''}
               </Text>
             ) : null}
-
-            <Text style={styles.sectionLabel}>DANGER ZONE</Text>
-            <Text style={styles.sectionHint}>
-              Deleting removes your ratings, reviews, comments, and friend connections for good.
-              There is no way to undo it or get the data back.
-            </Text>
-            <Pressable style={styles.deleteBtn} onPress={confirmDelete} disabled={deleting}>
-              {deleting ? (
-                <ActivityIndicator color="#b91c1c" />
-              ) : (
-                <>
-                  <Trash2 size={16} color="#b91c1c" />
-                  <Text style={styles.deleteText}>Delete my account</Text>
-                </>
-              )}
-            </Pressable>
 
             {user ? <Text style={styles.idHint}>Signed in as {user.name}</Text> : null}
           </ScrollView>

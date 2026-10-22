@@ -966,6 +966,17 @@ for editing a review later, and both paths post into the thread through
    (808 LOC) has Account / Sign-in methods / Notifications / Danger zone; web's whole
    settings surface is the Edit Profile modal in `Layout.tsx`. Account deletion being
    mobile-only is the one with a compliance edge to it.
+   App Review rejected build 6 (October 2026, Guideline 5.1.1(v)) without finding the
+   delete, then at the foot of Settings under About. It is now **Delete account**, directly
+   under Sign out in Settings → Account, and ends on an "Account deleted" alert, since
+   Apple wants the recording to reach a confirmation. `DELETE /users/me`
+   (`users.delete_own_account`) is set-based SQL, a statement per table: it had loaded
+   and deleted rows one by one (minutes for a large library), and it missed
+   `albumprediction`, `post`, `postlike` and `postreport`, so any account that had posted
+   or held predictions failed on a foreign key. Posts are tombstoned (author and body
+   cleared, as `DELETE /posts/{id}` does) because replies hang off them; votes come off
+   and the counters are recounted; recommendations sent stay with their recipients,
+   unnamed. A table that gains a user foreign key must be added there.
    ⚠️ **Avatars diverge in mechanism, not just presence**: mobile posts bytes via
    `uploadAvatar`, web base64s the image into `updateUser` (`Layout.tsx:184`). Two
    storage shapes for one field — reconcile before adding a third caller.
