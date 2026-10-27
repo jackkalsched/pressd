@@ -506,6 +506,28 @@ tutorial's did. Sign in with Apple no longer requests `FULL_NAME`. Every web sig
 passes `usernameChosen` through alongside `tutorialSeen`, and web's Edit Profile field
 filters input through `cleanUsername`.
 
+**Artist credits (`backend/credits.py`, October 2026).** `Album.artist` is the
+**primary** artist alone; the other credited artists are in `Album.extra_artists`, a
+JSON list filled by `/search/resolve` from the catalog's own structured credit —
+Deezer's Main contributors (never Featured), MusicBrainz's artist-credit, and for
+iTunes, whose credit is one joined string, the collection's `artistId` for the primary
+and the same album on Deezer for the rest (`_itunes_credit`). A Deezer or iTunes
+co-artist counts only when the other catalog's printed credit names them too
+(`named_in`): Deezer lists a band's members as Main beside the band (Snocaps with
+Waxahatchee), and an unconfirmed co-artist is dropped rather than guessed. A name
+contained in the primary's is the same act (`Ye` beside `Kanye West`). Every identity key
+(`subject_key`, `album_key`, `track_key`, the thread) stays on the primary, which all
+three sources agree on. For display and for every per-artist number — the artist page,
+league tables, SAR, bang/skip, the scatter, "most rated artist", the profile's Artists
+count — a record belongs to **each** credited artist in full (`album_artists`,
+`song_artists`). The credit is **never** split on its punctuation: in the library that
+would break AC/DC, Bob Marley & The Wailers, Catfish and the Bottlemen and Tyler, The
+Creator. Until then an iTunes import stored "Anderson .Paak & Cordae" and a Deezer
+import "Anderson .Paak", so *Heavy Is the Crown* was two records with two sets of
+tracks and two threads; and `extra_artists` came from a text box on both rating screens
+that people skipped or filled with song titles, which is gone. Stored copies were
+corrected by `backend/backfill_artist_credits.py`.
+
 **`backend/routers/public.py`** — the **intended** only unauthenticated surface
 (marketing charts). It deliberately duplicates rather than shares `discover.py`'s charts:
 no auth, aggregates only, never who rated what. Nothing per-user may ever go there.
@@ -743,7 +765,8 @@ nulls never overwrite stored values.
 return **identity only**, one HTTP call per source, because they back the autocomplete.
 `/search/resolve` fetches the tracklist for the one album picked. Before the split each
 source fetched a tracklist for all 5–8 results *per keystroke*, which made Deezer ~2s and
-MusicBrainz 10–18s.
+MusicBrainz 10–18s. Resolving an iTunes album costs one more call (its `artistId`), and
+three when the credit is a collaboration (Deezer search + album, for the co-artists).
 
 **Artist photos are Deezer-only** — no fallback chain, because Deezer covers ~99% of the
 library. The matching code at `util.py:589-689` guards four documented Deezer behaviours
@@ -1088,6 +1111,9 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
 - **Commit messages are declarative sentences** describing the behavior change, not the
   diff: "Pool an album's copies on the record, not the spelling", "Match a track title
   through apostrophes and medleys".
+- **A record's artists come from the catalog, never the user, and never from
+  splitting a string** (`credits.py`, §5). Group per artist with `album_artists` /
+  `song_artists`, not `Album.artist`, or a collaboration vanishes from its co-artist.
 - **Any grouping across users must go through `trackkeys.py`.** Matching raw names
   splits one album into three community albums with one rater each. Pick the right key:
   `album_key` when it must be byte-stable (it is a stored unique key on `albumfactors` /

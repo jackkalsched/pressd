@@ -194,7 +194,6 @@ export default function RatingScreen() {
   const [factorText, setFactorText] = useState<Record<FactorKey, string>>({
     theme: '', replay: '', production: '', distinctness: '',
   })
-  const [extraArtists, setExtraArtists] = useState('')
   const [listOpen, setListOpen] = useState(false)
   const [initialized, setInitialized] = useState(false)
   const [shareAlbum, setShareAlbum] = useState<Album | null>(null)
@@ -214,7 +213,6 @@ export default function RatingScreen() {
       production: album.production != null ? String(album.production) : '',
       distinctness: album.distinctness != null ? String(album.distinctness) : '',
     })
-    setExtraArtists(album.extraArtists.join(', '))
     const firstOpen = seeded.findIndex((t) => t === '')
     setIdx(firstOpen === -1 ? 0 : firstOpen)
     if (firstOpen === -1 && !isEP) setPhase('factors')
@@ -315,7 +313,6 @@ export default function RatingScreen() {
   const persist = async (status: 'rated' | 'listening') => {
     if (!album) return
     await batchRateSongs(sortedSongs.map((song, i) => ({ id: song.id, score: scores[i] ?? null })), userId)
-    const parsedExtra = extraArtists.split(',').map((s) => s.trim()).filter(Boolean)
     await updateAlbum(album.id, {
       ...(isEP
         ? {}
@@ -326,7 +323,6 @@ export default function RatingScreen() {
             distinctness: factorVals.distinctness,
           }),
       status,
-      extra_artists: parsedExtra.length ? JSON.stringify(parsedExtra) : null,
     })
   }
 
@@ -401,8 +397,8 @@ export default function RatingScreen() {
   // Where you are sitting (idx, phase) is left out deliberately: it is derived
   // on the way back in, and including it would write on every Next.
   const snapshot = useMemo(
-    () => JSON.stringify({ drafts, factorText, extraArtists, skipped: [...skipped].sort() }),
-    [drafts, factorText, extraArtists, skipped],
+    () => JSON.stringify({ drafts, factorText, skipped: [...skipped].sort() }),
+    [drafts, factorText, skipped],
   )
 
   useEffect(() => {
@@ -807,16 +803,6 @@ export default function RatingScreen() {
                     })}
                   </div>
                   )}
-
-                  <label className="block mt-5">
-                    <span className="block mb-1.5 text-[10.5px] font-bold tracking-[0.16em] text-[#a8998a]">ADDITIONAL ARTISTS</span>
-                    <input
-                      value={extraArtists}
-                      onChange={(e) => setExtraArtists(e.target.value)}
-                      placeholder="Comma-separated, e.g. Kanye West, Jay-Z"
-                      className="w-full h-11 px-4 rounded-xl border border-[#e2dbd0] bg-white/70 text-[14px] text-[#1c1917] placeholder:text-[#c2b8ad] focus:outline-none focus:border-[#2d6a4f]"
-                    />
-                  </label>
 
                   <div className="lg:hidden">
                     {previewScore !== null && <Projected score={previewScore} />}

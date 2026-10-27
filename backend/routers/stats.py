@@ -12,6 +12,7 @@ from ..database import get_session
 from ..deps import authorize_friend, current_user, viewable_user_id
 from ..models import Album, ArtistMeta, PressUser, Song
 from ..trackkeys import _clean_album as _same_record
+from ..credits import album_artists, song_artists
 from ..scoring import BANG_THRESHOLD, SKIP_THRESHOLD, compute_a_score, get_factor_stats
 
 router = APIRouter(prefix="/stats", tags=["stats"])
@@ -60,10 +61,12 @@ def summary(user_id: int = Depends(viewable_user_id), session: Session = Depends
         v = [x for x in vals if x is not None]
         return round(sum(v) / len(v), 2) if v else None
 
-    # Most loyal artist (most rated albums)
+    # Most loyal artist (most rated albums). A collaboration counts for each of
+    # its artists (backend/credits.py).
     artist_counts: dict[str, int] = defaultdict(int)
     for a in rated:
-        artist_counts[a.artist] += 1
+        for name in album_artists(a):
+            artist_counts[name] += 1
     most_loyal = max(artist_counts.items(), key=lambda x: x[1], default=None)
 
     # Best genre (highest avg score, min 3 albums)
@@ -124,19 +127,21 @@ def summary(user_id: int = Depends(viewable_user_id), session: Session = Depends
 @router.get("/artists")
 def artist_stats(user_id: int = Depends(viewable_user_id), before_date: Optional[date] = None, session: Session = Depends(get_session)):
     q = (
-        select(Song)
+        select(Song, Album)
         .join(Album, Song.album_id == Album.id)
         .where(Album.user_id == user_id)
         .where(Song.score.is_not(None))
     )
     if before_date:
         q = q.where(Album.date_rated <= before_date)
-    songs = session.exec(q).all()
+    rows = session.exec(q).all()
 
+    # Every credited artist of a collaboration gets its songs in full.
     by_artist: dict[str, list[float]] = defaultdict(list)
-    for s in songs:
-        if s.artist:
-            by_artist[s.artist].append(s.score)
+    for s, album in rows:
+        for name in song_artists(s.artist, album):
+            if name:
+                by_artist[name].append(s.score)
 
     result = []
     for artist, scores in by_artist.items():
@@ -252,19 +257,19 @@ def scatter_data(user_id: int = Depends(viewable_user_id), before_date: Optional
             continue
         if before_date and a.id not in eligible_ids:
             continue
-        art = a.artist
-        if art not in by_artist:
-            by_artist[art] = {"songs": [], "ext_vals": [], "genres": []}
-        by_artist[art]["songs"].extend(_album_scores.get(a.id, []))
+        for art in album_artists(a):
+            if art not in by_artist:
+                by_artist[art] = {"songs": [], "ext_vals": [], "genres": []}
+            by_artist[art]["songs"].extend(_album_scores.get(a.id, []))
     for a in rated_albums:
-        art = a.artist
-        if art not in by_artist:
-            by_artist[art] = {"songs": [], "ext_vals": [], "genres": []}
         ext = album_ext(a)
-        if ext is not None:
-            by_artist[art]["ext_vals"].append(ext)
-        if a.genre:
-            by_artist[art]["genres"].append(a.genre)
+        for art in album_artists(a):
+            if art not in by_artist:
+                by_artist[art] = {"songs": [], "ext_vals": [], "genres": []}
+            if ext is not None:
+                by_artist[art]["ext_vals"].append(ext)
+            if a.genre:
+                by_artist[art]["genres"].append(a.genre)
 
     rows = []
     for art, d in by_artist.items():
@@ -458,7 +463,8 @@ def _artist_payload(session: Session, artist_name: str, all_albums_any_status: l
         if a.status == "rated" or _song_counts.get(a.id, 0) <= 6:
             scores = _album_scores.get(a.id)
             if scores:
-                by_artist_songs[a.artist].extend(scores)
+                for name in album_artists(a):
+                    by_artist_songs[name].extend(scores)
 
     # How much of this scope's listening the artist accounts for, overall and
     # within their own genre. Ranked on songs rated rather than albums: an
@@ -466,8 +472,9 @@ def _artist_payload(session: Session, artist_name: str, all_albums_any_status: l
     # eight nobody finished, which is the sense of "most rated" people mean.
     _genre_of: dict[str, str] = {}
     for a in all_albums_any_status:
-        if a.artist and a.genre and a.artist not in _genre_of:
-            _genre_of[a.artist] = a.genre
+        if a.genre:
+            for name in album_artists(a):
+                _genre_of.setdefault(name, a.genre)
     _this_genre = _genre_of.get(artist_name) or next(
         (a.genre for a in all_artist_albums if a.genre), None
     )
@@ -492,7 +499,8 @@ def _artist_payload(session: Session, artist_name: str, all_albums_any_status: l
     by_artist_ext: dict[str, list[float]] = defaultdict(list)
     for a in all_albums:
         if (e := album_ext(a)) is not None:
-            by_artist_ext[a.artist].append(e)
+            for name in album_artists(a):
+                by_artist_ext[name].append(e)
 
     SMALL_SAMPLE = 15
 
@@ -764,7 +772,7 @@ def _artist_catalog_art(session: Session, artist_name: str, limit: int = 10) -> 
         # which also walks featured and extra credits, and an exact match on the
         # primary artist column disagreed with it — an artist whose albums are
         # filed under a joint credit came back with no covers at all.
-        .where(Album.artist.ilike(f"%{artist_name}%"))
+        .where(Album.artist.ilike(f"%{artist_name}%") | Album.extra_artists.ilike(f"%{artist_name}%"))
         .where(Album.album_art_url.is_not(None))
     ).all()
 
@@ -819,8 +827,9 @@ def similar_artist_comparisons(
     # Candidates: your other artists sharing that genre.
     by_artist: dict[str, list[Album]] = defaultdict(list)
     for a in mine:
-        if a.artist and a.artist.lower() != artist_name.lower():
-            by_artist[a.artist].append(a)
+        for name in album_artists(a):
+            if name.lower() != artist_name.lower():
+                by_artist[name].append(a)
     candidates = {}
     for name, albums in by_artist.items():
         g, subs = tags(albums)
@@ -834,14 +843,19 @@ def similar_artist_comparisons(
 
     # One pass for yours, one for everyone else's.
     def scored(where_mine: bool):
+        # A candidate can be a collaboration's co-artist, so albums with
+        # co-artists come along and are filtered on their full credit below.
         q = (
-            select(Album.artist, Song.title, Song.score, Song.track_id)
+            select(Album, Song.title, Song.score, Song.track_id)
             .join(Song, Song.album_id == Album.id)
             .where(Song.score.is_not(None))
-            .where(Album.artist.in_(list(candidates)))
+            .where(Album.artist.in_(list(candidates)) | Album.extra_artists.is_not(None))
         )
         q = q.where(Album.user_id == user_id) if where_mine else q.where(Album.user_id != user_id)
-        return session.exec(q).all()
+        for album, title, score, tid in session.exec(q).all():
+            for name in album_artists(album):
+                if name in candidates:
+                    yield name, title, score, tid
 
     mine_by: dict[tuple, list[float]] = defaultdict(list)
     titles: dict[tuple, str] = {}

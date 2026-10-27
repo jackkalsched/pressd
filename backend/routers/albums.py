@@ -17,8 +17,9 @@ from ..scoring import (
 )
 from ..global_rating import invalidate_cache as invalidate_global_ratings
 from ..genres import GENRES, canonical_genre, canonical_subgenre
-from ..trackkeys import _clean_album, match_title, same_album
+from ..trackkeys import _clean_album, artist_key, match_title, same_album
 from ..carryover import carryover_for_album
+from ..credits import album_artists
 from ..threads import sync_review_post
 from ..push import send_push, tokens_for_user
 
@@ -60,14 +61,10 @@ ALBUM_MUTABLE_FIELDS = {
 
 
 def artist_in_album(album: Album, name: str) -> bool:
-    if album.artist == name:
-        return True
-    if album.extra_artists:
-        try:
-            return name in json.loads(album.extra_artists)
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return False
+    """Whether `name` is any of the record's credited artists (credits.py),
+    regardless of case: one catalog's "MIKE" is another's "Mike"."""
+    want = artist_key(name)
+    return bool(want) and any(artist_key(n) == want for n in album_artists(album))
 
 
 @router.get("/")
@@ -897,6 +894,8 @@ def recommend_album(
             existing.sub_genre3 = canonical_subgenre(source.sub_genre3)
         if not existing.total_tracks:
             existing.total_tracks = source.total_tracks or added or None
+        if not existing.extra_artists:
+            existing.extra_artists = source.extra_artists
 
         session.add(existing)
         session.commit()

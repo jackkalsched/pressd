@@ -104,7 +104,7 @@ export default function FriendProfile() {
   })
   // The stat row's figures, counted as mobile's ProfileBanner counts them.
   // Artists are folded on case and spacing, so one artist's records don't count twice.
-  const artistCount = new Set(rated.map((a) => a.artist.trim().toLowerCase())).size
+  const artistCount = new Set(rated.flatMap((a) => [a.artist, ...a.extraArtists].map((n) => n.trim().toLowerCase()))).size
   const albumScores = rated.flatMap((a) => (a.score != null ? [a.score] : []))
 
   // "Pressing since" — the month of the earliest album in the library, as on mobile.

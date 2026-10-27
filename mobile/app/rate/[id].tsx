@@ -196,7 +196,6 @@ export default function RatingScreen() {
   const [factorText, setFactorText] = useState<Record<string, string>>({
     theme: '', replay: '', production: '', distinctness: '',
   })
-  const [extraArtists, setExtraArtists] = useState('')
   const [listOpen, setListOpen] = useState(false)
   const [initialized, setInitialized] = useState(false)
   const [shareAlbum, setShareAlbum] = useState<Album | null>(null)
@@ -216,7 +215,6 @@ export default function RatingScreen() {
       production: album.production != null ? String(album.production) : '',
       distinctness: album.distinctness != null ? String(album.distinctness) : '',
     })
-    setExtraArtists(album.extraArtists.join(', '))
     const firstOpen = seeded.findIndex((t) => t === '')
     setIdx(firstOpen === -1 ? 0 : firstOpen)
     if (firstOpen === -1 && !isEP) setPhase('factors')
@@ -378,7 +376,6 @@ export default function RatingScreen() {
   const persist = async (status: 'rated' | 'listening') => {
     if (!album) return
     await batchRateSongs(sortedSongs.map((song, i) => ({ id: song.id, score: scores[i] ?? null })), userId)
-    const parsedExtra = extraArtists.split(',').map((s) => s.trim()).filter(Boolean)
     await updateAlbum(album.id, {
       ...(isEP
         ? {}
@@ -389,7 +386,6 @@ export default function RatingScreen() {
             distinctness: factorVals.distinctness,
           }),
       status,
-      extra_artists: parsedExtra.length ? JSON.stringify(parsedExtra) : null,
     })
   }
 
@@ -468,8 +464,8 @@ export default function RatingScreen() {
   // out deliberately: where you were sitting is derived on the way back in, and
   // including them would write on every arrow press.
   const snapshot = useMemo(
-    () => JSON.stringify({ drafts, factorText, extraArtists, skipped: [...skipped].sort() }),
-    [drafts, factorText, extraArtists, skipped],
+    () => JSON.stringify({ drafts, factorText, skipped: [...skipped].sort() }),
+    [drafts, factorText, skipped],
   )
 
   useEffect(() => {
@@ -760,16 +756,6 @@ export default function RatingScreen() {
                   />
                 </View>
               ))}
-
-              <Text style={styles.sectionLabel}>ADDITIONAL ARTISTS</Text>
-              <TextInput
-                style={styles.extraInput}
-                value={extraArtists}
-                onChangeText={setExtraArtists}
-                placeholder="Comma-separated, e.g. Kanye West, Jay-Z"
-                placeholderTextColor={colors.inkMuted}
-                autoCapitalize="words"
-              />
 
               {previewScore !== null && (
                 <View style={styles.previewBlock}>
@@ -1224,18 +1210,6 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-
-  extraInput: {
-    backgroundColor: colors.raised,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontFamily: fonts.body,
-    fontSize: 14,
-    color: colors.ink,
   },
 
   previewBlock: { alignItems: 'center', marginTop: spacing.xl },

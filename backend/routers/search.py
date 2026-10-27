@@ -26,6 +26,9 @@ from datetime import date
 import httpx
 from fastapi import APIRouter, Body, HTTPException, Query
 
+from ..credits import dedupe_extras, named_in, split_rest
+from ..trackkeys import artist_key, same_album
+
 router = APIRouter(prefix="/search", tags=["search"])
 
 # ── Result cache ──────────────────────────────────────────────────────────────
@@ -252,6 +255,95 @@ async def search_mb(q: str = Query(..., min_length=1)):
 
 # ── Resolve: the picked album's full tracklist ────────────────────────────────
 
+def _deezer_main_artists(album: dict) -> list[str]:
+    """The names Deezer credits as Main on an album, in its order. Featured
+    artists are left out: a feature is a guest on a track, not a co-owner of
+    the record."""
+    return [
+        c["name"] for c in album.get("contributors") or []
+        if c.get("role") == "Main" and c.get("name")
+    ]
+
+
+async def _itunes_credit(
+    client: httpx.AsyncClient, album: dict, credit: str
+) -> tuple[str, list[str]]:
+    """Primary artist and co-artists for an iTunes album (backend/credits.py).
+
+    iTunes gives a collaboration as one string, "Anderson .Paak & Cordae", but
+    the collection's `artistId` is the primary act alone, so its name says where
+    the credit splits without guessing at punctuation. The co-artists come from
+    the same album on Deezer, which lists them; only when Deezer doesn't have it
+    is the rest of the string split. Any failure keeps the credit whole, which
+    is what was stored before.
+    """
+    artist_id = album.get("artistId")
+    if not artist_id:
+        return credit, []
+    try:
+        r = await client.get("https://itunes.apple.com/lookup", params={"id": artist_id})
+        primary = next(
+            (i.get("artistName") for i in r.json().get("results", []) if i.get("artistName")),
+            None,
+        ) if r.is_success else None
+    except (httpx.HTTPError, ValueError):
+        primary = None
+    if not primary or artist_key(primary) == artist_key(credit):
+        return credit, []
+
+    name = album.get("collectionName", "")
+    try:
+        r = await client.get(
+            "https://api.deezer.com/search/album", params={"q": f"{name} {primary}", "limit": 5}
+        )
+        hit = next(
+            (h for h in (r.json().get("data") or [])
+             if same_album(name, primary, h.get("title", ""), (h.get("artist") or {}).get("name", ""))),
+            None,
+        ) if r.is_success else None
+        if hit:
+            d = await client.get(f"https://api.deezer.com/album/{hit['id']}")
+            if d.is_success:
+                # Deezer's list, but only the names this credit prints: it also
+                # lists a band's members as Main (credits.named_in).
+                extras = named_in(credit, dedupe_extras(primary, _deezer_main_artists(d.json())))
+                if extras:
+                    return primary, extras
+    except (httpx.HTTPError, ValueError):
+        pass
+
+    rest = split_rest(credit, primary)
+    if rest is None:
+        return credit, []
+    return primary, dedupe_extras(primary, rest)
+
+
+async def _confirmed_by_itunes(
+    client: httpx.AsyncClient, name: str, primary: str, candidates: list[str]
+) -> list[str]:
+    """Deezer's co-artists that the same album's iTunes credit also prints.
+
+    Deezer lists a band's members as Main beside the band, so its list alone
+    would file Clipse under Pusha T. Unconfirmed — no iTunes match, or a failed
+    call — keeps none: a missing co-artist costs less than a wrong one, since
+    the record's identity rests on the primary either way.
+    """
+    if not candidates:
+        return []
+    try:
+        r = await client.get(
+            "https://itunes.apple.com/search",
+            params={"term": f"{name} {primary}", "entity": "album", "limit": 10},
+        )
+        hit = next(
+            (h for h in (r.json().get("results") or [])
+             if same_album(name, primary, h.get("collectionName", ""), h.get("artistName", ""))),
+            None,
+        ) if r.is_success else None
+    except (httpx.HTTPError, ValueError):
+        hit = None
+    return named_in(hit["artistName"], candidates) if hit else []
+
 async def _resolve_itunes(client: httpx.AsyncClient, collection_id: str) -> dict:
     resp = await client.get(
         "https://itunes.apple.com/lookup",
@@ -264,7 +356,8 @@ async def _resolve_itunes(client: httpx.AsyncClient, collection_id: str) -> dict
     if not album:
         raise HTTPException(status_code=404, detail="Album not found on iTunes")
 
-    artist = album.get("artistName", "")
+    credit = album.get("artistName", "")
+    artist, extras = await _itunes_credit(client, album, credit)
     tracks = [
         {
             "title": t["trackName"],
@@ -272,7 +365,9 @@ async def _resolve_itunes(client: httpx.AsyncClient, collection_id: str) -> dict
             "duration_ms": t.get("trackTimeMillis"),
             "explicit": t.get("trackExplicitness") == "explicit",
             "spotify_id": None,
-            "artist": t.get("artistName", artist),
+            # A track carrying the album's whole joined credit is the primary's,
+            # like the album — otherwise its track_key forks from the Deezer copy's.
+            "artist": artist if t.get("artistName", credit) == credit else t["artistName"],
         }
         for t in items
         if t.get("wrapperType") == "track" and t.get("kind") == "song" and t.get("trackName")
@@ -281,6 +376,7 @@ async def _resolve_itunes(client: httpx.AsyncClient, collection_id: str) -> dict
         "spotify_id": None,
         "album_name": album.get("collectionName", ""),
         "artist": artist,
+        "extra_artists": extras,
         "year": _year(album.get("releaseDate")),
         "cover_url": album.get("artworkUrl100", "").replace("100x100bb", "1000x1000bb") or None,
         "total_tracks": album.get("trackCount", len(tracks)),
@@ -303,6 +399,9 @@ async def _resolve_deezer(client: httpx.AsyncClient, album_id: str) -> dict:
         tracks_data = tr.json().get("data", []) if tr.is_success else []
 
     artist = (album.get("artist") or {}).get("name", "")
+    extras = await _confirmed_by_itunes(
+        client, album.get("title", ""), artist, dedupe_extras(artist, _deezer_main_artists(album))
+    )
     tracks = [
         {
             "title": t.get("title", ""),
@@ -318,6 +417,7 @@ async def _resolve_deezer(client: httpx.AsyncClient, album_id: str) -> dict:
         "spotify_id": None,
         "album_name": album.get("title", ""),
         "artist": artist,
+        "extra_artists": extras,
         "year": _year(album.get("release_date")),
         "cover_url": album.get("cover_xl") or album.get("cover_big") or album.get("cover_medium"),
         "total_tracks": album.get("nb_tracks") or len(tracks),
@@ -343,6 +443,8 @@ async def _resolve_mb(client: httpx.AsyncClient, rg_id: str) -> dict:
 
     credits = rg.get("artist-credit", [])
     artist = credits[0].get("name", "") if credits else ""
+    # The credit is already a list, joinphrases kept apart from the names.
+    extras = dedupe_extras(artist, [c.get("name", "") for c in credits[1:]])
     frd = rg.get("first-release-date", "") or ""
 
     releases = rg.get("releases") or []
@@ -391,6 +493,7 @@ async def _resolve_mb(client: httpx.AsyncClient, rg_id: str) -> dict:
         "mb_id": rg_id,
         "album_name": rg.get("title", ""),
         "artist": artist,
+        "extra_artists": extras,
         "year": _year(frd),
         "release_date": frd or None,
         "upcoming": bool(padded and padded > today),

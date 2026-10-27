@@ -146,7 +146,7 @@ export default function FriendProfile() {
   // Different artists rated — range, beside the volume of Albums and Songs.
   // Case and spacing folded, so one artist's records don't count twice.
   const artistCount = useMemo(
-    () => new Set(rated.map((a) => a.artist.trim().toLowerCase())).size,
+    () => new Set(rated.flatMap((a) => [a.artist, ...a.extraArtists].map((n) => n.trim().toLowerCase()))).size,
     [rated],
   )
   const albumScores = useMemo(
