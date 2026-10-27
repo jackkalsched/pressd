@@ -16,7 +16,7 @@ from ..scoring import (
     PREDICTION_FIELDS, SKIP_THRESHOLD,
 )
 from ..global_rating import invalidate_cache as invalidate_global_ratings
-from ..genres import GENRES, canonical_genre, canonical_subgenre
+from ..genres import GENRES, canonical_genre, canonical_subgenre, genre_qualifier
 from ..trackkeys import _clean_album, artist_key, match_title, same_album
 from ..carryover import carryover_for_album
 from ..credits import album_artists
@@ -305,14 +305,27 @@ def _queue_predictions(album_id: int):
 # what the scraper and importers send.
 _GENRE_LIST = GENRES
 
-def _classify_genre_claude(artist: str, album_name: str, year: int | None) -> tuple[str | None, list[str]]:
-    """Call Claude Haiku to classify main genre + up to 3 subgenres."""
+def _classify_genre_claude(
+    artist: str, album_name: str, year: int | None, qualifier: str | None = None
+) -> tuple[str | None, list[str]]:
+    """Call Claude Haiku to classify main genre + up to 3 subgenres.
+
+    `qualifier` is what the catalog filed the album under when that wasn't a
+    genre ("Alternative", genres.QUALIFIERS): Claude picks the genre it
+    qualifies, and the qualified form goes among the subgenres.
+    """
     import json as _json, os as _os
     import anthropic as _anthropic
     client = _anthropic.Anthropic(api_key=_os.environ.get("ANTHROPIC_API_KEY"))
     year_str = f" ({year})" if year else ""
+    hint = (
+        f'The catalog files it under "{qualifier}", which qualifies a genre rather '
+        f'than naming one: choose the genre it qualifies, and include the qualified '
+        f'form (e.g. "{qualifier} Rock", "{qualifier} Folk") among the subgenres.\n\n'
+    ) if qualifier else ""
     prompt = (
         f'Album: "{album_name}" by {artist}{year_str}\n\n'
+        f'{hint}'
         f'Classify this album. Respond with JSON only, no explanation:\n'
         f'{{"genre": "<one of: {", ".join(_GENRE_LIST)}>", '
         f'"subgenres": ["<specific subgenre 1>", "<specific subgenre 2>", "<specific subgenre 3>"]}}'
@@ -331,13 +344,39 @@ def _classify_genre_claude(artist: str, album_name: str, year: int | None) -> tu
     data = _json.loads(text.strip())
     genre = canonical_genre(data.get("genre"))
     genre = genre if genre in _GENRE_LIST else None
-    subgenres = [canonical_subgenre(s) for s in data.get("subgenres", [])
-                 if isinstance(s, str) and s.strip()][:3]
+    subgenres = _clean_subgenres(data.get("subgenres", []), genre, artist)
     return genre, subgenres
 
 
-def _queue_genre_tagging(album_id: int, artist: str, album_name: str, year: int | None = None):
-    """Spawn a background thread to classify genre/subgenres via Claude (Last.fm fallback for genre)."""
+def _clean_subgenres(raw: list, genre: str | None, artist: str) -> list[str]:
+    """Up to three house-spelled subgenres, minus the two kinds of filler the
+    tagger returns: the genre itself ("Pop" under Pop) and the artist's name
+    ("Wu-Tang Clan")."""
+    def k(v: str | None) -> str:
+        return "".join(c for c in (v or "").lower() if c.isalnum())
+    out: list[str] = []
+    for s in raw or []:
+        sub = canonical_subgenre(s, genre) if isinstance(s, str) else None
+        if sub and k(sub) not in {k(genre), k(artist)} and sub not in out:
+            out.append(sub)
+    return out[:3]
+
+
+def _needs_genre_tagging(album: Album) -> bool:
+    """No genre, or no subgenres. Most imports arrive with the catalog's genre
+    and nothing finer, and until October 2026 only a missing genre started the
+    tagger — so 152 of the 154 albums added that month had no subgenres."""
+    return not album.genre or not album.sub_genre1
+
+
+def _queue_genre_tagging(
+    album_id: int, artist: str, album_name: str, year: int | None = None,
+    qualifier: str | None = None,
+):
+    """Spawn a background thread to classify genre/subgenres via Claude (Last.fm fallback for genre).
+
+    Fills only what's empty: a catalog genre stays, and the tagger adds the
+    subgenres under it."""
     import threading, sys, pathlib
     sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent))
     def _run():
@@ -345,16 +384,27 @@ def _queue_genre_tagging(album_id: int, artist: str, album_name: str, year: int 
             from ..database import engine
             from sqlmodel import Session
 
-            genre, subgenres = _classify_genre_claude(artist, album_name, year)
+            # Its own try: a failed call has to reach the Last.fm fallback. It
+            # used to fall straight through to the outer except, so when the
+            # SDK began rejecting `temperature` (October 2026) every album
+            # silently came away with nothing.
+            try:
+                genre, subgenres = _classify_genre_claude(artist, album_name, year, qualifier)
+            except Exception as e:
+                print(f"[genre_tagger] Claude failed for album {album_id}: {e}")
+                genre, subgenres = None, []
 
             # fallback: if Claude didn't return a valid genre, try Last.fm
             if not genre:
                 try:
                     from generate_genres_lastfm import get_tags_for_album, infer_genres
                     tags = get_tags_for_album(album_id, artist, album_name)
-                    genre, _ = infer_genres(tags)
-                except Exception:
-                    pass
+                    genre, lf_subs = infer_genres(tags)
+                    genre = canonical_genre(genre)
+                    if not subgenres:
+                        subgenres = [x for t in lf_subs if (x := canonical_subgenre(t, genre))][:3]
+                except Exception as e:
+                    print(f"[genre_tagger] Last.fm failed for album {album_id}: {e}")
 
             if not genre and not subgenres:
                 return
@@ -362,7 +412,7 @@ def _queue_genre_tagging(album_id: int, artist: str, album_name: str, year: int 
             with Session(engine) as s:
                 alb = s.get(Album, album_id)
                 if alb:
-                    if genre and not alb.genre:
+                    if genre and (not alb.genre or genre_qualifier(alb.genre)):
                         alb.genre = genre
                     if len(subgenres) > 0 and not alb.sub_genre1:
                         alb.sub_genre1 = subgenres[0]
@@ -475,8 +525,9 @@ def import_album(
     if album.status == "to_listen":
         _queue_predictions(album.id)
 
-    if not album.genre:
-        _queue_genre_tagging(album.id, album.artist, album.album_name, album.year)
+    if _needs_genre_tagging(album):
+        _queue_genre_tagging(album.id, album.artist, album.album_name, album.year,
+                             genre_qualifier(data.get("genre")))
 
     return {
         **album.model_dump(),
@@ -906,7 +957,7 @@ def recommend_album(
         # sorts on, so backfill it once there are tracks to predict from.
         if untouched and existing.predicted_score is None and (added or existing.songs):
             _queue_predictions(existing.id)
-        if not existing.genre:
+        if _needs_genre_tagging(existing):
             _queue_genre_tagging(existing.id, existing.artist, existing.album_name, existing.year)
         # Notified on this branch too: the recipient already owning a copy is an
         # implementation detail, not something they should have to notice.
@@ -924,7 +975,7 @@ def recommend_album(
     session.refresh(new_album)
     _link_tracks(session, new_album.id)
     _queue_predictions(new_album.id)
-    if not new_album.genre:
+    if _needs_genre_tagging(new_album):
         _queue_genre_tagging(new_album.id, new_album.artist, new_album.album_name, new_album.year)
     notify_recipient()
     return {"ok": True, "already_existed": False}
@@ -1145,7 +1196,7 @@ def copy_album(
     _link_tracks(session, new_album.id)
     if new_album.status == "to_listen":
         _queue_predictions(new_album.id)
-    if not new_album.genre:
+    if _needs_genre_tagging(new_album):
         _queue_genre_tagging(new_album.id, new_album.artist, new_album.album_name, new_album.year)
     return {**new_album.model_dump(), "songs": [s.model_dump() for s in new_album.songs], "already_existed": False}
 

@@ -58,6 +58,21 @@ def _key(value: str) -> str:
 _CANONICAL_BY_KEY = {_key(g): g for g in GENRES}
 _CANONICAL_BY_KEY.update({_key(k): v for k, v in SYNONYMS.items()})
 
+# Words that qualify a genre rather than name one. "Alternative" is nothing on
+# its own — it means something as alternative rock, alt-folk, alternative R&B —
+# yet iTunes files whole albums under it: 97 of them by October 2026, beside
+# Rock and Pop as if it were a third thing, which split those records off their
+# genre's chart facet. So it is never stored as a genre: the album takes the
+# genre it qualifies, and the qualifier lives on in a subgenre ("Alternative
+# Rock"), the shape the library's subgenres already had.
+QUALIFIERS = {"Alternative": "Alternative", "Alt": "Alternative"}
+_QUALIFIER_BY_KEY = {_key(k): v for k, v in QUALIFIERS.items()}
+
+
+def genre_qualifier(raw: str | None) -> str | None:
+    """"Alternative" when `raw` is a qualifier on its own, else None."""
+    return _QUALIFIER_BY_KEY.get(_key(raw)) if raw and raw.strip() else None
+
 
 def canonical_genre(raw: str | None) -> str | None:
     """The canonical spelling of `raw`, or `raw` itself when it isn't something
@@ -65,12 +80,14 @@ def canonical_genre(raw: str | None) -> str | None:
 
     Unrecognised genres pass through rather than becoming None: "Bollywood" and
     "Roots Reggae" are real tags with no canonical home yet, and dropping them
-    would lose information to make a list look tidier.
+    would lose information to make a list look tidier. A bare qualifier
+    ("Alternative") is the exception and becomes None — it isn't a genre, and
+    the tagger is told about it instead (`genre_qualifier`).
     """
     if raw is None:
         return None
     cleaned = raw.strip()
-    if not cleaned:
+    if not cleaned or genre_qualifier(cleaned):
         return None
     return _CANONICAL_BY_KEY.get(_key(cleaned), cleaned)
 
@@ -127,14 +144,20 @@ def _capitalize_token(token: str) -> str:
     return "-".join(p[:1].upper() + p[1:] for p in token.split("-"))
 
 
-def canonical_subgenre(raw: str | None) -> str | None:
+def canonical_subgenre(raw: str | None, genre: str | None = None) -> str | None:
     """A subgenre in the house spelling: Title Case, hyphenated the way the
-    genre vocabulary hyphenates, acronyms intact."""
+    genre vocabulary hyphenates, acronyms intact.
+
+    A bare qualifier is tied to the album's genre ("Alternative" under Rock is
+    "Alternative Rock"), or dropped when there is no genre to tie it to.
+    """
     if raw is None:
         return None
     cleaned = " ".join(raw.split())
     if not cleaned:
         return None
+    if (q := genre_qualifier(cleaned)):
+        return f"{q} {genre}" if genre and not genre_qualifier(genre) else None
     titled = " ".join(_capitalize_token(t) for t in cleaned.split(" "))
     for wrong, right in _PHRASE_FIXES.items():
         titled = re.sub(rf"\b{re.escape(wrong)}\b", right, titled)

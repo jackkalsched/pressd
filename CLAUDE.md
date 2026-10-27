@@ -528,6 +528,25 @@ tracks and two threads; and `extra_artists` came from a text box on both rating 
 that people skipped or filled with song titles, which is gone. Stored copies were
 corrected by `backend/backfill_artist_credits.py`.
 
+**Genres (`backend/genres.py`, the tagger in `albums.py`).** An import keeps the
+catalog's genre (iTunes `primaryGenreName`, Deezer's first genre) through
+`canonical_genre`, then `_queue_genre_tagging` asks Claude Haiku for a genre and three
+subgenres whenever the album lacks **either** (`_needs_genre_tagging`), filling only
+what's empty; Last.fm (`generate_genres_lastfm.py`) is the fallback for both when
+Claude returns nothing or fails. **"Alternative" is a qualifier, never a genre**
+(`QUALIFIERS`, `genre_qualifier`): `canonical_genre("Alternative")` is None, the tagger
+is told the catalog said it so it picks the genre it qualifies, and a bare
+"Alternative" subgenre is tied to the album's genre ("Alternative Rock") by
+`canonical_subgenre(raw, genre)`. Until October 2026 the tagger ran only when the genre
+was missing, its Claude call raised past the Last.fm fallback, and from the moment
+Render's unpinned `anthropic` reached 1.x every call failed on `temperature` — 152 of
+the 154 albums added that month had no subgenres, and iTunes had filed 97 albums under
+"Alternative" alone. `backend/backfill_genre_tags.py` corrected the stored copies.
+**`anthropic` is pinned to 0.44.0** in both requirement files: 1.x removed
+`temperature`, which the tagger and the theme measurements pass (§7). Moving to 1.x
+means deleting it from all five call sites, a change to how reproducible the theme
+axes are — decide that on purpose, not through a deploy.
+
 **`backend/routers/public.py`** — the **intended** only unauthenticated surface
 (marketing charts). It deliberately duplicates rather than shares `discover.py`'s charts:
 no auth, aggregates only, never who rated what. Nothing per-user may ever go there.
@@ -696,7 +715,7 @@ Four call sites, all `claude-haiku-4-5-20251001`:
 |---|---|---|
 | `theme_analysis.analyze_theme:141` | nightly worker | **yes** — `albumfactors`, once per album ever |
 | `distinctness_predictor.predict_distinctness` | nightly worker | **yes** — same row |
-| `albums.py:_classify_genre_claude:302` | web, background thread, on import | once per album row |
+| `albums.py:_classify_genre_claude` | web, background thread, on import | once per album row |
 | `stats.py:analysis:1138` | **web, synchronous, unbounded** | **no** — §10 P10 |
 
 **The design.** The old prompt asked *"what would Jack score this?"*, with Jack's

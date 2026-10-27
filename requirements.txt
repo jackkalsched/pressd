@@ -12,7 +12,7 @@ cryptography==44.0.2
 Pillow==12.1.1
 beautifulsoup4==4.14.3
 pandas==2.3.3
-anthropic>=0.40.0
+anthropic==0.44.0  # 1.x rejects `temperature`, which the tagger and theme analysis pass (CLAUDE.md §7)
 # Signs the FCM service-account token in backend/push.py, which main.py reaches
 # through albums/users/discussions at import time — so a missing google-auth is
 # not a broken notification, it is a backend that will not boot. Nothing else
