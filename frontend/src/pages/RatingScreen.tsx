@@ -699,12 +699,16 @@ export default function RatingScreen() {
 
                   {/* Where a prefilled score came from. Gone once edited. */}
                   {carried.has(idx) && song.carriedFromAlbumName && (
-                    <p className="m-0 mt-4 flex items-center justify-center gap-1.5 text-[12.5px] text-[#8a7f72]">
-                      {song.carriedFromAlbumArtUrl && (
-                        <CoverImg url={song.carriedFromAlbumArtUrl} displayPx={16} alt="" className="w-4 h-4 rounded-[3px] object-cover" />
-                      )}
-                      <span className="truncate">from {song.carriedFromAlbumName}</span>
-                    </p>
+                    <div className="mt-5 flex justify-center">
+                      <div className="inline-flex max-w-full items-center gap-3 rounded-full border border-[#e2dbd0] bg-white/80 py-1.5 pl-1.5 pr-5 pop-in">
+                        {song.carriedFromAlbumArtUrl && (
+                          <CoverImg url={song.carriedFromAlbumArtUrl} displayPx={32} alt="" className="w-8 h-8 shrink-0 rounded-full object-cover" />
+                        )}
+                        <span className="truncate text-[14.5px] text-[#57534e]">
+                          From <span className="font-semibold text-[#1c1917]">{song.carriedFromAlbumName}</span>
+                        </span>
+                      </div>
+                    </div>
                   )}
 
                   <div className="flex items-center gap-2 mt-7">
