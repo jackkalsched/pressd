@@ -297,9 +297,12 @@ class Like(SQLModel, table=True):
 
 
 class Track(SQLModel, table=True):
-    """Global, user-agnostic identity for a unique recording. Dedup key is
-    normalized (artist, title) — spotify_id is unpopulated in this DB. Audio
-    is analyzed once per track and shared across every user's copy."""
+    """Global, user-agnostic identity for a unique recording. `track_key` is
+    `trackkeys.recording_key` (the album's primary artist, the title with
+    edition qualifiers folded and live/demo/remix-style variants tagged), plus
+    the `||alt<n>` / `||d<sec>` tiebreaks of backend/tracklink.py; spotify_id
+    is unpopulated in this DB. Audio is analyzed once per track and shared
+    across every user's copy."""
     id: Optional[int] = Field(default=None, primary_key=True)
     track_key: str = Field(unique=True, index=True)
     artist_norm: str = Field(index=True)

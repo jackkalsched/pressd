@@ -32,6 +32,7 @@ import { useUser } from '../context/UserContext'
 import { useRecalibrationMessage } from '@pressd/shared/hooks/useRecalibration'
 import CoverImg from '../components/CoverImg'
 import { coverUrl } from '@pressd/shared/covers'
+import { seedDrafts, firstOpenIndex, canJumpTo, nextTrackIndex } from '@pressd/shared/rating'
 
 const DANGER = '#b91c1c'
 
@@ -111,14 +112,6 @@ function parseScore(text: string): number | null {
   return Math.max(0, Math.min(10, n))
 }
 
-/** Which tracks the user may jump to — the same function mobile uses, so the
- *  chips and the tracklist can never disagree about what is reachable. A
- *  track not yet reached stays out of reach: that first-pass constraint is the
- *  product. */
-function canJumpTo(i: number, scores: (number | null)[], skipped: Set<number>, current: number): boolean {
-  return scores[i] != null || skipped.has(i) || i === current
-}
-
 /** Keep only digits and a single decimal point, capped at 10. */
 function cleanScoreText(text: string): string {
   let t = text.replace(/[^0-9.]/g, '')
@@ -187,6 +180,9 @@ export default function RatingScreen() {
   const [drafts, setDrafts] = useState<string[]>([])
   const [review, setReview] = useState('')
   const [skipped, setSkipped] = useState<Set<number>>(new Set())
+  // Tracks whose draft is a score carried from another of the user's records
+  // and not yet touched. Editing or skipping one takes it out.
+  const [carried, setCarried] = useState<Set<number>>(new Set())
   const [idx, setIdx] = useState(0)
   // Which way the last move went, so the next track slides in from that side.
   const [dir, setDir] = useState<'next' | 'prev'>('next')
@@ -202,10 +198,13 @@ export default function RatingScreen() {
   const [tiebreak, setTiebreak] = useState<Album | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // Seed once the album arrives; resume at the first unscored track.
+  // Seed once the album arrives, carried scores included, and resume at the
+  // first track that genuinely needs a score. The rules are shared with mobile
+  // (shared/src/rating.ts).
   if (album && !initialized) {
-    const seeded = sortedSongs.map((s) => (s.score != null ? String(s.score) : ''))
-    setDrafts(seeded)
+    const seed = seedDrafts(sortedSongs)
+    setDrafts(seed.drafts)
+    setCarried(seed.carried)
     setReview(album.review ?? '')
     setFactorText({
       theme: album.theme != null ? String(album.theme) : '',
@@ -213,13 +212,16 @@ export default function RatingScreen() {
       production: album.production != null ? String(album.production) : '',
       distinctness: album.distinctness != null ? String(album.distinctness) : '',
     })
-    const firstOpen = seeded.findIndex((t) => t === '')
-    setIdx(firstOpen === -1 ? 0 : firstOpen)
-    if (firstOpen === -1 && !isEP) setPhase('factors')
+    const start = firstOpenIndex(seed.drafts, new Set())
+    setIdx(start === -1 ? 0 : start)
+    if (start === -1 && !isEP) setPhase('factors')
     setInitialized(true)
   }
 
   const scores = useMemo(() => drafts.map(parseScore), [drafts])
+  const firstOpen = firstOpenIndex(drafts, skipped)
+  const reach = (i: number, current: number) =>
+    canJumpTo(i, { scores, skipped, carried, current, firstOpen })
   const factorVals = useMemo(
     () => ({
       theme: parseScore(factorText.theme),
@@ -267,12 +269,24 @@ export default function RatingScreen() {
   const headline = previewScore ?? runningAvg
   const shownHeadline = useCountUp(headline)
 
+  function uncarry(i: number) {
+    if (!carried.has(i)) return
+    setCarried((prev) => {
+      const next = new Set(prev)
+      next.delete(i)
+      return next
+    })
+  }
+
   function setDraftAt(i: number, text: string) {
     setDrafts((prev) => {
       const next = [...prev]
       next[i] = cleanScoreText(text)
       return next
     })
+    // Touched, so it is the listener's own score now. The source record keeps
+    // whatever it had.
+    uncarry(i)
     if (skipped.has(i)) {
       setSkipped((prev) => {
         const next = new Set(prev)
@@ -289,9 +303,12 @@ export default function RatingScreen() {
     setIdx(i)
   }
 
+  // Passes over carried tracks, so a run of them doesn't need a Next each.
+  const nextIdx = nextTrackIndex(idx, sortedSongs.length, carried)
+
   function advance() {
     setDir('next')
-    if (idx < sortedSongs.length - 1) setIdx(idx + 1)
+    if (nextIdx !== -1) setIdx(nextIdx)
     else setPhase('factors')
   }
 
@@ -301,6 +318,7 @@ export default function RatingScreen() {
   }
 
   function onSkip() {
+    uncarry(idx)
     setSkipped((prev) => new Set(prev).add(idx))
     setDrafts((prev) => {
       const next = [...prev]
@@ -500,7 +518,7 @@ export default function RatingScreen() {
   const busy = submit.isPending || saveDraft.isPending || remove.isPending
   const song = sortedSongs[idx]
   const currentScore = parseScore(drafts[idx] ?? '')
-  const isLast = idx === sortedSongs.length - 1
+  const isLast = nextIdx === -1
 
   // ── Pieces shared by the stage (narrow) and the rail (wide) ────────────────
 
@@ -508,7 +526,7 @@ export default function RatingScreen() {
     <div className="flex gap-1 mt-3">
       {sortedSongs.map((s, i) => {
         const v = scores[i]
-        const open = canJumpTo(i, scores, skipped, idx)
+        const open = reach(i, idx)
         return (
           <button
             key={s.id}
@@ -560,7 +578,7 @@ export default function RatingScreen() {
         const v = scores[i]
         const isSkipped = skipped.has(i)
         const current = phase === 'tracks' && i === idx
-        const open = canJumpTo(i, scores, skipped, phase === 'tracks' ? idx : -1)
+        const open = reach(i, phase === 'tracks' ? idx : -1)
         return (
           <li key={s.id}>
             <button
@@ -679,20 +697,14 @@ export default function RatingScreen() {
                   />
                   <ScoreScale value={currentScore} />
 
-                  {/* Offered, never prefilled: writing it into the draft would
-                      unlock the next track and hand the user a number they
-                      never agreed to. One click is the whole saving. */}
-                  {song.carriedScore != null && song.score == null && !drafts[idx] && (
-                    <button
-                      onClick={() => setDraftAt(idx, String(song.carriedScore))}
-                      className="rise-in mt-5 w-full flex items-center gap-3 rounded-xl border border-[#d7e6dd] bg-[#2d6a4f]/5 hover:bg-[#2d6a4f]/10 px-4 py-3 text-left"
-                    >
-                      <span className="flex-1 min-w-0 text-[13.5px] text-[#57534e]">
-                        You rated this {song.carriedScore.toFixed(1)} on{' '}
-                        <span className="font-semibold text-[#1c1917]">{song.carriedFromAlbumName}</span>
-                      </span>
-                      <span className="text-[13px] font-bold text-[#2d6a4f]">Use it</span>
-                    </button>
+                  {/* Where a prefilled score came from. Gone once edited. */}
+                  {carried.has(idx) && song.carriedFromAlbumName && (
+                    <p className="m-0 mt-4 flex items-center justify-center gap-1.5 text-[12.5px] text-[#8a7f72]">
+                      {song.carriedFromAlbumArtUrl && (
+                        <CoverImg url={song.carriedFromAlbumArtUrl} displayPx={16} alt="" className="w-4 h-4 rounded-[3px] object-cover" />
+                      )}
+                      <span className="truncate">from {song.carriedFromAlbumName}</span>
+                    </p>
                   )}
 
                   <div className="flex items-center gap-2 mt-7">

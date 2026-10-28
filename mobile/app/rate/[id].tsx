@@ -44,10 +44,12 @@ import {
   type Album,
   type Song,
 } from '@pressd/shared/types'
+import { seedDrafts, firstOpenIndex, canJumpTo, nextTrackIndex } from '@pressd/shared/rating'
 import { useAuth } from '../../lib/auth'
 import ShareCard from '../../components/ShareCard'
 import TopSongTiebreak from '../../components/TopSongTiebreak'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
+import CoverImage from '../../components/CoverImage'
 import { useDeleteAlbum } from '../../lib/useDeleteAlbum'
 import { useRecalibrationMessage } from '@pressd/shared/hooks/useRecalibration'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
@@ -109,21 +111,6 @@ function parseScore(text: string): number | null {
   const n = Number.parseFloat(text)
   if (!Number.isFinite(n)) return null
   return Math.max(0, Math.min(10, n))
-}
-
-/** Which tracks the user may jump to.
- *
- *  Songs unlock one at a time in track order, so a track the user has not
- *  reached yet stays out of reach — that first-pass constraint is the product.
- *  Anything already scored or skipped is fair game to revisit, and so is the
- *  track they are standing on.
- *
- *  Both the progress chips and the track sheet ask this one function rather
- *  than each testing the condition themselves, so the two can never disagree
- *  about what is reachable.
- */
-function canJumpTo(i: number, scores: (number | null)[], skipped: Set<number>, current: number): boolean {
-  return scores[i] != null || skipped.has(i) || i === current
 }
 
 /** Keep only digits and a single decimal point, capped at 10. */
@@ -191,6 +178,9 @@ export default function RatingScreen() {
   const [drafts, setDrafts] = useState<string[]>([])
   const [review, setReview] = useState('')
   const [skipped, setSkipped] = useState<Set<number>>(new Set())
+  // Tracks whose draft is a score carried from another of the user's records
+  // and not yet touched. Editing or skipping one takes it out.
+  const [carried, setCarried] = useState<Set<number>>(new Set())
   const [idx, setIdx] = useState(0)
   const [phase, setPhase] = useState<'tracks' | 'factors' | 'review'>('tracks')
   const [factorText, setFactorText] = useState<Record<string, string>>({
@@ -204,10 +194,13 @@ export default function RatingScreen() {
   const [tiebreak, setTiebreak] = useState<Album | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // Seed once the album arrives; resume at the first unscored track.
+  // Seed once the album arrives, carried scores included, and resume at the
+  // first track that genuinely needs a score. The rules are shared with web
+  // (shared/src/rating.ts).
   if (album && !initialized) {
-    const seeded = sortedSongs.map((s) => (s.score != null ? String(s.score) : ''))
-    setDrafts(seeded)
+    const seed = seedDrafts(sortedSongs)
+    setDrafts(seed.drafts)
+    setCarried(seed.carried)
     setReview(album.review ?? '')
     setFactorText({
       theme: album.theme != null ? String(album.theme) : '',
@@ -215,13 +208,16 @@ export default function RatingScreen() {
       production: album.production != null ? String(album.production) : '',
       distinctness: album.distinctness != null ? String(album.distinctness) : '',
     })
-    const firstOpen = seeded.findIndex((t) => t === '')
-    setIdx(firstOpen === -1 ? 0 : firstOpen)
-    if (firstOpen === -1 && !isEP) setPhase('factors')
+    const start = firstOpenIndex(seed.drafts, new Set())
+    setIdx(start === -1 ? 0 : start)
+    if (start === -1 && !isEP) setPhase('factors')
     setInitialized(true)
   }
 
   const scores = useMemo(() => drafts.map(parseScore), [drafts])
+  const firstOpen = firstOpenIndex(drafts, skipped)
+  const reach = (i: number, current: number) =>
+    canJumpTo(i, { scores, skipped, carried, current, firstOpen })
   const factorVals = useMemo(
     () => ({
       theme: parseScore(factorText.theme),
@@ -266,12 +262,24 @@ export default function RatingScreen() {
     return libraryPercentileLabel(runningAvg, others)
   }, [runningAvg, ratedAlbums, albumId])
 
+  function uncarry(i: number) {
+    if (!carried.has(i)) return
+    setCarried((prev) => {
+      const next = new Set(prev)
+      next.delete(i)
+      return next
+    })
+  }
+
   function setDraftAt(i: number, text: string) {
     setDrafts((prev) => {
       const next = [...prev]
       next[i] = cleanScoreText(text)
       return next
     })
+    // Touched, so it is the listener's own score now. The source record keeps
+    // whatever it had.
+    uncarry(i)
     if (skipped.has(i)) {
       setSkipped((prev) => {
         const next = new Set(prev)
@@ -281,9 +289,12 @@ export default function RatingScreen() {
     }
   }
 
+  // Passes over carried tracks, so a run of them doesn't need a Next each.
+  const nextIdx = nextTrackIndex(idx, sortedSongs.length, carried)
+
   function advance() {
     haptics.selection()
-    if (idx < sortedSongs.length - 1) setIdx(idx + 1)
+    if (nextIdx !== -1) setIdx(nextIdx)
     else setPhase('factors')
   }
 
@@ -358,6 +369,7 @@ export default function RatingScreen() {
   )
 
   function onSkip() {
+    uncarry(idx)
     setSkipped((prev) => new Set(prev).add(idx))
     setDrafts((prev) => {
       const next = [...prev]
@@ -617,19 +629,15 @@ export default function RatingScreen() {
               />
               <ScoreScale value={scores[idx]} />
 
-              {/* Offered, never prefilled. Writing the score straight into the
-                  draft would make scores[i] non-null, which unlocks jumping to
-                  that track and hands the user a number they never agreed to.
-                  One tap is the whole saving, and it keeps both properties. */}
-              {song.carriedScore != null && song.score == null && !drafts[idx] && (
-                <Pressable style={styles.carryRow} onPress={() => setDraftAt(idx, String(song.carriedScore))}>
-                  <Text style={styles.carryText} numberOfLines={2}>
-                    You rated this {song.carriedScore.toFixed(1)} on{' '}
-                    <Text style={styles.carryAlbum}>{song.carriedFromAlbumName}</Text>
-                  </Text>
-                  <Text style={styles.carryUse}>Use it</Text>
-                </Pressable>
-              )}
+              {/* Where a prefilled score came from. Gone once edited. */}
+              {carried.has(idx) && song.carriedFromAlbumName ? (
+                <View style={styles.carryRow}>
+                  {song.carriedFromAlbumArtUrl ? (
+                    <CoverImage url={song.carriedFromAlbumArtUrl} displayPx={16} style={styles.carryArt} />
+                  ) : null}
+                  <Text style={styles.carryText} numberOfLines={1}>from {song.carriedFromAlbumName}</Text>
+                </View>
+              ) : null}
 
               <View style={styles.actions}>
                 <Pressable style={styles.listBtn} onPress={() => setListOpen(true)} accessibilityLabel="Jump to a track">
@@ -645,7 +653,7 @@ export default function RatingScreen() {
                   disabled={parseScore(drafts[idx] ?? '') === null}
                 >
                   <Text style={styles.nextBtnText}>
-                    {idx < sortedSongs.length - 1 ? 'Next track' : isEP ? 'Finish' : 'Rate the album'}
+                    {nextIdx !== -1 ? 'Next track' : isEP ? 'Finish' : 'Rate the album'}
                   </Text>
                   <ArrowRight size={16} color="#fff" />
                 </Pressable>
@@ -672,7 +680,7 @@ export default function RatingScreen() {
                 <View style={styles.chipRow}>
                   {sortedSongs.map((s, i) => {
                     const v = scores[i]
-                    const open = canJumpTo(i, scores, skipped, idx)
+                    const open = reach(i, idx)
                     return (
                       <Pressable
                         key={s.id}
@@ -703,7 +711,7 @@ export default function RatingScreen() {
                 </View>
                 {/* The chips were previously decoration, so say once that they
                     are not — only when there is somewhere back to go. */}
-                {ratedIdx.some((i) => i !== idx) && (
+                {sortedSongs.some((_, i) => i !== idx && reach(i, idx)) && (
                   <Text style={styles.chipHint}>Tap a track to go back</Text>
                 )}
               </View>
@@ -855,6 +863,7 @@ export default function RatingScreen() {
           songs={sortedSongs}
           scores={scores}
           skipped={skipped}
+          reach={reach}
           current={phase === 'tracks' ? idx : -1}
           onPick={jumpTo}
           onClose={() => setListOpen(false)}
@@ -960,6 +969,7 @@ function TrackSheet({
   songs,
   scores,
   skipped,
+  reach,
   current,
   onPick,
   onClose,
@@ -968,6 +978,8 @@ function TrackSheet({
   songs: Song[]
   scores: (number | null)[]
   skipped: Set<number>
+  /** The screen's canJumpTo, so the sheet and the chips agree. */
+  reach: (i: number, current: number) => boolean
   current: number
   onPick: (i: number) => void
   onClose: () => void
@@ -985,7 +997,7 @@ function TrackSheet({
               const v = scores[i]
               const isSkipped = skipped.has(i)
               const visited = v != null || isSkipped
-              const open = canJumpTo(i, scores, skipped, current)
+              const open = reach(i, current)
               return (
                 <Pressable
                   key={s.id}
@@ -1160,11 +1172,10 @@ const styles = StyleSheet.create({
   chipPressed: { opacity: 0.55 },
   carryRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: spacing.sm, marginTop: spacing.md,
+    gap: 6, marginTop: spacing.md,
   },
+  carryArt: { width: 16, height: 16, borderRadius: 3 },
   carryText: { fontFamily: fonts.body, fontSize: 12, color: colors.inkSecondary, flexShrink: 1 },
-  carryAlbum: { fontFamily: fonts.bodySemiBold, color: colors.ink },
-  carryUse: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },
   chipHint: { fontFamily: fonts.body, fontSize: 11, color: colors.inkTertiary, marginTop: spacing.sm, textAlign: 'center' },
 
   sectionLabel: {

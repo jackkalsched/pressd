@@ -112,8 +112,8 @@ async def _fetch_cover_url(client: httpx.AsyncClient, album: str, artist: str) -
         return None
 
     # The 500px thumbnail, not `front` itself: `front` is the uploaded original,
-    # which ran 0.3–11 MB for an image drawn at 58–184 px (thumbnail_cover_urls.py
-    # has the measurements). What's stored is the redirect target on the Archive
+    # which ran 0.3–11 MB for an image drawn at 58–184 px (measured October 2026,
+    # when the 643 stored originals were rewritten). What's stored is the redirect target on the Archive
     # machine, the fastest address; the apps fall back to the stable one
     # (shared/src/covers.ts) if that machine stops answering.
     for release in releases:

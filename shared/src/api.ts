@@ -67,6 +67,7 @@ function transformSong(s: Record<string, unknown>): Song {
     carriedScore: (s.carried_score as number | null) ?? null,
     carriedFromAlbumId: (s.carried_from_album_id as number | null) ?? null,
     carriedFromAlbumName: (s.carried_from_album_name as string | null) ?? null,
+    carriedFromAlbumArtUrl: (s.carried_from_album_art_url as string | null) ?? null,
   }
 }
 

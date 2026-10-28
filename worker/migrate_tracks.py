@@ -3,8 +3,8 @@ One-time backfill for the shared global track store (PLAN_ml_worker_split §2).
 
 1. Creates the new tables (track, trackaudio, albumcorpus, workerrun) and
    song.track_id via init_db().
-2. Builds track rows from every existing song, dedup-keyed on normalized
-   (artist, title); links song.track_id.
+2. Builds track rows from every existing song, keyed by recording
+   (backend/tracklink.py, trackkeys.recording_key); links song.track_id.
 3. Copies each track's best songaudiofeatures row into trackaudio
    (most non-null feature columns wins, tie-break latest analyzed_at),
    tagged source='yt_full'.
@@ -27,10 +27,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 from sqlalchemy import text
 import backend.models  # noqa: F401 — registers tables in SQLModel.metadata
 from backend.database import engine, init_db
-from backend.trackkeys import track_key, album_key
-
-# Duration disagreement beyond this means "different recording, same name"
-_DUR_TOL_MS = 10_000
+from backend.trackkeys import album_key
+from backend.tracklink import link_unlinked
 
 _FEATURE_COLS = (
     "bpm", "bpm_confidence", "key", "scale", "key_strength",
@@ -43,64 +41,29 @@ _FEATURE_COLS = (
 def build_tracks(con) -> dict:
     """Create track rows for all unlinked songs; return {song_id: track_id}.
     Incremental: the nightly ingest reuses this to link newly imported songs.
-    Bulk execute_values throughout — row-by-row round trips to Supabase take
-    ~20 min for the initial 9.5k-song backfill; this takes seconds."""
-    from psycopg2.extras import execute_values
-
-    rows = con.execute(text("""
-        SELECT s.id, COALESCE(NULLIF(s.artist, ''), a.artist), s.title, s.duration_ms
-        FROM song s JOIN album a ON a.id = s.album_id
-        WHERE s.track_id IS NULL
-    """)).fetchall()
-    if not rows:
-        return {}
-
-    existing = {r[0]: (r[1], r[2]) for r in con.execute(
-        text("SELECT track_key, id, duration_ms FROM track")).fetchall()}
-
-    song_key: dict[int, str] = {}
-    new_tracks: dict[str, list] = {}   # key -> [artist_norm, title_norm, duration_ms]
-
-    for song_id, artist, title, dur in rows:
-        key = track_key(artist or "", title or "")
-        hit = existing.get(key)
-        if hit and dur and hit[1] and abs(dur - hit[1]) > _DUR_TOL_MS:
-            key = f"{key}||d{dur // 1000}"   # same name, different recording
-            hit = existing.get(key)
-        song_key[song_id] = key
-        if not hit and key not in new_tracks:
-            parts = key.split("||")
-            new_tracks[key] = [parts[0], parts[1], dur]
-
-    raw = con.connection.driver_connection
-    with raw.cursor() as cur:
-        if new_tracks:
-            execute_values(cur,
-                "INSERT INTO track (track_key, artist_norm, title_norm, duration_ms, created_at)"
-                " VALUES %s ON CONFLICT (track_key) DO NOTHING",
-                [(k, a, t, d, datetime.utcnow())
-                 for k, (a, t, d) in new_tracks.items()])
-
-        cur.execute("SELECT track_key, id FROM track")
-        key_id = dict(cur.fetchall())
-
-        pairs = [(sid, key_id[k]) for sid, k in song_key.items() if k in key_id]
-        execute_values(cur,
-            "UPDATE song SET track_id = data.tid FROM (VALUES %s) AS data (sid, tid)"
-            " WHERE song.id = data.sid",
-            pairs)
-    raw.commit()
-    return dict(pairs)
+    The rule is backend/tracklink.py's, shared with the import path."""
+    return link_unlinked(con)
 
 
 def backfill_audio(con):
-    """Copy each track's best songaudiofeatures row into trackaudio."""
+    """Copy each track's best songaudiofeatures row into trackaudio.
+
+    Only a legacy analysis made after the track row existed counts. The re-key
+    of October 2026 (backend/rekey_tracks.py) split live takes, remixes and
+    duet versions off the studio track they had been sharing, into new rows
+    with no audio so the ingest fetches the right version. Their songs' legacy
+    rows predate the split, and which recording a legacy search actually
+    downloaded can't be told after the fact; the ingest searches for the
+    version by its full title. The initial backfill, the one time older rows
+    were wanted, has long since run: no track lacking audio had an eligible
+    row when this was added."""
     cols = ", ".join(f"af.{c}" for c in _FEATURE_COLS)
     rows = con.execute(text(f"""
         SELECT s.track_id, af.analyzed_at, {cols}
         FROM songaudiofeatures af
         JOIN song s ON s.id = af.song_id
-        WHERE s.track_id IS NOT NULL AND af.bpm IS NOT NULL
+        JOIN track t ON t.id = s.track_id
+        WHERE af.bpm IS NOT NULL AND af.analyzed_at >= t.created_at
     """)).fetchall()
 
     done = {r[0] for r in con.execute(text("SELECT track_id FROM trackaudio")).fetchall()}

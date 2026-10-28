@@ -171,8 +171,8 @@ def get_album(
         if a.user_id is not None and a.user_id != user.id
     })
     songs = [s.model_dump() for s in album.songs]
-    # A score this user already gave the same recording on a single or an EP,
-    # offered as a prefill for the rating flow. Only computed for the owner —
+    # A score this user already gave the same recording on another of their
+    # records, prefilled by the rating flow. Only computed for the owner —
     # a friend viewing the album has no use for it — and only when something is
     # still unscored, which keeps it off the hot path for finished records.
     # See backend/carryover.py for why a shared track_id alone is not enough.
@@ -184,6 +184,7 @@ def get_album(
                 s["carried_score"] = hit["score"]
                 s["carried_from_album_id"] = hit["from_album_id"]
                 s["carried_from_album_name"] = hit["from_album_name"]
+                s["carried_from_album_art_url"] = hit["from_album_art_url"]
     row = _for_viewer(album.model_dump(), user.id)
     if not predictions_unlocked(session, album.user_id):
         row = _hide_predictions(row)
@@ -554,36 +555,12 @@ def _parse_release_date(v) -> date | None:
 def _link_tracks(session: Session, album_id: int):
     """Resolve global track ids for an album's songs (shared-audio dedup):
     if any user already imported + analyzed the same recording, its audio is
-    reused and the nightly ingest never downloads it again. Never fails the
-    import — the worker's sync_tracks() is the backstop."""
-    from sqlalchemy import text as _sql
-    from ..trackkeys import track_key
+    reused and the nightly ingest never downloads it again. The rule lives in
+    backend/tracklink.py, shared with the worker's sync_tracks(), which is also
+    the backstop: this never fails the import."""
+    from ..tracklink import link_album
     try:
-        rows = session.execute(_sql(
-            "SELECT s.id, COALESCE(NULLIF(s.artist, ''), a.artist), s.title, s.duration_ms"
-            " FROM song s JOIN album a ON a.id = s.album_id"
-            " WHERE s.album_id = :aid AND s.track_id IS NULL"), {"aid": album_id}).fetchall()
-        for song_id, artist, title, dur in rows:
-            key = track_key(artist or "", title or "")
-            hit = session.execute(_sql(
-                "SELECT id, duration_ms FROM track WHERE track_key = :k"),
-                {"k": key}).fetchone()
-            if hit and dur and hit[1] and abs(dur - hit[1]) > 10_000:
-                key = f"{key}||d{dur // 1000}"   # same name, different recording
-                hit = session.execute(_sql(
-                    "SELECT id, duration_ms FROM track WHERE track_key = :k"),
-                    {"k": key}).fetchone()
-            if hit:
-                tid = hit[0]
-            else:
-                a_norm, t_norm = key.split("||")[0], key.split("||")[1]
-                tid = session.execute(_sql(
-                    "INSERT INTO track (track_key, artist_norm, title_norm, duration_ms, created_at)"
-                    " VALUES (:k, :a, :t, :d, NOW()) ON CONFLICT (track_key) DO UPDATE"
-                    " SET track_key = EXCLUDED.track_key RETURNING id"),
-                    {"k": key, "a": a_norm, "t": t_norm, "d": dur}).scalar()
-            session.execute(_sql("UPDATE song SET track_id = :tid WHERE id = :sid"),
-                            {"tid": tid, "sid": song_id})
+        link_album(session, album_id)
         session.commit()
     except Exception as e:
         session.rollback()

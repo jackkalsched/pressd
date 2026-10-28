@@ -1,8 +1,9 @@
-"""Carry a song score forward from a single or EP onto a longer record.
+"""Carry a song score forward from one of the user's records onto another.
 
-A user rates a single, then adds the album that single ended up on. It is the
-same recording; asking them to score it a second time is busywork, and the two
-scores then disagree in their own library.
+A user rates a record, then adds another that holds the same recordings — the
+album a single ended up on, or the deluxe edition of an album they already
+rated. It is the same recording; asking them to score it a second time is
+busywork, and the two scores then disagree in their own library.
 
 Songs already share a global identity — `Song.track_id`, the `Track` row that
 audio analysis is keyed on — so the match itself is a join. The care is all in
@@ -10,10 +11,12 @@ deciding when a shared `track_id` is *enough* evidence.
 
 Why the guards exist
 --------------------
-`track_key` is `_clean(artist)||_clean(title)`, which collapses distinct songs
-that share a title within an artist's catalogue. Measured against the live
-database on 2026-08-30, every cross-record `track_id` match in user 1's library
-was a false positive or unverifiable:
+A track is keyed by `trackkeys.recording_key` — the primary artist and the
+title with edition qualifiers folded — so distinct songs that share a plain
+title within an artist's catalogue ("Intro") still land on one track unless
+their durations tell them apart. Measured against the live database on
+2026-08-30, under the older `track_key`, every cross-record `track_id` match in
+user 1's library was a false positive or unverifiable:
 
     Intro  2014 Forest Hills Drive (129s)  ->  KOD (107s)          different song
     Intro  2014 Forest Hills Drive (129s)  ->  Cole World (82s)    different song
@@ -22,30 +25,40 @@ was a false positive or unverifiable:
 
 Prefilling on `track_id` alone would therefore have written J. Cole's *2014
 Forest Hills Drive* intro onto *KOD*'s entirely different intro. Duration is the
-natural tiebreak but is missing on 68.6% of songs, so it cannot carry the whole
-argument on its own. Three guards together do:
+natural tiebreak but was missing on 68.6% of songs then, so it cannot carry the
+whole argument on its own. The rule:
 
-  1. The source must be a single or EP (<= CARRYOVER_MAX_SOURCE_TRACKS). This is
-     the case that was actually asked for, and it is also where the evidence is
-     strongest: a two-track single exists to carry one recording, whereas two
-     full albums by one artist are exactly where generic titles collide. Every
-     false positive above came from a full-album source.
-  2. Titles that name a position on a record rather than a song — intro, outro,
-     interlude, skit — are refused unless duration positively confirms them.
-     These are the titles that repeat across an artist's catalogue.
-  3. When both durations are known they must agree within DURATION_TOLERANCE_MS.
+  1. When both durations are known they must agree within
+     DURATION_TOLERANCE_MS, and then the source may be any record of any
+     status — rated or still being listened to. A title match *and* a
+     runtime match within five seconds is strong evidence of one recording.
      `_link_tracks` already uses a 10s tolerance to decide two recordings are
      *different*; this is deliberately tighter, because there the cost of a
      wrong call is a duplicate audio download and here it is a wrong score in
      someone's library.
+  2. When either duration is missing, the source must be a single or EP
+     (<= CARRYOVER_MAX_SOURCE_TRACKS songs, counted over the whole source
+     album). A two-track single exists to carry one recording, whereas two
+     full albums by one artist are exactly where generic titles collide.
+  3. Titles that name a position on a record rather than a song — intro, outro,
+     interlude, skit — are refused unless duration positively confirms them,
+     whatever the source. These are the titles that repeat across a catalogue.
 
-Relaxing rule 1 re-admits the *Intro* class of false positive and must not be
-done without stronger title evidence than a normalised string match.
+Until October 2026 rule 2 applied to every match, durations or not, and it was
+also miscounted — the window counted the source's *scored* songs rather than
+its tracks. Measured then, it blocked every real match in production: all 18
+candidate matches came from full albums, 12 of them *The Life of a Showgirl*'s
+songs already rated on *The Encore*, and the 3 *Intro* matches among them are
+exactly the false positives above, which rule 3 still refuses. Agreeing
+durations are what separate the two, so they now open the full-album case.
+
+Only this user's own scores are ever read. When several records hold the same
+recording, the one most recently rated (or, for one still being listened to,
+most recently added) wins.
 
 Nothing here writes. It reports what *could* carry; the rating screen prefills
-the draft and shows where the number came from, and the user submits it or
-overwrites it like any other score. A wrong suggestion costs one keystroke,
-which is the reason the guards can be pragmatic rather than perfect.
+the draft and says where the number came from, and the user submits it or
+overwrites it like any other score. Changing it never touches the source.
 """
 
 from __future__ import annotations
@@ -96,54 +109,58 @@ def _durations_agree(a: int | None, b: int | None) -> bool | None:
 
 
 def carryover_for_album(session: Session, album_id: int, user_id: int) -> dict[int, dict]:
-    """{song_id: {"score", "from_album_id", "from_album_name"}} for the unscored
-    songs on `album_id` that this user already scored on a single or EP.
+    """{song_id: {"score", "from_album_id", "from_album_name",
+    "from_album_art_url"}} for the unscored songs on `album_id` that this user
+    already scored on another of their records. See the module docstring.
 
     Read-only. Returns {} rather than raising if anything goes wrong — a
     prefill is a convenience, and losing it must never block a rating.
     """
     try:
         rows = session.execute(_sql("""
-            WITH src AS (
-                SELECT s.track_id, s.score, s.duration_ms, s.title,
-                       a.id AS album_id, a.album_name, a.date_rated,
-                       COUNT(*) OVER (PARTITION BY a.id) AS n_tracks
-                FROM song s
-                JOIN album a ON a.id = s.album_id
+            WITH src_album AS (
+                -- Counted over every song, scored or not: the guard is about
+                -- what the source record is, not how far through it the user is.
+                SELECT a.id, a.album_name, a.album_art_url,
+                       COALESCE(a.date_rated::timestamptz, a.created_at) AS recency,
+                       (SELECT COUNT(*) FROM song x WHERE x.album_id = a.id) AS n_tracks
+                FROM album a
                 WHERE a.user_id = :uid
-                  AND a.status = 'rated'
                   AND a.id <> :aid
-                  AND s.score IS NOT NULL
-                  AND s.track_id IS NOT NULL
             )
             SELECT tgt.id, tgt.title, tgt.duration_ms,
-                   src.score, src.album_id, src.album_name, src.duration_ms, src.title
+                   s.score, sa.id, sa.album_name, sa.album_art_url,
+                   s.duration_ms, sa.n_tracks
             FROM song tgt
-            JOIN src ON src.track_id = tgt.track_id
+            JOIN song s ON s.track_id = tgt.track_id
+            JOIN src_album sa ON sa.id = s.album_id
             WHERE tgt.album_id = :aid
               AND tgt.score IS NULL
               AND tgt.track_id IS NOT NULL
-              AND src.n_tracks <= :maxsrc
-            ORDER BY src.date_rated DESC NULLS LAST, src.album_id DESC
-        """), {"uid": user_id, "aid": album_id,
-               "maxsrc": CARRYOVER_MAX_SOURCE_TRACKS}).fetchall()
+              AND s.score IS NOT NULL
+            ORDER BY sa.recency DESC NULLS LAST, sa.id DESC
+        """), {"uid": user_id, "aid": album_id}).fetchall()
     except Exception as e:  # pragma: no cover - a prefill is never worth a 500
         print(f"[carryover] album {album_id} user {user_id} failed: {e}")
         return {}
 
     out: dict[int, dict] = {}
-    for song_id, t_title, t_dur, score, src_album_id, src_album, s_dur, s_title in rows:
-        # Ordered most-recently-rated first, so the first hit for a song wins.
+    for (song_id, t_title, t_dur, score, src_album_id, src_album, src_art,
+         s_dur, n_tracks) in rows:
+        # Ordered most recent first, so the first acceptable hit for a song wins.
         if song_id in out:
             continue
         agree = _durations_agree(t_dur, s_dur)
         if agree is False:
-            continue                                    # guard 3
+            continue                                    # rule 1
+        if agree is None and n_tracks > CARRYOVER_MAX_SOURCE_TRACKS:
+            continue                                    # rule 2
         if is_positional_title(t_title) and agree is not True:
-            continue                                    # guard 2
+            continue                                    # rule 3
         out[song_id] = {
             "score": float(score),
             "from_album_id": int(src_album_id),
             "from_album_name": src_album,
+            "from_album_art_url": src_art,
         }
     return out

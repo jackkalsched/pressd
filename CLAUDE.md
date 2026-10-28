@@ -25,6 +25,11 @@ the constraint is the product.
 The constraint applies to the **first pass only**. Once an album is rated, the user can
 edit any song score or factor freely, which recomputes the album score.
 
+A song the user has **already scored on another record** — the single, the standard
+edition of a deluxe — arrives pre-filled and counts as done (§5, carryover), so they
+start at the first song that genuinely needs them. A pre-filled song further down the
+record stays locked until the listener reaches it; it is never a way to jump ahead.
+
 Vocabulary of the core loop:
 
 - **To Listen** — the queue of records the user intends to hear, sorted best-predicted-first.
@@ -242,6 +247,8 @@ There is no Alembic and no version table. Adding a column means adding a SQLMode
 ### Journey: submit a rating
 
 ```
+GET /albums/{id}                    carried_score on unscored songs (carryover.py)
+  shared/src/rating.ts seedDrafts   pre-fills them, resumes at the first open track
 frontend RatingScreen.tsx `submit` / mobile rate/[id].tsx `submit`
   POST /songs/batch-rate            songs.py:83   writes scores; NO recompute
   PATCH /albums/{id}                albums.py:215 status + 4 factors
@@ -388,9 +395,62 @@ Users' catalogs disagree about editions, feat-credits and apostrophes; these key
 collapse "Take Care", "Take Care (Deluxe)" and "Take Care (Deluxe Version)" into one
 record. Read §12 before adding a grouping.
 
+**Recording identity (`trackkeys.recording_key`, `backend/tracklink.py`, October
+2026).** A `Track` is one *recording*, so audio is analysed once and the global board
+pools a song across every edition it appears on. Its key is the album's **primary**
+artist (`artist_key`; a song's own credit only when it names none of the album's
+artists, as on a soundtrack) and the title with each `(…)`/`[…]` group and ` - …` tail
+classified. **Folded** — the same recording: remaster/remastered (any year), deluxe,
+expanded, anniversary, edition, bonus, explicit/clean, album/original version,
+reissue, and credits that *start* with feat/ft/featuring/with. **Kept apart** as a
+`||v:` tag — a different recording: live, demo, voice memo, acoustic, unplugged,
+stripped, piano, orchestral, instrumental, a cappella, session, rehearsal, alt/alternate,
+take N, outtake, basic track, sped up, slowed, reverb, edit, mono, stereo, and any
+"<x> remix", "<x> mix" or "<x> version" (Taylor's Version, Cardi B Version), whose
+naming words are kept so two different remixes don't share audio. A version word wins
+over a credit ("(Afrojack Remix ft. Pitbull)" stays a remix). An album name contributes
+its tag only from a **trailing** qualifier ("Loveworm (Bedroom Sessions)" → `v:session`)
+and only when the title carries none — never from a plain word search, because "Dark
+Lane Demo Tapes" and "LONG.LIVE.A$AP" are original songs. Titles are NFKD-folded with
+apostrophes dropped and Unicode letters kept; a punctuation-only title ("!!!!!!!")
+keys on its code points. `tracklink` adds the two rules one title can't decide: **two
+songs on one album copy never share a track** (the second "Karma" on *Midnights Til
+Dawn* is `||alt2`, ordered so every copy of the record agrees), and duration is a
+tiebreak only, matched within 10s (59% of songs have none, and copies of one recording
+differ by up to 6s). `link_album` (import, via `albums._link_tracks`) and `link_unlinked`
+(the worker's `build_tracks`) are the only two writers, so they can't drift again.
+Until October 2026 each built its own key on `_clean`, which folded "- Live"/"- Demo"/
+"- Remix" into the studio song, kept "(2012 Remaster)" apart from the original, and keyed
+on the song's full credit string: 58 redundant tracks (The Stone Roses, The Smiths and
+Led Zeppelin IV remasters; MBDTF's "Monster" family), 21 album copies with two songs on
+one track, and 8 empty-title keys. `_clean`, `album_key` and `track_key` are untouched —
+`album_key` is a stored unique key — and `track_key` is legacy. The stored tracks were
+re-keyed in one transaction (55 merged into the copy with audio, 22 songs split onto 19
+new tracks with no audio, so the ingest fetches the right version). Split tracks never
+inherit a song's legacy `songaudiofeatures` row: `backfill_audio` copies one only when it
+was analysed after the track was created. Still open: an album that is live throughout
+with bare titles ("MTV Unplugged in New York") still shares the studio keys, and
+`subject_key_album` / `match_title` still fold "(Taylor's Version)" and "(Remix)" into
+the original on threads and the community view.
+
+**Carryover (`backend/carryover.py`).** `GET /albums/{id}`, for the owner, sends
+`carried_score` / `carried_from_album_*` on each unscored song whose `track_id` the
+same user has scored on another of their records (rated or listening; never another
+user's). A source of any size counts when both durations are known and agree within
+5s; without durations, only a ≤6-track source (a single or EP) does, and positional
+titles (intro, outro, skit…) need agreeing durations whatever the source. Most recent
+wins. Both screens seed it through `shared/src/rating.ts` (`seedDrafts`,
+`firstOpenIndex`, `canJumpTo`, `nextTrackIndex` — the first-pass rules, once for both
+platforms): the song shows its score with a small "from <album>" note, counts as done,
+stays editable, and Next passes over it. It is written to the new copy on the next save
+and never back to the source. It used to be an opt-in "Use it" button gated to ≤6-track
+sources, and that gate blocked every real match there was (12 *Showgirl* songs from
+*The Encore*, all full-album sources); the gate also counted the source's scored songs,
+not its tracks.
+
 **`backend/routers/albums.py`** (1,335) — the largest router. `import_album` (`:398`)
-dedups, inserts, then `_link_tracks` (`:497`) resolves global track ids; two recordings
-sharing a name but differing >10s in duration get a `||d{sec}`-suffixed key (`:514-515`).
+dedups, inserts, then `_link_tracks` resolves global track ids through
+`tracklink.link_album` (recording identity, above).
 `recommend_album` (`:803`) refuses without a tracklist (`:831-836`) and fills in whatever
 the recipient's shell copy is missing, but leaves anything they've engaged with alone.
 ⚠️ **`GET /albums/` (the list) returns albums without their songs**; only
@@ -516,7 +576,7 @@ co-artist counts only when the other catalog's printed credit names them too
 (`named_in`): Deezer lists a band's members as Main beside the band (Snocaps with
 Waxahatchee), and an unconfirmed co-artist is dropped rather than guessed. A name
 contained in the primary's is the same act (`Ye` beside `Kanye West`). Every identity key
-(`subject_key`, `album_key`, `track_key`, the thread) stays on the primary, which all
+(`subject_key`, `album_key`, the recording key, the thread) stays on the primary, which all
 three sources agree on. For display and for every per-artist number — the artist page,
 league tables, SAR, bang/skip, the scatter, "most rated artist", the profile's Artists
 count — a record belongs to **each** credited artist in full (`album_artists`,
@@ -525,8 +585,8 @@ would break AC/DC, Bob Marley & The Wailers, Catfish and the Bottlemen and Tyler
 Creator. Until then an iTunes import stored "Anderson .Paak & Cordae" and a Deezer
 import "Anderson .Paak", so *Heavy Is the Crown* was two records with two sets of
 tracks and two threads; and `extra_artists` came from a text box on both rating screens
-that people skipped or filled with song titles, which is gone. Stored copies were
-corrected by `backend/backfill_artist_credits.py`.
+that people skipped or filled with song titles, which is gone. A one-off backfill
+corrected the 18 stored copies that needed it (commit `b8c4d08`).
 
 **Genres (`backend/genres.py`, the tagger in `albums.py`).** An import keeps the
 catalog's genre (iTunes `primaryGenreName`, Deezer's first genre) through
@@ -541,7 +601,8 @@ is told the catalog said it so it picks the genre it qualifies, and a bare
 was missing, its Claude call raised past the Last.fm fallback, and from the moment
 Render's unpinned `anthropic` reached 1.x every call failed on `temperature` — 152 of
 the 154 albums added that month had no subgenres, and iTunes had filed 97 albums under
-"Alternative" alone. `backend/backfill_genre_tags.py` corrected the stored copies.
+"Alternative" alone. A one-off backfill tagged the 421 stored albums that needed it
+(commit `8a28b6f`).
 **`anthropic` is pinned to 0.44.0** in both requirement files: 1.x removed
 `temperature`, which the tagger and the theme measurements pass (§7). Moving to 1.x
 means deleting it from all five call sites, a change to how reproducible the theme
@@ -1136,7 +1197,12 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
 - **Any grouping across users must go through `trackkeys.py`.** Matching raw names
   splits one album into three community albums with one rater each. Pick the right key:
   `album_key` when it must be byte-stable (it is a stored unique key on `albumfactors` /
-  `albumprediction`), `subject_key_album` when copies must collapse into one thing.
+  `albumprediction`), `subject_key_album` when copies must collapse into one thing, and
+  for a song, its `track_id` — never a title match. Tracks are created only through
+  `tracklink` (`recording_key`), and a remaster is the same recording while a live,
+  demo, remix or session version is not (§5).
+- **One-off backfills and migrations are deleted once applied** — the commit and this
+  file record what they did; only scripts that run again (ingest, nightly, ops) stay.
   Never inline `(name.lower(), artist.lower())` — five places already did, and they now
   disagree with the threads (§11).
 - **Auth is the invariant.** Identity comes from `current_user`, never a client-supplied
@@ -1178,8 +1244,8 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   `CoverImage`; a new cover goes through one of them, not a bare `<img>`/`Image`. The
   share card is the exception — it rasterises the stored full-size image. Stored
   Archive covers are the `_thumb500` copy: until October 2026 the backfill stored the
-  uploaded original (643 albums, 0.3–11 MB each), rewritten by
-  `backend/thumbnail_cover_urls.py`, and both writers (`util.py` backfill,
+  uploaded original (643 albums, 0.3–11 MB each), rewritten once to the thumbnail,
+  and both writers (`util.py` backfill,
   `search.py` resolve) now ask for `front-500`. A cold For You loaded 2.3 MB of
   covers after that rewrite and 1.4 MB with the sizing; Library 7.3 MB and 2.1 MB.
 - **The public pages promote the iPhone app as a feature, not a footnote.** The
