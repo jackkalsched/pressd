@@ -9,7 +9,7 @@
 // The friend's predicted score never reaches the client, so there is no number
 // to show for them. "Would probably love it" is the whole claim; your own score
 // is yours, and it stays.
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { Image } from 'expo-image'
 import { Send } from 'lucide-react-native'
 import { avatarColor, songScoreColor } from '@pressd/shared/types'
@@ -22,10 +22,13 @@ const AVATAR = 30
 export default function PassItOnCell({
   suggestion,
   onPress,
+  onOpenFriend,
   style,
 }: {
   suggestion: RecommendSuggestion
   onPress: () => void
+  /** The friend's face and name open their profile; the rest of the card sends. */
+  onOpenFriend?: (id: number) => void
   style?: StyleProp<ViewStyle>
 }) {
   const { album, friend } = suggestion
@@ -47,15 +50,17 @@ export default function PassItOnCell({
       artUrl={album.albumArtUrl}
       seed={album.artist}
       badge={
-        friend.avatarUrl ? (
-          <Image source={{ uri: friend.avatarUrl }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" />
-        ) : (
-          <View style={[styles.avatar, { backgroundColor: avatarColor(friend.name) }]}>
-            <Text style={styles.avatarInitial} maxFontSizeMultiplier={NUM_SCALE_CAP}>
-              {friend.name[0]?.toUpperCase()}
-            </Text>
-          </View>
-        )
+        <Pressable onPress={() => onOpenFriend?.(friend.id)} disabled={!onOpenFriend} hitSlop={6} accessibilityLabel={`View ${friend.name}'s profile`}>
+          {friend.avatarUrl ? (
+            <Image source={{ uri: friend.avatarUrl }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: avatarColor(friend.name) }]}>
+              <Text style={styles.avatarInitial} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+                {friend.name[0]?.toUpperCase()}
+              </Text>
+            </View>
+          )}
+        </Pressable>
       }
     >
       <Text style={styles.meta} numberOfLines={1}>
@@ -65,7 +70,7 @@ export default function PassItOnCell({
         </Text>
       </Text>
       <Text style={styles.friendLine} numberOfLines={1}>
-        <Text style={styles.friendName}>{firstName}</Text> would probably love it
+        <Text style={styles.friendName} onPress={onOpenFriend ? () => onOpenFriend(friend.id) : undefined}>{firstName}</Text> would probably love it
       </Text>
     </SpotlightCard>
   )

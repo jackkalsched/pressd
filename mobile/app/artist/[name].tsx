@@ -53,11 +53,15 @@ const BG_CLEAR = 'rgba(249,248,246,0)'
 
 // How far above the catalog strip the photo starts dissolving.
 const FADE_LEAD = spacing.lg
+// Room the hero keeps below the catalog strip for the dissolve to finish in.
+// With only the strip's height to work with it ran out in about 100pt, or 30pt
+// for an artist with no strip, and read as a hard edge.
+const FADE_TAIL = 112
 // Stops sampled along the dissolve. A plain two-stop fade leaves a seam where
 // it begins — alpha's slope jumps from nothing to constant, and the eye catches
 // that crease as a band. Sampling a smoothstep instead leaves the ramp flat at
 // both ends, so the photo melts into the page with no edge anywhere along it.
-const FADE_STEPS = 12
+const FADE_STEPS = 20
 
 type Ramp = {
   colors: readonly [string, string, ...string[]]
@@ -227,6 +231,9 @@ export default function ArtistPage() {
               end={{ x: 1, y: 1 }}
               style={styles.heroFill}
             />
+          )}
+          {!artistImage && (
+            <LinearGradient colors={fade.colors} locations={fade.locations} style={styles.heroFill} pointerEvents="none" />
           )}
 
           <View style={styles.heroBar}>
@@ -826,7 +833,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
 
-  hero: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, backgroundColor: colors.bg },
+  hero: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm + FADE_TAIL, backgroundColor: colors.bg },
   heroArt: { position: 'absolute', top: 0, left: 0, right: 0 },
   heroFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.xl },

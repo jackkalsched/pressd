@@ -29,7 +29,7 @@ import { songScoreColor, type Album, type AlbumStatus } from '@pressd/shared/typ
 import { useAuth } from '../../lib/auth'
 import { useProfile } from '../../lib/picks'
 import StatsView from '../../components/StatsView'
-import ProfileBanner, { topRatedArt, type PickKind } from '../../components/ProfileBanner'
+import ProfileBanner, { type PickKind } from '../../components/ProfileBanner'
 import { getPrefs } from '../../lib/prefs'
 import SettingsSheet from '../../components/SettingsSheet'
 import AnchoredMenu from '../../components/AnchoredMenu'
@@ -227,15 +227,6 @@ export default function Profile() {
     [rated],
   )
 
-  // "Pressing since" — the month of the earliest album in the library.
-  const since = useMemo(() => {
-    const dates = rated.map((a) => a.dateAdded ?? a.dateRated).filter(Boolean) as string[]
-    if (dates.length === 0) return null
-    const min = dates.reduce((a, b) => (a < b ? a : b))
-    const d = new Date(min.length <= 10 ? `${min}T00:00:00` : min)
-    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  }, [rated])
-
   // Scroll header: the banner scrolls away and a compact green bar keeping just
   // the profile name fades in, matching the other tabs' treatment.
   const scrollY = useRef(new Animated.Value(0)).current
@@ -326,8 +317,7 @@ export default function Profile() {
         onScroll={onScroll}
         scrollEventThrottle={16}
         refreshControl={
-          // Green, not the default gray: the spinner sits in the header's
-          // pale green wash, carried up over the pull.
+          // Green, not the default gray, to match the banner under it.
           <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.green} />
         }
         ListHeaderComponent={
@@ -335,7 +325,6 @@ export default function Profile() {
             <ProfileBanner
               name={user.name}
               avatarUrl={user.avatarUrl}
-              since={since}
               avg={summary?.avg_album_score ?? null}
               stats={[
                 { value: String(rated.length), label: 'ALBUMS' },
@@ -351,7 +340,6 @@ export default function Profile() {
               topInset={insets.top}
               profile={profile}
               picksHeading="MY PICKS"
-              washArtUrl={topRatedArt(rated)}
               scores={albumScores}
               onPickPress={(kind: PickKind) => router.push(`/favorite/${kind}`)}
               action={

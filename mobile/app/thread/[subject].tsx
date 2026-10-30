@@ -45,6 +45,7 @@ import {
 import AnchoredMenu from '../../components/AnchoredMenu'
 import Avatar from '../../components/Avatar'
 import FullReviewSheet from '../../components/FullReviewSheet'
+import { useOpenProfile } from '../../lib/useOpenProfile'
 import VoteButtons from '../../components/VoteButtons'
 import { threadKey } from '../../lib/refresh'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
@@ -412,6 +413,7 @@ function PostRow({
   onChanged: () => void
   onReply: (p: DiscussionPost) => void
 }) {
+  const openProfile = useOpenProfile()
   const anchor = useRef<RNView | null>(null)
   const [menu, setMenu] = useState(false)
   // Whose full rating is open: this post's, or one of its replies'.
@@ -472,8 +474,16 @@ function PostRow({
           {/* The person first and largest. Whose opinion this is matters more
               than what they scored it — and the "REVIEW" tag it used to lead
               with said nothing, since almost every post here is one. */}
-          <Avatar name={post.author?.name ?? '?'} avatarUrl={post.author?.avatarUrl} size={28} />
-          <Text style={styles.postAuthor} numberOfLines={1}>{post.author?.name ?? 'Unknown'}</Text>
+          <Pressable
+            style={styles.authorLink}
+            onPress={() => post.author && openProfile(post.author.id)}
+            disabled={!post.author}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${post.author?.name ?? 'their'}'s profile`}
+          >
+            <Avatar name={post.author?.name ?? '?'} avatarUrl={post.author?.avatarUrl} size={28} />
+            <Text style={styles.postAuthor} numberOfLines={1}>{post.author?.name ?? 'Unknown'}</Text>
+          </Pressable>
           {post.author?.score != null && (
             <Text
               style={[styles.postScore, { color: songScoreColor(post.author.score) }]}
@@ -535,10 +545,18 @@ function PostRow({
                 ) : (
                   <>
                     <View style={styles.postHead}>
-                      <Avatar name={r.author?.name ?? '?'} avatarUrl={r.author?.avatarUrl} size={22} />
-                      <Text style={styles.replyAuthor} numberOfLines={1}>
-                        {r.author?.name ?? 'Unknown'}
-                      </Text>
+                      <Pressable
+                        style={styles.authorLink}
+                        onPress={() => r.author && openProfile(r.author.id)}
+                        disabled={!r.author}
+                        accessibilityRole="button"
+                        accessibilityLabel={`View ${r.author?.name ?? 'their'}'s profile`}
+                      >
+                        <Avatar name={r.author?.name ?? '?'} avatarUrl={r.author?.avatarUrl} size={22} />
+                        <Text style={styles.replyAuthor} numberOfLines={1}>
+                          {r.author?.name ?? 'Unknown'}
+                        </Text>
+                      </Pressable>
                       {r.author?.score != null && (
                         <Text
                           style={[styles.replyScore, { color: songScoreColor(r.author.score) }]}
@@ -652,6 +670,8 @@ const styles = StyleSheet.create({
   },
   systemLabel: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1, color: colors.green, marginBottom: 4 },
   systemBody: { fontFamily: fonts.displayRegular, fontSize: 15, color: colors.ink },
+  // Face and name as one target; it takes the row's slack, as the name alone did.
+  authorLink: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   postHead: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: 6,
     justifyContent: 'space-between',

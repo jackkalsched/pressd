@@ -437,8 +437,12 @@ the original on threads and the community view.
 `carried_score` / `carried_from_album_*` on each unscored song whose `track_id` the
 same user has scored on another of their records (rated or listening; never another
 user's). A source of any size counts when both durations are known and agree within
-5s; without durations, only a ≤6-track source (a single or EP) does, and positional
-titles (intro, outro, skit…) need agreeing durations whatever the source. Most recent
+5s; without durations, a ≤6-track source (a single or EP) does, or any source sharing
+at least `MIN_SHARED_TRACKS` (3) tracks with this record, which makes it an edition of
+it. Positional titles (intro, outro, skit…) need agreeing durations or that overlap,
+and don't count towards it; durations that disagree always refuse. On the data real
+editions share 4–24 tracks and every other pair at most 2; *CMIYGL: The Estate Sale*
+against a rated copy with no stored durations is why the overlap rule exists. Most recent
 wins. Both screens seed it through `shared/src/rating.ts` (`seedDrafts`,
 `firstOpenIndex`, `canJumpTo`, `nextTrackIndex` — the first-pass rules, once for both
 platforms): the song shows its score with a small "from <album>" note, counts as done,
@@ -450,7 +454,11 @@ not its tracks.
 
 **`backend/routers/albums.py`** (1,335) — the largest router. `import_album` (`:398`)
 dedups, inserts, then `_link_tracks` resolves global track ids through
-`tracklink.link_album` (recording identity, above).
+`tracklink.link_album` (recording identity, above). `GET /albums/{id}` also returns
+`owner` (`public_user`) and `viewer_copy` (`{id, status, score}`: the caller's copy of the
+record in any edition, by `subject_key`, or null), which both clients use to decide what
+someone else's copy offers: your rating and compare, continue rating, or rate/add. Before
+this web offered Rate/Add on every copy that wasn't yours, even a record you'd rated.
 `recommend_album` (`:803`) refuses without a tracklist (`:831-836`) and fills in whatever
 the recipient's shell copy is missing, but leaves anything they've engaged with alone.
 ⚠️ **`GET /albums/` (the list) returns albums without their songs**; only
@@ -483,9 +491,11 @@ Vercel with the site's domains authorised.
 **Custom profile banners (both platforms, October 2026)** — an uploaded picture,
 stored **24:5 at 1920×400** (`BANNER_SIZE`) through the same decode path as
 avatars (`_normalize_image` in `users.py`: EXIF stripped, rotation applied, pixel-bomb
-guard). Web shows it **sharp**, as the strip across the top of the profile page (Pressd
-green when there's none), with *Edit banner* on your own; mobile blurs it into its header
-wash in place of the favourite album's cover. It was 480×200 while it was only ever
+guard). Both apps show it **sharp**, as a rounded strip at the top of every profile
+(Pressd green when there's none) with the avatar riding up over its bottom edge, in
+front of it; web has *Edit banner* on your own. Mobile's strip (`ProfileBanner`,
+`BANNER_ASPECT`) is cropped to 4:1, about 90pt on a phone, so it loses a little of the
+sides of what was framed. It was 480×200 while it was only ever
 blurred — no banner had been uploaded when it changed. Both apps crop to 24:5 before
 uploading (mobile's picker `aspect: [24, 5]`; web's `BannerCropper`, drag and zoom,
 opened whenever the picked picture isn't already 24:5 — `lib/banner.ts`, and
@@ -494,16 +504,22 @@ so what someone frames is what's kept. Sharp means seen as uploaded: avatars wer
 already in that position, and there is no moderation of either. `UserBanner` holds the
 bytes and `PressUser.banner_url` points at them. The endpoints are
 `POST`/`DELETE /users/{id}/banner`, plus an unauthenticated `GET` for the same `<Image>`
-reason as avatars. `banner_url` rides on `GET /users/{id}/profile`, and `ProfileBanner`
-washes `banner_url ?? favourite album ?? top-rated art`. It's set in Settings → Profile,
+reason as avatars. `banner_url` rides on `GET /users/{id}/profile`; an album cover never
+stands in for it. It's set in Settings → Profile,
 which writes the new URL straight into the `['profile', id]` cache. Web sets it in
-Settings (`SettingsDialog.tsx`). Web draws no blurred wash on its profile or Library
-pages — the banner strip, or Pressd green, is the colour.
+Settings (`SettingsDialog.tsx`). Neither app draws a blurred wash on a profile.
+
+**Other people's profiles on mobile** are `app/friend/[id].tsx`, for anyone, friend or
+not: identity comes from `GET /users/{id}/profile` as on web, a failed load says "This
+profile isn't available", and the button is Add, Requested, Accept or Friends.
+`lib/useOpenProfile.ts` is the one way to open a person (your own id goes to the Profile
+tab); every name and avatar goes through it, except `RecommendSheet` rows, where a tap
+selects the recipient, and `RecommendationBanner`, whose whole surface opens the
+recommendation.
 
 **Your own profile on web (October 2026)** is `FriendProfile` at `/u/{your id}` — the
 sidebar's name and the small-screen *Profile* button open it. The header: the banner
-strip, the avatar riding up over its edge, the name with "@handle • bio • Pressing since"
-(the earliest album's month, as mobile works it out) under it, the bio on its own line,
+strip, the avatar riding up over its edge, the name with "@handle" under it, the bio on its own line,
 the album-score distribution (`ScoreHistogram`, no axis) under the avatar, and a stat
 row between two rules in mobile's order: Avg score, Albums, Artists (distinct,
 case-folded), Songs and Friends. When it's you, the friend button becomes **Share profile** (your invite link,
@@ -586,7 +602,10 @@ Creator. Until then an iTunes import stored "Anderson .Paak & Cordae" and a Deez
 import "Anderson .Paak", so *Heavy Is the Crown* was two records with two sets of
 tracks and two threads; and `extra_artists` came from a text box on both rating screens
 that people skipped or filled with song titles, which is gone. A one-off backfill
-corrected the 18 stored copies that needed it (commit `b8c4d08`).
+corrected the 18 stored copies that needed it (commit `b8c4d08`). `GROUP_MEMBERS` holds
+the rare act that belongs to its members rather than being an artist: Silk Sonic is filed
+as Bruno Mars with Anderson .Paak (`expand_groups`, applied in `/search/resolve`), and has
+no page of its own. Add a name only by decision; Clipse and Rae Sremmurd stay artists.
 
 **Genres (`backend/genres.py`, the tagger in `albums.py`).** An import keeps the
 catalog's genre (iTunes `primaryGenreName`, Deezer's first genre) through
@@ -1053,7 +1072,11 @@ for editing a review later, and both paths post into the thread through
    and a rated album you own offers *Compare with Pressd* when someone else has rated
    it. Before this, web's Charts and Trending linked to whichever user's copy ranked —
    friends-only, so they failed for everyone else.
-2. **Compare / taste overlap.** The Compare tab closed, October 2026: web Social's
+2. **Compare / taste overlap.** One record against one person closed, October 2026:
+   web's `/album/:id?view=compare` ([albumCompare.tsx](frontend/src/components/albumCompare.tsx))
+   is mobile's `FriendCompare`, both now open for any user and pairing tracks on
+   `track_id`. On someone's copy of a record you don't own, both apps offer Rate it
+   yourself and Add to Library. The Compare tab closed, October 2026: web Social's
    fourth tab draws `fetchCompare` (`/social/compare`) as
    [CompareCard.tsx](frontend/src/components/CompareCard.tsx) — mobile's card, every
    rater on one 5–10 line, then each score and review; the title opens your own copy.
@@ -1087,7 +1110,7 @@ for editing a review later, and both paths post into the thread through
 **Surfaces that exist on both, where web is the thinner one.**
 
 4. **Profile.** Mobile unifies library + stats + identity in `app/(tabs)/profile.tsx`
-   (849) with `ProfileBanner` (617): a cover-wash header — no green block since October 2026 — with the average ringing the avatar, headline stats, taste chips, and
+   (849) with `ProfileBanner` (617): a banner strip with the avatar overlapping it, the average ringing the avatar, headline stats, taste chips, and
    **My Picks** (`favorite_album/artist/song_id`, `setTopSong`). Web's profile page
    gained My Picks, the banner and Settings in October 2026 (§5), but still splits
    library and stats across `Library.tsx` and `Stats.tsx` tabs and draws no score ring —
@@ -1106,8 +1129,9 @@ for editing a review later, and both paths post into the thread through
    ranks) and *Compare* (`both`: the two song averages side by side, *Where you split*,
    both distributions as curves, and `fetchSimilarArtistComparisons`), drawn from
    [artistCompare.tsx](frontend/src/components/artistCompare.tsx). Mobile's full splits
-   page is an inline "See all" there. In the Pressd scope an album row is one record
-   pooled across copies (`stats._artist_album_rows`, keyed on `_clean_album`, scored as
+   page is an inline "See all" there. Your own scope lists exactly your rated copies, one row each. In the
+   Pressd scope an album row is one record rated by anyone,
+   pooled across copies (`stats._artist_album_rows`, keyed on `_clean_album` of the title alone, scored as
    the plain mean of copies — the community page's own PRESSD AVG), so both clients
    open the record's community page from it, not one owner's copy. Both pages list
    records newest first and nothing else: the discography grids (web's
@@ -1211,9 +1235,9 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   `authorize_friend` (an **accepted** friendship). New endpoints get a guard at the
   point they are written, and anything private on a public row is blanked for non-owners.
 - **The album pages share one kit** (web): `components/albumView.tsx` — `CoverWash`,
-  `RevealRow`, `BangSkip`, `StatFigure`, `PILL`, `SECTION_LABEL` — used by
-  `AlbumDetail` (your or someone's rating) and `CommunityAlbum` (Pressd average,
-  Compare). Same layout on all three: sticky cover column, unboxed numbers, the three
+  `RevealRow`, `BangSkip`, `StatFigure`, `CompareScores`, `PILL`, `PILL_ACTIVE`, `SECTION_LABEL` — used by
+  `AlbumDetail` (your or someone's rating, you vs them) and `CommunityAlbum` (Pressd
+  average, Compare). Same layout on all three: sticky cover column, unboxed numbers, the three
   views as pills in the top-right. A change to one view's look goes through the kit.
   Under the title, Average rating previews the room's top three posts
   (`ThreadPreview`, sort `popular`) — a locked line until you've rated the record, as
@@ -1314,7 +1338,7 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   `cd frontend && npm run typecheck`. Mobile: `cd mobile && npm run typecheck`. Backend:
   import the app (`python -c "import backend.main"`). `cd frontend && npx eslint .`
   currently reports **14 problems — 10 errors and 4 warnings**, and mobile `eslint .`
-  reports **127 errors
+  reports **126 errors
   and 7 warnings** (mostly `react-hooks/refs` on `useRef(...).current`; hold an
   `Animated.Value` in `useState(() => …)` instead) — if your change doesn't add to
   those counts, you haven't regressed them.

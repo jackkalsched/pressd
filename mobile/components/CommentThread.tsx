@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { Send, Trash2 } from 'lucide-react-native'
 import { fetchComments, postComment, deleteComment } from '../lib/api'
+import { useOpenProfile } from '../lib/useOpenProfile'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
 function timeAgo(iso: string | null): string {
@@ -28,6 +29,7 @@ export default function CommentThread({
    *  and stay deletable, since moderating your own page is the owner's job. */
   canComment?: boolean
 }) {
+  const openProfile = useOpenProfile()
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
@@ -92,16 +94,18 @@ export default function CommentThread({
       ) : (
         comments.map((c) => (
           <View key={c.id} style={styles.comment}>
-            {c.author.avatar_url ? (
-              <Image source={{ uri: c.author.avatar_url }} style={styles.avatar} contentFit="cover" />
-            ) : (
-              <View style={[styles.avatar, styles.avatarFallback]}>
-                <Text style={styles.avatarInitial} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={NUM_SCALE_CAP}>{c.author.name[0]?.toUpperCase()}</Text>
-              </View>
-            )}
+            <Pressable onPress={() => openProfile(c.author.id)} accessibilityRole="button" accessibilityLabel={`View ${c.author.name}'s profile`}>
+              {c.author.avatar_url ? (
+                <Image source={{ uri: c.author.avatar_url }} style={styles.avatar} contentFit="cover" />
+              ) : (
+                <View style={[styles.avatar, styles.avatarFallback]}>
+                  <Text style={styles.avatarInitial} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={NUM_SCALE_CAP}>{c.author.name[0]?.toUpperCase()}</Text>
+                </View>
+              )}
+            </Pressable>
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={styles.commentHead}>
-                <Text style={styles.author}>{c.author.name}</Text>
+                <Text style={styles.author} onPress={() => openProfile(c.author.id)}>{c.author.name}</Text>
                 <Text style={styles.time}>{timeAgo(c.created_at)}</Text>
                 {c.can_delete && (
                   <Pressable onPress={() => remove(c.id)} hitSlop={8}>

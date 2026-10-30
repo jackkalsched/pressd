@@ -51,6 +51,7 @@ async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> 
 function transformSong(s: Record<string, unknown>): Song {
   return {
     id: s.id as number,
+    trackId: (s.track_id as number | null) ?? null,
     title: s.title as string,
     trackNumber: s.track_number as number ?? null,
     score: s.score as number | null,
@@ -108,6 +109,13 @@ function transformAlbum(a: Record<string, unknown>): Album {
     reviewAt: a.review_at as string | null ?? null,
     topSongId: (a.top_song_id as number | null) ?? null,
     othersRaterCount: (a.others_rater_count as number | undefined) ?? 0,
+    viewerCopy: (a.viewer_copy as Album['viewerCopy'] | undefined) ?? null,
+    owner: a.owner
+      ? (() => {
+          const o = a.owner as { id: number; name: string; avatar_url: string | null }
+          return { id: o.id, name: o.name, avatarUrl: o.avatar_url ?? undefined }
+        })()
+      : null,
     songs,
   }
 }
@@ -1371,8 +1379,8 @@ export interface Profile {
   id: number
   name: string
   avatar_url: string | null
-  /** An uploaded header picture, washed in place of the favourite album's
-   *  cover; null keeps the cover. */
+  /** An uploaded header picture, drawn sharp as the strip across the top of the
+   *  profile; null shows Pressd green. */
   banner_url: string | null
   bio: string | null
   /** False until `picks_required` albums are rated; the picks row stays hidden. */

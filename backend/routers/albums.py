@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from datetime import date, datetime
 
 from ..database import get_session
-from ..deps import current_user, authorize_view, are_friends
+from ..deps import current_user, authorize_view, are_friends, public_user
 from ..models import Album, Song, SongAudioFeatures, PressUser, Like, Comment
 from ..scoring import (
     compute_a_score, recompute_user_scores, predictions_unlocked, BANG_THRESHOLD,
@@ -17,7 +17,7 @@ from ..scoring import (
 )
 from ..global_rating import invalidate_cache as invalidate_global_ratings
 from ..genres import GENRES, canonical_genre, canonical_subgenre, genre_qualifier
-from ..trackkeys import _clean_album, artist_key, match_title, same_album
+from ..trackkeys import _clean_album, artist_key, match_title, same_album, subject_key_album
 from ..carryover import carryover_for_album
 from ..credits import album_artists
 from ..threads import sync_review_post
@@ -103,6 +103,26 @@ def _for_viewer(row: dict, viewer_id: int) -> dict:
     if row.get("user_id") == viewer_id:
         return row
     return {**row, "recommendation_note": None}
+
+
+def _viewer_copy(session: Session, viewer_id: int, album: Album) -> dict | None:
+    """The viewer's own copy of the record behind someone else's album, in any
+    edition, so a page showing another person's rating knows what to offer:
+    their copy or a comparison if they've rated it, the rating flow if it's
+    queued, and only otherwise a way to add it. Decided here because a client
+    can't: `GET /albums/` carries exact-name filters, which miss the other
+    edition. If they somehow hold two editions the most finished one answers."""
+    if album.user_id == viewer_id:
+        return None
+    key = album.subject_key or subject_key_album(album.artist or "", album.album_name or "")
+    copies = session.exec(
+        select(Album).where(Album.user_id == viewer_id, Album.subject_key == key)
+    ).all()
+    if not copies:
+        return None
+    rank = {"rated": 2, "listening": 1}
+    best = max(copies, key=lambda a: (rank.get(a.status, 0), a.id))
+    return {"id": best.id, "status": best.status, "score": best.score}
 
 
 def _hide_predictions(row: dict) -> dict:
@@ -191,6 +211,10 @@ def get_album(
     return {
         **row,
         "others_rater_count": others,
+        "viewer_copy": _viewer_copy(session, user.id, album),
+        # Whose rating this is, for a copy opened from anywhere: profiles are
+        # public, so the owner needn't be anyone in the viewer's friends list.
+        "owner": public_user(owner) if (owner := session.get(PressUser, album.user_id)) else None,
         "songs": songs,
     }
 

@@ -112,6 +112,30 @@ def named_in(credit: str, names: list[str]) -> list[str]:
     return [n for n in names if (k := artist_key(n).replace(" ", "")) and k in c]
 
 
+# A duo credited as its own act alongside its members, whose records belong to
+# the people in it. Catalogs list Silk Sonic beside Bruno Mars and Anderson .Paak
+# (or alone, on MusicBrainz), which gave it an artist page of its own and split
+# *An Evening With Silk Sonic* into two records with separate tracks. Deliberately
+# not a rule about bands: most groups (Clipse, Rae Sremmurd) are artists in their
+# own right. Add a name here only by decision, keyed by `artist_key`, first member
+# as the primary.
+GROUP_MEMBERS = {"silk sonic": ("Bruno Mars", "Anderson .Paak")}
+
+
+def expand_groups(primary: str, extras: list[str]) -> tuple[str, list[str]]:
+    """The credit with any `GROUP_MEMBERS` act replaced by its members."""
+    names: list[str] = []
+    for n in [primary, *extras]:
+        names.extend(GROUP_MEMBERS.get(artist_key(n), (n,)))
+    return names[0], dedupe_extras(names[0], names[1:])
+
+
+def primary_act(name: str) -> str:
+    """Who a credit is filed under, for a song or a search row naming a group."""
+    members = GROUP_MEMBERS.get(artist_key(name))
+    return members[0] if members else name
+
+
 _JOINER = re.compile(r"\s*(?:,|&)\s*")
 
 

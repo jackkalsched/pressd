@@ -486,10 +486,14 @@ export default function ArtistPage() {
         )
         return (
           <>
-            <p className={`${SECTION_LABEL} mb-2`}>ALBUMS</p>
-            <ol className="m-0 -mx-4 mb-8 list-none p-0">
-              {fullAlbums.map((a, i) => <RevealRow key={a.id} index={i}><AlbumCard album={a} /></RevealRow>)}
-            </ol>
+            {fullAlbums.length > 0 && (
+              <>
+                <p className={`${SECTION_LABEL} mb-2`}>ALBUMS</p>
+                <ol className="m-0 -mx-4 mb-8 list-none p-0">
+                  {fullAlbums.map((a, i) => <RevealRow key={a.id} index={i}><AlbumCard album={a} /></RevealRow>)}
+                </ol>
+              </>
+            )}
             {eps.length > 0 && (
               <>
                 <p className={`${SECTION_LABEL} mb-2`}>EPS</p>

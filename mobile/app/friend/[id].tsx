@@ -1,10 +1,14 @@
-// Friend profile — a read-only mirror of your own Profile tab: the same green
-// banner (identity, average ring, headline stats, taste chips), the same
+// Someone's profile, friend or not — a read-only mirror of your own Profile tab:
+// the same banner (identity, average ring, headline stats, taste chips), the same
 // compact scroll header, and the same Library / Stats / Ratings switcher. The
-// banner's action slot carries the add/remove-friend control instead of sign out.
+// banner's action slot carries the friend button instead of settings.
+//
+// Profiles are public (backend/deps.py, authorize_view), so who this is comes from
+// the profile endpoint. Web's FriendProfile.tsx does the same.
 import { useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Pressable,
   StyleSheet,
@@ -14,14 +18,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, ChevronDown, Plus } from 'lucide-react-native'
+import { ArrowLeft, Check, ChevronDown, Clock, UserPlus } from 'lucide-react-native'
 import {
-  fetchUsers,
   fetchFriends,
+  fetchFriendRequests,
   fetchSummary,
   fetchAlbums,
   fetchScoreRange,
   addFriend,
+  acceptFriendRequest,
   removeFriend,
   fetchArtistStats,
   fetchScatterData,
@@ -36,7 +41,7 @@ import {
   ALBUM_METRICS, ARTIST_METRICS, QUALIFIED, cmpVals, defaultMetricFor,
   type ArtistRank, type RankDir, type RankMode,
 } from '../../lib/rankings'
-import ProfileBanner, { topRatedArt } from '../../components/ProfileBanner'
+import ProfileBanner from '../../components/ProfileBanner'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 
@@ -94,7 +99,6 @@ export default function FriendProfile() {
     setRankDir('desc')
   }
 
-  const { data: allUsers = [] } = useQuery({ queryKey: ['users'], queryFn: fetchUsers })
   const { data: artistStats = [] } = useQuery({
     queryKey: ['artist-stats', fid],
     queryFn: () => fetchArtistStats(fid),
@@ -134,13 +138,23 @@ export default function FriendProfile() {
   })
   // Their picks — the same endpoint your own page reads, so the row renders
   // identically here. No onPickPress: someone else's cards aren't editable.
-  const { data: profile } = useProfile(Number.isFinite(fid) ? fid : undefined)
+  const { data: profile, isError: profileError } = useProfile(Number.isFinite(fid) ? fid : undefined)
   const badgeMu = scoreRange?.mu ?? 7.0
   const badgeSd = scoreRange?.sd ?? 1.0
 
-  const friendFromList = myFriends.find((f) => f.id === fid)
-  const person = friendFromList ?? allUsers.find((u) => u.id === fid)
-  const isFriend = !!friendFromList
+  const person = profile
+    ? { name: profile.name, avatarUrl: profile.avatar_url, bio: profile.bio }
+    : null
+  const isSelf = user?.id === fid
+  const isFriend = myFriends.some((f) => f.id === fid)
+  const { data: requests } = useQuery({
+    queryKey: ['friend-requests', user?.id],
+    queryFn: () => fetchFriendRequests(user!.id),
+    enabled: !!user && !isSelf && !isFriend,
+  })
+  const requested = !!requests?.outgoing.some((u) => u.id === fid)
+  const theyAsked = !!requests?.incoming.some((u) => u.id === fid)
+  const [friendBusy, setFriendBusy] = useState(false)
 
   // The header's small distribution: one bar per whole point, over albums.
   // Different artists rated — range, beside the volume of Albums and Songs.
@@ -158,27 +172,42 @@ export default function FriendProfile() {
     () => topTags(rated.flatMap((a) => [a.subGenre1, a.subGenre2, a.subGenre3]), 3),
     [rated],
   )
-  const since = useMemo(() => {
-    const dates = rated.map((a) => a.dateAdded ?? a.dateRated).filter(Boolean) as string[]
-    if (dates.length === 0) return null
-    const min = dates.reduce((a, b) => (a < b ? a : b))
-    const d = new Date(min.length <= 10 ? `${min}T00:00:00` : min)
-    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  }, [rated])
-
   // Same scroll treatment as Profile: the banner scrolls away and a compact
   // green bar keeping just the name fades in.
   const scrollY = useRef(new Animated.Value(0)).current
   const compactOpacity = scrollY.interpolate({ inputRange: [70, 130], outputRange: [0, 1], extrapolate: 'clamp' })
   const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })
 
-  async function toggleFriend() {
-    if (!user) return
-    if (isFriend) await removeFriend(user.id, fid)
-    else await addFriend(user.id, fid)
-    queryClient.invalidateQueries({ queryKey: ['friends'] })
-    queryClient.invalidateQueries({ queryKey: ['feed'] })
-    queryClient.invalidateQueries({ queryKey: ['user-search'] })
+  async function changeFriendship(change: () => Promise<unknown>) {
+    if (friendBusy) return
+    setFriendBusy(true)
+    try {
+      await change()
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['friends'] }),
+        queryClient.invalidateQueries({ queryKey: ['friend-requests'] }),
+        queryClient.invalidateQueries({ queryKey: ['feed'] }),
+        queryClient.invalidateQueries({ queryKey: ['user-search'] }),
+      ])
+    } catch {
+      Alert.alert('That didn\u2019t go through', 'Check your connection and try again.')
+    } finally {
+      setFriendBusy(false)
+    }
+  }
+
+  function onFriendButton() {
+    if (!user || requested) return
+    if (isFriend) {
+      Alert.alert(`Remove ${person?.name ?? 'this person'} as a friend?`, undefined, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => changeFriendship(() => removeFriend(user.id, fid)) },
+      ])
+    } else if (theyAsked) {
+      changeFriendship(() => acceptFriendRequest(user.id, fid))
+    } else {
+      changeFriendship(() => addFriend(user.id, fid))
+    }
   }
 
   function openArtist(name: string) {
@@ -231,11 +260,20 @@ export default function FriendProfile() {
   if (!person) {
     return (
       <View style={[styles.screen, styles.center]}>
-        <ActivityIndicator color={colors.green} />
+        <View style={[styles.backWrap, { top: insets.top + 6 }]}>
+          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+            <ArrowLeft size={18} color={colors.ink} />
+            <Text style={styles.backText}>Back</Text>
+          </Pressable>
+        </View>
+        {profileError || !Number.isFinite(fid) ? (
+          <Text style={styles.empty}>This profile isn&rsquo;t available.</Text>
+        ) : (
+          <ActivityIndicator color={colors.green} />
+        )}
       </View>
     )
   }
-
 
   return (
     <View style={styles.screen}>
@@ -247,7 +285,7 @@ export default function FriendProfile() {
         <Text style={styles.compactTitle} numberOfLines={1}>{person.name}</Text>
       </Animated.View>
 
-      {/* Back sits above the header's wash. */}
+      {/* Back sits above the header, on the page rather than on the picture. */}
       <View style={[styles.backWrap, { top: insets.top + 6 }]}>
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
           <ArrowLeft size={18} color={colors.ink} />
@@ -272,7 +310,6 @@ export default function FriendProfile() {
             <ProfileBanner
               name={person.name}
               avatarUrl={person.avatarUrl}
-              since={since}
               avg={summary?.avg_album_score ?? null}
               stats={[
                 { value: String(summary?.total_albums_rated ?? rated.length), label: 'ALBUMS' },
@@ -289,21 +326,30 @@ export default function FriendProfile() {
               bio={person.bio}
               profile={profile}
               picksHeading={`${possessive(person.name)} picks`}
-              washArtUrl={topRatedArt(rated)}
               scores={albumScores}
               action={
-                <Pressable
-                  style={[styles.friendBtn, isFriend && styles.friendBtnOn]}
-                  onPress={toggleFriend}
-                  hitSlop={10}
-                  accessibilityLabel={isFriend ? 'Remove friend' : 'Add friend'}
-                >
-                  {isFriend ? (
-                    <Check size={18} color={colors.green} strokeWidth={2.6} />
-                  ) : (
-                    <Plus size={18} color="#ffffff" strokeWidth={2.6} />
-                  )}
-                </Pressable>
+                isSelf ? undefined : (
+                  // Adding someone is what this page should invite, so it gets
+                  // the loud green; friends or pending is the settled, quiet state.
+                  <Pressable
+                    style={[styles.friendBtn, (isFriend || requested) && styles.friendBtnOn, friendBusy && { opacity: 0.6 }]}
+                    onPress={onFriendButton}
+                    disabled={friendBusy || requested}
+                    hitSlop={8}
+                    accessibilityLabel={isFriend ? 'Friends. Remove friend' : requested ? 'Friend request sent' : theyAsked ? 'Accept friend request' : 'Add friend'}
+                  >
+                    {isFriend ? (
+                      <Check size={14} color={colors.green} strokeWidth={2.6} />
+                    ) : requested ? (
+                      <Clock size={14} color={colors.green} strokeWidth={2.4} />
+                    ) : theyAsked ? null : (
+                      <UserPlus size={14} color="#ffffff" strokeWidth={2.4} />
+                    )}
+                    <Text style={[styles.friendBtnText, (isFriend || requested) && styles.friendBtnTextOn]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+                      {isFriend ? 'Friends' : requested ? 'Requested' : theyAsked ? 'Accept' : 'Add'}
+                    </Text>
+                  </Pressable>
+                )
               }
             />
 
@@ -452,23 +498,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
   },
-  compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: colors.ink, letterSpacing: 0.5 },
+  // Centred: flush left, it ran underneath the Back button that stays pinned there.
+  compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: colors.ink, letterSpacing: 0.5, textAlign: 'center', paddingHorizontal: 64 },
 
   backWrap: { position: 'absolute', left: spacing.lg, zIndex: 30 },
-  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  // Backed in the page's cream, which is invisible until the banner scrolls under
+  // it; dark on a dark picture it would otherwise disappear.
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: -10,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bg,
+  },
   backText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.ink },
 
-  // Icon-only status control: a check when you're already friends, a plus to
-  // add. Circular so it reads as a single toggle rather than a labelled button.
+  // Labelled, because four states (add, requested, accept, friends) can't be told
+  // apart from an icon. The same words as Find friends' rows.
   friendBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radii.pill,
     backgroundColor: colors.green,
   },
   friendBtnOn: { backgroundColor: colors.greenSoft },
+  friendBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: '#ffffff' },
+  friendBtnTextOn: { color: colors.green },
 
   bio: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSecondary, lineHeight: 19, marginTop: spacing.md },
 

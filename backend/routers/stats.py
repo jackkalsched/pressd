@@ -367,19 +367,25 @@ def _artist_genres(albums: list[Album]) -> tuple[str | None, list[str]]:
     return primary, subs
 
 
-def _artist_album_rows(albums: list[Album], album_ext, song_counts: dict[int, int]) -> list[dict]:
-    """One row per record, not per copy.
+def _artist_album_rows(albums: list[Album], album_ext, song_counts: dict[int, int], pooled: bool) -> list[dict]:
+    """The artist page's list, from the scope's rated copies of this artist.
 
-    A single-user scope has one copy of each album, so grouping is a no-op. A
-    global scope holds every user's copy, and listing them raw would repeat the
-    same album once per rater with a different score on each line. Collapsed on
-    the same-record key and averaged, so the row reads as the userbase's score.
-    The id kept is a real copy's — whichever sorts first — so the row still
-    opens something.
+    One user's list is one row per copy they finished, so a standard and a
+    deluxe they rated separately both show, each with its own score. The pooled
+    list is one row per record: listing copies raw would repeat an album once
+    per rater, so they collapse and average into the userbase's score. The id
+    kept is a real copy's, so the row still opens something.
+
+    Pooled copies group on the title alone. Every row here already credits the
+    page's artist, and copies disagree about who is primary: *An Evening With
+    Silk Sonic* is stored under both Silk Sonic and Bruno Mars. The raw title is
+    the fallback because `_same_record` is empty for "÷" and "=", which would
+    otherwise merge into one row.
     """
-    groups: dict[str, list[Album]] = defaultdict(list)
+    groups: dict[object, list[Album]] = defaultdict(list)
     for a in albums:
-        groups[f'{_same_record(a.album_name)}||{_same_record(a.artist)}'].append(a)
+        key = (_same_record(a.album_name) or a.album_name.strip().lower()) if pooled else a.id
+        groups[key].append(a)
 
     rows: list[dict] = []
     for copies in groups.values():
@@ -393,14 +399,18 @@ def _artist_album_rows(albums: list[Album], album_ext, song_counts: dict[int, in
             "score": round(sum(c.score for c in scored) / len(scored), 4) if scored else None,
             "album_art_url": next((c.album_art_url for c in copies if c.album_art_url), None),
             "avg_external": round(sum(ext_vals) / len(ext_vals), 4) if ext_vals else None,
-            "is_ep": song_counts.get(ref.id, 0) <= 6,
+            # The longest copy decides, as in global_rating, so a record doesn't
+            # change shelf with whichever copy happens to score highest.
+            "is_ep": max(song_counts.get(c.id, 0) for c in copies) <= 6,
             "status": ref.status,
             "rater_count": len(scored),
         })
     return sorted(rows, key=lambda r: r["score"] or 0, reverse=True)
 
 
-def _artist_payload(session: Session, artist_name: str, all_albums_any_status: list[Album]) -> dict:
+def _artist_payload(
+    session: Session, artist_name: str, all_albums_any_status: list[Album], pooled: bool = False
+) -> dict:
     """Everything the artist page shows, computed over whatever scope it's given.
 
     The whole pipeline below — the per-artist league table, the empirical-Bayes
@@ -672,11 +682,7 @@ def _artist_payload(session: Session, artist_name: str, all_albums_any_status: l
         "genre_popularity_rank": genre_rank,
         "genre_popularity_of": genre_rank_of,
         "popularity_genre": _this_genre,
-        "albums": _artist_album_rows(
-            [a for a in all_artist_albums if a.status == "rated" or len(_album_scores.get(a.id, [])) <= 6],
-            album_ext,
-            _song_counts,
-        ),
+        "albums": _artist_album_rows(artist_albums, album_ext, _song_counts, pooled),
         "all_artists": scatter_rows,
     }
 
@@ -925,7 +931,7 @@ def artist_detail(
         return session.exec(select(Album)).all()
 
     if population == "global":
-        g = _artist_payload(session, artist_name, scope_global())
+        g = _artist_payload(session, artist_name, scope_global(), pooled=True)
         g["catalog_art"] = _artist_catalog_art(session, artist_name)
         return g
 
@@ -934,7 +940,7 @@ def artist_detail(
     # Every mode's header reads this, so it isn't gated on population.
     payload["catalog_art"] = _artist_catalog_art(session, artist_name)
     if population == "both":
-        g = _artist_payload(session, artist_name, scope_global())
+        g = _artist_payload(session, artist_name, scope_global(), pooled=True)
         # Only what the comparison actually draws — the full global payload
         # would double the response for albums and song_scores the compare view
         # never reads.

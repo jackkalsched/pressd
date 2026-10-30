@@ -36,6 +36,7 @@ import { MIN_RATED_ALBUMS, songScoreColor, type Album } from '@pressd/shared/typ
 import AnchoredMenu from '../../components/AnchoredMenu'
 import RecommendationBanner from '../../components/RecommendationBanner'
 import PassItOnCell from '../../components/PassItOnCell'
+import { useOpenProfile } from '../../lib/useOpenProfile'
 import SpotlightCard from '../../components/SpotlightCard'
 import RecommendSheet from '../../components/RecommendSheet'
 import HeatedDiscussions from '../../components/HeatedDiscussions'
@@ -107,6 +108,7 @@ function SectionHead({ label, meta, onMetaPress, metaRef }: {
 
 export default function ForYou() {
   const router = useRouter()
+  const openProfile = useOpenProfile()
   const queryClient = useQueryClient()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
@@ -412,7 +414,7 @@ export default function ForYou() {
         {((passItOn && passKey !== passSent) || continueAlbum) && (
           <View style={styles.spotlights}>
             {passItOn && passKey !== passSent && (
-              <PassItOnCell suggestion={passItOn} onPress={() => setPassSheetOpen(true)} />
+              <PassItOnCell suggestion={passItOn} onPress={() => setPassSheetOpen(true)} onOpenFriend={openProfile} />
             )}
             {continueAlbum && (
               <SpotlightCard
@@ -501,7 +503,7 @@ export default function ForYou() {
                   <Text style={styles.rowSub} numberOfLines={1}>{suggestion.artist}</Text>
                   <Text style={styles.suggestWhy} numberOfLines={1}>
                     {suggestion.recommendedByName
-                      ? `Recommended by ${suggestion.recommendedByName}`
+                      ? <>Recommended by <Text onPress={suggestion.recommendedBy != null ? () => openProfile(suggestion.recommendedBy!) : undefined}>{suggestion.recommendedByName}</Text></>
                       : suggestion.predictedScore != null
                       ? `We think you'll rate this about ${suggestion.predictedScore.toFixed(2)}`
                       : 'Next up in your queue'}
@@ -588,6 +590,7 @@ export default function ForYou() {
                   review={rv}
                   first={i === 0}
                   onOpen={() => openAlbum(rv.album_id)}
+                  onOpenUser={openProfile}
                   onLike={() => likeReview(rv.album_id)}
                 />
               ))
@@ -635,15 +638,17 @@ function NewReleaseCard({ release, onOpen }: { release: NewRelease; onOpen: () =
   )
 }
 
-function ReviewCell({ review, first, onOpen, onLike }: { review: TopReview; first: boolean; onOpen: () => void; onLike: () => void }) {
+function ReviewCell({ review, first, onOpen, onOpenUser, onLike }: { review: TopReview; first: boolean; onOpen: () => void; onOpenUser: (id: number) => void; onLike: () => void }) {
   return (
     <View style={[styles.review, !first && styles.hairline]}>
       <Pressable onPress={onOpen}>
         {/* Reviewer identity leads, bigger than the album */}
         <View style={styles.reviewHead}>
-          <Cover uri={review.author.avatar_url} seed={review.author.name} size={38} radius={19} />
+          <Pressable onPress={() => onOpenUser(review.author.id)} accessibilityRole="button" accessibilityLabel={`View ${review.author.name}'s profile`}>
+            <Cover uri={review.author.avatar_url} seed={review.author.name} size={38} radius={19} />
+          </Pressable>
           <View style={styles.mediaText}>
-            <Text style={styles.reviewAuthor} numberOfLines={1}>{review.author.name}</Text>
+            <Text style={styles.reviewAuthor} numberOfLines={1} onPress={() => onOpenUser(review.author.id)}>{review.author.name}</Text>
             <Text style={styles.reviewOn} numberOfLines={1}>reviewed {review.album_name}</Text>
           </View>
           {review.score != null && (

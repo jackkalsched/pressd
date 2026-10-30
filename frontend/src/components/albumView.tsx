@@ -15,6 +15,10 @@ export const DANGER = '#b91c1c'
 export const PILL =
   'inline-flex items-center gap-1.5 rounded-full border border-[#e2dbd0] bg-white/80 px-3.5 py-1.5 text-[13px] font-semibold text-[#2d6a4f] hover:border-[#2d6a4f] hover:bg-white disabled:opacity-60'
 
+/** The view you're on, among the top bar's controls. */
+export const PILL_ACTIVE =
+  'inline-flex items-center gap-1.5 rounded-full border border-[#2d6a4f] bg-[#2d6a4f] px-3.5 py-1.5 text-[13px] font-semibold text-white'
+
 /** A small caps label over a group of numbers or rows. */
 export const SECTION_LABEL = 'm-0 text-[11px] font-bold tracking-[0.16em] text-[#a8998a]'
 
@@ -84,6 +88,50 @@ export function BangSkip({ score }: { score: number | null }) {
     return <span className="text-[10px] font-bold tracking-[0.08em]" style={{ color: songScoreColor(score) }}>SKIP</span>
   }
   return null
+}
+
+export interface CompareSide {
+  label: string
+  score: number
+  color: string
+  /** Its mark on the rail. */
+  tick: string
+}
+
+/** Two album scores side by side, over one 5–10 rail: where almost every album
+ *  score lives, so the gap is visible. */
+export function CompareScores({ left, right }: { left: CompareSide; right: CompareSide }) {
+  const pos = (v: number) => ((Math.max(5, Math.min(10, v)) - 5) / 5) * 100
+  return (
+    <>
+      <div className="flex items-stretch">
+        {[left, right].map((side, i) => (
+          <div key={side.label} className={`min-w-0 flex-1 ${i === 1 ? 'border-l border-[#e2dbd0] pl-8' : ''}`}>
+            <p className="m-0 truncate text-[11px] font-bold tracking-[0.16em]" style={{ color: side.color }}>{side.label}</p>
+            <p className="font-display m-0 mt-1 text-[56px] font-bold leading-none tabular-nums" style={{ color: side.color }}>
+              {side.score.toFixed(2)}
+            </p>
+          </div>
+        ))}
+      </div>
+      <div className="relative mt-6 h-2 rounded-full bg-[#2d6a4f]/15">
+        <div
+          className="grow-x absolute inset-y-0 left-0 rounded-full bg-[#2d6a4f]/45"
+          style={{ width: `${Math.max(pos(left.score), pos(right.score))}%` }}
+        />
+        {[left, right].map(side => (
+          <span
+            key={side.label}
+            className="absolute top-1/2 h-4 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{ left: `${pos(side.score)}%`, background: side.tick }}
+          />
+        ))}
+      </div>
+      <div className="mt-1.5 flex justify-between text-[11px] text-[#8a7f72] tabular-nums">
+        {[5, 6, 7, 8, 9, 10].map((n) => <span key={n}>{n}</span>)}
+      </div>
+    </>
+  )
 }
 
 /** One number in a row of them — the factors, the song stats. */

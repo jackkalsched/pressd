@@ -38,11 +38,19 @@ whole argument on its own. The rule:
      someone's library.
   2. When either duration is missing, the source must be a single or EP
      (<= CARRYOVER_MAX_SOURCE_TRACKS songs, counted over the whole source
-     album). A two-track single exists to carry one recording, whereas two
-     full albums by one artist are exactly where generic titles collide.
+     album), or the two records must overlap (rule 4). A two-track single
+     exists to carry one recording, whereas two full albums by one artist are
+     exactly where generic titles collide.
   3. Titles that name a position on a record rather than a song — intro, outro,
-     interlude, skit — are refused unless duration positively confirms them,
-     whatever the source. These are the titles that repeat across a catalogue.
+     interlude, skit — are refused unless duration positively confirms them or
+     the two records overlap. These are the titles that repeat across a
+     catalogue.
+  4. Two records overlap when they share at least MIN_SHARED_TRACKS tracks,
+     counted over all their songs, scored or not. A shared title can be a
+     coincidence; several on one pair of records cannot, so those are editions
+     of one another and no duration is needed. Positional titles and pairs whose
+     durations disagree don't count towards it. It never overrides durations
+     that are known to disagree (rule 1).
 
 Until October 2026 rule 2 applied to every match, durations or not, and it was
 also miscounted — the window counted the source's *scored* songs rather than
@@ -51,6 +59,16 @@ candidate matches came from full albums, 12 of them *The Life of a Showgirl*'s
 songs already rated on *The Encore*, and the 3 *Intro* matches among them are
 exactly the false positives above, which rule 3 still refuses. Agreeing
 durations are what separate the two, so they now open the full-album case.
+
+Rule 4 came later that month. Songs imported from the old spreadsheet have no
+duration at all, so a deluxe of a record rated that way could never match: all
+24 songs of *CALL ME IF YOU GET LOST: The Estate Sale* share a track with the
+24-track copy of *CALL ME IF YOU GET LOST* the owner had rated, and rule 2
+refused every one. Overlap is measured between the two records rather than read
+from their names because it also covers a differently titled edition. Measured
+then, over every pair of one user's records: editions share 4, 12 and 24 tracks,
+and every other pair at most 2 (*KING* on VULTURES 1 and BULLY, *Pull Up* on
+International Artist and Hoodie SZN, and the J. Cole *Intro*s, share 1 or 0).
 
 Only this user's own scores are ever read. When several records hold the same
 recording, the one most recently rated (or, for one still being listened to,
@@ -75,6 +93,10 @@ CARRYOVER_MAX_SOURCE_TRACKS = EP_MAX_TRACKS
 
 # Tighter than _link_tracks' 10s: see the module docstring.
 DURATION_TOLERANCE_MS = 5_000
+
+# How many tracks two records must share to count as editions of one another.
+# See rule 4 in the module docstring for the gap in the data this sits in.
+MIN_SHARED_TRACKS = 3
 
 # Titles that name a slot on a record rather than a song, and so repeat across
 # an artist's catalogue. Matched after normalising, so "Intro." and "intro"
@@ -128,34 +150,42 @@ def carryover_for_album(session: Session, album_id: int, user_id: int) -> dict[i
                 WHERE a.user_id = :uid
                   AND a.id <> :aid
             )
-            SELECT tgt.id, tgt.title, tgt.duration_ms,
+            SELECT tgt.id, tgt.title, tgt.duration_ms, tgt.score,
                    s.score, sa.id, sa.album_name, sa.album_art_url,
-                   s.duration_ms, sa.n_tracks
+                   s.duration_ms, sa.n_tracks, tgt.track_id
             FROM song tgt
             JOIN song s ON s.track_id = tgt.track_id
             JOIN src_album sa ON sa.id = s.album_id
             WHERE tgt.album_id = :aid
-              AND tgt.score IS NULL
               AND tgt.track_id IS NOT NULL
-              AND s.score IS NOT NULL
             ORDER BY sa.recency DESC NULLS LAST, sa.id DESC
         """), {"uid": user_id, "aid": album_id}).fetchall()
     except Exception as e:  # pragma: no cover - a prefill is never worth a 500
         print(f"[carryover] album {album_id} user {user_id} failed: {e}")
         return {}
 
+    # Rule 4, so over every shared song: a song already scored on either record
+    # is still evidence that the two records are editions of one another.
+    shared: dict[int, set[int]] = {}
+    for (_, t_title, t_dur, _, _, src_album_id, _, _, s_dur, _, track_id) in rows:
+        if not is_positional_title(t_title) and _durations_agree(t_dur, s_dur) is not False:
+            shared.setdefault(src_album_id, set()).add(track_id)
+
     out: dict[int, dict] = {}
-    for (song_id, t_title, t_dur, score, src_album_id, src_album, src_art,
-         s_dur, n_tracks) in rows:
+    for (song_id, t_title, t_dur, t_score, score, src_album_id, src_album, src_art,
+         s_dur, n_tracks, _) in rows:
+        if t_score is not None or score is None:
+            continue
         # Ordered most recent first, so the first acceptable hit for a song wins.
         if song_id in out:
             continue
         agree = _durations_agree(t_dur, s_dur)
         if agree is False:
             continue                                    # rule 1
-        if agree is None and n_tracks > CARRYOVER_MAX_SOURCE_TRACKS:
+        overlap = len(shared.get(src_album_id, ())) >= MIN_SHARED_TRACKS
+        if agree is None and n_tracks > CARRYOVER_MAX_SOURCE_TRACKS and not overlap:
             continue                                    # rule 2
-        if is_positional_title(t_title) and agree is not True:
+        if is_positional_title(t_title) and agree is not True and not overlap:
             continue                                    # rule 3
         out[song_id] = {
             "score": float(score),

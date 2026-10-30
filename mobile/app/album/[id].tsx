@@ -25,7 +25,6 @@ import Svg, { Text as SvgText } from 'react-native-svg'
 import { ArrowLeft, Check, ChevronRight, Heart, Pencil, Share2, Star, Trash2 } from 'lucide-react-native'
 import {
   fetchAlbum,
-  fetchAlbums,
   fetchFriends,
   fetchCommunityAlbum,
   fetchCommunityAlbumByName,
@@ -40,8 +39,9 @@ import {
   type CommunityTrack,
 } from '../../lib/api'
 import { songScoreColor, avatarColor, EP_MAX_TRACKS, type Album, type Song } from '@pressd/shared/types'
-import { normalizeTrackTitle } from '@pressd/shared/albumSearch'
 import { useAuth } from '../../lib/auth'
+import { useProfile } from '../../lib/picks'
+import { useOpenProfile } from '../../lib/useOpenProfile'
 import CommentThread from '../../components/CommentThread'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
 import BangSkip from '../../components/BangSkip'
@@ -255,22 +255,23 @@ export default function AlbumDetail() {
     enabled: !!user,
   })
 
-  // Viewing someone else's copy: look up your own rating of the same album so
-  // the two can be shown side by side. The list endpoint omits songs, so the
-  // match is resolved to a full album fetch for per-track scores.
-  const notMine = !!user && !!album && album.userId !== user.id
-  const { data: myMatches = [] } = useQuery({
-    queryKey: ['albums', 'rated', user?.id, album?.albumName, album?.artist],
-    queryFn: () =>
-      fetchAlbums({ status: 'rated', albumName: album!.albumName, artist: album!.artist, userId: user!.id }),
-    enabled: notMine,
-  })
-  const myCopyId = myMatches[0]?.id
+  // Viewing someone else's copy: your own rating of the record, in any edition,
+  // so the two can be shown side by side. The server names the copy; it's fetched
+  // whole for the per-track scores.
+  const myCopyId = album?.viewerCopy?.status === 'rated' ? album.viewerCopy.id : undefined
   const { data: myAlbum } = useQuery({
     queryKey: ['album', myCopyId],
     queryFn: () => fetchAlbum(myCopyId!),
     enabled: !!myCopyId,
   })
+
+  const openProfile = useOpenProfile()
+  // Whoever sent you this record, friend or not any more, for their face on the
+  // recommendation card. Your own copies only: a sender on someone else's copy
+  // is their business.
+  const { data: recSender } = useProfile(
+    album?.recommendedBy != null && album.userId === user?.id ? album.recommendedBy : undefined,
+  )
 
   // Only your own copy can be deleted — a friend's rating isn't yours to remove.
   // Declared above every early return: the community branch bails before this
@@ -286,6 +287,8 @@ export default function AlbumDetail() {
   // Above the early returns for the same reason useDeleteAlbum is.
   const [sharing, setSharing] = useState(false)
   const [recommending, setRecommending] = useState(false)
+  const [copying, setCopying] = useState<'listening' | 'to_listen' | null>(null)
+  const [copyError, setCopyError] = useState<string | null>(null)
   // Held here rather than inside ReviewSection: the button that opens the
   // composer now sits beside the rating CTA, well above that section.
   const [reviewEditing, setReviewEditing] = useState(false)
@@ -350,8 +353,9 @@ export default function AlbumDetail() {
       </SafeAreaView>
     )
   }
-  // Personal copies are friends-only; without this an unauthorized album left
-  // the screen spinning forever.
+  // Profiles are public, so any copy can be read; what fails here is one that's
+  // gone or a request that didn't land. Without this it left the screen spinning
+  // forever.
   if (isError || !album) {
     return <LoadFailed onBack={leave} />
   }
@@ -369,19 +373,16 @@ export default function AlbumDetail() {
   // Takes over the screen the way it does after a rating, so the card is the
   // whole surface and the Share control sits directly beneath it.
   if (sharing) return <ShareCard album={album} onClose={() => setSharing(false)} />
-  const owner = !isMine && album.userId != null ? friends.find((f) => f.id === album.userId) ?? null : null
+  // Off the album itself rather than the friends list: profiles are public, so
+  // the owner can be anyone.
+  const owner = !isMine ? album.owner : null
+  const isFriendsCopy = !isMine && friends.some((f) => f.id === album.userId)
   const ownerColor = owner ? avatarColor(owner.name) : colors.green
 
   // The whole recommended presentation hangs off this one condition: it's your
   // copy and somebody sent it. On a friend's copy the sender is their business,
   // not yours, so the page stays ordinary.
   const wasRecommended = isMine && !!album.recommendedByName
-  // Matched by id, not name — two friends can share a first name, and the id is
-  // what the sender was recorded as. Falls back to initials when they aren't in
-  // your friends list any more.
-  const recSender = album.recommendedBy != null
-    ? friends.find((f) => f.id === album.recommendedBy) ?? null
-    : null
   const recWhen = album.recommendedAt ? relativeDay(album.recommendedAt) : null
 
   // Compare is offered wherever a comparison exists to make, so the control is
@@ -451,6 +452,7 @@ export default function AlbumDetail() {
           router.push({ pathname: '/album/[id]', params: { id: String(albumId), community: '1' } })
         }
         onOpenArtist={openArtist}
+        showComments={isFriendsCopy}
       />
     )
   }
@@ -473,9 +475,9 @@ export default function AlbumDetail() {
           <ArrowLeft size={18} color={colors.inkSecondary} />
           <Text style={styles.backText}>Back</Text>
         </Pressable>
-        {/* Whose rating this is — only when viewing a friend's copy. */}
+        {/* Whose rating this is — only on someone else's copy. */}
         {owner && (
-          <View style={styles.ownerTag}>
+          <Pressable style={styles.ownerTag} onPress={() => openProfile(owner.id)} hitSlop={8} accessibilityRole="link">
             <View style={[styles.ownerPfp, { backgroundColor: ownerColor }]}>
               {owner.avatarUrl ? (
                 <Image source={{ uri: owner.avatarUrl }} style={styles.ownerPfpImg} contentFit="cover" />
@@ -486,7 +488,7 @@ export default function AlbumDetail() {
             <Text style={[styles.ownerName, { color: ownerColor }]} numberOfLines={1}>
               {owner.name}'s rating
             </Text>
-          </View>
+          </Pressable>
         )}
         {/* Every action travels in one right-hand cluster. Left to space-between
             they spread across the whole bar, and Compare drifts into the middle
@@ -623,10 +625,15 @@ export default function AlbumDetail() {
             other album page in the app. */}
         {wasRecommended && (
           <View style={styles.recCard}>
-            <View style={styles.recHead}>
+            <Pressable
+              style={styles.recHead}
+              disabled={album.recommendedBy == null}
+              onPress={() => openProfile(album.recommendedBy!)}
+              accessibilityRole="link"
+            >
               <View style={[styles.recPfp, { backgroundColor: avatarColor(album.recommendedByName!) }]}>
-                {recSender?.avatarUrl ? (
-                  <Image source={{ uri: recSender.avatarUrl }} style={styles.recPfpImg} contentFit="cover" />
+                {recSender?.avatar_url ? (
+                  <Image source={{ uri: recSender.avatar_url }} style={styles.recPfpImg} contentFit="cover" />
                 ) : (
                   <Text style={styles.recPfpInitial}>
                     {album.recommendedByName![0]?.toUpperCase()}
@@ -640,7 +647,7 @@ export default function AlbumDetail() {
                 {recWhen && <Text style={styles.recWhen}>{recWhen}</Text>}
               </View>
               <Star size={15} color={RECOMMEND} fill={RECOMMEND} />
-            </View>
+            </Pressable>
             {album.recommendationNote ? (
               <Text style={styles.recNote}>“{album.recommendationNote}”</Text>
             ) : (
@@ -682,6 +689,84 @@ export default function AlbumDetail() {
             <Text style={styles.ctaText}>{cta}</Text>
           </Pressable>
         )}
+        {/* Someone else's copy of a record you hold: on to your copy, never a
+            second one of the same record. */}
+        {!isMine && album.viewerCopy && (
+          <Pressable
+            style={({ pressed }) => [styles.cta, pressed && { backgroundColor: colors.greenPressed }]}
+            onPress={() =>
+              album.viewerCopy!.status === 'rated'
+                ? router.push({ pathname: '/album/[id]', params: { id: String(album.viewerCopy!.id) } })
+                : router.push({ pathname: '/rate/[id]', params: { id: String(album.viewerCopy!.id) } })
+            }
+          >
+            <Pencil size={17} color="#fff" />
+            <Text style={styles.ctaText}>
+              {album.viewerCopy.status === 'rated'
+                ? 'Your rating'
+                : album.viewerCopy.status === 'listening'
+                  ? 'Continue rating'
+                  : 'Rate this album'}
+            </Text>
+          </Pressable>
+        )}
+        {/* Someone else's copy of a record you don't hold: the same two offers
+            as web. The refetch after adding brings viewerCopy, which swaps these
+            for the block above. */}
+        {!isMine && !album.viewerCopy && (
+          <>
+            <View style={styles.ctaRow}>
+              <Pressable
+                style={({ pressed }) => [styles.cta, styles.ctaInRow, pressed && { backgroundColor: colors.greenPressed }]}
+                disabled={copying != null}
+                onPress={async () => {
+                  setCopying('listening')
+                  setCopyError(null)
+                  try {
+                    const copy = await copyAlbumToLibrary(album.id, 'listening')
+                    queryClient.invalidateQueries({ queryKey: ['albums'] })
+                    queryClient.invalidateQueries({ queryKey: ['album', albumId] })
+                    router.push({ pathname: '/rate/[id]', params: { id: String(copy.id) } })
+                  } catch (e) {
+                    setCopyError(e instanceof Error ? e.message : 'Failed to add album')
+                  } finally {
+                    setCopying(null)
+                  }
+                }}
+              >
+                {copying === 'listening' ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.ctaText} numberOfLines={1}>Rate it yourself</Text>
+                )}
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.cta, styles.ctaInRow, pressed && { backgroundColor: colors.greenPressed }]}
+                disabled={copying != null}
+                onPress={async () => {
+                  setCopying('to_listen')
+                  setCopyError(null)
+                  try {
+                    await copyAlbumToLibrary(album.id, 'to_listen')
+                    queryClient.invalidateQueries({ queryKey: ['albums'] })
+                    await queryClient.invalidateQueries({ queryKey: ['album', albumId] })
+                  } catch (e) {
+                    setCopyError(e instanceof Error ? e.message : 'Failed to add album')
+                  } finally {
+                    setCopying(null)
+                  }
+                }}
+              >
+                {copying === 'to_listen' ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.ctaText} numberOfLines={1}>Add to Library</Text>
+                )}
+              </Pressable>
+            </View>
+            {copyError ? <Text style={styles.copyError}>{copyError}</Text> : null}
+          </>
+        )}
         <AlbumThoughts
           album={album.albumName}
           artist={album.artist}
@@ -706,7 +791,7 @@ export default function AlbumDetail() {
           onEditingChange={setReviewEditing}
         />
 
-        <CommentThread albumId={albumId} canComment={!isMine} />
+        {(isMine || isFriendsCopy) && <CommentThread albumId={albumId} canComment={!isMine} />}
       </Animated.ScrollView>
       </SafeAreaView>
 
@@ -723,7 +808,7 @@ function LoadFailed({ onBack }: { onBack: () => void }) {
   return (
     <SafeAreaView style={[styles.screen, styles.center]}>
       <Text style={styles.failTitle}>This album didn't load</Text>
-      <Text style={styles.failBody}>It may have been removed, or it belongs to someone you don't follow.</Text>
+      <Text style={styles.failBody}>It may have been removed.</Text>
       <Pressable style={styles.failBtn} onPress={onBack}>
         <Text style={styles.failBtnText}>Go back</Text>
       </Pressable>
@@ -1212,7 +1297,6 @@ function tint(hsl: string, alpha: number): string {
 
 // Matching your copy's tracks to theirs: same rules the server uses, so the
 // two views agree about what counts as one track.
-const normTitle = normalizeTrackTitle
 
 /** Clip a display name so long usernames can't blow out a column header. */
 const shortName = (name: string, max: number) =>
@@ -1232,6 +1316,7 @@ function FriendCompare({
   onOpenMine,
   onOpenAverage,
   onOpenArtist,
+  showComments,
 }: {
   theirs: Album
   mine: Album
@@ -1241,25 +1326,37 @@ function FriendCompare({
   onOpenMine: () => void
   onOpenAverage: () => void
   onOpenArtist: (name: string) => void
+  showComments: boolean
 }) {
   const { user } = useAuth()
+  const openProfile = useOpenProfile()
   const [liked, setLiked] = useState(false)
 
   const theirScore = theirs.score!
   const myScore = mine.score!
   const diff = theirScore - myScore
 
-  // Pair tracks on normalized title so re-imports with punctuation differences
-  // still line up; fall back to no comparison for anything unmatched.
-  const mineByTitle = new Map(mine.songs.map((s) => [normTitle(s.title), s.score]))
-  const tracks = [...theirs.songs]
-    .sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
-    .map((song: Song) => ({ song, myScore: mineByTitle.get(normTitle(song.title)) ?? null }))
+  // Pair tracks on the recording, not the title: two editions spell a song
+  // differently, and a live cut can share a studio title. A song only you have
+  // (the other edition's bonus track) gets a row too.
+  const mineByTrack = new Map(mine.songs.filter((s) => s.trackId != null).map((s) => [s.trackId, s]))
+  const byNumber = (a: Song, b: Song) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0)
+  const paired = new Set<number>()
+  const theirRows = [...theirs.songs].sort(byNumber).map((song: Song) => {
+    const match = song.trackId != null ? mineByTrack.get(song.trackId) : undefined
+    if (match) paired.add(match.id)
+    return { song, theirScore: song.score, myScore: match?.score ?? null }
+  })
+  const tracks = [
+    ...theirRows,
+    ...[...mine.songs].sort(byNumber).filter((s) => !paired.has(s.id))
+      .map((song: Song) => ({ song, theirScore: null as number | null, myScore: song.score })),
+  ]
 
   let widest: { title: string; gap: number } | null = null
   for (const t of tracks) {
-    if (t.song.score == null || t.myScore == null) continue
-    const gap = Math.abs(t.song.score - t.myScore)
+    if (t.theirScore == null || t.myScore == null) continue
+    const gap = Math.abs(t.theirScore - t.myScore)
     if (!widest || gap > widest.gap) widest = { title: t.song.title, gap }
   }
 
@@ -1296,7 +1393,12 @@ function FriendCompare({
             <ArrowLeft size={18} color={colors.inkSecondary} />
             <Text style={styles.backText}>Back</Text>
           </Pressable>
-          <View style={[styles.ownerTag, { backgroundColor: tint(color, 0.1), paddingHorizontal: 10, paddingVertical: 5, borderRadius: radii.pill }]}>
+          <Pressable
+            style={[styles.ownerTag, { backgroundColor: tint(color, 0.1), paddingHorizontal: 10, paddingVertical: 5, borderRadius: radii.pill }]}
+            onPress={() => openProfile(owner.id)}
+            hitSlop={8}
+            accessibilityRole="link"
+          >
             <View style={[styles.ownerPfp, { backgroundColor: color }]}>
               {owner.avatarUrl ? (
                 <Image source={{ uri: owner.avatarUrl }} style={styles.ownerPfpImg} contentFit="cover" />
@@ -1305,7 +1407,7 @@ function FriendCompare({
               )}
             </View>
             <Text style={[styles.ownerName, { color }]} numberOfLines={1}>{owner.name}'s rating</Text>
-          </View>
+          </Pressable>
         </View>
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -1393,15 +1495,15 @@ function FriendCompare({
               <Text style={{ color: right.head }}>{right.label}</Text>
             </Text>
           </View>
-          {tracks.map(({ song, myScore: ms }, i) => (
+          {tracks.map(({ song, theirScore: ts, myScore: ms }, i) => (
             <View key={song.id} style={[styles.cmpTrackRow, i > 0 && styles.cmpTrackDivider]}>
               <Text style={styles.cmpTrackNum}>{song.trackNumber}</Text>
               <Text style={styles.cmpTrackTitle} numberOfLines={1}>{song.title}</Text>
               <Text style={[styles.cmpTrackScore, { color: left.head }]}>
-                {(youLeft ? ms : song.score) != null ? (youLeft ? ms! : song.score!).toFixed(1) : '—'}
+                {(youLeft ? ms : ts) != null ? (youLeft ? ms! : ts!).toFixed(1) : '—'}
               </Text>
               <Text style={[styles.cmpTrackScore, { color: right.head }]}>
-                {(youLeft ? song.score : ms) != null ? (youLeft ? song.score! : ms!).toFixed(1) : '—'}
+                {(youLeft ? ts : ms) != null ? (youLeft ? ts! : ms!).toFixed(1) : '—'}
               </Text>
             </View>
           ))}
@@ -1413,7 +1515,7 @@ function FriendCompare({
             <ForkBtn label="Average rating" onPress={onOpenAverage} />
           </View>
 
-          <CommentThread albumId={theirs.id} />
+          {showComments && <CommentThread albumId={theirs.id} />}
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -1861,6 +1963,7 @@ const styles = StyleSheet.create({
   factorLabel: { fontFamily: fonts.bodyMedium, fontSize: 10, color: colors.inkSecondary, marginTop: 2 },
 
   ctaRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xl },
+  copyError: { fontFamily: fonts.bodyMedium, fontSize: 13, color: '#b91c1c', textAlign: 'center', marginTop: spacing.sm },
   // The standalone button — Edit rating on a finished album. Owns its own top
   // margin, since nothing wraps it.
   cta: {

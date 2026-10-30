@@ -1,17 +1,15 @@
-// The profile header, shared by your own Profile tab and a friend's page:
-// identity, the average score, four headline stats, taste chips, and the three
-// picks below them. The `action` slot holds whatever control belongs to the
-// viewer (settings on your own page, add/remove friend on someone else's).
+// The profile header, shared by your own Profile tab and someone else's page:
+// the banner, identity, the average score, four headline stats, taste chips, and
+// the three picks below them. The `action` slot holds whatever control belongs to
+// the viewer (settings on your own page, the friend button on someone else's).
 //
-// It used to be a solid green block with white type, the one slab of flat
-// colour left in the app. It now follows the rest of Pressd — For You's
-// spotlight cards and web's album pages: no box, the colour comes from a record.
-// Your favourite album (or the caller's stand-in, your top-rated one) is
-// blurred into light behind the header, over a soft green wash, and the whole
-// thing fades into the page instead of ending at an edge. The type is dark on
-// cream, the numbers unboxed in Playfair. The average is the headline figure,
-// set large in its own score colour, and also rings the avatar — the share of
-// 10 you rate at, drawn around who you are.
+// The top follows web's profile (frontend/src/pages/FriendProfile.tsx): the
+// person's banner, sharp, in a rounded strip, Pressd green when there is none, and
+// the avatar riding up over its bottom edge on a disc of the page's cream. It
+// used to be their picture or favourite album blurred into a wash, which made an
+// uploaded banner unrecognisable. The numbers stay unboxed in Playfair. The
+// average is the headline figure, set large in its own score colour, and also
+// rings the avatar: the share of 10 you rate at, drawn around who you are.
 import { useMemo, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { Image } from 'expo-image'
@@ -22,12 +20,14 @@ import type { Profile } from '@pressd/shared/api'
 import { avatarColor, songScoreColor } from '@pressd/shared/types'
 import { fetchArtistImage } from '../lib/api'
 import { colors, fonts, radii, spacing } from '../theme/tokens'
-import CoverImage from './CoverImage'
 import ScoreHistogram from './ScoreHistogram'
 
-// The wash's top colour — the same green tint the green SpotlightCard starts
-// from. Pull-to-refresh exposes it above the header.
-const WASH_TOP = '#e6f0ea'
+// The server stores banners 24:5 (BANNER_SIZE, backend/routers/users.py). At phone
+// width that is a sliver, too thin to carry the avatar, so the strip is a little
+// taller and takes the crop from the sides. 4:1 keeps five-sixths of the width.
+const BANNER_ASPECT = 4
+// How much of the avatar's disc sits over the strip.
+const AVATAR_OVERLAP = 0.5
 
 // How far type in this header is allowed to scale. The header is a fixed-shape
 // composition — a ringed avatar beside the name, a headline figure beside a
@@ -43,7 +43,6 @@ export interface BannerStatItem {
 export default function ProfileBanner({
   name,
   avatarUrl,
-  since,
   avg,
   stats,
   genres,
@@ -54,12 +53,10 @@ export default function ProfileBanner({
   profile,
   picksHeading,
   onPickPress,
-  washArtUrl,
   scores,
 }: {
   name: string
   avatarUrl?: string | null
-  since?: string | null
   avg: number | null
   stats: BannerStatItem[]
   genres: string[]
@@ -77,9 +74,6 @@ export default function ProfileBanner({
   picksHeading?: string
   /** Only your own page passes this; a friend's cards are not editable. */
   onPickPress?: (kind: PickKind) => void
-  /** The cover blurred behind the header when no favourite album is set —
-   *  callers pass the top-rated record. */
-  washArtUrl?: string | null
   /** Every rated album's score: drawn as a small distribution under the
    *  average, the Stats tab's chart in miniature. */
   scores?: number[]
@@ -129,24 +123,22 @@ export default function ProfileBanner({
   return (
     <>
       <View style={[styles.banner, { paddingTop: topInset + spacing.sm }]}>
-        <BannerWash artUrl={profile?.banner_url ?? profile?.favorite_album?.album_art_url ?? washArtUrl} />
+        <BannerStrip url={profile?.banner_url} />
 
         <View style={styles.bannerTop}>
           <RingedAvatar name={name} avatarUrl={avatarUrl} avg={avg} />
-          <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={styles.identity}>
             {/* Capped because this is the column that gives way when the
                 avatar grows beside it — uncapped, a long name at a large
                 setting truncates to two or three characters. */}
             <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
               {name}
             </Text>
-            {since ? (
-              <Text style={styles.since} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
-                Pressing since {since}
-              </Text>
-            ) : null}
+            <Text style={styles.handle} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
+              @{name}
+            </Text>
           </View>
-          {action}
+          {action ? <View style={styles.action}>{action}</View> : null}
         </View>
 
         {/* The average leads, large and in its own score colour; the other
@@ -156,7 +148,6 @@ export default function ProfileBanner({
             <Text
               style={[styles.heroValue, { color: avg != null ? songScoreColor(avg) : colors.inkMuted }]}
               numberOfLines={1}
-              adjustsFontSizeToFit
               maxFontSizeMultiplier={HEADER_SCALE_CAP}
             >
               {avg != null ? avg.toFixed(2) : '—'}
@@ -174,17 +165,18 @@ export default function ProfileBanner({
           <View style={styles.grid}>
             {stats.map((s) => (
               <View key={s.label} style={styles.statCell}>
-                {/* Held to one line and allowed to shrink: unbounded, "5,692"
-                    wrapped and pushed its own label out of line. */}
+                {/* Held to one line: unbounded, "5,692" wrapped and pushed its own
+                    label out of line. No adjustsFontSizeToFit: on iOS, with a set
+                    lineHeight, it collapsed "458" to a few points in a cell with
+                    room to spare. A five-digit count fits at full size. */}
                 <Text
                   style={styles.statValue}
                   numberOfLines={1}
-                  adjustsFontSizeToFit
                   maxFontSizeMultiplier={HEADER_SCALE_CAP}
                 >
                   {s.value}
                 </Text>
-                <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={HEADER_SCALE_CAP}>
+                <Text style={styles.statLabel} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
                   {s.label}
                 </Text>
               </View>
@@ -192,9 +184,9 @@ export default function ProfileBanner({
           </View>
         </View>
 
-        {/* Taste chips, last thing on the wash: genres first (green), then
+        {/* Taste chips, last thing in the header: genres first (green), then
             subgenres (white). Borderless and translucent, so they read as part of
-            the header rather than as white boxes laid over it. Only as many as actually fit the line are
+            the page rather than as white boxes laid over it. Only as many as actually fit the line are
             shown — the rest collapse behind a count chip that reveals them
             below, so the headline row is always exactly one line. */}
         {tags.length > 0 && (
@@ -261,16 +253,6 @@ export default function ProfileBanner({
 }
 
 export type PickKind = 'song' | 'album' | 'artist'
-
-/** The cover of the highest-scored record that has one — the header's
- *  stand-in colour when no favourite album is set. */
-export function topRatedArt(albums: { score?: number | null; albumArtUrl?: string | null }[]): string | null {
-  let best: { score?: number | null; albumArtUrl?: string | null } | null = null
-  for (const a of albums) {
-    if (a.albumArtUrl && a.score != null && (best == null || a.score > (best.score ?? -1))) best = a
-  }
-  return best?.albumArtUrl ?? null
-}
 
 /** The three pinned favourites, under the taste chips.
  *
@@ -410,28 +392,29 @@ function PickCard({
   )
 }
 
-/** The header's colour: a soft green wash, a record's cover blurred into light
- *  over it, and a fade to the page at the bottom so the header has no edge.
- *  Bled past the screen's padding and carried up above the top, so a
- *  pull-to-refresh shows more of the wash rather than a cream gap. */
-function BannerWash({ artUrl }: { artUrl?: string | null }) {
+/** Their picture exactly as uploaded, or Pressd green. A plain image rather than
+ *  CoverImage: that sizes album covers per host, and a banner has one size. */
+function BannerStrip({ url }: { url?: string | null }) {
   return (
-    <View style={styles.wash} pointerEvents="none">
-      <View style={styles.overscroll} />
-      {/* Clipped: the cover is scaled past the header so its blur has no edge,
-          and unclipped it hung below the fade as a grey slab over the picks. */}
-      <View style={styles.washClip}>
-        <LinearGradient colors={[WASH_TOP, colors.bg]} style={StyleSheet.absoluteFill} />
-        {artUrl ? (
-          // Blurred to a wash: a small image is all it needs.
-          <CoverImage url={artUrl} displayPx={120} blurRadius={45} style={styles.washArt} accessible={false} />
-        ) : null}
-        <LinearGradient
-          colors={['rgba(249,248,246,0)', colors.bg]}
-          locations={[0.5, 1]}
+    <View style={styles.strip} pointerEvents="none">
+      <LinearGradient
+        colors={['#245c43', '#2d6a4f', '#3d8463']}
+        locations={[0, 0.45, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0.4 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {url ? (
+        <Image
+          source={{ uri: url }}
           style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={url}
+          transition={120}
+          accessible={false}
         />
-      </View>
+      ) : null}
     </View>
   )
 }
@@ -442,7 +425,7 @@ function BannerWash({ artUrl }: { artUrl?: string | null }) {
 function RingedAvatar({ name, avatarUrl, avg }: { name: string; avatarUrl?: string | null; avg: number | null }) {
   const { fontScale } = useWindowDimensions()
   const k = Math.min(Math.max(fontScale, 1), HEADER_SCALE_CAP)
-  const AV = 57 * k
+  const AV = 74 * k
   const SW = 3.25
   const GAP = 3.5
   const SIZE = AV + (SW + GAP) * 2
@@ -452,7 +435,7 @@ function RingedAvatar({ name, avatarUrl, avg }: { name: string; avatarUrl?: stri
   const mid = SIZE / 2
   return (
     <View
-      style={{ width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' }}
+      style={[styles.avatarDisc, { width: SIZE, height: SIZE, borderRadius: SIZE / 2, marginTop: -SIZE * AVATAR_OVERLAP }]}
       accessibilityLabel={avg != null ? `Average score ${avg.toFixed(2)}` : undefined}
     >
       <Svg width={SIZE} height={SIZE} style={StyleSheet.absoluteFill}>
@@ -488,7 +471,7 @@ function RingedAvatar({ name, avatarUrl, avg }: { name: string; avatarUrl?: stri
           // A letter in a fixed disc: capped and allowed to shrink. Nobody
           // needs to *read* an initial at a larger size — it's identity.
           <Text
-            style={[styles.avatarInitial, { fontSize: 24 * k }]}
+            style={[styles.avatarInitial, { fontSize: 31 * k }]}
             numberOfLines={1}
             adjustsFontSizeToFit
             maxFontSizeMultiplier={1}
@@ -502,35 +485,22 @@ function RingedAvatar({ name, avatarUrl, avg }: { name: string; avatarUrl?: stri
 }
 
 const styles = StyleSheet.create({
-  banner: {
-    marginHorizontal: -spacing.lg,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: 20,
-  },
-  wash: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  washClip: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' },
-  // Taller than any realistic pull, and bled past both edges so it spans the
-  // full width regardless of the header's own horizontal padding.
-  overscroll: {
-    position: 'absolute',
-    top: -600,
-    left: -spacing.lg * 2,
-    right: -spacing.lg * 2,
-    height: 600,
-    backgroundColor: WASH_TOP,
-  },
-  // Scaled past the edges so the blur has no hard border to fade against.
-  washArt: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    opacity: 0.3,
-    transform: [{ scale: 1.6 }],
+  banner: { paddingBottom: 20 },
+  strip: {
+    width: '100%',
+    aspectRatio: BANNER_ASPECT,
+    borderRadius: radii.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.green,
   },
 
-  bannerTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.sm },
+  // The strip's clipping is its own, so nothing here cuts the avatar off. The
+  // text starts below the strip by its own padding, since the row aligns to the
+  // top and the avatar alone is pulled up.
+  bannerTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, paddingLeft: spacing.sm },
+  avatarDisc: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg, zIndex: 1 },
+  identity: { flex: 1, minWidth: 0, paddingTop: spacing.sm },
+  action: { paddingTop: spacing.md },
   avatar: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -539,7 +509,7 @@ const styles = StyleSheet.create({
   avatarImg: { width: '100%', height: '100%' },
   avatarInitial: { fontFamily: fonts.display, color: '#ffffff' },
   name: { fontFamily: fonts.displayBlack, fontSize: 27, lineHeight: 33, color: colors.ink, letterSpacing: 0.2 },
-  since: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.inkTertiary, marginTop: 2 },
+  handle: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.inkTertiary, marginTop: 2 },
 
   figures: { flexDirection: 'row', alignItems: 'center', marginTop: 20 },
   hero: { width: '33%', paddingRight: spacing.md },
@@ -577,7 +547,7 @@ const styles = StyleSheet.create({
   // Genres in the brand's soft green — the same fill as For You's range chip.
   chipGenre: { backgroundColor: 'rgba(45,106,79,0.12)' },
   chipGenreText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },
-  // Subgenres as frosted white over the wash: present, but a step quieter.
+  // Subgenres as frosted white on the page: present, but a step quieter.
   chipSub: { backgroundColor: 'rgba(255,255,255,0.7)' },
   chipSubText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary },
   // The count reads as a control, not a tag: no fill, just the words.

@@ -2,6 +2,8 @@ export type AlbumStatus = 'to_listen' | 'listening' | 'rated'
 
 export interface Song {
   id: number
+  /** The recording, shared across every edition and user. Pair songs on this. */
+  trackId: number | null
   title: string
   trackNumber: number
   score: number | null
@@ -61,6 +63,11 @@ export interface Album {
   /** People other than you who have rated this record. Zero means there is no
    *  comparison to offer. Only populated by the single-album fetch. */
   othersRaterCount: number
+  /** Your own copy of this record, in any edition, when this one is someone
+   *  else's. Only populated by the single-album fetch. */
+  viewerCopy: { id: number; status: AlbumStatus; score: number | null } | null
+  /** Who this copy belongs to. Only populated by the single-album fetch. */
+  owner: { id: number; name: string; avatarUrl?: string } | null
   review: string | null
   reviewAt: string | null
   /** The track the user picked when several tied for the album's best

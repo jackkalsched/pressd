@@ -26,7 +26,7 @@ from datetime import date
 import httpx
 from fastapi import APIRouter, Body, HTTPException, Query
 
-from ..credits import dedupe_extras, named_in, split_rest
+from ..credits import dedupe_extras, expand_groups, named_in, primary_act, split_rest
 from ..trackkeys import artist_key, same_album
 
 router = APIRouter(prefix="/search", tags=["search"])
@@ -241,7 +241,7 @@ async def search_mb(q: str = Query(..., min_length=1)):
                 "spotify_id": None,
                 "mb_id": rg["id"],
                 "album_name": rg.get("title", ""),
-                "artist": credits[0].get("name", "") if credits else "",
+                "artist": primary_act(credits[0].get("name", "")) if credits else "",
                 "year": _year(frd),
                 "release_date": frd or None,
                 "upcoming": bool(padded and padded > today),
@@ -590,6 +590,10 @@ async def resolve_album(
             data = await _resolve_deezer(client, id)
         else:
             data = await _resolve_mb(client, id)
+
+    data["artist"], data["extra_artists"] = expand_groups(data["artist"], data.get("extra_artists") or [])
+    for t in data.get("tracks", []):
+        t["artist"] = primary_act(t.get("artist") or data["artist"])
 
     _cache_set("resolve", f"{source}:{id}", data)
     return data

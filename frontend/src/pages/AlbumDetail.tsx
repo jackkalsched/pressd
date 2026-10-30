@@ -13,10 +13,15 @@
 // Profiles are public, so this page opens on anyone's copy. What isn't public
 // is the copy's comment thread, which is friends-only on the server
 // (deps.authorize_friend) and hidden here for anyone else.
+//
+// On someone else's copy, what's offered follows your own copy of the record,
+// which the server reports in any edition (`viewerCopy`): rated, you get your
+// rating and ?view=compare, you against them; queued or half done, the rating
+// flow on that copy; only with none at all, the ways to add it.
 import { useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, Loader2, Pencil, Play, Plus, Share2, Star, Trash2 } from 'lucide-react'
+import { ArrowLeft, Loader2, Pencil, Play, Plus, Share2, Star, Trash2 } from 'lucide-react'
 import { fetchAlbum, deleteAlbum, fetchFriendRatings, fetchFriends, importAlbum, saveReview, deleteReview } from '../api'
 import { useUser } from '../context/UserContext'
 import { songScoreColor, BANG_THRESHOLD, SKIP_THRESHOLD, EP_MAX_TRACKS } from '../types'
@@ -25,10 +30,11 @@ import RecommendModal from '../components/RecommendModal'
 import CommentThread from '../components/CommentThread'
 import AlbumThoughts from '../components/AlbumThoughts'
 import ShareCardModal from '../components/ShareCard'
+import AlbumCompare from '../components/albumCompare'
 import CoverImg from '../components/CoverImg'
 import { Cover } from '../components/covers'
 import {
-  BangSkip, CoverWash, DANGER, GREEN, PILL, RECOMMEND, RevealRow, SECTION_LABEL, StatFigure,
+  BangSkip, CoverWash, DANGER, GREEN, PILL, PILL_ACTIVE, RECOMMEND, RevealRow, SECTION_LABEL, StatFigure,
 } from '../components/albumView'
 import { stagger } from '../lib/format'
 
@@ -163,21 +169,35 @@ export default function AlbumDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { isViewingFriend, viewingUser, activeUser, setViewingUser } = useUser()
+  const [params] = useSearchParams()
+  const { viewingUser, activeUser, setViewingUser } = useUser()
   const [showRecommend, setShowRecommend] = useState(false)
   const [showShareCard, setShowShareCard] = useState(false)
   const [busy, setBusy] = useState<'rate' | 'queue' | 'delete' | null>(null)
-  const [addedToLibrary, setAddedToLibrary] = useState(false)
 
   const { data: album, isLoading, error } = useQuery({
     queryKey: ['album', Number(id)],
     queryFn: () => fetchAlbum(Number(id)),
   })
 
+  // The copy's own owner decides this, not which library you came through: a
+  // link to someone's copy doesn't have to pass through their profile first.
+  const isOwn = !!album && album.userId === activeUser?.id
+  const yourCopy = album?.viewerCopy ?? null
+  const canCompareThem = !!album && !isOwn && album.status === 'rated' && album.score != null
+    && yourCopy?.status === 'rated' && yourCopy.score != null
+  const comparing = canCompareThem && params.get('view') === 'compare'
+
+  const { data: yourAlbum } = useQuery({
+    queryKey: ['album', yourCopy?.id],
+    queryFn: () => fetchAlbum(yourCopy!.id),
+    enabled: comparing,
+  })
+
   const { data: friendRatings = [] } = useQuery({
     queryKey: ['friend-ratings', album?.albumName, album?.artist, activeUser?.id],
     queryFn: () => fetchFriendRatings(album!.albumName, album!.artist, activeUser!.id),
-    enabled: !!album && !isViewingFriend,
+    enabled: !!album && isOwn,
     staleTime: 60_000,
   })
 
@@ -186,7 +206,7 @@ export default function AlbumDetail() {
   const { data: myFriends = [] } = useQuery({
     queryKey: ['friends', activeUser?.id],
     queryFn: () => fetchFriends(activeUser!.id),
-    enabled: !!activeUser && isViewingFriend,
+    enabled: !!activeUser && !!album && !isOwn,
     staleTime: 60_000,
   })
 
@@ -211,9 +231,9 @@ export default function AlbumDetail() {
     )
   }
 
-  const own = !isViewingFriend
-  const ownerName = own ? (activeUser?.name ?? 'You') : (viewingUser?.name ?? 'Their')
-  const canSeeComments = own || myFriends.some(f => f.id === viewingUser?.id)
+  const own = isOwn
+  const ownerName = own ? (activeUser?.name ?? 'You') : (album.owner?.name ?? viewingUser?.name ?? 'Their')
+  const canSeeComments = own || myFriends.some(f => f.id === album.userId)
   const rated = album.status === 'rated'
   const ratedSongs = album.songs.filter((s) => s.score !== null)
   const songMean = ratedSongs.length > 0
@@ -281,12 +301,13 @@ export default function AlbumDetail() {
   }
 
   async function addToLibrary() {
-    if (busy || addedToLibrary) return
+    if (busy) return
     setBusy('queue')
     try {
       await importToLibrary('to_listen')
       queryClient.invalidateQueries({ queryKey: ['albums'] })
-      setAddedToLibrary(true)
+      // viewerCopy now answers, so the buttons become the way into that copy.
+      await queryClient.invalidateQueries({ queryKey: ['album', album!.id] })
     } catch { /* the button stays as it was */ } finally {
       setBusy(null)
     }
@@ -319,6 +340,15 @@ export default function AlbumDetail() {
           </button>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {/* The three views of a record, in the same corner on all three. */}
+            {canCompareThem && (
+              <>
+                <Link to={`/album/${album.id}`} replace className={comparing ? PILL : PILL_ACTIVE}>{possessive(ownerName)} rating</Link>
+                <Link to={`/album/${album.id}?view=compare`} replace className={comparing ? PILL_ACTIVE : PILL}>Compare</Link>
+              </>
+            )}
+            {!own && yourCopy?.status === 'rated' && (
+              <Link to={`/album/${yourCopy.id}`} onClick={() => setViewingUser(activeUser)} className={PILL}>Your rating</Link>
+            )}
             {showAverage && (
               <Link to={`/album/${album.id}/community`} className={PILL}>Average rating</Link>
             )}
@@ -402,6 +432,16 @@ export default function AlbumDetail() {
 
           {/* ── The rating ─────────────────────────────────────────── */}
           <main className="min-w-0">
+            {comparing ? (
+              yourAlbum ? (
+                <AlbumCompare theirs={album} mine={yourAlbum} ownerName={ownerName} />
+              ) : (
+                <div className="flex items-center gap-2 py-8 text-[#a8998a]">
+                  <Loader2 size={16} className="animate-spin" /> Loading…
+                </div>
+              )
+            ) : (
+            <>
             <div className="rise-in py-2" style={stagger(0)}>
               {album.score != null ? (
                 <>
@@ -460,8 +500,19 @@ export default function AlbumDetail() {
               </div>
             )}
 
-            {/* Someone else's copy: the same two ways in as the community page. */}
-            {!own && (
+            {/* Someone else's copy, and yours is unfinished: carry on with it
+                rather than importing a second one. */}
+            {!own && yourCopy && yourCopy.status !== 'rated' && (
+              <button
+                onClick={() => { setViewingUser(activeUser); navigate(`/rate/${yourCopy.id}`) }}
+                className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#2d6a4f] text-[15px] font-semibold text-white hover:bg-[#245c43] rise-in"
+                style={stagger(9)}
+              >
+                <Play size={14} fill="currentColor" /> {yourCopy.status === 'listening' ? 'Continue rating' : 'Rate it yourself'}
+              </button>
+            )}
+            {/* Not in your library at all: the same two ways in as the community page. */}
+            {!own && !yourCopy && (
               <div className="mt-7 flex gap-2.5 rise-in" style={stagger(9)}>
                 <button
                   onClick={rateYourself}
@@ -473,13 +524,11 @@ export default function AlbumDetail() {
                 </button>
                 <button
                   onClick={addToLibrary}
-                  disabled={busy === 'queue' || addedToLibrary}
-                  className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-xl text-[15px] font-semibold ${
-                    addedToLibrary ? 'bg-[#2d6a4f]/10 text-[#2d6a4f]' : 'border border-[#d7cfc3] bg-white text-[#1c1917] hover:border-[#2d6a4f]'
-                  }`}
+                  disabled={busy === 'queue'}
+                  className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-[#d7cfc3] bg-white text-[15px] font-semibold text-[#1c1917] hover:border-[#2d6a4f]"
                 >
-                  {busy === 'queue' ? <Loader2 size={16} className="animate-spin" /> : addedToLibrary ? <Check size={16} className="pop" /> : <Plus size={16} />}
-                  {addedToLibrary ? 'Added' : 'Add to Library'}
+                  {busy === 'queue' ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                  Add to Library
                 </button>
               </div>
             )}
@@ -566,6 +615,9 @@ export default function AlbumDetail() {
                   })}
                 </ul>
               </section>
+            )}
+
+            </>
             )}
 
             {!reviewInRail && (

@@ -51,6 +51,7 @@ import LikeButton from '../../components/LikeButton'
 import { type FeedPost } from '@pressd/shared/types'
 import { useRefreshOnFocus } from '../../lib/refresh'
 import { useAuth } from '../../lib/auth'
+import { useOpenProfile } from '../../lib/useOpenProfile'
 import { markSocialSeen, latestFeedTime } from '../../lib/socialSeen'
 import {
   contactsAccess,
@@ -137,11 +138,13 @@ function AlbumTile({ name, url, size, style }: { name: string; url?: string | nu
 }
 
 /** The paired friend-avatar + album-cover cluster that leads every row. */
-function Cluster({ item }: { item: { friend: { name: string; avatar_url?: string }; album_name: string; album_art_url?: string } }) {
+function Cluster({ item, onOpenUser }: { item: { friend: { id: number; name: string; avatar_url?: string }; album_name: string; album_art_url?: string }; onOpenUser: (id: number) => void }) {
   return (
     <View style={styles.cluster}>
       <AlbumTile name={item.album_name} url={item.album_art_url} size={40} style={styles.albumPos} />
-      <Avatar name={item.friend.name} url={item.friend.avatar_url} size={40} style={styles.avatarPos} />
+      <Pressable style={styles.avatarPos} onPress={() => onOpenUser(item.friend.id)} accessibilityLabel={`View ${item.friend.name}'s profile`}>
+        <Avatar name={item.friend.name} url={item.friend.avatar_url} size={40} />
+      </Pressable>
     </View>
   )
 }
@@ -226,11 +229,9 @@ export default function Social() {
     return m
   }, [myRated])
 
+  const openFriend = useOpenProfile()
   function openAlbum(id: number) {
     router.push({ pathname: '/album/[id]', params: { id: String(id) } })
-  }
-  function openFriend(id: number) {
-    router.push({ pathname: '/friend/[id]', params: { id: String(id) } })
   }
   async function like(albumId: number) {
     if (!user) return
@@ -321,6 +322,7 @@ export default function Social() {
                     myScore={item.score != null ? myScores.get(albumKey(item.album_name, item.artist)) ?? null : null}
                     queued={queued.has(item.album_id)}
                     onOpenAlbum={openAlbum}
+                    onOpenUser={openFriend}
                     onLike={() => like(item.album_id)}
                     onRate={() => router.push({ pathname: '/rate/[id]', params: { id: String(item.album_id) } })}
                     onAddQueue={() => addToQueue(item)}
@@ -365,6 +367,7 @@ export default function Social() {
           scrollEventThrottle={16}
           renderItem={({ item }) => (
             <FeedPostRow
+              onOpenUser={openFriend}
               item={item}
               onOpen={() =>
                 router.push({
@@ -424,6 +427,7 @@ function ActivityRow({
   myScore,
   queued,
   onOpenAlbum,
+  onOpenUser,
   onLike,
   onRate,
   onAddQueue,
@@ -433,6 +437,7 @@ function ActivityRow({
   myScore: number | null
   queued: boolean
   onOpenAlbum: (id: number) => void
+  onOpenUser: (id: number) => void
   onLike: () => void
   onRate: () => void
   onAddQueue: () => void
@@ -445,10 +450,10 @@ function ActivityRow({
   return (
     <Pressable style={[styles.row, !first && styles.divider]} onPress={() => onOpenAlbum(item.album_id)}>
       <View style={styles.rowMain}>
-        <Cluster item={item} />
+        <Cluster item={item} onOpenUser={onOpenUser} />
         <View style={styles.rowText}>
           <Text style={styles.line1}>
-            <Text style={styles.bold}>{item.friend.name}</Text>
+            <Text style={styles.bold} onPress={() => onOpenUser(item.friend.id)}>{item.friend.name}</Text>
             <Text style={styles.reg}> {verb} </Text>
             <Text style={styles.bold}>{item.album_name}</Text>
           </Text>
@@ -496,7 +501,7 @@ function ActivityRow({
 
 /** One friend's post from any thread. Leads with the record, because a line of
  *  someone's opinion means little until you know what it is about. */
-function FeedPostRow({ item, onOpen }: { item: FeedPost; onOpen: () => void }) {
+function FeedPostRow({ item, onOpen, onOpenUser }: { item: FeedPost; onOpen: () => void; onOpenUser: (id: number) => void }) {
   return (
     <Pressable
       style={({ pressed }) => [styles.fpRow, item.toMe && styles.fpToMe, pressed && { opacity: 0.7 }]}
@@ -527,7 +532,7 @@ function FeedPostRow({ item, onOpen }: { item: FeedPost; onOpen: () => void }) {
         )}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.fpWho}>
-            {item.author.name}
+            <Text onPress={() => onOpenUser(item.author.id)}>{item.author.name}</Text>
             <Text style={styles.fpKind}>
               {item.toMe
                 ? ' replied to you'

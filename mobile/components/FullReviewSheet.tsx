@@ -12,6 +12,7 @@ import { Triangle, X } from 'lucide-react-native'
 import { songScoreColor } from '@pressd/shared/types'
 import { fetchPostAuthorRating } from '../lib/api'
 import Avatar from './Avatar'
+import { useOpenProfile } from '../lib/useOpenProfile'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
 const DOWN = '#e0492b'
@@ -31,6 +32,7 @@ function ratedOn(iso: string | null): string | null {
 }
 
 export default function FullReviewSheet({ postId, onClose }: { postId: number | null; onClose: () => void }) {
+  const openProfile = useOpenProfile()
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['postRating', postId],
     queryFn: () => fetchPostAuthorRating(postId!),
@@ -65,9 +67,17 @@ export default function FullReviewSheet({ postId, onClose }: { postId: number | 
         ) : (
           <ScrollView contentContainerStyle={styles.body}>
             <View style={styles.who}>
-              <Avatar name={data.author.name} avatarUrl={data.author.avatarUrl} size={44} />
+              {/* Closed first: this is a native modal, and a push from inside one
+                  lands behind it. */}
+              <Pressable
+                onPress={() => { onClose(); openProfile(data.author.id) }}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${data.author.name}'s profile`}
+              >
+                <Avatar name={data.author.name} avatarUrl={data.author.avatarUrl} size={44} />
+              </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.name} numberOfLines={1}>{data.author.name}</Text>
+                <Text style={styles.name} numberOfLines={1} onPress={() => { onClose(); openProfile(data.author.id) }}>{data.author.name}</Text>
                 <Text style={styles.meta} numberOfLines={2}>
                   on {data.albumName} · {data.artist}{rated ? ` · rated ${rated}` : ''}
                 </Text>

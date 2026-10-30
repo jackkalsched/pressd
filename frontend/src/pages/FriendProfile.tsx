@@ -107,14 +107,6 @@ export default function FriendProfile() {
   const artistCount = new Set(rated.flatMap((a) => [a.artist, ...a.extraArtists].map((n) => n.trim().toLowerCase()))).size
   const albumScores = rated.flatMap((a) => (a.score != null ? [a.score] : []))
 
-  // "Pressing since" — the month of the earliest album in the library, as on mobile.
-  const since = (() => {
-    const dates = rated.map((a) => a.dateAdded ?? a.dateRated).filter(Boolean) as string[]
-    if (dates.length === 0) return null
-    const min = dates.reduce((a, b) => (a < b ? a : b))
-    return new Date(min.length <= 10 ? `${min}T00:00:00` : min).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  })()
-
   /** Your invite link, not this page's address: a profile is behind sign-in,
    *  and the invite both signs someone up and makes you friends. The system
    *  share sheet where there is one, else the clipboard. */
@@ -268,7 +260,6 @@ export default function FriendProfile() {
           <p className="m-0 mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[15px] text-[#8a7f72]">
             {[
               `@${person.name}`,
-              since && `Pressing since ${since}`,
               !isSelf && mutualCount > 0 && `${mutualCount} mutual friend${mutualCount === 1 ? '' : 's'}`,
             ].filter(Boolean).map((part, i) => (
               <span key={i} className="flex items-center gap-2.5">

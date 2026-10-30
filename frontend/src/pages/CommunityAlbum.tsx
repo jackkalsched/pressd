@@ -37,7 +37,7 @@ import RecommendModal from '../components/RecommendModal'
 import ThreadPreview from '../components/ThreadPreview'
 import { useUser } from '../context/UserContext'
 import CoverImg from '../components/CoverImg'
-import { BangSkip, CoverWash, DANGER, GREEN, PILL, RECOMMEND, RevealRow, SECTION_LABEL, StatFigure } from '../components/albumView'
+import { BangSkip, CompareScores, CoverWash, DANGER, GREEN, PILL, RECOMMEND, RevealRow, SECTION_LABEL, StatFigure } from '../components/albumView'
 import { stagger } from '../lib/format'
 
 export default function CommunityAlbum() {
@@ -450,7 +450,6 @@ function CompareView({ data }: { data: CommunityAlbumData }) {
   const yourScore = you.score!
   const diff = yourScore - avgScore
   const youLeft = yourScore <= avgScore
-  const pos = (v: number) => ((Math.max(5, Math.min(10, v)) - 5) / 5) * 100
 
   const otherScore = (t: CommunityTrack) => t.others_avg_score ?? t.avg_score
   let widest: { title: string; gap: number } | null = null
@@ -461,36 +460,14 @@ function CompareView({ data }: { data: CommunityAlbumData }) {
     if (!widest || gap > widest.gap) widest = { title: t.title, gap }
   }
 
-  const youSide = { label: 'YOU', score: yourScore, color: '#44403c' }
-  const themSide = { label: 'PRESSD USERS', score: avgScore, color: GREEN }
+  const youSide = { label: 'YOU', score: yourScore, color: '#44403c', tick: '#1c1917' }
+  const themSide = { label: 'PRESSD USERS', score: avgScore, color: GREEN, tick: GREEN }
   const [left, right] = youLeft ? [youSide, themSide] : [themSide, youSide]
 
   return (
     <div>
       <div className="rise-in" style={stagger(0)}>
-        <div className="flex items-stretch">
-          {[left, right].map((side, i) => (
-            <div key={side.label} className={`flex-1 ${i === 1 ? 'border-l border-[#e2dbd0] pl-8' : ''}`}>
-              <p className="m-0 text-[11px] font-bold tracking-[0.16em]" style={{ color: side.color }}>{side.label}</p>
-              <p className="font-display m-0 mt-1 text-[56px] font-bold leading-none tabular-nums" style={{ color: side.color }}>
-                {side.score.toFixed(2)}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        {/* 5 to 10: where almost every album score lives, so the gap is visible. */}
-        <div className="relative mt-6 h-2 rounded-full bg-[#2d6a4f]/15">
-          <div
-            className="grow-x absolute inset-y-0 left-0 rounded-full bg-[#2d6a4f]/45"
-            style={{ width: `${Math.max(pos(avgScore), pos(yourScore))}%` }}
-          />
-          <span className="absolute top-1/2 h-4 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: `${pos(avgScore)}%`, background: GREEN }} />
-          <span className="absolute top-1/2 h-4 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#1c1917]" style={{ left: `${pos(yourScore)}%` }} />
-        </div>
-        <div className="mt-1.5 flex justify-between text-[11px] text-[#8a7f72] tabular-nums">
-          {[5, 6, 7, 8, 9, 10].map((n) => <span key={n}>{n}</span>)}
-        </div>
+        <CompareScores left={left} right={right} />
 
         {Math.abs(diff) < 0.005 ? (
           <p className="m-0 mt-5 text-[15px] text-[#1c1917]">You landed exactly on the Pressd average.</p>
