@@ -596,7 +596,7 @@ contained in the primary's is the same act (`Ye` beside `Kanye West`). Every ide
 three sources agree on. For display and for every per-artist number — the artist page,
 league tables, SAR, bang/skip, the scatter, "most rated artist", the profile's Artists
 count — a record belongs to **each** credited artist in full (`album_artists`,
-`song_artists`). The credit is **never** split on its punctuation: in the library that
+`song_artists`, which also reads a joined song credit naming one of them as theirs). The credit is **never** split on its punctuation: in the library that
 would break AC/DC, Bob Marley & The Wailers, Catfish and the Bottlemen and Tyler, The
 Creator. Until then an iTunes import stored "Anderson .Paak & Cordae" and a Deezer
 import "Anderson .Paak", so *Heavy Is the Crown* was two records with two sets of
@@ -1225,6 +1225,12 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   for a song, its `track_id` — never a title match. Tracks are created only through
   `tracklink` (`recording_key`), and a remaster is the same recording while a live,
   demo, remix or session version is not (§5).
+- **A song on a shared surface is one row per `track_id`, and its title is only a label.**
+  Copies spell one recording differently (a spreadsheet import's "Dancing in the
+  Courthouse" against the catalogs' "Dancing In The Courthouse"), so `GROUP BY title`,
+  or title and track together, shows one song twice. `threads.thread_summary` did that
+  on 29 records until November 2026, labelling each with the spelling most copies use
+  now; the community page matched titles and so pooled demos into studio songs.
 - **One-off backfills and migrations are deleted once applied** — the commit and this
   file record what they did; only scripts that run again (ingest, nightly, ops) stay.
   Never inline `(name.lower(), artist.lower())` — five places already did, and they now

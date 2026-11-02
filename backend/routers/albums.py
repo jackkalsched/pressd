@@ -1040,17 +1040,19 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
         vals = [v for v in vals if v is not None]
         return round(sum(vals) / len(vals), 2) if vals else None
 
-    # Titles are matched on the shared same-recording key, not raw punctuation:
-    # one copy spells the feat-credit out and another doesn't, and a local
-    # normalizer that ignored that split single tracks into two rows.
-    norm = match_title
+    # One row per recording: the track id, which already sees through how copies
+    # spell a title. Matching titles instead pooled what only looks the same —
+    # "London Calling (Vanilla Studios Demo Version)" into the studio song, the
+    # second "Karma" on Til Dawn into the first. The title key is only for a song
+    # not yet linked to a track.
+    norm = lambda s: s.track_id if s.track_id is not None else match_title(s.title)
 
     # Seed the tracklist from the most complete copy so unrated tracks still
     # show, then fold every copy's scores into it.
     base = max(copies, key=lambda c: len(c.songs)) if copies else source
-    buckets: dict[str, dict] = {}
+    buckets: dict[object, dict] = {}
     for s in sorted(base.songs, key=lambda s: s.track_number or 0) if base else []:
-        buckets[norm(s.title)] = {
+        buckets[norm(s)] = {
             "title": s.title, "track_number": s.track_number,
             "scores": [], "others": [], "your_score": None,
         }
@@ -1058,7 +1060,7 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
         for s in c.songs:
             if s.score is None:
                 continue
-            key = norm(s.title)
+            key = norm(s)
             b = buckets.get(key)
             if b is None:
                 b = buckets.setdefault(key, {

@@ -83,6 +83,13 @@ def thread_summary(session: Session, thread: Thread) -> dict | None:
     gives the track, so a deluxe edition's bonus tracks fall in after the
     standard ones rather than shuffling them. `raters` there is per track: a
     song someone skipped has fewer voices than the album does.
+
+    Grouped on the track alone, and the title is only what the row is called.
+    Copies spell one recording differently — a spreadsheet import has "Think Fast
+    (feat. Weezer)" and "Dancing in the Courthouse" where the catalogs have "Think
+    Fast" and "Dancing In The Courthouse" — and grouping on the title as well
+    showed each spelling as its own song, with its own average: 100 tracks across
+    29 records by November 2026, and a worst track that was one person's score.
     """
     if thread.subject_type != "album":
         return None
@@ -96,12 +103,15 @@ def thread_summary(session: Session, thread: Thread) -> dict | None:
         return None
 
     rows = session.execute(_sql("""
-        SELECT s.title, AVG(s.score) AS m, MIN(s.track_number) AS n,
+        SELECT s.track_id, MODE() WITHIN GROUP (ORDER BY s.title) AS title,
+               AVG(s.score) AS m, MIN(s.track_number) AS n,
                COUNT(DISTINCT a.user_id) AS r
         FROM song s JOIN album a ON a.id = s.album_id
         WHERE a.subject_key = :k AND s.score IS NOT NULL AND s.track_id IS NOT NULL
-        GROUP BY s.track_id, s.title
+        GROUP BY s.track_id
     """), {"k": thread.subject_key}).fetchall()
+    # (title, mean, track number, raters): the spelling most copies use.
+    rows = [r[1:] for r in rows]
     in_order = sorted(rows, key=lambda r: (r[2] is None, r[2] or 0, r[0]))
     tracks = sorted(rows, key=lambda r: -float(r[1]))
 

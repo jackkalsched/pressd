@@ -68,13 +68,17 @@ def song_artists(song_artist: str | None, album) -> list[str]:
 
     A song credited to any of the album's artists counts for all of them — on a
     collaboration the whole record is theirs, and Deezer files every track of
-    *Heavy Is the Crown* under Paak alone. A song credited to someone off the
-    album's credit (a soundtrack, a compilation) stays with that someone.
+    *Heavy Is the Crown* under Paak alone. So does a joined credit naming one of
+    them: iTunes files "what's wrong with me" under "Olivia Rodrigo & Robert Smith"
+    and Deezer under Olivia Rodrigo, and the joined string read as an artist of its
+    own, with four songs. A song credited to someone off the album's credit (a
+    soundtrack, a compilation, a feature on a compilation) stays with that someone.
     """
     names = album_artists(album)
     if not song_artist:
         return names
-    if len(names) > 1 and artist_key(song_artist) in {artist_key(n) for n in names}:
+    mine = artist_key(song_artist).replace(" ", "")
+    if any(k in mine for n in names if (k := artist_key(n).replace(" ", ""))):
         return names
     return [song_artist]
 
