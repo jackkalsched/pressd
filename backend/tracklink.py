@@ -67,6 +67,15 @@ def copy_keys(songs: list[SongRow], album_artist: str | None,
     artists = [album_artist or "", *extras_of(extra_artists)]
     keys = {s.id: recording_key(s.title or "", s.artist, artists, album_name or "")
             for s in songs}
+    # A song's own credit says who recorded it only where the album's artist
+    # doesn't: a soundtrack, or JACKBOYS 2. On anyone's own record a stray credit
+    # is the catalog's billing: one catalog files College Dropout's "Slow Jamz" under
+    # Twista and Dark Lane's "D4L" under Future, which split each from the
+    # copies filed under the album's artist.
+    plain = {s.id: recording_key(s.title or "", None, artists, album_name or "")
+             for s in songs}
+    if sum(keys[s.id] != plain[s.id] for s in songs) * 2 < len(songs):
+        keys = plain
     by_key: dict[str, list[SongRow]] = {}
     for s in songs:
         by_key.setdefault(keys[s.id], []).append(s)

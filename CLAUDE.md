@@ -399,7 +399,7 @@ record. Read §12 before adding a grouping.
 2026).** A `Track` is one *recording*, so audio is analysed once and the global board
 pools a song across every edition it appears on. Its key is the album's **primary**
 artist (`artist_key`; a song's own credit only when it names none of the album's
-artists, as on a soundtrack) and the title with each `(…)`/`[…]` group and ` - …` tail
+artists and most of the copy's songs are like that, as on a soundtrack) and the title with each `(…)`/`[…]` group and ` - …` tail
 classified. **Folded** — the same recording: remaster/remastered (any year), deluxe,
 expanded, anniversary, edition, bonus, explicit/clean, album/original version,
 reissue, and credits that *start* with feat/ft/featuring/with. **Kept apart** as a
