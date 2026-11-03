@@ -227,17 +227,21 @@ Mockups: `.superpowers/brainstorm/51272-1793705302/content/` (gitignored; local)
 
 ### 5.2 The pop-up after rating
 
-- **When**: after **every** album rating, the next time the user lands on For You after
-  leaving the rating flow (after the review step and share card), never inside the flow.
-  No daily limit. **(Jack)** If several albums were finished before returning, show one
-  sheet, for the most recent album. **(call)**
+- **When**: after **every** album rating, **as the share card closes** — the end of the
+  rating flow, never inside it. **(Jack, revised after review: both flows end on the
+  album page, not For You, so "the next For You visit" could be hours later on the
+  other device.)** A sheet not shown then (the app closed first) shows on the next
+  launch, and is dropped once it is 48 hours old. No daily limit. **(Jack)** If several
+  albums were finished before it shows, show one sheet, for the most recent album.
+  **(call)**
 - **What counts as a rating** **(call)**: an album's **first** move to `rated` — albums,
   EPs and singles alike. Re-editing an already-rated album does not owe a sheet.
 - **Where "a sheet is owed" lives** **(call)**: on the server, so a rating made on web
-  shows its sheet on the iPhone and the other way round. Both clients ask on landing on
-  For You, and showing it (or *Not now*) clears it. This is also the "sheet shown" event
-  in §6.
-- **Form**: a bottom sheet over For You (web: a dialog), headed "N people rated
+  shows its sheet on the iPhone and the other way round. Both clients ask when the share
+  card closes and on launch; fetching it records nothing, and the client reports
+  "shown" only once the sheet is on screen, which clears it. That report is the "sheet
+  shown" event in §6.
+- **Form**: a bottom sheet over the album page (web: a dialog), headed "N people rated
   *<album>* too" with the cover. **(Jack — mockup A, v2)**
 - **Who** — among other users who rated the same record (`subject_key`, any edition):
   - more than three: **two at random from the top quarter** of overlap with the user,
@@ -302,15 +306,49 @@ before, so the comparison fills in naturally as new people rate albums.
 
 - Any grouping across users goes through `trackkeys` / `track_id` / `subject_key`
   (CLAUDE.md §12); per-artist grouping through `credits.py`.
-- Web and mobile ship together. Because the iPhone build goes through App Review, both
-  clients are built against a **server-side switch** that stays off until the iOS build
-  is approved, then turns the feature on for both at once. Launch date = the day it is
-  switched on. **(call)**
+- **No switch (Jack).** It is a global feature that ships the moment it is committed
+  and pushed: the backend and web go live on deploy, and iPhone users get it with the
+  next approved build (older builds never call the new endpoints). Launch date = the
+  push. App Review sees the feature as it is.
 - Local `.env` points at production; migrations run on `uvicorn` start.
 - CLAUDE.md updated in the same commits (new table, endpoints, columns, worker stage).
 - One-off scripts deleted after use.
 
-## 8. Left to the builder
+## 8. Decisions after review (2026-11-03)
+
+A brainstorming review of this spec and its plan raised these; Jack's answers are
+**(Jack)**, the rest are calls folded into the plan.
+
+- **Sheet timing** — as the share card closes (§5.2). **(Jack)**
+- **Timestamps first** — `Friendship.requested_at` / `accepted_at` (on every path that
+  creates or accepts one, invite acceptance included) and `Album.rated_at` ship now,
+  ahead of everything else, so each user's "before" starts accumulating. **(Jack)**
+- **No-evidence 50% looks identical** to a measured 50% — same number, same meter.
+  **(Jack)** The reason line may still name a record to rate.
+- **No switch** — ships on push (§7). **(Jack)**
+- **First rating** needs both a previous status other than rated and a null `rated_at`,
+  so moving a rated album back to Listening and finishing it again owes nothing, and
+  neither does editing a copy rated before the column existed; and a copy
+  whose record (`subject_key`) the user has already rated in another edition owes
+  nothing. Singles (≤ 2 tracks) owe no sheet. **(call)**
+- **Sheets owe only once the feature is live** and expire after 48 hours, so launch day
+  doesn't surface a sheet for every album rated since the columns landed. **(call)**
+- **The live path** folds the rater in and computes against that record's other raters
+  only; the nightly run does every other pair. Pairs are stored only off 50%; a missing
+  row reads as 50. The nightly fit warm-starts from the previous night's item vectors.
+  The stored item vectors carry the cluster map's `computed_at`, and fold-in drops the
+  cluster columns when the two disagree; single-user runs don't rewrite the map.
+  **(call)**
+- **The reason follows the number's band** — never "you both put *X* near the top"
+  under a 24%. **(call)**
+- **The baseline's album-feature layer is cut**: it carries Claude-measured values,
+  which can't ship. **(call)**
+- **The discussion metric** counts posts and replies after `rated_at`, not the review
+  each rating already posts into the thread. **(call)**
+- **Open:** a way to block someone, or stop suggesting them, before strangers are
+  surfaced after every rating. Pressd has reports but no block.
+
+## 9. Left to the builder
 
 Exact rank, regularisation, column-type and layer weights, shrinkage and curve (from §3.5); the smoothing rule; table and
 endpoint shapes; whether the live path is stdlib or reads precomputed vectors; the

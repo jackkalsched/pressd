@@ -23,7 +23,7 @@
 - Every new table with a user id is added to `users.delete_own_account` (`backend/routers/users.py:590`).
 - New columns: SQLModel field **and** an idempotent `ALTER TABLE … ADD COLUMN IF NOT EXISTS` in `init_db()`; old rows stay null.
 - ⚠️ Local `.env` is production, and `uvicorn` runs migrations on start. **Do not start the backend locally without Jack's go-ahead.** Backend verification is `python3.13 -c "import backend.main"` plus the pytest suite.
-- Web and mobile ship together, behind `TASTE_OVERLAP_ENABLED` (env, Render) — off until the iOS build is approved.
+- **No switch (Jack):** the feature ships on push — backend and web on deploy, iPhone with the next approved build. There is no `TASTE_OVERLAP_ENABLED`; ignore the switch wherever a task below still mentions it, and see **Amendments**.
 - Copy uses "Pressd", no apostrophe; no grey helper captions under headings or at panel footers.
 - Mobile UI is checked by Jack, not by simulator screenshots: verify with `npm run typecheck` and lint counts.
 - Lint baselines: web 14 problems (10 errors, 4 warnings); mobile 126 errors, 7 warnings. Don't add to them.
@@ -39,6 +39,46 @@
 5. **Deleting an account that has overlaps, sheets and events** — expect the delete to succeed. → Task 1 step on `delete_own_account`, checked by `test_delete_covers_new_tables`.
 
 ---
+
+## Amendments after review (2026-11-03)
+
+These override the tasks below where they disagree. Spec §8 has the reasoning.
+
+1. **Task order.** Task 1 splits:
+   - **1a, first:** `Friendship.requested_at` / `accepted_at` — stamped on friend add,
+     the reverse-pending auto-accept, the accept endpoint **and invite acceptance**
+     (`users.py`, the invite route) — and `Album.rated_at`. No new tables, no sheet.
+     Commit and push on its own. (Jack)
+   - **Then Tasks 2–5** (pure code and read-only evaluation), then the checkpoint.
+   - **1b, after the checkpoint:** the five taste tables and the owed sheet.
+2. **First rating** (`_first_rating`, landed in 1a): `data["status"] == "rated"`, the
+   previous status wasn't `rated`, and `rated_at` is null — both tests, because copies
+   rated before the column have a null `rated_at` and are re-sent "rated" on every edit. Owe no sheet when the user already has another
+   rated copy with the same `subject_key`, or the record has ≤ 2 tracks. Test both.
+3. **No switch.** Drop `own_user["taste_overlap_enabled"]`, the env var and every
+   "when the switch is off" branch; Task 11 step 4 becomes "push". (Jack)
+4. **Sheet timing.** Both clients request the sheet when the share card closes (web
+   `RatingScreen.tsx`, mobile `rate/[id].tsx`) and once on launch — not on For You. The
+   sheet sits over the album page. (Jack)
+5. **`GET /overlap/sheet` is read-only.** The client posts `action: "shown"` to the
+   events endpoint once it renders; that marks the sheet shown. Owed sheets older than
+   48 hours are skipped and marked `superseded`.
+6. **Live path.** Fold the caller in, then compute only against the record's other
+   raters (load their rows); never against every stored user on the web service.
+7. **Storage and steadiness (Task 6).** Store pairs only off 50 (missing row = 50).
+   Warm-start ALS from the stored item vectors. Stamp `tasteitem` with the cluster
+   map's `computed_at`; fold-in drops `c:` columns on a mismatch; `--user` runs don't
+   persist the map.
+8. **Reasons by band.** `reason_for` takes the percent and picks agree / mixed / split
+   by band, with a fixed phrasing chosen by a hash of the pair. No-evidence pairs show
+   50% exactly like any other 50% (Jack); their reason may name a record to rate.
+9. **Baseline:** cut the album-feature layer.
+10. **Checkpoint report adds:** named pairs (`--pairs`), the distribution with user 1
+    removed from bridge counts, and percentiles over pairs with evidence ≥ `EVIDENCE_K`/2.
+11. **Tests** get a bogus `DATABASE_URL` from `conftest.py` instead of loading `.env`.
+    CLAUDE.md §2's "There is no test suite" changes with them.
+12. **Metric 3** counts `kind IN ('user','track_note')` posts and replies after `rated_at`.
+13. **Open:** block / "Don't suggest this person". Not in scope until Jack decides.
 
 ## File Structure
 
