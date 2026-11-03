@@ -475,6 +475,17 @@ def main():
             clusters.persist(con)
             print(f"[nightly_predict] artist map: {len(clusters.artists)} artists, "
                   f"k={clusters.k}, {len(clusters.maps)} seeds")
+            # Taste overlap reads the map just persisted (its cluster columns), and
+            # is userbase-wide, so a --user run leaves it alone. Its own try/except
+            # and workerrun row: a failure must not stop the user stages.
+            if not args.user:
+                try:
+                    from worker.taste_nightly import run_nightly
+                    t = run_nightly(con)
+                    print(f"[nightly_predict] taste overlap: {t['pairs']} pairs, "
+                          f"{t['pairs_stored']} stored off 50%")
+                except Exception as e:
+                    print(f"[nightly_predict] taste overlap FAILED — {e}")
             pooled = fit_pooled_model(con, clusters=clusters)
             catalog = catalog_albums(con)
             frame = album_frames(con, [r["album_id"] for r in catalog])

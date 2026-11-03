@@ -1,3 +1,5 @@
+import type { UserInfo } from './api'
+
 export type AlbumStatus = 'to_listen' | 'listening' | 'rated'
 
 export interface Song {
@@ -384,3 +386,61 @@ export const USERNAME_RE = /^[a-z0-9._]{3,20}$/
 export function cleanUsername(raw: string): string {
   return raw.toLowerCase().replace(/[^a-z0-9._]/g, '').slice(0, 20)
 }
+
+// ── Taste overlap (backend/routers/overlap.py) ───────────────────────────────
+
+/** Why two people overlap. `text` is the server's sentence with every name
+ *  HTML-escaped: render from the structured fields, or tokenise only the literal
+ *  `<i>…</i>` in it, and never set it as HTML. The structured fields stay raw. */
+export interface TasteReason {
+  kind: 'agree' | 'split' | 'mixed' | 'artist' | 'genre' | 'shared'
+  text: string
+  subjectKey?: string
+  album?: string
+  artist?: string
+  genre?: string
+  /** On `mixed`: the record they agree on, beside `subjectKey`'s split. */
+  agreeSubjectKey?: string
+  agreeAlbum?: string
+  /** The other person's most recent rated copy of the record the reason names. */
+  albumId?: number
+}
+
+export interface OverlapAlbum {
+  id: number
+  name: string
+  artist: string
+  artUrl: string | null
+}
+
+/** `percent` is a whole number, 50 when the pair has no stored row; null only
+ *  for yourself. */
+export interface Overlap {
+  percent: number | null
+  reason: TasteReason | null
+  connectingAlbumId: number | null
+  connectingAlbum: OverlapAlbum | null
+}
+
+export interface SheetSong { title: string; score: number }
+
+export interface SheetPerson {
+  user: UserInfo
+  percent: number
+  topSong: SheetSong | null
+  bottomSong: SheetSong | null
+  /** Set in the fallback, where the songs come from their nearest record. */
+  fromAlbum: string | null
+}
+
+export interface PeopleSheetData {
+  sheetId: number
+  album: OverlapAlbum
+  fallback: boolean
+  /** Every other user who rated the record, friends included — the heading's
+   *  count, not the few shown. Null in the fallback. */
+  raters: number | null
+  people: SheetPerson[]
+}
+
+export type SheetAction = 'shown' | 'add' | 'open_discussion' | 'not_now' | 'open_profile'

@@ -1,6 +1,7 @@
 from typing import Optional
 from datetime import date, datetime
-from sqlalchemy import Column, LargeBinary, UniqueConstraint, event
+from datetime import timezone
+from sqlalchemy import Column, DateTime, LargeBinary, UniqueConstraint, event
 from sqlmodel import Field, Relationship, SQLModel
 
 from .trackkeys import subject_key_album
@@ -102,8 +103,8 @@ class Friendship(SQLModel, table=True):
     # size can be counted over time — the measure taste overlap is judged on.
     # Null for rows that predate the columns. Declining or unfriending deletes
     # the row, so churn isn't recorded.
-    requested_at: Optional[datetime] = None
-    accepted_at: Optional[datetime] = None
+    requested_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    accepted_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
 
 
 class UserAvatar(SQLModel, table=True):
@@ -211,7 +212,7 @@ class Album(SQLModel, table=True):
     # the first move to rated, and never again — moving the copy back to
     # Listening and finishing it keeps the original. Null for copies rated
     # before the column existed.
-    rated_at: Optional[datetime] = None
+    rated_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
 
     # Which record this copy is, across every user's spelling of it —
     # trackkeys.subject_key_album. Stored rather than computed on read because
@@ -479,7 +480,7 @@ class ArtistCluster(SQLModel, table=True):
 class WorkerRun(SQLModel, table=True):
     """One row per worker job execution (audio ingest / per-user predict)."""
     id: Optional[int] = Field(default=None, primary_key=True)
-    job: str = Field(index=True)  # 'audio_ingest' | 'nightly_predict' | 'rescore_scores' | 'new_releases'
+    job: str = Field(index=True)  # 'audio_ingest' | 'nightly_predict' | 'rescore_scores' | 'new_releases' | 'taste_overlap' | 'taste_health'
     user_id: Optional[int] = Field(default=None, index=True)
     started_at: datetime = Field(default_factory=datetime.utcnow)
     finished_at: Optional[datetime] = None
@@ -658,3 +659,64 @@ class PostReport(SQLModel, table=True):
     reason: str                                     # 'abuse' | 'off_subject' | 'spoiler'
     created_at: datetime = Field(default_factory=datetime.utcnow)
     resolved_at: Optional[datetime] = None
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class TasteItem(SQLModel, table=True):
+    """What an album copy is like, as the taste baseline reads it: its feature
+    vector (Claude's six measurements and the audio means), standardized across the
+    whole catalog. column_key is `album:<album_id>`; one row keyed `raters` holds
+    the category columns' rater counts as a JSON object instead. Rewritten nightly
+    (worker/taste_nightly.py), so the live path never re-standardizes over the few
+    albums it loads."""
+    column_key: str = Field(primary_key=True)
+    vector_json: str = ""
+    fitted_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
+
+
+class TasteUser(SQLModel, table=True):
+    """A user's album-feature taste vector and the number of records behind it,
+    which sets how much evidence the feature layer can lend a pair. `[]` with 0
+    records when they have none: the row still dates their last computation, which
+    is how the live path (taste_live.py) tells whether they rated since."""
+    user_id: int = Field(foreign_key="pressuser.id", primary_key=True)
+    vector_json: str = ""
+    records: int = 0
+    updated_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
+
+
+class TasteOverlap(SQLModel, table=True):
+    """The overlap between two users, stored once with user_id_a < user_id_b, and
+    only when it reads as something other than 50%: a missing row is 50."""
+    user_id_a: int = Field(foreign_key="pressuser.id", primary_key=True)
+    user_id_b: int = Field(foreign_key="pressuser.id", primary_key=True)
+    percent: float = 50.0
+    evidence: float = 0.0
+    reason_json: Optional[str] = None
+    updated_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
+
+
+class OverlapSheet(SQLModel, table=True):
+    """A people sheet owed to a user for a first rating. album_id is a plain int,
+    not a foreign key, so deleting the album blanks the sheet instead of
+    blocking the delete."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="pressuser.id", index=True)
+    album_id: int
+    status: str = Field(default="owed", index=True)  # owed | shown | superseded
+    created_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
+    shown_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+
+
+class OverlapEvent(SQLModel, table=True):
+    """What a user did with a people sheet, for measuring the feature."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="pressuser.id", index=True)
+    sheet_id: Optional[int] = None
+    # shown | add | open_discussion | not_now | open_profile
+    action: str
+    target_user_id: Optional[int] = None
+    created_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))

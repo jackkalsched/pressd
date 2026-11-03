@@ -5,7 +5,7 @@ import uuid
 import smtplib
 from email.mime.text import MIMEText
 from binascii import Error as BinasciiError
-from datetime import datetime
+from datetime import datetime, timezone
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
@@ -423,12 +423,12 @@ def accept_invite(
         existing = session.exec(select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)).first()
         if not existing:
             # Invite links are mutual consent — accepted immediately
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             session.add(Friendship(user_id_a=a, user_id_b=b, status="accepted", requested_by=invite.invited_by,
                                    requested_at=now, accepted_at=now))
         elif existing.status == "pending":
             existing.status = "accepted"
-            existing.accepted_at = datetime.utcnow()
+            existing.accepted_at = datetime.now(timezone.utc)
             session.add(existing)
             try:
                 session.commit()
@@ -664,6 +664,13 @@ def delete_own_account(
     # Recommendations they sent stay in friends' To Listen, but no longer name
     # them or carry their note.
     run("UPDATE album SET recommended_by = NULL, recommendation_note = NULL WHERE recommended_by = :u")
+
+    # Taste overlap: their vector, every overlap that names them, their
+    # sheets, and their events, plus other people's events that point at them.
+    run("DELETE FROM tasteoverlap WHERE user_id_a = :u OR user_id_b = :u")
+    run("DELETE FROM tasteuser WHERE user_id = :u")
+    run("DELETE FROM overlapevent WHERE user_id = :u OR target_user_id = :u")
+    run("DELETE FROM overlapsheet WHERE user_id = :u")
 
     # The uploaded pictures hang off the user row by foreign key too.
     run("DELETE FROM useravatar WHERE user_id = :u")
@@ -1053,13 +1060,13 @@ def add_friend(
             return {"ok": True, "status": "pending", "already_friends": False}
         # They already requested us — requesting back is mutual consent
         existing.status = "accepted"
-        existing.accepted_at = datetime.utcnow()
+        existing.accepted_at = datetime.now(timezone.utc)
         session.add(existing)
         session.commit()
         _notify_accepted(session, background, user, friend_id)
         return {"ok": True, "status": "accepted", "already_friends": True}
     session.add(Friendship(user_id_a=a, user_id_b=b, status="pending", requested_by=user.id,
-                           requested_at=datetime.utcnow()))
+                          requested_at=datetime.now(timezone.utc)))
     try:
         session.commit()
     except IntegrityError:
@@ -1127,7 +1134,7 @@ def accept_friend_request(
     if f.requested_by == user.id:
         raise HTTPException(status_code=400, detail="Can't accept your own request")
     f.status = "accepted"
-    f.accepted_at = datetime.utcnow()
+    f.accepted_at = datetime.now(timezone.utc)
     session.add(f)
     session.commit()
     _notify_accepted(session, background, user, other_id)

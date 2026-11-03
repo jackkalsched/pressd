@@ -6,14 +6,14 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlmodel import Session, select
 from sqlalchemy import func, text as _sql
 from sqlalchemy.orm import selectinload
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from ..database import get_session
 from ..deps import current_user, authorize_view, are_friends, public_user
-from ..models import Album, Song, SongAudioFeatures, PressUser, Like, Comment
+from ..models import Album, Song, SongAudioFeatures, PressUser, Like, Comment, OverlapSheet
 from ..scoring import (
     compute_a_score, recompute_user_scores, predictions_unlocked, BANG_THRESHOLD,
-    PREDICTION_FIELDS, SKIP_THRESHOLD,
+    PREDICTION_FIELDS, SKIP_THRESHOLD, is_single_release,
 )
 from ..global_rating import invalidate_cache as invalidate_global_ratings
 from ..genres import GENRES, canonical_genre, canonical_subgenre, genre_qualifier
@@ -60,6 +60,22 @@ def _first_rating(previous_status: Optional[str], rated_at: Optional[datetime], 
     previous status alone would treat a rated copy moved back to Listening and
     finished again as a first rating."""
     return data.get("status") == "rated" and previous_status != "rated" and rated_at is None
+
+
+def _owes_sheet(first_rating: bool, album_name: Optional[str], track_count: int, rated_elsewhere: bool) -> bool:
+    """Whether a rating owes the people sheet (routers/overlap.py): a first rating,
+    not of a single, and not of a record the user already rated in another edition —
+    they met its raters then."""
+    return first_rating and not is_single_release(album_name, track_count) and not rated_elsewhere
+
+
+def _rated_elsewhere(session: Session, album: Album) -> bool:
+    if not album.subject_key:
+        return False
+    return session.exec(select(Album.id).where(
+        Album.user_id == album.user_id, Album.id != album.id,
+        Album.subject_key == album.subject_key, Album.status == "rated",
+    )).first() is not None
 
 
 ALBUM_MUTABLE_FIELDS = {
@@ -287,8 +303,11 @@ def update_album(
 
     if data.get("status") == "rated":
         album.date_rated = date.today()
+
     if first_rating:
-        album.rated_at = datetime.utcnow()
+        album.rated_at = datetime.now(timezone.utc)
+        if _owes_sheet(True, album.album_name, len(album.songs), _rated_elsewhere(session, album)):
+            session.add(OverlapSheet(user_id=user.id, album_id=album.id))
 
     session.add(album)
     session.commit()

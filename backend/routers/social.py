@@ -5,7 +5,7 @@ from sqlmodel import Session, select, func
 from ..database import get_session
 from ..deps import current_user
 from ..models import Album, Comment, Friendship, Like, PressUser, Song
-from ..scoring import pick_top_song
+from ..scoring import top_bottom_songs
 
 router = APIRouter(prefix="/social", tags=["social"])
 
@@ -304,8 +304,7 @@ def get_top_reviews(
         songs = songs_by_album.get(album.id, [])
         # Honours the author's tie-break when several tracks shared the top
         # score; falls back to the highest otherwise.
-        top = pick_top_song(album, songs)
-        bottom = min(songs, key=lambda s: s.score) if len(songs) >= 2 else None
+        top, bottom = top_bottom_songs(album, songs)
         items.append({
             "author": {"id": author.id, "name": author.name, "avatar_url": author.avatar_url},
             "album_id": album.id,

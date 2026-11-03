@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  FlatList,
   Pressable,
   StyleSheet,
   Text,
@@ -30,6 +31,7 @@ import {
   removeFriend,
   fetchArtistStats,
   fetchScatterData,
+  fetchOverlap,
 } from '../../lib/api'
 import { songScoreColor, type Album } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
@@ -42,6 +44,7 @@ import {
   type ArtistRank, type RankDir, type RankMode,
 } from '../../lib/rankings'
 import ProfileBanner from '../../components/ProfileBanner'
+import { OverlapChip, OverlapPanel } from '../../components/TasteOverlap'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 
@@ -156,6 +159,17 @@ export default function FriendProfile() {
   const theyAsked = !!requests?.incoming.some((u) => u.id === fid)
   const [friendBusy, setFriendBusy] = useState(false)
 
+  // How alike your taste is (spec §5.1) — anyone's profile but your own.
+  const { data: overlap } = useQuery({
+    queryKey: ['overlap', user?.id, fid],
+    queryFn: () => fetchOverlap(fid),
+    enabled: Number.isFinite(fid) && !!user && !isSelf,
+    staleTime: 60_000,
+  })
+  // Compare with no shared record goes to their library, scrolled to the tabs.
+  const listRef = useRef<FlatList<Album | ArtistRank>>(null)
+  const [tabsY, setTabsY] = useState(0)
+
   // The header's small distribution: one bar per whole point, over albums.
   // Different artists rated — range, beside the volume of Albums and Songs.
   // Case and spacing folded, so one artist's records don't count twice.
@@ -208,6 +222,18 @@ export default function FriendProfile() {
     } else {
       changeFriendship(() => addFriend(user.id, fid))
     }
+  }
+
+  function compareWith(albumId: number | null) {
+    if (albumId != null) {
+      // Their copy: the album page draws FriendCompare once you've rated it too.
+      router.push({ pathname: '/album/[id]', params: { id: String(albumId) } })
+      return
+    }
+    setTab('library')
+    // After the switch has rendered: leaving a list tab remounts the FlatList
+    // (its key changes with the column count), so the ref moves to a new one.
+    setTimeout(() => listRef.current?.scrollToOffset({ offset: Math.max(0, tabsY - spacing.lg), animated: true }), 60)
   }
 
   function openArtist(name: string) {
@@ -294,6 +320,7 @@ export default function FriendProfile() {
       </View>
 
       <Animated.FlatList
+        ref={listRef}
         key={isGrid ? 'grid' : 'list'}
         data={listData as (Album | ArtistRank)[]}
         // Artist rows have no id — the artist name is the identity there.
@@ -353,7 +380,25 @@ export default function FriendProfile() {
               }
             />
 
-            <View style={styles.tabBar}>
+            {/* A friend's overlap is a chip; for anyone else — a pending request
+                either way included — it's the panel, which makes the case for
+                adding them. */}
+            {!isSelf && overlap && (isFriend ? (
+              <OverlapChip overlap={overlap} />
+            ) : (
+              <OverlapPanel
+                overlap={overlap}
+                person={person}
+                onAdd={onFriendButton}
+                requested={requested}
+                theyAsked={theyAsked}
+                busy={friendBusy}
+                onCompare={compareWith}
+                onOpenAlbum={(albumId) => router.push({ pathname: '/album/[id]', params: { id: String(albumId) } })}
+              />
+            ))}
+
+            <View style={styles.tabBar} onLayout={(e) => setTabsY(e.nativeEvent.layout.y)}>
               {TABS.map(({ key, label }) => (
                 <Pressable key={key} style={styles.tab} onPress={() => setTab(key)}>
                   <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>

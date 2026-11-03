@@ -27,6 +27,7 @@ import {
 } from '../types'
 import type { Song, Album } from '../types'
 import ShareCardModal from '../components/ShareCard'
+import { PEOPLE_SHEET_KEY } from '../lib/peopleSheet'
 import TopSongTiebreak from '../components/TopSongTiebreak'
 import { useUser } from '../context/UserContext'
 import { useRecalibrationMessage } from '@pressd/shared/hooks/useRecalibration'
@@ -344,6 +345,14 @@ export default function RatingScreen() {
     })
   }
 
+  // The end of the flow, as the share card closes. A first rating may owe a
+  // people sheet (backend/routers/overlap.py); Layout's host asks again once
+  // the album page mounts it, so the sheet opens over the album, never here.
+  function closeFlow() {
+    queryClient.invalidateQueries({ queryKey: PEOPLE_SHEET_KEY })
+    navigate(`/album/${albumId}`, { replace: true })
+  }
+
   const submit = useMutation({
     mutationFn: async () => {
       await persist('rated')
@@ -360,7 +369,7 @@ export default function RatingScreen() {
       queryClient.invalidateQueries({ queryKey: ['thread'] })
       const fresh = await fetchAlbum(albumId).catch(() => null)
       if (!fresh) {
-        navigate(`/album/${albumId}`, { replace: true })
+        closeFlow()
         return
       }
       // Ask about a tie before the share card, since the card is one of the
@@ -483,7 +492,7 @@ export default function RatingScreen() {
     return (
       <ShareCardModal
         album={shareAlbum}
-        onClose={() => navigate(`/album/${albumId}`, { replace: true })}
+        onClose={closeFlow}
       />
     )
   }

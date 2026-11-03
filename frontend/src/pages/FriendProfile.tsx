@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Check, Clock, Image as ImageIcon, Loader2, Settings, UserPlus } from 'lucide-react'
-import { acceptFriendRequest, addFriend, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, getInviteLink, removeFriend } from '../api'
+import { acceptFriendRequest, addFriend, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, fetchOverlap, getInviteLink, removeFriend } from '../api'
 import { useUser } from '../context/UserContext'
 import Library from './Library'
 import { useBanner } from '../lib/useBanner'
@@ -11,6 +11,7 @@ import { songScoreColor } from '../types'
 import { ScoreHistogram } from '../components/histograms'
 import ProfilePicks from '../components/ProfilePicks'
 import SettingsDialog from '../components/SettingsDialog'
+import { OverlapChip, OverlapPanel } from '../components/TasteOverlap'
 import Stats from './Stats'
 import Ratings from './Ratings'
 
@@ -77,6 +78,15 @@ export default function FriendProfile() {
   })
   const requested = !!requests?.outgoing.some(u => u.id === fid)
   const theyAsked = !!requests?.incoming.some(u => u.id === fid)
+
+  // How alike your taste is (spec §5.1) — anyone's profile but your own.
+  const { data: overlap } = useQuery({
+    queryKey: ['overlap', activeUser?.id, fid],
+    queryFn: () => fetchOverlap(fid),
+    enabled: valid && !!activeUser && !isSelf,
+    staleTime: 60_000,
+  })
+  const tabsRef = useRef<HTMLDivElement>(null)
 
   // Their friends → mutual = intersection with mine (excluding myself).
   const { data: theirFriends = [] } = useQuery({
@@ -275,6 +285,9 @@ export default function FriendProfile() {
               {person.bio}
             </p>
           )}
+          {/* A friend's overlap is a chip under the name; for anyone else
+              it's the panel below, which makes the case for adding them. */}
+          {!isSelf && isFriend && overlap && <OverlapChip overlap={overlap} />}
         </div>
 
         <div className="flex shrink-0 items-center gap-2.5 pt-4 md:pt-8">
@@ -315,6 +328,24 @@ export default function FriendProfile() {
           )}
         </div>
       </div>
+
+      {/* ── You & them ───────────────────────────────────────────
+          Across the page's width, under the name and over the numbers.
+          A pending request either way still counts as not friends. */}
+      {!isSelf && !isFriend && overlap && (
+        <OverlapPanel
+          overlap={overlap}
+          person={person}
+          onAdd={handleFriendButton}
+          requested={requested}
+          theyAsked={theyAsked}
+          busy={busy}
+          onOpenLibrary={() => {
+            setTab('library')
+            tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }}
+        />
+      )}
 
       {/* ── Headline numbers, between two rules ─────────────────
           The average and the four counts, in mobile's order. */}
@@ -368,7 +399,7 @@ export default function FriendProfile() {
       )}
 
       {/* ── Tab switcher ─────────────────────────────────────────── */}
-      <div className="flex items-center border-t border-[#e8e2d9] pt-5 mb-6">
+      <div ref={tabsRef} className="flex items-center border-t border-[#e8e2d9] pt-5 mb-6">
         <div className="flex items-center gap-1 bg-[#efe9e0] rounded-xl p-1 shrink-0">
           {tabs.map(({ key, label }) => (
             <button

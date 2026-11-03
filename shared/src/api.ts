@@ -2,6 +2,7 @@ import type {
   Album, Song, ArtistStats, FactorStats, FactorPoints,
   DiscussionPost, SubjectRef, ThreadMeta, ThreadPage, ThreadSort,
   FeedPost, HeatedMood, HeatedRecord, SubjectType,
+  TasteReason, Overlap, OverlapAlbum, PeopleSheetData, SheetPerson, SheetSong, SheetAction,
 } from './types'
 
 // ── Runtime configuration ─────────────────────────────────────────────────────
@@ -2059,4 +2060,88 @@ export async function fetchDiscussionFeed(
     }),
     nextCursor: (d.next_cursor as string | null) ?? null,
   }
+}
+
+
+// ── Taste overlap (backend/routers/overlap.py) ───────────────────────────────
+
+function transformOverlapAlbum(a: Record<string, unknown>): OverlapAlbum {
+  return {
+    id: a.id as number,
+    name: a.name as string,
+    artist: a.artist as string,
+    artUrl: (a.art_url as string | null) ?? null,
+  }
+}
+
+function transformTasteReason(r: Record<string, unknown>): TasteReason {
+  const opt = <T>(v: unknown): T | undefined => (v == null ? undefined : (v as T))
+  return {
+    kind: r.kind as TasteReason['kind'],
+    text: (r.text as string) ?? '',
+    subjectKey: opt<string>(r.subject_key),
+    album: opt<string>(r.album),
+    artist: opt<string>(r.artist),
+    genre: opt<string>(r.genre),
+    agreeSubjectKey: opt<string>(r.agree_subject_key),
+    agreeAlbum: opt<string>(r.agree_album),
+    albumId: opt<number>(r.album_id),
+  }
+}
+
+function transformSheetSong(s: Record<string, unknown> | null): SheetSong | null {
+  return s ? { title: s.title as string, score: s.score as number } : null
+}
+
+function transformSheetPerson(p: Record<string, unknown>): SheetPerson {
+  return {
+    user: toUserInfo(p.user as Parameters<typeof toUserInfo>[0]),
+    percent: p.percent as number,
+    topSong: transformSheetSong(p.top_song as Record<string, unknown> | null),
+    bottomSong: transformSheetSong(p.bottom_song as Record<string, unknown> | null),
+    fromAlbum: (p.from_album as string | null) ?? null,
+  }
+}
+
+/** How alike your taste and another user's is. Any signed-in user may ask; the
+ *  percent is null only for your own id. */
+export async function fetchOverlap(userId: number): Promise<Overlap> {
+  const res = await apiFetch(`${BASE()}/users/${userId}/overlap`)
+  if (!res.ok) throw new Error('Failed to load overlap')
+  const d = await res.json()
+  return {
+    percent: (d.percent as number | null) ?? null,
+    reason: d.reason ? transformTasteReason(d.reason) : null,
+    connectingAlbumId: (d.connecting_album_id as number | null) ?? null,
+    connectingAlbum: d.connecting_album ? transformOverlapAlbum(d.connecting_album) : null,
+  }
+}
+
+/** The people sheet owed after a first rating, or null when nothing is owed.
+ *  Reading it marks nothing shown: log `shown` once it is on screen. */
+export async function fetchPeopleSheet(): Promise<PeopleSheetData | null> {
+  const res = await apiFetch(`${BASE()}/overlap/sheet`)
+  if (!res.ok) throw new Error('Failed to load people sheet')
+  const d = await res.json()
+  if (!d) return null
+  return {
+    sheetId: d.sheet_id as number,
+    album: transformOverlapAlbum(d.album),
+    fallback: !!d.fallback,
+    raters: (d.raters as number | null) ?? null,
+    people: ((d.people ?? []) as Record<string, unknown>[]).map(transformSheetPerson),
+  }
+}
+
+export async function logSheetEvent(
+  sheetId: number,
+  action: SheetAction,
+  targetUserId?: number,
+): Promise<void> {
+  const res = await apiFetch(`${BASE()}/overlap/sheet/${sheetId}/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, target_user_id: targetUserId ?? null }),
+  })
+  if (!res.ok) throw new Error('Failed to log sheet event')
 }

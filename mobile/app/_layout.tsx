@@ -30,6 +30,7 @@ import { wireAppStateFocus } from '../lib/refresh'
 import { getMessaging, setBackgroundMessageHandler } from '@react-native-firebase/messaging'
 import WhatsNewSheet from '../components/WhatsNewSheet'
 import PhoneSheet from '../components/PhoneSheet'
+import { PeopleSheetHost } from '../components/PeopleSheet'
 import { colors } from '../theme/tokens'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
@@ -133,6 +134,18 @@ function RootNavigator() {
       mode="prompt"
       visible={pastFirstRun && user.phonePromptDone === false && whatsNewKnown && !whatsNewOpen}
       onClose={() => {}}
+    />
+    {/* The people sheet a first rating owes, asked for at launch and again as
+        the rating flow's share card closes. Last in line: the username page,
+        the tutorial, the release notes and the phone prompt each go first.
+        Held until the phone answer is known to be in, so a session that
+        learns from the launch refresh that the prompt is owed can't have
+        the sheet already up underneath it. */}
+    <PeopleSheetHost
+      held={
+        !pastFirstRun || user.usernameChosen === false || !whatsNewKnown || whatsNewOpen ||
+        user.phonePromptDone !== true
+      }
     />
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Protected guard={!!user}>

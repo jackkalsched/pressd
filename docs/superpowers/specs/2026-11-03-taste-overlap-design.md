@@ -76,6 +76,9 @@ records; for everyone else, genres, subgenres, artist clusters and album feature
 
 ### 3.2 Approach: matrix factorization first (Jack)
 
+> **Superseded at the checkpoint (§3.7): the baseline ships.** The factorization stays
+> built, as the comparison the nightly health check scores against it (§6.1).
+
 Jack wants the backend built on **matrix factorization first, to see how it works**,
 before settling on anything else. So the first build is a factorization model, and the
 layered approach in §3.3–3.4 is the **baseline it is measured against** (and the
@@ -97,6 +100,14 @@ fallback if it loses).
     rebuilt from each night's map, and the live update after a rating uses that same
     night's map. An artist joins only once their audio is analysed (the Mac's nightly
     ingest), so a brand-new artist has no cluster columns until the night after.
+- each user's **taste for Claude's six album measurements** (Jack, at the
+  checkpoint) — one `m:<axis>` column per `albumfactors` measurement (narrative arc,
+  concept unity, emotional throughline, sequencing intent, lyrical depth,
+  distinctness). The value is how the user's album-level z-scores lean with that
+  measurement across their rated albums (high when they score the records Claude
+  measured high above their own average), shrunk like the other aggregates. The
+  measurements describe albums, not people, so they enter only through this per-user
+  lean; they connect pairs who share no record but like the same kind of record,
 - the **final album score**: requested, but it is the song mean plus the factor
   adjustments and drifts with the userbase prior, so include it **only if the §3.5 test
   shows it helps** **(call)**.
@@ -198,6 +209,26 @@ reason to fix it before launch.
   seconds at most.
 - Mind the 15-client Supabase pooler (CLAUDE.md §7): no connection held across slow work.
 
+### 3.7 The checkpoint's decision (Jack, 2026-11-03)
+
+- **The layered baseline (§3.3–3.4) computes the percentage**, not the factorization.
+  On the real data the baseline gets more confident the more two people share — Jack's
+  friends with 8–18 shared records land at 63–82% — while the factorization did the
+  opposite: pairs sharing one record went to 11% and 87%, heavy-overlap friends sat at
+  48–64%. Jack judged the baseline's numbers believable and the factorization's not.
+  It is also slightly more accurate on held-out songs (MAE 0.8556 against 0.8657).
+- **Configuration:** aggregate columns at weight 1.0, the **final album score on**,
+  curve γ 0.5, `EVIDENCE_K` 10. The album-feature layer keeps Claude's six measurements
+  and the audio means.
+- **Why not forever.** The factorization is starved today — most columns have one to
+  three raters — and is expected to overtake the baseline as records gather raters. So
+  the comparison keeps running (§6.1), and the choice is re-made at set milestones.
+- **Cost as it grows.** The baseline compares every pair directly, so the nightly run
+  grows with users²: ~5,000 pairs today, 500,000 at 1,000 users, 50 million at 10,000.
+  Before a few thousand users it must compute only candidate pairs (shared records or
+  artists, friends) and store only pairs off 50%. The live path is unaffected: it only
+  compares a rater with that record's other raters.
+
 ## 4. Storage and API (call — shapes are the builder's)
 
 - A `tasteoverlap` table keyed `(user_id_a, user_id_b)` with `user_id_a < user_id_b`
@@ -295,14 +326,37 @@ soon as it's ready. "Before" is measured per user, not per calendar month: whate
 user did before their first pop-up — even an hour or a minute earlier — is their
 before, so the comparison fills in naturally as new people rate albums.
 
+### 6.1 Health and re-checkpoints (Jack, 2026-11-03)
+
+- **Every night** a health check scores both approaches on held-out song scores — the
+  baseline that ships, the factorization beside it, and plain pooling as the floor — and
+  records the result as a `workerrun` row (job `taste_health`). It also records the
+  shipped baseline's percentile spread, the count of pairs off 50%, and **examples with
+  user 1 (Jack)**: his highest, his lowest, and the pairs sharing the most songs with
+  him, each with both approaches' percentages. And it records **the overlap stage's own
+  status** — the latest `taste_overlap` row's status, when it finished and its age —
+  and fails the job when that stage errored, has been running over 6 hours, or last ran
+  over 36 hours ago, since nothing else would notice the stored percentages going stale.
+- **Jack's morning brief reads that row**, so he sees the overlap's health each morning:
+  the two accuracies side by side, whether the spread is in band, and his examples.
+- **Re-checkpoints.** The full checkpoint report (§3.5's grid, both approaches) re-runs,
+  and the health row flags a decision due, the first night each of these is crossed:
+  - **1,000, 2,500, 5,000 and 10,000 users** have joined;
+  - **50 users**, then **100 users**, each share 50 or more songs with at least one
+    other user.
+  Each fires once. The decision stays Jack's: the flag asks for it, nothing switches.
+- **The report stays private.** The repository is public, so nothing per-user is
+  published from its Actions: the re-run checkpoint report rides in that night's
+  `taste_health` row (`report_md`), where only the database and Jack's brief see it.
+
 ## 7. Constraints
 
 - **The percentage is the model's, never an LLM's (Jack).** No Claude call computes,
   chooses or words it; the reason text is a template. Claude-measured album values
-  (`albumfactors` theme axes, distinctness) never enter the factorization. They appear
-  only in the baseline's album-feature layer, which is used for comparison at the
-  checkpoint. Genre and subgenre labels (partly Claude-tagged) only group a user's own
-  scores.
+  (`albumfactors`: the five theme axes and distinctness, measured once per album) **may
+  enter the factorization as inputs (Jack, at the checkpoint)** — as six per-user
+  columns holding the user's taste for each measurement (§3.2). Genre and subgenre
+  labels (partly Claude-tagged) only group a user's own scores.
 
 - Any grouping across users goes through `trackkeys` / `track_id` / `subject_key`
   (CLAUDE.md §12); per-artist grouping through `credits.py`.
@@ -341,8 +395,9 @@ A brainstorming review of this spec and its plan raised these; Jack's answers ar
   **(call)**
 - **The reason follows the number's band** — never "you both put *X* near the top"
   under a 24%. **(call)**
-- **The baseline's album-feature layer is cut**: it carries Claude-measured values,
-  which can't ship. **(call)**
+- **Claude's album measurements stay in**, as the factorization's `m:` columns and in
+  the baseline's album-feature layer — Jack's checkpoint decision (§3.2, §7) stands
+  over the review's suggestion to cut them. **(Jack)**
 - **The discussion metric** counts posts and replies after `rated_at`, not the review
   each rating already posts into the thread. **(call)**
 - **Open:** a way to block someone, or stop suggesting them, before strangers are

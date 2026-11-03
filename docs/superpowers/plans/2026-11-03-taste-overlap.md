@@ -16,7 +16,7 @@
 - Every score is read relative to the user's own mean and spread **per column type** (z-scores).
 - Cluster columns: all 10 seeds × 18 clusters, each column at **1/10** the cluster weight.
 - Final album score column: **off** unless the checkpoint test shows it helps.
-- **No LLM call anywhere in computing, choosing or wording the overlap (Jack).** The percentage is the model's output from users' own ratings; the reason text is a fixed template. No Claude-measured value (`albumfactors` theme axes or distinctness) enters the factorization. Genre and subgenre labels are used only as groupings of a user's own scores.
+- **No LLM call anywhere in computing, choosing or wording the overlap (Jack).** The percentage is the model's output; the reason text is a fixed template. Claude-measured album values (`albumfactors` theme axes and distinctness) enter the factorization only as inputs — six per-user `m:` columns (Jack, at the checkpoint). Genre and subgenre labels are used only as groupings of a user's own scores.
 - Pairs with evidence: target 10th percentile ≥ 25 and 90th percentile ≤ 85, interquartile range ≥ 15 points **(plan's numbers for the spec's 25–85 band)**.
 - `backend/taste_matrix.py` and `backend/taste_overlap.py` are **pure stdlib** (+ `sqlalchemy.text` for loading): the web service has no numpy (`theme_predictor/personalize.py:37-39`).
 - Any cross-user match goes through `track_id` / `subject_key` / `trackkeys.artist_key`; per-artist grouping through `credits.album_artists` / `credits.song_artists`.
@@ -72,13 +72,46 @@ These override the tasks below where they disagree. Spec §8 has the reasoning.
 8. **Reasons by band.** `reason_for` takes the percent and picks agree / mixed / split
    by band, with a fixed phrasing chosen by a hash of the pair. No-evidence pairs show
    50% exactly like any other 50% (Jack); their reason may name a record to rate.
-9. **Baseline:** cut the album-feature layer.
+9. **Claude's album measurements stay** — as the `m:` columns of Task 5b and in the baseline's album-feature layer (Jack, at the checkpoint; the review's suggestion to cut them is withdrawn).
 10. **Checkpoint report adds:** named pairs (`--pairs`), the distribution with user 1
     removed from bridge counts, and percentiles over pairs with evidence ≥ `EVIDENCE_K`/2.
 11. **Tests** get a bogus `DATABASE_URL` from `conftest.py` instead of loading `.env`.
     CLAUDE.md §2's "There is no test suite" changes with them.
 12. **Metric 3** counts `kind IN ('user','track_note')` posts and replies after `rated_at`.
 13. **Open:** block / "Don't suggest this person". Not in scope until Jack decides.
+
+## Amendments after the checkpoint (2026-11-03)
+
+Jack chose the **baseline** (spec §3.7). These override Tasks 6–7 and 11 where they
+disagree, and add Task 6b.
+
+1. **Constants.** `backend/taste_overlap.py`: `GAMMA = 0.5`. `backend/taste_matrix.py`
+   `COLUMN_WEIGHTS`: aggregates (`a`, `c`, `g`, `sg`) at 1.0 and the final album score
+   (`A`) on, exactly as the checkpoint's winning baseline configuration in
+   `worker/taste_evaluate.py` sets them. `EVIDENCE_K` stays 10.
+2. **The baseline moves to `backend/`** (`backend/taste_baseline.py`, from
+   `worker/taste_baseline.py`), so the web service can run it: it is already pure stdlib
+   plus `statistics`. `worker/taste_evaluate.py` imports it from there. The
+   factorization (`worker/taste_factorize.py`) stays in the worker, for the health check
+   only.
+3. **Storage (Task 6).** No item or user vectors are fitted. `tasteitem` holds each
+   album's standardized feature vector (`column_key = "album:<album_id>"`,
+   `vector_json`), so the live path never re-standardizes over a subset; `tasteuser`
+   holds each user's album-feature taste vector and the record count behind it.
+   `tasteoverlap` stores pairs off 50% only (a missing row reads as 50), with the
+   evidence, reason and `updated_at`. Smoothing is unchanged.
+4. **Nightly (Task 6).** `run_nightly` builds cells and album features for everyone,
+   runs `baseline_similarity` over every pair, maps each with `to_percent`, smooths,
+   attaches `reason_for` (by band, review amendment 8), and writes. It no longer calls
+   the factorization. Logged as `workerrun` job `taste_overlap`.
+5. **Live path (Task 7).** After a first rating: load the caller's and that record's
+   other raters' rows, build their cells, take album features from `tasteitem` and the
+   others' taste vectors from `tasteuser`, recompute the caller's taste vector, and run
+   the baseline for the caller against those raters only.
+6. **Scale.** Note in CLAUDE.md that all-pairs is ~5k pairs today and grows with
+   users²; candidate-pair restriction is needed before a few thousand users. Not built
+   now.
+7. **Task 6b (new): the health check and re-checkpoints** — below, after Task 6.
 
 ## File Structure
 
@@ -403,6 +436,33 @@ def fit(cells: dict[int, Cells], rank: int = RANK, reg: float = REG, iters: int 
 - [ ] **Step 4: Run, expect PASS**, then run `python3.13 -m worker.taste_factorize --dry-run`. That flag runs `run_nightly` without writing and prints the counts and percentile table. The table should match the checkpoint report within a point or two.
 
 - [ ] **Step 5: Commit** — "Refit taste overlap nightly after the artist map and store every pair's percentage and reason".
+
+---
+
+### Task 6b: Nightly health check and re-checkpoints (spec §6.1)
+
+**Files:**
+- Create: `worker/taste_health.py`, `tests/test_taste_health.py`
+- Modify: `worker/taste_evaluate.py` (expose what the health check reuses), `.github/workflows/nightly-predict.yml` (a `taste-health` job)
+- Modify: `CLAUDE.md` §3 (run command), §6.3 or a taste-overlap entry (the health row and milestones), the `WorkerRun.job` comment in `models.py`
+
+**Interfaces:**
+- `python -m worker.taste_health [--report PATH] [--dry-run]`. Reads the database; writes exactly one `workerrun` row (`job = "taste_health"`, `status` `ok` or `error`) unless `--dry-run`.
+- `detail_json` (the morning brief reads it; keep the keys stable):
+  - `users` (count of `pressuser`), `users_sharing_50` (distinct users who share ≥ 50 songs, by `track_id`, with at least one other user)
+  - `accuracy`: `{"baseline": mae, "factorization": mae, "pooling": mae, "held_out": n}` on the same hold-out as `taste_evaluate`
+  - `spread`: the shipped baseline's p10 / p25 / p50 / p75 / p90 over pairs with evidence, `in_band` (p10 ≥ 25, p90 ≤ 85, IQR ≥ 15), `pairs`, `pairs_off_50`
+  - `user1`: up to 3 highest, 3 lowest and the 5 most-shared pairs with user 1: `{"user_id", "name", "shared_songs", "shared_records", "baseline", "factorization"}`
+  - `milestones_crossed`: every milestone reached so far; `checkpoint_due`: those crossed for the first time tonight (a milestone fires once — read the previous `taste_health` rows' `milestones_crossed` to know)
+  - Milestones: `users_1000`, `users_2500`, `users_5000`, `users_10000`, `sharing50_50`, `sharing50_100`
+- When `checkpoint_due` is non-empty, the full checkpoint report (`taste_evaluate`'s markdown) goes into `detail_json` as `report_md` (and to `--report PATH` when given, for local use). **Never an Actions artifact** — the repo is public and the report names users (ruling, Task 6b review).
+- The factorization here is the checkpoint's configuration (rank 8, reg 5, bias reg 5, aggregates 0.25, album score off, measures 1); the baseline is the shipped one (amendment 1).
+
+- [ ] **Step 1: Failing tests** (pure helpers, no database): milestone logic — a milestone already in a previous row is not due again; crossing two at once makes both due; `users_sharing_50` from a small synthetic song list (two users sharing 50 tracks count, sharing 49 don't).
+- [ ] **Step 2: Implement**, reusing `taste_evaluate`'s load / hold-out / scoring functions; one read transaction closed before computing, one short write.
+- [ ] **Step 3:** `python3.13 -m worker.taste_health --dry-run` prints the detail JSON (read-only against production).
+- [ ] **Step 4: Workflow** — a `taste-health` job in `nightly-predict.yml`, after `predict` (`needs: predict`, but runs even if predict failed: `if: always()`), installing `requirements-worker.txt`, running `python -m worker.taste_health`. No artifact upload. Fails red only when the check itself errors.
+- [ ] **Step 5: Commit** — "Check taste overlap's health nightly against the factorization and flag a checkpoint at each milestone".
 
 ---
 

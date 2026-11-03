@@ -60,6 +60,7 @@ frontend/         React 19 + Vite SPA        → Vercel
 mobile/           Expo SDK 57 iOS app        → TestFlight
 worker/           nightly ML pipeline        → GitHub Actions, 02:30 PT
 ops/launchd/      nightly audio ingest       → launchd on the Mac, from a deploy clone of main
+tests/            pytest, backend-only: taste overlap's modules and router (no DB connection)
 shared/           @pressd/shared — TS source consumed by frontend + mobile, no build
 theme_predictor/  LLM album analysis; imported by the worker AND the web service
 song_score_model.py  LightGBM per-song model (1,211 lines) — train + inference
@@ -70,19 +71,19 @@ PLAN_*.md         gitignored design docs; code cites them by section
 
 | Area | Role | LOC |
 |---|---|---|
-| `backend/main.py` | CORS, 14 routers, `init_db()` on startup, `/health` | 45 |
-| `backend/database.py` | engine + **the entire migration system** (§3) | 208 |
-| `backend/models.py` | 23 SQLModel tables | 595 |
+| `backend/main.py` | CORS, 15 routers, `init_db()` on startup, `/health` | 46 |
+| `backend/database.py` | engine + **the entire migration system** (§3) | 274 |
+| `backend/models.py` | 29 SQLModel tables | 722 |
 | `backend/deps.py` | `current_user`, `viewable_user_id`, `thread_access` — the auth invariant | 148 |
 | `backend/scoring.py` | framework 1: the user's own album score | 267 |
 | `backend/global_rating.py` | framework 2: the userbase-pooled rating | 155 |
 | `backend/trackkeys.py` | normalization keys; pure stdlib, imported everywhere | 163 |
-| `backend/routers/` | 14 routers, **113 endpoints** | 7,502 |
-| `worker/` | `nightly_predict`, `catalog_predict`, `artist_clusters`, `audio_ingest`, `refresh_new_releases`, … | 2,149 |
+| `backend/routers/` | 15 routers, **119 endpoints** | 8,357 |
+| `worker/` | `nightly_predict`, `catalog_predict`, `artist_clusters`, `audio_ingest`, `refresh_new_releases`, `taste_nightly`, `taste_health`, … | 3,449 |
 | `theme_predictor/` | `predict_single`, `personalize`, `global_factors`, `corpus`, … | 1,896 |
-| `shared/src/api.ts` | the single API client, 92 exported functions | 1,763 |
-| `frontend/src/` | 18 pages, 16 components, 2 lib modules | 10,355 |
-| `mobile/` | 19 routes, 32 components, 14 lib modules | 17,416 |
+| `shared/src/api.ts` | the single API client, 108 exported functions | 2,147 |
+| `frontend/src/` | 22 pages, 35 components, 8 lib modules | 16,566 |
+| `mobile/` | 20 routes, 38 components, 22 lib modules | 21,555 |
 
 **Stack, as verified.** FastAPI 0.103 + SQLModel on **Postgres only** — Supabase is a
 Postgres *host*, no SDK, no Supabase auth (`database.py:11-29`). **Row-level security is
@@ -96,8 +97,11 @@ add `FORCE ROW LEVEL SECURITY` — that would bind the owner too. Firebase is
 Tailwind 4 on web; Expo 57 / RN 0.86 / expo-router on mobile. Plain REST, JSON,
 snake_case on the wire, camelCase at the client boundary.
 
-**There is no test suite.** No pytest, no vitest, nothing. Verification is typecheck +
-lint + running it.
+**The test suite is small and backend-only** (`tests/`, pytest, added with taste
+overlap: its matrix, baseline, live path, nightly stage, health check, router and the
+schema's delete order). Nothing else is covered — no vitest, nothing for scoring or the
+other routers — so for everything outside taste overlap verification is typecheck +
+lint + running it. Tests never open a database connection (`tests/conftest.py`).
 
 ---
 
@@ -120,12 +124,22 @@ cd mobile && npx expo start
 npm run typecheck && npm run lint
 # Never run `npx expo prebuild --clean` casually — it wipes native config. See mobile/TESTFLIGHT.md.
 
+# Tests — pytest is not in either requirements file; a global pytest_asyncio plugin breaks
+# plain `pytest`, hence the env var. From the repo root.
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3.13 -m pytest tests -q -p no:warnings
+
 # ML worker — requirements-worker.txt is deliberately NOT installed on the web service
 pip install -r requirements-worker.txt
 python -m worker.nightly_predict             # all eligible users
 python -m worker.nightly_predict --user 1 --skip-llm --force
 python -m worker.catalog_predict --dry-run
 python song_score_model.py                   # retrain → song_score_model.pkl
+python -m worker.taste_evaluate --out PATH   # taste overlap: factorization vs layered baseline on held-out
+                                             # song scores; reads production only; names users, keep it local
+                                             # (--pairs 1:84,1:12: eye-test pairs by user id; default user 1's)
+python -m worker.taste_nightly --dry-run     # taste overlap's nightly stage, read-only: counts + percentiles
+python -m worker.taste_health --dry-run      # taste overlap's health row, read-only: prints the detail JSON
+                                             # (--report PATH: also the checkpoint report, if due; local only)
 
 # Audio ingest — the Mac only: yt-dlp is bot-blocked from datacenter IPs.
 ./run_audio_ingest.sh [--limit 20]           # by hand
@@ -231,8 +245,8 @@ There is no Alembic and no version table. Adding a column means adding a SQLMode
                                  │
           ┌──────────────────────┼───────────────────────────┐
           ▼                      ▼                           ▼
-   routers/ (14)           scoring.py                trackkeys.py
-   113 endpoints           global_rating.py          (normalization —
+   routers/ (15)           scoring.py                trackkeys.py
+   119 endpoints           global_rating.py          (normalization —
                                  │                    imported by web,
                                  ▼                    worker, and scripts)
                           Postgres (Supabase)
@@ -307,6 +321,37 @@ GET /discover/charts              discover.py:169
 ### Journey: taste overlap
 
 ```
+nightly, inside nightly_predict, right after the artist map persists (not on --user runs)
+  worker/taste_nightly.run_nightly      one read transaction, closed before computing
+    build_cells (taste_matrix)          every user's z-scored cells; aggregates 1.0, album score on
+    load_album_features / taste_vectors album feature vectors (Claude's six + audio means), per-user taste
+    baseline_similarity (taste_baseline) every pair: direct + category + feature layers → (r, evidence)
+    to_percent (taste_overlap)          γ 0.5, EVIDENCE_K 10 — 50 until there is evidence
+    displayed → smooth                  eases 30%/night; jumps if either user's rated_at is newer
+    reason_for                          a fixed template by band: agree / mixed / split / artist / genre / shared
+  one write transaction, bulk          tasteitem (album:<id> vectors + `raters`), tasteuser, tasteoverlap off 50% only
+                                        workerrun job 'taste_overlap'
+```
+A missing `tasteoverlap` row reads as 50%, measured or not. Rows are replaced only if
+stamped at or before the night's read, so a newer row from the live path (after a
+rating) survives. **All pairs, ~3,000 today, grows with users²**: candidate pairs
+(shared records or artists, friends) are needed before a few thousand users; not built.
+The run takes seconds now.
+
+```
+live, in the request, only when the caller rated since their tasteuser row (taste_live.is_stale)
+GET /overlap/sheet         vs that record's other raters  → tasteuser + their pairs upserted
+GET /users/{id}/overlap    vs that one person             → that pair only; tasteuser untouched
+  load_rows(con, users)    these users' rows; Claude's measures still scaled over the whole catalog
+  tasteitem / tasteuser    stored album vectors and the others' taste vectors — never re-standardized
+  baseline_similarity(only=caller, raters=catalog-wide: direct counted live, category from the night)
+  read, commit, compute, write: the connection is back in the process's pool while computing;
+  a recompute that fails rolls back and the stored numbers are served
+```
+
+### Journey: the Compare tab
+
+```
 GET /social/compare               social.py:329
   → accepted friendships → every rated album of the caller + friends (full ORM rows)
   → group, keep only albums with the caller's score AND ≥1 friend's
@@ -359,7 +404,7 @@ spend a request on every open.
 
 ## 5. Module reference
 
-**`backend/models.py`** — 23 tables. `Album` is a **per-user copy**, not a record
+**`backend/models.py`** — 29 tables (five for the taste overlap: `TasteItem`, `TasteUser`, `TasteOverlap`, `OverlapSheet`, `OverlapEvent`; the first three written nightly by `worker/taste_nightly.py` and for one caller by the live path, all five served by `routers/overlap.py`). `Album` is a **per-user copy**, not a record
 (`:89`); anything "global" must pool copies. `Song` carries `track_id` into the global
 `Track`, so audio is analyzed once and shared (`:258-260`) — that split is what makes
 the ML affordable. A mapper event keeps `Album.subject_key` in step with artist+name on
@@ -515,7 +560,7 @@ profile isn't available", and the button is Add, Requested, Accept or Friends.
 `lib/useOpenProfile.ts` is the one way to open a person (your own id goes to the Profile
 tab); every name and avatar goes through it, except `RecommendSheet` rows, where a tap
 selects the recipient, and `RecommendationBanner`, whose whole surface opens the
-recommendation.
+recommendation. Under the banner it shows the taste overlap (below, **On iPhone**).
 
 **Your own profile on web (October 2026)** is `FriendProfile` at `/u/{your id}` — the
 sidebar's name and the small-screen *Profile* button open it. The header: the banner
@@ -531,7 +576,8 @@ tutorial replay, sign-out. Every profile now shows **My Picks**
 through a picker over the same sources as mobile's `app/favorite/*` (rated albums best
 first, `fetchRankedSongs`, `fetchArtistStats`), saved with `PATCH /users/{id}`. The picks
 are columns on the account, so one set shows on both platforms; hidden below ten rated
-albums, as on mobile. Account deletion
+albums, as on mobile. Someone else's profile adds the taste overlap under the name
+(below). Account deletion
 now removes both picture rows; before this it never removed `UserAvatar`, whose
 foreign key blocked deleting any account that had a photo.
 
@@ -626,6 +672,112 @@ the 154 albums added that month had no subgenres, and iTunes had filed 97 albums
 `temperature`, which the tagger and the theme measurements pass (§7). Moving to 1.x
 means deleting it from all five call sites, a change to how reproducible the theme
 axes are — decide that on purpose, not through a deploy.
+
+**Taste overlap on the surfaces (`backend/routers/overlap.py`, November 2026)** — the
+number on a profile and the people sheet after a first rating (spec §5; the nightly
+computation is §4, "Journey: taste overlap"). Three endpoints, all behind
+`current_user`; profiles are public, so anyone signed in may ask about anyone, and
+people appear only as `public_user`.
+
+- `GET /users/{id}/overlap` → `{percent, reason, connecting_album_id, connecting_album}`.
+  `percent` is a whole number, the stored pair or **50 when there is no row** (a missing
+  row is 50, measured or not); null only for yourself; 404 for a user that doesn't
+  exist. `reason` is the stored `reason_for` dict — `kind` (agree / split / mixed /
+  artist / genre / shared), its structured fields (`subject_key`, `album`, `artist`,
+  `genre`, and `agree_subject_key` / `agree_album` on mixed) and `text` — plus
+  `album_id`, the **other user's** copy of the reason's record, for Compare.
+  `connecting_album` (`{id, name, artist, art_url}`) is that copy, else their most
+  recent rated copy of any record you both rated, else null.
+- `GET /overlap/sheet` → null, or `{sheet_id, album {id, name, artist, art_url},
+  fallback, raters, people: [{user, percent, top_song, bottom_song, from_album}]}`.
+  `raters` is every other user with a rated copy of the record, friends and pending
+  included — the heading's count, not the three shown — and null in the fallback. It serves the
+  newest `owed` sheet under **48 hours** old (`SHEET_TTL`) and supersedes every other
+  owed one, and an owed sheet whose album was deleted or is no longer rated; that is
+  its only write to sheets. It is otherwise **read-only**: asking again, or from the
+  other device, serves the same sheet, and nothing is marked shown. People are other
+  users with a rated copy of the record (`subject_key`, any edition) — or, with none,
+  every user with a rated album (`fallback: true`) — never yourself, a friend, or anyone
+  with a request pending either way; `pick_people` takes two from the top quarter and
+  one from the bottom. Songs come from their copy of the record (`scoring.top_bottom_songs`,
+  the same pair For You's review previews show); in the fallback from their record
+  nearest it — most recent sharing a credited artist, else the same genre — named in
+  `from_album`. Nobody left: null, not an empty sheet.
+- `POST /overlap/sheet/{id}/events` `{action, target_user_id}` → `{ok: true}`; 404 for a
+  sheet that isn't yours. The client posts `shown` once the sheet is on screen — that is
+  what clears it (`status` shown, `shown_at`), logged once however many devices show
+  it — and `not_now` also clears it. `add`, `open_discussion` and `open_profile` are
+  logged as they come.
+
+**The live path** (`backend/taste_live.py`) keeps the sheet's numbers fresh: a caller
+who rated since their `tasteuser` row recomputes, inside the request, against that
+record's raters (the sheet) or the one person (a profile) — never everyone, which is the
+nightly run's job, so the fallback sheet reads stored numbers. It is the nightly
+computation on fewer users: same cells, the stored `tasteitem` album vectors and the
+others' stored taste vectors, and every column discounted by the whole userbase's
+raters, as the night does: the caller's songs, factors and album scores counted live,
+and the artist, cluster, genre and subgenre counts read from the nightly's `raters`
+row in `tasteitem` (a JSON object, column → count), falling back to the loaded users'
+count only for a column new since the night. No smoothing (the caller rated since).
+`tests/test_taste_live.py` pins that on the same data it reproduces the night's pairs;
+a column the caller joined since the night is one rater short until the next nightly. Only the sheet marks the caller fresh; a profile writes
+just its pair, so a profile opened first can't leave the sheet on last night's numbers.
+The nightly writes a `tasteuser` row for every user with cells (`[]` when they have no
+vector) so that freshness is defined for everyone.
+
+**On web** (`components/TasteOverlap.tsx`, `components/PeopleSheet.tsx`, November
+2026). `FriendProfile` asks `fetchOverlap` (`['overlap', id]`) on anyone's profile but
+your own. Not friends — no friendship, or a request pending either way — gets
+`OverlapPanel` across the page's width between the identity row and the stat row:
+"YOU & {NAME}", the percent in Playfair green, a 0–100 meter with a mark, the connecting
+record's cover beside the reason, **Add friend** (the page's own friend handler, so it
+reads Requested / Accept request as the header button does) and **Compare**, which opens
+`/album/{reason.albumId ?? connecting album}?view=compare`, or with no shared record
+switches to their Library tab. A friend gets `OverlapChip` under the bio — "72% taste
+overlap" and the reason on one line. 50% is drawn like any other number, and a null
+reason draws nothing. The reason renders from `text` by turning only its literal
+`<i>…</i>` pairs into `<i>` elements and unescaping the entities the server put in the
+rest (`ReasonText`) — never as HTML. The sheet has one mount, `PeopleSheetHost` in
+`Layout`, the only observer of `['people-sheet', userId]` (`lib/peopleSheet.ts`;
+`staleTime: Infinity`), so it asks once per page load — a sheet owed from the other
+device — and again when `RatingScreen` invalidates the key as its share card closes
+(`closeFlow`). The rating flow is outside `Layout`, so the sheet opens over the album page
+the flow lands on, never inside the flow; it also waits while the one-time phone prompt
+is up. It is a dialog (`fade-in` + `pop-in`): the cover and "{raters} people rated *album*
+too" ("1 person" at one; "People who like what you like" in the fallback), one card per person — avatar
+and name opening `/u/{id}`, the percent, **Add** (then Requested), and Best/Worst songs
+drawn as For You's review previews draw them, with "from *record*" in the fallback — side by
+side on desktop, then **Not now** and **Open the discussion** (`resolveThread`, then
+`threadPath`). `shown` is posted from the dialog's first render, once per sheet per page
+load (a module-level set, since `Layout` remounts between route trees); closing it any
+way but a profile or the discussion posts `not_now`; Add, a profile and the discussion
+post their own actions, with `target_user_id` where there is one. Closing clears the
+cached sheet so a remount can't reopen it.
+
+**On iPhone** (`mobile/components/TasteOverlap.tsx`, `mobile/components/PeopleSheet.tsx`,
+November 2026) — the same features in mobile's layout. `app/friend/[id].tsx` asks
+`fetchOverlap` (`['overlap', id]`) on anyone but you and draws it between
+`ProfileBanner` and the tab bar: `OverlapPanel` for anyone not a friend (pending either
+way included) — "YOU & {NAME}", the percent in Playfair green, the meter, the connecting
+cover beside the reason, **Add friend** (the screen's own friend handler) and
+**Compare**, which pushes `/album/{reason.albumId ?? connecting album}` (the album page
+draws `FriendCompare` once both copies are rated) or, with no shared record, switches to
+Library and scrolls to the tabs; `OverlapChip` for a friend. `ReasonText` turns only the
+literal `<i>…</i>` pairs into italic `<Text>` spans and unescapes the rest. The sheet's one
+mount is `PeopleSheetHost` in the root layout (`app/_layout.tsx`, beside What's New and
+the phone prompt), the only observer of `['people-sheet', userId]` (`lib/peopleSheet.ts`,
+`staleTime: Infinity`): it asks once at launch and again when `rate/[id].tsx`
+invalidates the key as its share card closes (`closeFlow`). It is held — rendered with
+the Modal hidden — until the username is chosen, the tutorial seen, What's New closed
+and the phone prompt answered (`phonePromptDone === true`), and while the current route
+is the rating flow or a first-run screen (`HELD_ON`), so it opens over the album page the
+flow lands on. A bottom sheet: dimmed backdrop, grab handle, dragged down or tapped
+outside to close; the cover and the same heading as web; one row per person — avatar
+and name through `useOpenProfile`, the percent, **Add** (then Requested), and the best
+and worst song drawn as `ReviewCell` draws them (green up / `#e0492b` down `Triangle`,
+`songScoreColor`, one decimal), "from *record*" in the fallback; then **Not now** and
+**Open the discussion** (`/thread/[subject]`, as `AlbumThoughts` opens it). `shown` is
+posted from the Modal's `onShow`, once per sheet per launch; the events are web's.
 
 **`backend/routers/public.py`** — the **intended** only unauthenticated surface
 (marketing charts). It deliberately duplicates rather than shares `discover.py`'s charts:
@@ -746,6 +898,45 @@ a newly queued album picks up a prediction without refitting. Each user runs in 
 try/except and logs to `workerrun`. Before any of it, the job recomputes every stored
 album score against the current userbase prior (`rescore_library_scores`, logged as
 `rescore_scores`); a `--user` run rescores only that user.
+
+**Taste overlap** is a stage of its own, not a per-user one: right after the artist map
+persists, `worker/taste_nightly.run_nightly` computes every pair's percentage with the
+layered baseline (`backend/taste_baseline.py`, Jack's choice at the checkpoint — spec
+§3.7 in `docs/superpowers/specs/2026-11-03-taste-overlap-design.md`) and stores it
+(§4, "Journey: taste overlap"). It runs in its own try/except with its own `workerrun`
+row (`taste_overlap`), so a failure never stops the user stages, and a `--user` run
+skips it. Nothing is fitted: the baseline compares cells directly, which is why it sits
+in `backend/` (pure stdlib) where the live path can run it too. The factorization
+(`worker/taste_factorize.py`) is kept only to be scored beside it (below). The reason under the
+number is a fixed template (`taste_overlap.reason_for`), chosen by the number's band
+and phrased by a stable hash of the pair — no LLM touches the number or its words.
+
+**Taste overlap's health** (spec §6.1) is the `taste-health` job in
+`nightly-predict.yml`, after `predict` whatever it did, needing only `DATABASE_URL`:
+`worker/taste_health.py` scores the shipped baseline (default weights, `GAMMA`, no γ
+search) against the checkpoint's factorization (rank 8, reg 5, bias reg 5, aggregates
+0.25, album score off, measures 1) and plain pooling, on `taste_evaluate`'s hold-out,
+and writes one `workerrun` row, job `taste_health`. Jack's morning brief reads its
+`detail_json`, so its keys are a contract — `users`, `users_sharing_50`, `accuracy`
+{baseline, factorization, pooling, held_out}, `spread` (the baseline's raw p10–p90 over
+pairs with evidence, `in_band`, `pairs`, `pairs_off_50`), `user1` {highest, lowest,
+most_shared}, `milestones_crossed`, `checkpoint_due`, `overlap_stage` (the latest
+`taste_overlap` row's `status`, `finished_at` and `age_hours`, or null if the stage has
+never run): add, never rename. The job goes red when that stage errored, has been
+`running` over 6h, or last ran over 36h ago — the only alarm the stage has, since
+`nightly_predict` just prints its failure. Milestones
+(`users_1000/2500/5000/10000`; `sharing50_50/100`, users sharing ≥ 50 songs by
+`track_id` with someone) fire once, the first night they are absent from every earlier
+`ok` row; a due one puts `taste_evaluate`'s full report in the row as `report_md`,
+which the morning brief reads (absent on nights with nothing due). The decision is
+Jack's; nothing switches. On 2026-11-03: MAE (baseline / factorization / pooling)
+0.8629 / 0.8680 / 0.8531, spread in band, 17 users sharing 50, ~15 s. **Plain pooling
+is more accurate than both approaches**: weighting other raters by either overlap
+predicts a held-out song worse than counting every other rater the same. The baseline
+ships on believability — Jack judged its numbers and examples true to life, the
+factorization's not — not on accuracy (spec §3.7). Nothing
+per-user is published from the public repo's Actions: no artifact, no file, and the
+log prints no names; they stay in the row.
 
 ⚠️ `song_score_model.ARTIST_K = 12` and `worker/artist_clusters.ARTIST_K = 18` are
 **different constants with the same name** for different clusterings.
@@ -888,6 +1079,7 @@ match).
 | Apple JWKS, FCM creds | `auth.py:21`, `push.py:48` | — | **process** |
 | artist photos | `ArtistMeta` (Postgres) | 30d | shared ✅ |
 | album LLM factors | `albumfactors` (Postgres) | forever | shared ✅ |
+| taste overlap | `tasteoverlap` (pairs off 50%), `tasteuser`, `tasteitem` — `worker/taste_nightly.py` | rebuilt nightly; a fresh rater's pairs in the request (`taste_live.py`) | shared ✅ |
 
 **Everything in-process is correct only because the backend is one process.** See §10 P5.
 
@@ -957,9 +1149,17 @@ Since November 2026, for taste overlap's success measures
 `requested_at` and `accepted_at` (add, accept, a request sent back, and invite
 acceptance all stamp them; declining or unfriending deletes the row, so churn isn't
 kept), and an album copy carries `rated_at`: its **first** move to rated, set once by
-`PATCH /albums/{id}` (`albums._first_rating`). Use it, not `date_rated`, which every
-save that sends `status: "rated"` rewrites. All three are null for rows that predate
-them, by the same rule as `created_at`.
+`PATCH /albums/{id}` (`albums._first_rating` — a previous status other than rated
+*and* a null `rated_at`, so neither editing a copy rated before the column nor
+finishing one again counts). Use it, not `date_rated`, which every save that sends
+`status: "rated"` rewrites. All three are `TIMESTAMPTZ`, null for rows that predate
+them, by the same rule as `created_at`. That same first rating inserts an
+`OverlapSheet` (status `owed`) in the same commit — unless the record is a single
+(≤ 2 tracks) or the user already rated it in another edition (`albums._owes_sheet`).
+The sheet's events (`shown`, `add`, `open_discussion`, `not_now`, `open_profile`) are
+the pop-up attribution rows in `OverlapEvent`; `delete_own_account` clears the
+four taste tables that carry a user id (`tasteitem` is keyed by album copy, and the
+next nightly run drops a deleted account's rows).
 
 The structural gap is the share card. It is rasterised entirely client-side
 (`html2canvas` on web, `captureRef` on mobile) and produces a bare PNG — **no
@@ -1244,6 +1444,12 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   file record what they did; only scripts that run again (ingest, nightly, ops) stay.
   Never inline `(name.lower(), artist.lower())` — five places already did, and they now
   disagree with the threads (§11).
+- **A taste-overlap reason's `text` is escaped, and rendered from its fields.**
+  `reason_for` HTML-escapes every name it interpolates, and the only markup is a
+  literal `<i>…</i>` around an album. Clients draw the line from the structured fields
+  (`kind`, `album`, `artist`, `genre`, `agree_album`) or tokenise that one tag — never
+  `dangerouslySetInnerHTML` / an HTML renderer. Below 40% a reason is a split or
+  nothing: no agreement of any kind sits under a low number.
 - **Auth is the invariant.** Identity comes from `current_user`, never a client-supplied
   `user_id`. Reads of another user go through `viewable_user_id` / `authorize_view`
   (any signed-in user — profiles are public); friends-only reads through
@@ -1352,12 +1558,15 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   `EP_MAX_TRACKS` / `isEP` lives in `scoring.py` and both rating screens. The share
   card's geometry lives in both `ShareCard.tsx` files by the same rule — every mobile
   measurement is the web pixel value passed through `u()`.
-- **There is no test suite, so verification is typecheck + lint + running it.** Web:
+- **Verification is the taste-overlap tests plus typecheck + lint + running it.** Tests:
+  `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3.13 -m pytest tests -q -p no:warnings` (95
+  pass; none open a database connection, so they say nothing about production data —
+  new taste-overlap code gets a test beside the others). Web:
   `cd frontend && npm run typecheck`. Mobile: `cd mobile && npm run typecheck`. Backend:
   import the app (`python -c "import backend.main"`). `cd frontend && npx eslint .`
   currently reports **14 problems — 10 errors and 4 warnings**, and mobile `eslint .`
   reports **126 errors
-  and 7 warnings** (mostly `react-hooks/refs` on `useRef(...).current`; hold an
+  and 6 warnings** (mostly `react-hooks/refs` on `useRef(...).current`; hold an
   `Animated.Value` in `useState(() => …)` instead) — if your change doesn't add to
   those counts, you haven't regressed them.
 

@@ -47,6 +47,7 @@ import {
 import { seedDrafts, firstOpenIndex, canJumpTo, nextTrackIndex } from '@pressd/shared/rating'
 import { useAuth } from '../../lib/auth'
 import ShareCard from '../../components/ShareCard'
+import { PEOPLE_SHEET_KEY } from '../../lib/peopleSheet'
 import TopSongTiebreak from '../../components/TopSongTiebreak'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
 import CoverImage from '../../components/CoverImage'
@@ -401,6 +402,15 @@ export default function RatingScreen() {
     })
   }
 
+  // The end of the flow, as the share card closes. A first rating may owe a
+  // people sheet (backend/routers/overlap.py); the root layout's host asks
+  // again, and holds it until the album page has replaced this screen, so the
+  // sheet opens over the album, never here.
+  const closeFlow = () => {
+    queryClient.invalidateQueries({ queryKey: PEOPLE_SHEET_KEY })
+    router.replace({ pathname: '/album/[id]', params: { id: String(albumId) } })
+  }
+
   const submit = useMutation({
     mutationFn: async () => {
       await persist('rated')
@@ -419,7 +429,7 @@ export default function RatingScreen() {
       queryClient.invalidateQueries({ queryKey: ['album', albumId] })
       const fresh = await fetchAlbum(albumId).catch(() => null)
       if (!fresh) {
-        router.replace({ pathname: '/album/[id]', params: { id: String(albumId) } })
+        closeFlow()
         return
       }
       // Ask about a tie before the share card, since the card is one of the
@@ -542,7 +552,7 @@ export default function RatingScreen() {
     return (
       <ShareCard
         album={shareAlbum}
-        onClose={() => router.replace({ pathname: '/album/[id]', params: { id: String(albumId) } })}
+        onClose={closeFlow}
       />
     )
   }

@@ -124,6 +124,17 @@ def pick_top_song(album, songs: list):
     return max(scored, key=lambda s: s.score)
 
 
+def top_bottom_songs(album, songs: list):
+    """(favourite, least favourite) of one rating, as the review previews show
+    them: the top song as `pick_top_song` picks it, and the lowest score, only
+    when there are two scored songs to tell apart. Shared by For You's reviews
+    and the people sheet after a rating, so both draw the same pair."""
+    scored = [s for s in songs if s.score is not None]
+    top = pick_top_song(album, scored)
+    bottom = min(scored, key=lambda s: s.score) if len(scored) >= 2 else None
+    return top, bottom
+
+
 def is_single_release(album_name: str | None, track_count: int | None) -> bool:
     """Whether a release is a single rather than a record. Track count is the
     reliable signal; the "- Single" suffix is an iTunes naming convention that

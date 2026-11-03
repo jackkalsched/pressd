@@ -240,10 +240,12 @@ def init_db():
             # ── When a friendship was requested and accepted, and when an album
             #    copy was first rated (models.py). No default and no backfill:
             #    when older rows happened was never stored, so they stay null,
-            #    as created_at's did.
-            "ALTER TABLE friendship ADD COLUMN requested_at TIMESTAMPTZ",
-            "ALTER TABLE friendship ADD COLUMN accepted_at TIMESTAMPTZ",
-            "ALTER TABLE album ADD COLUMN rated_at TIMESTAMPTZ",
+            #    as created_at's did. The index serves the owed-sheet lookup
+            #    (taste overlap); create_all builds its table.
+            "ALTER TABLE friendship ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ",
+            "ALTER TABLE friendship ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ",
+            "ALTER TABLE album ADD COLUMN IF NOT EXISTS rated_at TIMESTAMPTZ",
+            "CREATE INDEX IF NOT EXISTS ix_overlapsheet_user_status ON overlapsheet (user_id, status)",
             # ── Row-level security on every public table, last so it covers the
             #    tables create_all just made. Supabase serves the public schema
             #    over its REST API to anyone holding the project's publishable

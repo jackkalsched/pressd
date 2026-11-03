@@ -8,6 +8,7 @@ import { fetchFriends, getInviteLink, removeFriend } from '../api'
 import type { UserInfo } from '../api'
 import AddAlbumModal from './AddAlbumModal'
 import PhoneDialog from './PhoneDialog'
+import { PeopleSheetHost } from './PeopleSheet'
 import { phoneVerifyConfigured } from '../lib/phoneVerify'
 
 function avatarColor(name: string): string {
@@ -353,6 +354,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {showAddAlbum && activeUser && (
         <AddAlbumModal onClose={() => setShowAddAlbum(false)} userId={activeUser.id} />
       )}
+      {/* People who rated your last record too, owed by the server after a
+          first rating. Here, the one mount, so it can follow you onto any page. */}
+      <PeopleSheetHost />
     </div>
   )
 }

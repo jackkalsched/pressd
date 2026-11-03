@@ -13,6 +13,14 @@ name: Nightly predictions
 # row and fails if the last run errored or is stale, and it is independent of
 # `predict` on purpose: predictions still run on whatever audio exists, and a
 # dead ingest goes red on its own instead of silently for weeks.
+#
+# `taste-health` scores taste overlap's shipped baseline against the factorization
+# on held-out song scores and records a workerrun row (job taste_health) for Jack's
+# morning brief (worker/taste_health.py). It runs after `predict` whatever that did,
+# and is red when the check itself fails or when the nightly taste_overlap stage
+# errored, died at 'running' (>6h) or last ran over 36h ago. When a milestone fires the full
+# checkpoint report goes into that row (`report_md`), never into an artifact or a
+# file: it names users, and this repository is public.
 
 # Normally started by the Mac the moment its audio ingest succeeds (worker/
 # audio_ingest.py, start_predictions — a workflow_dispatch). The cron is the
@@ -75,3 +83,26 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m worker.audio_health
+
+  taste-health:
+    needs: predict
+    if: always()
+    runs-on: ubuntu-latest
+    # Measured 2026-11-03 on a laptop, read-only: the health check 13 s, the full
+    # checkpoint report a milestone night adds 48 s (79 users with a record). 30 min is
+    # far past 3x that, with room for the report to grow with the userbase.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements-worker.txt
+
+      - name: Check taste overlap against the factorization
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m worker.taste_health
