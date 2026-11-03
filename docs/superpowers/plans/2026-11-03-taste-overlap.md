@@ -16,6 +16,7 @@
 - Every score is read relative to the user's own mean and spread **per column type** (z-scores).
 - Cluster columns: all 10 seeds × 18 clusters, each column at **1/10** the cluster weight.
 - Final album score column: **off** unless the checkpoint test shows it helps.
+- **No LLM call anywhere in computing, choosing or wording the overlap (Jack).** The percentage is the model's output from users' own ratings; the reason text is a fixed template. No Claude-measured value (`albumfactors` theme axes or distinctness) enters the factorization. Genre and subgenre labels are used only as groupings of a user's own scores.
 - Pairs with evidence: target 10th percentile ≥ 25 and 90th percentile ≤ 85, interquartile range ≥ 15 points **(plan's numbers for the spec's 25–85 band)**.
 - `backend/taste_matrix.py` and `backend/taste_overlap.py` are **pure stdlib** (+ `sqlalchemy.text` for loading): the web service has no numpy (`theme_predictor/personalize.py:37-39`).
 - Any cross-user match goes through `track_id` / `subject_key` / `trackkeys.artist_key`; per-artist grouping through `credits.album_artists` / `credits.song_artists`.

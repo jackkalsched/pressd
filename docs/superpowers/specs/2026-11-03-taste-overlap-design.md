@@ -293,6 +293,13 @@ before, so the comparison fills in naturally as new people rate albums.
 
 ## 7. Constraints
 
+- **The percentage is the model's, never an LLM's (Jack).** No Claude call computes,
+  chooses or words it; the reason text is a template. Claude-measured album values
+  (`albumfactors` theme axes, distinctness) never enter the factorization. They appear
+  only in the baseline's album-feature layer, which is used for comparison at the
+  checkpoint. Genre and subgenre labels (partly Claude-tagged) only group a user's own
+  scores.
+
 - Any grouping across users goes through `trackkeys` / `track_id` / `subject_key`
   (CLAUDE.md §12); per-artist grouping through `credits.py`.
 - Web and mobile ship together. Because the iPhone build goes through App Review, both
