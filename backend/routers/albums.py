@@ -53,6 +53,15 @@ def _record_copies(session: Session, album_name: str, artist: str, *,
 
 # Fields a client may set/change on an album; everything else (score, user_id,
 # predicted_*) is server-controlled and must never come from the request body.
+def _first_rating(previous_status: Optional[str], rated_at: Optional[datetime], data: dict) -> bool:
+    """Whether this PATCH is the copy's first move to rated. Both tests are
+    needed. rated_at alone would stamp every edit of a copy rated before the
+    column existed (both rating screens re-send "rated" on every edit); the
+    previous status alone would treat a rated copy moved back to Listening and
+    finished again as a first rating."""
+    return data.get("status") == "rated" and previous_status != "rated" and rated_at is None
+
+
 ALBUM_MUTABLE_FIELDS = {
     "album_name", "artist", "year", "status", "theme", "replay_value",
     "production", "distinctness", "genre", "sub_genre1", "sub_genre2",
@@ -255,6 +264,8 @@ def update_album(
     if album.user_id != user.id:
         raise HTTPException(status_code=403, detail="Not your album")
 
+    first_rating = _first_rating(album.status, album.rated_at, data)
+
     for key, value in data.items():
         if key in ALBUM_MUTABLE_FIELDS:
             setattr(album, key, value)
@@ -276,6 +287,8 @@ def update_album(
 
     if data.get("status") == "rated":
         album.date_rated = date.today()
+    if first_rating:
+        album.rated_at = datetime.utcnow()
 
     session.add(album)
     session.commit()

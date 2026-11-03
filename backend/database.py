@@ -237,6 +237,13 @@ def init_db():
             "ALTER TABLE track ADD COLUMN audio_failures INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE track ADD COLUMN audio_failed_at TIMESTAMPTZ",
             "ALTER TABLE track ADD COLUMN audio_fail_reason VARCHAR",
+            # ── When a friendship was requested and accepted, and when an album
+            #    copy was first rated (models.py). No default and no backfill:
+            #    when older rows happened was never stored, so they stay null,
+            #    as created_at's did.
+            "ALTER TABLE friendship ADD COLUMN requested_at TIMESTAMPTZ",
+            "ALTER TABLE friendship ADD COLUMN accepted_at TIMESTAMPTZ",
+            "ALTER TABLE album ADD COLUMN rated_at TIMESTAMPTZ",
             # ── Row-level security on every public table, last so it covers the
             #    tables create_all just made. Supabase serves the public schema
             #    over its REST API to anyone holding the project's publishable

@@ -952,6 +952,15 @@ the deploy time, which would read as every account signing up that day. Count si
 with `created_at > …`, never `created_at IS NULL OR …`. `create_album` stamps it
 server-side because it takes an `Album` straight from the request body.
 
+Since November 2026, for taste overlap's success measures
+(`docs/superpowers/specs/2026-11-03-taste-overlap-design.md`), a friendship carries
+`requested_at` and `accepted_at` (add, accept, a request sent back, and invite
+acceptance all stamp them; declining or unfriending deletes the row, so churn isn't
+kept), and an album copy carries `rated_at`: its **first** move to rated, set once by
+`PATCH /albums/{id}` (`albums._first_rating`). Use it, not `date_rated`, which every
+save that sends `status: "rated"` rewrites. All three are null for rows that predate
+them, by the same rule as `created_at`.
+
 The structural gap is the share card. It is rasterised entirely client-side
 (`html2canvas` on web, `captureRef` on mobile) and produces a bare PNG — **no
 server-rendered OG image, no deep link, no event**. The primary growth mechanic is

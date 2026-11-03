@@ -97,6 +97,13 @@ class Friendship(SQLModel, table=True):
     user_id_b: int = Field(foreign_key="pressuser.id", index=True)
     status: str = Field(default="accepted", index=True)  # pending | accepted
     requested_by: Optional[int] = Field(default=None, foreign_key="pressuser.id")
+    # When the request was sent and when it was accepted (an invite link or a
+    # request sent back sets both at once), so friend requests and network
+    # size can be counted over time — the measure taste overlap is judged on.
+    # Null for rows that predate the columns. Declining or unfriending deletes
+    # the row, so churn isn't recorded.
+    requested_at: Optional[datetime] = None
+    accepted_at: Optional[datetime] = None
 
 
 class UserAvatar(SQLModel, table=True):
@@ -198,6 +205,13 @@ class Album(SQLModel, table=True):
 
     date_added: Optional[date] = Field(default_factory=date.today)
     date_rated: Optional[date] = None
+    # When this copy was first rated. date_rated can't say: PATCH rewrites it on
+    # every save that sends status "rated", and both rating screens send it on
+    # every edit and autosave, so it means "last saved". This is set once, on
+    # the first move to rated, and never again — moving the copy back to
+    # Listening and finishing it keeps the original. Null for copies rated
+    # before the column existed.
+    rated_at: Optional[datetime] = None
 
     # Which record this copy is, across every user's spelling of it —
     # trackkeys.subject_key_album. Stored rather than computed on read because

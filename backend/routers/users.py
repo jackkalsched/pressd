@@ -423,9 +423,12 @@ def accept_invite(
         existing = session.exec(select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)).first()
         if not existing:
             # Invite links are mutual consent — accepted immediately
-            session.add(Friendship(user_id_a=a, user_id_b=b, status="accepted", requested_by=invite.invited_by))
+            now = datetime.utcnow()
+            session.add(Friendship(user_id_a=a, user_id_b=b, status="accepted", requested_by=invite.invited_by,
+                                   requested_at=now, accepted_at=now))
         elif existing.status == "pending":
             existing.status = "accepted"
+            existing.accepted_at = datetime.utcnow()
             session.add(existing)
             try:
                 session.commit()
@@ -1050,11 +1053,13 @@ def add_friend(
             return {"ok": True, "status": "pending", "already_friends": False}
         # They already requested us — requesting back is mutual consent
         existing.status = "accepted"
+        existing.accepted_at = datetime.utcnow()
         session.add(existing)
         session.commit()
         _notify_accepted(session, background, user, friend_id)
         return {"ok": True, "status": "accepted", "already_friends": True}
-    session.add(Friendship(user_id_a=a, user_id_b=b, status="pending", requested_by=user.id))
+    session.add(Friendship(user_id_a=a, user_id_b=b, status="pending", requested_by=user.id,
+                           requested_at=datetime.utcnow()))
     try:
         session.commit()
     except IntegrityError:
@@ -1122,6 +1127,7 @@ def accept_friend_request(
     if f.requested_by == user.id:
         raise HTTPException(status_code=400, detail="Can't accept your own request")
     f.status = "accepted"
+    f.accepted_at = datetime.utcnow()
     session.add(f)
     session.commit()
     _notify_accepted(session, background, user, other_id)
