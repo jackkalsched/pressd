@@ -89,6 +89,14 @@ fallback if it loses).
 - each user's **aggregate** score per **artist** (via `album_artists` / `song_artists`),
   per **artist cluster** and per **genre / subgenre** — these are what connect the 92%
   of pairs who share no song,
+  - **Artist clusters are 180 columns, each at a tenth of the weight (Jack).**
+    `worker/artist_clusters.py` refits from scratch every night — KMeans, 18 clusters,
+    10 fixed seeds, read as an ensemble, stored in `artistcluster` — and new artists or
+    new audio can reshuffle a seed's cluster ids. One column per (seed, cluster) at
+    1/10 weight means one seed reshuffling barely moves anyone. Cluster columns are
+    rebuilt from each night's map, and the live update after a rating uses that same
+    night's map. An artist joins only once their audio is analysed (the Mac's nightly
+    ingest), so a brand-new artist has no cluster columns until the night after.
 - the **final album score**: requested, but it is the song mean plus the factor
   adjustments and drifts with the userbase prior, so include it **only if the §3.5 test
   shows it helps** **(call)**.
@@ -132,7 +140,8 @@ Every score below is the user's own z-score unless said otherwise.
    userbase prior (CLAUDE.md §6.1). Add it only if the test in §3.5 says it helps.
 2. **Category agreement** — each user's average z-score per artist (`album_artists` /
    `song_artists`, so a collaboration counts for every credited artist), per artist
-   cluster (`worker/artist_clusters.py`, 18), per genre and per subgenre. Compared over
+   cluster (`worker/artist_clusters.py`: all 10 seeds × 18, each at 1/10 weight, as in
+   §3.2), per genre and per subgenre. Compared over
    the categories both have. Thin averages (one album in a genre) are shrunk toward the
    user's own mean before comparison, the same idea as `scoring.shrink_to_prior`.
 3. **Album-feature agreement** — each user's taste vector: the album feature vectors of
