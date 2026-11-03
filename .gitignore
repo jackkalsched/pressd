@@ -76,3 +76,6 @@ tags_backup_*.json
 
 # App Store preview/screenshot exports, rendered locally for submission.
 pressd_app_preview_*.png
+
+# brainstorming mockups
+.superpowers/
