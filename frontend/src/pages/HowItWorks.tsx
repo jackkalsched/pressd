@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom'
 import { ListMusic, Sliders, Sparkles, Users, BarChart3 } from 'lucide-react'
 import PublicShell from '../components/PublicShell'
 import AppleLogo from '../components/AppleLogo'
-import { IOS_APP_URL } from '../lib/iosApp'
+import { IOS_APP_LINK } from '../lib/iosApp'
 
 const STEPS = [
   {
@@ -201,15 +201,7 @@ export default function HowItWorks() {
             </p>
             <p className="ios-line">
               <AppleLogo size={14} />
-              {/* One span: .ios-line is a flex row, and loose text and a link
-                  would each become their own gapped item. */}
-              <span>
-                {IOS_APP_URL ? (
-                  <a href={IOS_APP_URL} target="_blank" rel="noopener noreferrer">Get Pressd for iPhone</a>
-                ) : (
-                  <>Pressd is coming to iOS soon — <Link to="/#iphone">see the app</Link>.</>
-                )}
-              </span>
+              <a {...IOS_APP_LINK}>Pressd is now on the App Store</a>
             </p>
           </div>
           <Link to="/charts" className="closer-link">See what people are rating</Link>

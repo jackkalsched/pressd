@@ -1,14 +1,12 @@
-// Where "Get the iPhone app" goes: a TestFlight public link or the App Store
-// listing, set as VITE_IOS_APP_URL. Unset — which it is until the app has a
-// public link — the landing page's buttons scroll to its showcase instead and
-// the public pages say it is coming to iOS soon, rather than offering a
-// download that isn't there. One constant so the two pages can't disagree.
-export const IOS_APP_URL: string | undefined = import.meta.env.VITE_IOS_APP_URL || undefined
+// Where "Download on the App Store" goes. Pressd is out on iOS, so the listing
+// is a constant rather than an env var that, unset, would leave the public
+// pages saying "coming soon"; VITE_IOS_APP_URL still overrides it (a TestFlight
+// link for a preview deploy, say). The landing page's QR code
+// (public/app/qr-code.png) is Apple's own, from App Store Connect: it encodes
+// an apple.co short link to this listing, so scans are counted there. One
+// constant so the two public pages can't disagree.
+export const IOS_APP_URL: string =
+  import.meta.env.VITE_IOS_APP_URL || 'https://apps.apple.com/us/app/pressd-music-ratings/id6796907083'
 
-/** Link props for an iPhone-app call to action: out to the listing in a new
- *  tab when there is one, otherwise to `fallback` on the same page. */
-export function iosAppLink(fallback: string): { href: string; target?: string; rel?: string } {
-  return IOS_APP_URL
-    ? { href: IOS_APP_URL, target: '_blank', rel: 'noopener noreferrer' }
-    : { href: fallback }
-}
+/** Link props for an iPhone-app call to action: out to the listing, in a new tab. */
+export const IOS_APP_LINK = { href: IOS_APP_URL, target: '_blank', rel: 'noopener noreferrer' } as const

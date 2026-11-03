@@ -188,8 +188,8 @@ fallback literal, on purpose). `GITHUB_DISPATCH_TOKEN` (the Mac's `.env` only �
 fine-grained token for this repo with *Actions: read and write*; the nightly ingest uses
 it to start the prediction workflow, and without it predictions wait for GitHub's cron;
 re-run `ops/launchd/install.sh` after adding it, since the job reads a copy of `.env`).
-Web: `VITE_API_URL`, `VITE_GOOGLE_CLIENT_ID`, `VITE_IOS_APP_URL` (the TestFlight or App
-Store link the public pages' iPhone buttons open; unset, they say it is coming to iOS soon —
+Web: `VITE_API_URL`, `VITE_GOOGLE_CLIENT_ID`, `VITE_IOS_APP_URL` (overrides the App
+Store link the public pages' iPhone buttons open; unset, they use the listing constant in
 `frontend/src/lib/iosApp.ts`), `VITE_FIREBASE_API_KEY` / `_AUTH_DOMAIN` / `_PROJECT_ID` /
 `_APP_ID` (the Firebase web app's config, for phone verification; unset, web hides the
 phone prompt and Settings row). Mobile: `EXPO_PUBLIC_API_URL`,
@@ -1278,13 +1278,16 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   and both writers (`util.py` backfill,
   `search.py` resolve) now ask for `front-500`. A cold For You loaded 2.3 MB of
   covers after that rewrite and 1.4 MB with the sizing; Library 7.3 MB and 2.1 MB.
-- **The public pages promote the iPhone app as a feature, not a footnote.** The
-  landing page carries an iPhone button beside the Google sign-in, a nav link, and a
-  full-width band (`#iphone`) fanning the five App Store preview slides
-  (`frontend/public/app/`, resized from the design exports). Where the buttons go is
-  one setting, `VITE_IOS_APP_URL` (`frontend/src/lib/iosApp.ts`): unset, they scroll
-  to the band and the page says "Coming to iOS soon" rather than offering a download
-  that isn't there.
+- **The public pages promote the iPhone app as a feature, not a footnote** — they
+  inform web visitors rather than steer them off the web. The landing page opens with a
+  "Now on the App Store!" pill over the headline, sets an App Store badge (`StoreBadge`,
+  drawn in CSS) level with the Google sign-in, links it from the nav, and has a
+  full-width band (`#iphone`) where nine screens from the app (`frontend/public/app/`,
+  simulator screenshots at 720px wide) sit in a sideways carousel that wraps around
+  (three copies, recentred when scrolling settles), stepped by left and right arrows on desktop and swiped on a phone, with the badge and, on
+  desktop only, a QR code (`public/app/qr-code.png`, Apple's own: an `apple.co` short
+  link to the listing, so App Store Connect counts the scans). The link is one constant,
+  `IOS_APP_URL` in `frontend/src/lib/iosApp.ts`; `VITE_IOS_APP_URL` overrides it.
 - **For You's single-record cards share `SpotlightCard`** (one per platform —
   `frontend/src/components/` and `mobile/components/`): Pass it on and Pick this back
   up. No border and no box button — the cover, blurred, is the card's

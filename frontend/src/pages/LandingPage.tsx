@@ -5,15 +5,15 @@
 // complete with a tonearm and groove lines. The current brand mark has neither,
 // so that illustration is gone — the mark itself is now the hero, and the spin
 // comes from PressdMark's highlight sweep rather than a rotating record.
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Loader2, Star } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Star } from 'lucide-react'
 import { useGoogleLogin } from '@react-oauth/google'
 import { signInWithGoogle } from '../api'
 import { useUser } from '../context/UserContext'
 import PressdMark from '../components/PressdMark'
 import AppleLogo from '../components/AppleLogo'
-import { IOS_APP_URL, iosAppLink } from '../lib/iosApp'
+import { IOS_APP_LINK } from '../lib/iosApp'
 
 // Real artwork, from the same iTunes artwork CDN the app already uses for
 // album covers. 200px renders crisply at the card's 44px on a 2x display.
@@ -51,14 +51,87 @@ function GoogleLogo() {
   )
 }
 
-// The App Store preview slides, resized for the web (frontend/public/app/).
-const APP_SLIDES = [
-  { src: '/app/02-rate.jpg', alt: 'Pressd on iPhone: scoring an album track by track' },
-  { src: '/app/03-album.jpg', alt: 'Pressd on iPhone: an album page' },
-  { src: '/app/01-hero.jpg', alt: 'Pressd on iPhone: the For You feed' },
-  { src: '/app/04-artist.jpg', alt: 'Pressd on iPhone: an artist page' },
-  { src: '/app/05-social.jpg', alt: 'Pressd on iPhone: comparing ratings with friends' },
+// Apple's badge shape drawn in CSS, sized to sit level with the Google button.
+function StoreBadge() {
+  return (
+    <a {...IOS_APP_LINK} className="btn-store">
+      <AppleLogo size={24} />
+      <span className="store-text">
+        <span className="store-small">Download on the</span>
+        <span className="store-big">App Store</span>
+      </span>
+    </a>
+  )
+}
+
+// Screens from the iPhone app (frontend/public/app/), 720px wide from the
+// simulator's 1242, in the order the carousel shows them.
+const APP_SCREENS = [
+  { src: '/app/for-you.jpg', alt: 'Pressd on iPhone: the For You feed' },
+  { src: '/app/profile.jpg', alt: 'Pressd on iPhone: a profile with picks and stats' },
+  { src: '/app/compare.jpg', alt: 'Pressd on iPhone: comparing ratings with friends' },
+  { src: '/app/thread.jpg', alt: 'Pressd on iPhone: the discussion for an album' },
+  { src: '/app/charts.jpg', alt: 'Pressd on iPhone: the charts' },
+  { src: '/app/stats.jpg', alt: 'Pressd on iPhone: bangs, skips and genres' },
+  { src: '/app/library.jpg', alt: 'Pressd on iPhone: a library of rated albums' },
+  { src: '/app/discussions.jpg', alt: 'Pressd on iPhone: heated discussions' },
+  { src: '/app/share-card.jpg', alt: 'Pressd on iPhone: a rating share card' },
 ]
+
+// The app's screens in a row that wraps around, scrolled by the arrows or by
+// swipe. Three copies sit end to end and the row starts on the middle one;
+// whenever scrolling settles outside it, the row jumps one copy's width back
+// towards it. Every copy is identical, so the jump lands on the same picture
+// and there is no end to reach in either direction. A press moves about one
+// window of phones.
+function ScreenCarousel() {
+  const rowRef = useRef<HTMLDivElement>(null)
+  const settle = useRef<number | undefined>(undefined)
+
+  const recentre = useCallback(() => {
+    const row = rowRef.current
+    if (!row) return
+    const copy = row.scrollWidth / 3
+    if (row.scrollLeft < copy * 0.5) row.scrollLeft += copy
+    else if (row.scrollLeft > copy * 1.5) row.scrollLeft -= copy
+  }, [])
+
+  useEffect(() => {
+    const row = rowRef.current
+    if (row) row.scrollLeft = row.scrollWidth / 3
+    return () => window.clearTimeout(settle.current)
+  }, [])
+
+  function onScroll() {
+    window.clearTimeout(settle.current)
+    settle.current = window.setTimeout(recentre, 140)
+  }
+
+  function step(dir: 1 | -1) {
+    const row = rowRef.current
+    if (!row) return
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    row.scrollBy({ left: dir * row.clientWidth * 0.8, behavior: reduce ? 'auto' : 'smooth' })
+  }
+
+  return (
+    <div className="app-carousel">
+      <button type="button" className="app-arrow prev" onClick={() => step(-1)} aria-label="Previous screens">
+        <ChevronLeft size={22} />
+      </button>
+      <div className="app-row" ref={rowRef} onScroll={onScroll}>
+        {[0, 1, 2].map(copy => APP_SCREENS.map(screen => (
+          <div key={`${copy}-${screen.src}`} className="app-slide" aria-hidden={copy !== 1 || undefined}>
+            <img src={screen.src} alt={copy === 1 ? screen.alt : ''} width={720} height={1558} />
+          </div>
+        )))}
+      </div>
+      <button type="button" className="app-arrow next" onClick={() => step(1)} aria-label="Next screens">
+        <ChevronRight size={22} />
+      </button>
+    </div>
+  )
+}
 
 export default function LandingPage() {
   const { setActiveUser } = useUser()
@@ -401,24 +474,46 @@ export default function LandingPage() {
         /* ── Hero actions: web sign-in and the iPhone app, side by side ── */
         .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 
-        .btn-app {
+        .app-pill {
           display: inline-flex;
           align-items: center;
-          gap: 9px;
-          background: rgba(244,242,236,0.08);
+          gap: 7px;
+          margin-bottom: 22px;
+          padding: 7px 14px;
+          border-radius: 999px;
+          background: rgba(244,242,236,0.12);
+          border: 1px solid rgba(244,242,236,0.28);
           color: #F4F2EC;
-          font-family: inherit;
-          font-size: 15px;
+          font-size: 13.5px;
           font-weight: 700;
-          padding: 14px 24px;
-          border-radius: 14px;
-          border: 1.5px solid rgba(244,242,236,0.42);
-          cursor: pointer;
           text-decoration: none;
           transition: background 0.15s, border-color 0.15s, transform 0.12s;
         }
-        .btn-app:hover { background: rgba(244,242,236,0.16); border-color: #F4F2EC; transform: translateY(-1px); }
-        .btn-app:focus-visible { outline: 2px solid #F4F2EC; outline-offset: 2px; }
+        .app-pill:hover { background: rgba(244,242,236,0.2); border-color: rgba(244,242,236,0.6); transform: translateY(-1px); }
+        .app-pill:focus-visible { outline: 2px solid #F4F2EC; outline-offset: 2px; }
+
+        /* The same 54px height, radius and shadow as .btn-primary, so neither
+           way in outranks the other. */
+        .btn-store {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          height: 54px;
+          padding: 0 24px 0 20px;
+          border-radius: 14px;
+          background: #000;
+          color: #fff;
+          border: 1px solid rgba(255,255,255,0.28);
+          text-decoration: none;
+          box-shadow: 0 12px 28px -10px rgba(0,0,0,0.5);
+          transition: background 0.15s, transform 0.12s, box-shadow 0.15s;
+        }
+        .btn-store:hover { background: #161616; transform: translateY(-1px); box-shadow: 0 16px 32px -10px rgba(0,0,0,0.55); }
+        .btn-store:active { transform: translateY(0); }
+        .btn-store:focus-visible { outline: 2px solid #F4F2EC; outline-offset: 2px; }
+        .store-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1; }
+        .store-small { font-size: 11px; font-weight: 500; letter-spacing: 0.01em; }
+        .store-big { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; margin-top: 3px; }
 
         .nav-app {
           display: inline-flex;
@@ -428,9 +523,8 @@ export default function LandingPage() {
 
         /* ── The iPhone app ─────────────────────────────────────────────
            Its own full-width band below the hero, so the app is a thing the
-           page shows rather than a line it mentions. The five slides are the
-           App Store previews, fanned like a hand of cards; the one under the
-           pointer straightens and comes forward. */
+           page shows rather than a line it mentions. Under the badge, the
+           app's own screens in a carousel (.app-carousel, below). */
         .app-band {
           position: relative;
           background: linear-gradient(180deg, #24382D 0%, #1B2A22 100%);
@@ -464,73 +558,92 @@ export default function LandingPage() {
           line-height: 1.6;
           color: rgba(244,242,236,0.72);
         }
-        .app-soon {
-          display: inline-flex;
+        .app-get {
+          display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 12px 22px;
-          border-radius: 999px;
-          background: rgba(244,242,236,0.1);
-          border: 1px solid rgba(244,242,236,0.22);
-          font-size: 14.5px;
-          font-weight: 700;
-          color: #F4F2EC;
+          justify-content: center;
+          gap: 18px;
+        }
+        .app-qr {
+          width: 92px;
+          height: 92px;
+          padding: 6px;
+          border-radius: 12px;
+          background: #fff;
+          box-shadow: 0 12px 28px -12px rgba(0,0,0,0.6);
+        }
+        /* Nothing to scan with on the phone that's showing the page. */
+        @media (max-width: 760px), (pointer: coarse) {
+          .app-qr { display: none; }
         }
 
-        .app-fan {
-          display: flex;
-          justify-content: center;
-          align-items: flex-end;
-          /* Room above for the lifted card; the band clips the bottoms, so the
-             slides read as rising out of the page. */
-          padding: 64px 24px 0;
-          margin-bottom: -120px;
+        /* A level row of phones that scrolls sideways: the arrows step it,
+           and a swipe or trackpad moves it directly. The scrollbar is hidden
+           because the arrows stand in for it. */
+        .app-carousel {
+          position: relative;
+          max-width: 1240px;
+          margin: 48px auto 0;
+          padding: 0 72px;
         }
-        /* Each slide sits in a dark bezel with rounded corners, so the row
-           reads as a hand of phones rather than a strip of cream cards. */
+        .app-row {
+          display: flex;
+          gap: 28px;
+          overflow-x: auto;
+          scroll-snap-type: x mandatory;
+          scrollbar-width: none;
+          padding: 24px 4px 72px;
+        }
+        .app-row::-webkit-scrollbar { display: none; }
+        /* Each screen sits in a dark bezel, so the row reads as phones
+           rather than a strip of pictures. */
         .app-slide {
-          width: clamp(150px, 17vw, 250px);
+          width: clamp(180px, 17vw, 240px);
           flex-shrink: 0;
-          margin: 0 -14px;
+          scroll-snap-align: start;
           padding: 7px;
           border-radius: 34px;
           background: #0E1512;
           box-shadow: 0 30px 60px -20px rgba(0,0,0,0.65), 0 0 0 1px rgba(244,242,236,0.16);
-          transform: translateY(var(--y)) rotate(var(--r));
-          transition: transform 0.35s cubic-bezier(0.34, 1.3, 0.64, 1), box-shadow 0.3s;
-          position: relative;
-          z-index: var(--z);
+          transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
         }
         .app-slide img { display: block; width: 100%; height: auto; border-radius: 27px; }
-        .app-slide:hover {
-          transform: translateY(calc(var(--y) - 34px)) rotate(0deg) scale(1.06);
-          z-index: 10;
-          box-shadow: 0 44px 80px -24px rgba(0,0,0,0.75), 0 0 0 1px rgba(244,242,236,0.14);
+        .app-slide:hover { transform: translateY(-4%); }
+        .app-arrow {
+          position: absolute;
+          top: calc(50% - 24px);
+          transform: translateY(-50%);
+          width: 48px;
+          height: 48px;
+          border-radius: 999px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #F4F2EC;
+          color: #23372C;
+          border: none;
+          cursor: pointer;
+          box-shadow: 0 12px 28px -10px rgba(0,0,0,0.6);
+          transition: background 0.15s, opacity 0.15s, transform 0.12s;
+          z-index: 2;
         }
+        .app-arrow.prev { left: 12px; }
+        .app-arrow.next { right: 12px; }
+        .app-arrow:hover { background: #fff; }
+        .app-arrow:active { transform: translateY(-50%) scale(0.94); }
+        .app-arrow:focus-visible { outline: 2px solid #F4F2EC; outline-offset: 3px; }
 
-        @media (prefers-reduced-motion: reduce) {
-          .app-slide { transition: none; }
-        }
         @media (max-width: 760px) {
           .app-band { padding: 72px 0 0; }
           .app-title, .app-sub, .app-eyebrow { margin-left: 24px; margin-right: 24px; }
-          /* Too many to fan on a phone: a swipeable row instead, with room
-             inside the scroller so nothing is clipped. */
-          .app-fan {
-            justify-content: flex-start;
-            overflow-x: auto;
-            gap: 14px;
-            padding: 40px 24px 0;
-            margin-bottom: -60px;
-            scroll-snap-type: x mandatory;
-          }
-          .app-slide {
-            width: 62vw;
-            margin: 0;
-            transform: none;
-            scroll-snap-align: center;
-          }
-          .app-slide:hover { transform: none; }
+          /* A phone swipes; the arrows would only crowd the screens. */
+          .app-carousel { margin-top: 32px; padding: 0; }
+          .app-row { gap: 16px; padding: 24px 24px 56px; scroll-padding: 0 24px; }
+          .app-slide { width: 62vw; }
+          .app-arrow { display: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .app-slide, .app-slide:hover { transition: none; transform: none; }
         }
 
         /* ── Responsive ─────────────────────────── */
@@ -570,7 +683,7 @@ export default function LandingPage() {
           <div className="nav-links">
             <Link to="/charts" className="nav-link">Charts</Link>
             <Link to="/how-it-works" className="nav-link">How it Works</Link>
-            <a {...iosAppLink('#iphone')} className="nav-link nav-app">
+            <a {...IOS_APP_LINK} className="nav-link nav-app">
               <AppleLogo size={13} /> iPhone app
             </a>
           </div>
@@ -584,6 +697,10 @@ export default function LandingPage() {
         {/* ── Hero ── */}
         <section className="hero">
           <div className="hero-content">
+            <a {...IOS_APP_LINK} className="app-pill rise">
+              <AppleLogo size={13} /> Now on the App Store!
+            </a>
+
             <h1 className="hero-headline rise d1">Track your taste.</h1>
 
             <p className="hero-sub rise d2">
@@ -599,12 +716,10 @@ export default function LandingPage() {
                   </span>
                   {authLoading ? 'Signing in…' : 'Get started with Google'}
                 </button>
-                {/* Beside the web sign-in rather than under it as a footnote:
-                    the app is the other way in, not an aside. */}
-                <a {...iosAppLink('#iphone')} className="btn-app">
-                  <AppleLogo size={16} />
-                  {IOS_APP_URL ? 'Get the iPhone app' : 'See the iPhone app'}
-                </a>
+                {/* Level with the web sign-in, not under it as a footnote:
+                    the app is the other way in, not an aside — but the page
+                    tells web visitors about it rather than steering them off. */}
+                <StoreBadge />
               </div>
               {authError && <p className="auth-error">{authError}</p>}
             </div>
@@ -652,31 +767,20 @@ export default function LandingPage() {
             Rate as you listen, settle scores with friends, and get told the
             moment someone sends you a record.
           </p>
-          {IOS_APP_URL ? (
-            <a {...iosAppLink('#iphone')} className="btn-primary" style={{ textDecoration: 'none' }}>
-              <AppleLogo size={17} /> Get the iPhone app
-            </a>
-          ) : (
-            <span className="app-soon"><AppleLogo size={15} /> Coming to iOS soon</span>
-          )}
-
-          <div className="app-fan">
-            {APP_SLIDES.map((slide, i) => (
-              <div
-                key={slide.src}
-                className="app-slide"
-                style={{
-                  // Fanned about the middle card: the outer ones sit lower and
-                  // lean away, and stack behind their inner neighbours.
-                  '--r': `${(i - 2) * 4}deg`,
-                  '--y': `${Math.abs(i - 2) * 22}px`,
-                  '--z': 5 - Math.abs(i - 2),
-                } as React.CSSProperties}
-              >
-                <img src={slide.src} alt={slide.alt} loading="lazy" width={720} height={1558} />
-              </div>
-            ))}
+          <div className="app-get">
+            <StoreBadge />
+            {/* Desktop only: a visitor on a computer can't install from this
+                tab, but their phone can read the listing off the screen. */}
+            <img
+              className="app-qr"
+              src="/app/qr-code.png"
+              alt="QR code for Pressd on the App Store"
+              width={400}
+              height={400}
+            />
           </div>
+
+          <ScreenCarousel />
         </section>
       </div>
     </>
