@@ -115,6 +115,9 @@ def _apply_event(sheet, action: str, now: datetime) -> bool:
     return first if action == "shown" else True
 
 
+SHARED_SHOWN = 3   # covers in the profile's overlap pill; the rest are a count
+
+
 def _album_brief(album) -> dict | None:
     if album is None:
         return None
@@ -186,17 +189,22 @@ def build_sheet(store, me: int, sheet, album, rng: random.Random) -> dict | None
 
 def profile_overlap(store, me: int, other: int) -> dict:
     if other == me:
-        return {"percent": None, "reason": None, "connecting_album_id": None, "connecting_album": None}
+        return {"percent": None, "reason": None, "connecting_album_id": None, "connecting_album": None,
+                "shared_records": [], "shared_count": 0}
     _refresh(store, me, {other}, mark_fresh=False)
     percent, reason = store.overlap_row(me, other) or (50.0, None)
     copy = None
     if reason and reason.get("subject_key"):
         copy = store.their_copy(other, reason["subject_key"])
         reason = {**reason, "album_id": copy.id if copy else None}
+    shared = store.shared_records(me, other)
     if copy is None:
-        copy = store.shared_record(me, other)
+        copy = shared[0] if shared else None
+    # The profile's pill draws the first few covers and counts the rest: the
+    # records you have both rated, as their copies, newest first.
     return {"percent": round(percent), "reason": reason,
-            "connecting_album_id": copy.id if copy else None, "connecting_album": _album_brief(copy)}
+            "connecting_album_id": copy.id if copy else None, "connecting_album": _album_brief(copy),
+            "shared_records": [_album_brief(a) for a in shared[:SHARED_SHOWN]], "shared_count": len(shared)}
 
 
 # ---------------------------------------------------------------- data access
@@ -271,11 +279,17 @@ class Store:
         copies = [a for a in self.rated_albums(uid) if a.subject_key == subject_key]
         return _recent_first(copies)[0] if copies else None
 
-    def shared_record(self, me: int, uid: int) -> Album | None:
-        """Their most recent rated copy of a record the caller has rated too."""
+    def shared_records(self, me: int, uid: int) -> list[Album]:
+        """Their rated copies of the records the caller has rated too, one per
+        record (any edition), most recent first."""
         mine = {a.subject_key for a in self.rated_albums(me) if a.subject_key}
-        theirs = [a for a in self.rated_albums(uid) if a.subject_key in mine]
-        return _recent_first(theirs)[0] if theirs else None
+        seen: set[str] = set()
+        out: list[Album] = []
+        for a in _recent_first([a for a in self.rated_albums(uid) if a.subject_key in mine]):
+            if a.subject_key not in seen:
+                seen.add(a.subject_key)
+                out.append(a)
+        return out
 
 
 # ---------------------------------------------------------------- endpoints

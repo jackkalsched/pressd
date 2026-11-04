@@ -7,6 +7,7 @@ import {
   useFonts,
   PlayfairDisplay_400Regular,
   PlayfairDisplay_700Bold,
+  PlayfairDisplay_700Bold_Italic,
   PlayfairDisplay_900Black,
 } from '@expo-google-fonts/playfair-display'
 import {
@@ -64,6 +65,7 @@ function RootNavigator() {
   const [fontsLoaded] = useFonts({
     PlayfairDisplay_400Regular,
     PlayfairDisplay_700Bold,
+    PlayfairDisplay_700Bold_Italic,
     PlayfairDisplay_900Black,
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,

@@ -145,11 +145,12 @@ export default function PeopleSheet({ data, onClose }: { data: PeopleSheetData; 
       >
         <div className="flex items-center gap-4">
           <Cover artUrl={album.artUrl} seed={album.artist} size={64} radius={12} />
-          <h2 className="m-0 min-w-0 flex-1 text-[22px] font-bold leading-snug text-[#1c1917] md:text-[26px]">
+          {/* One face for the whole line, a title's: the album stands out by
+              italics, not by switching family mid-sentence. */}
+          <h2 className="font-display m-0 min-w-0 flex-1 text-[22px] font-bold leading-snug text-[#1c1917] md:text-[26px]">
             {data.fallback || data.raters == null ? 'People who like what you like' : (
               <>
-                {data.raters} {data.raters === 1 ? 'person' : 'people'} rated{' '}
-                <i className="font-display">{album.name}</i> too
+                {data.raters} {data.raters === 1 ? 'person' : 'people'} rated <i>{album.name}</i> too
               </>
             )}
           </h2>
@@ -175,8 +176,9 @@ export default function PeopleSheet({ data, onClose }: { data: PeopleSheetData; 
                   >
                     {p.user.name}
                   </button>
-                  <span className="font-display shrink-0 text-[26px] font-bold leading-none tabular-nums" style={{ color: GREEN }}>
-                    {p.percent}%
+                  <span className="flex shrink-0 items-baseline gap-1.5" style={{ color: GREEN }}>
+                    <span className="font-display text-[26px] font-bold leading-none tabular-nums">{p.percent}%</span>
+                    <span className="text-xs font-semibold">taste overlap</span>
                   </span>
                 </div>
                 <SongNotes person={p} />

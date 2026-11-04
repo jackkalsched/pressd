@@ -420,6 +420,10 @@ export interface Overlap {
   reason: TasteReason | null
   connectingAlbumId: number | null
   connectingAlbum: OverlapAlbum | null
+  /** Records you have both rated, as their copies, newest first — the first few. */
+  sharedRecords: OverlapAlbum[]
+  /** How many records you have both rated in all. */
+  sharedCount: number
 }
 
 export interface SheetSong { title: string; score: number }

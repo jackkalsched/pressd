@@ -44,7 +44,7 @@ import {
   type ArtistRank, type RankDir, type RankMode,
 } from '../../lib/rankings'
 import ProfileBanner from '../../components/ProfileBanner'
-import { OverlapChip, OverlapPanel } from '../../components/TasteOverlap'
+import { OverlapPill } from '../../components/TasteOverlap'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 
@@ -351,6 +351,11 @@ export default function FriendProfile() {
               subgenres={topSubgenres}
               topInset={insets.top + 22}
               bio={person.bio}
+              // The same pill for a friend and a stranger: only the friend
+              // button beside the name says which they are.
+              overlap={!isSelf && overlap && user ? (
+                <OverlapPill overlap={overlap} me={user} them={person} onCompare={compareWith} />
+              ) : undefined}
               profile={profile}
               picksHeading={`${possessive(person.name)} picks`}
               scores={albumScores}
@@ -380,23 +385,6 @@ export default function FriendProfile() {
               }
             />
 
-            {/* A friend's overlap is a chip; for anyone else — a pending request
-                either way included — it's the panel, which makes the case for
-                adding them. */}
-            {!isSelf && overlap && (isFriend ? (
-              <OverlapChip overlap={overlap} />
-            ) : (
-              <OverlapPanel
-                overlap={overlap}
-                person={person}
-                onAdd={onFriendButton}
-                requested={requested}
-                theyAsked={theyAsked}
-                busy={friendBusy}
-                onCompare={compareWith}
-                onOpenAlbum={(albumId) => router.push({ pathname: '/album/[id]', params: { id: String(albumId) } })}
-              />
-            ))}
 
             <View style={styles.tabBar} onLayout={(e) => setTabsY(e.nativeEvent.layout.y)}>
               {TABS.map(({ key, label }) => (

@@ -537,8 +537,8 @@ Vercel with the site's domains authorised.
 stored **24:5 at 1920×400** (`BANNER_SIZE`) through the same decode path as
 avatars (`_normalize_image` in `users.py`: EXIF stripped, rotation applied, pixel-bomb
 guard). Both apps show it **sharp**, as a rounded strip at the top of every profile
-(Pressd green when there's none) with the avatar riding up over its bottom edge, in
-front of it; web has *Edit banner* on your own. Mobile's strip (`ProfileBanner`,
+(Pressd green when there's none) — on web with the avatar riding up over its bottom
+edge, in front of it; on iPhone with the avatar set below it, so the whole strip shows; web has *Edit banner* on your own. Mobile's strip (`ProfileBanner`,
 `BANNER_ASPECT`) is cropped to 4:1, about 90pt on a phone, so it loses a little of the
 sides of what was framed. It was 480×200 while it was only ever
 blurred — no banner had been uploaded when it changed. Both apps crop to 24:5 before
@@ -679,7 +679,9 @@ computation is §4, "Journey: taste overlap"). Three endpoints, all behind
 `current_user`; profiles are public, so anyone signed in may ask about anyone, and
 people appear only as `public_user`.
 
-- `GET /users/{id}/overlap` → `{percent, reason, connecting_album_id, connecting_album}`.
+- `GET /users/{id}/overlap` → `{percent, reason, connecting_album_id, connecting_album,
+  shared_records, shared_count}` — the last two are the records you have both rated, as
+  their copies newest first: the first `SHARED_SHOWN` (3) as album briefs, and how many in all.
   `percent` is a whole number, the stored pair or **50 when there is no row** (a missing
   row is 50, measured or not); null only for yourself; 404 for a user that doesn't
   exist. `reason` is the stored `reason_for` dict — `kind` (agree / split / mixed /
@@ -726,18 +728,20 @@ The nightly writes a `tasteuser` row for every user with cells (`[]` when they h
 vector) so that freshness is defined for everyone.
 
 **On web** (`components/TasteOverlap.tsx`, `components/PeopleSheet.tsx`, November
-2026). `FriendProfile` asks `fetchOverlap` (`['overlap', id]`) on anyone's profile but
-your own. Not friends — no friendship, or a request pending either way — gets
-`OverlapPanel` across the page's width between the identity row and the stat row:
-"YOU & {NAME}", the percent in Playfair green, a 0–100 meter with a mark, the connecting
-record's cover beside the reason, **Add friend** (the page's own friend handler, so it
-reads Requested / Accept request as the header button does) and **Compare**, which opens
-`/album/{reason.albumId ?? connecting album}?view=compare`, or with no shared record
-switches to their Library tab. A friend gets `OverlapChip` under the bio — "72% taste
-overlap" and the reason on one line. 50% is drawn like any other number, and a null
-reason draws nothing. The reason renders from `text` by turning only its literal
-`<i>…</i>` pairs into `<i>` elements and unescaping the entities the server put in the
-rest (`ReasonText`) — never as HTML. The sheet has one mount, `PeopleSheetHost` in
+2026). `FriendProfile` asks `fetchOverlap` (`['overlap', viewer, id]`) on anyone's profile
+but your own, and draws one `OverlapPill` under the bio for a friend and a stranger alike:
+your two avatars overlapping, the percent in Playfair green with "taste overlap", and —
+past a divider — up to three covers of the records you have both rated (the endpoint's
+`shared_records`, their copies, newest first) and "+N" for the rest (`shared_count`).
+The number opens `/album/{reason.albumId ?? connecting album}?view=compare`, or with no
+shared record their Library tab; a cover compares that record; the reason is the pill's
+tooltip. Only the button beside it says which relationship it is: **Add friend** /
+**Accept request** / **Friends** filled green, **Requested** tinted. Removing a friend
+moved to the round "…" menu (with Copy profile link), so the filled Friends button can't
+undo a friendship on a stray click. The handle line adds "Pressing since {Mon YYYY}" from
+the profile's `created_at` (absent for accounts older than the column). 50% is drawn like
+any other number. The reason's `text` is only ever plain text — the tooltip drops its
+`<i>` tags and unescapes the entities the server put in the rest — never HTML. The sheet has one mount, `PeopleSheetHost` in
 `Layout`, the only observer of `['people-sheet', userId]` (`lib/peopleSheet.ts`;
 `staleTime: Infinity`), so it asks once per page load — a sheet owed from the other
 device — and again when `RatingScreen` invalidates the key as its share card closes
@@ -756,14 +760,17 @@ cached sheet so a remount can't reopen it.
 
 **On iPhone** (`mobile/components/TasteOverlap.tsx`, `mobile/components/PeopleSheet.tsx`,
 November 2026) — the same features in mobile's layout. `app/friend/[id].tsx` asks
-`fetchOverlap` (`['overlap', id]`) on anyone but you and draws it between
-`ProfileBanner` and the tab bar: `OverlapPanel` for anyone not a friend (pending either
-way included) — "YOU & {NAME}", the percent in Playfair green, the meter, the connecting
-cover beside the reason, **Add friend** (the screen's own friend handler) and
-**Compare**, which pushes `/album/{reason.albumId ?? connecting album}` (the album page
-draws `FriendCompare` once both copies are rated) or, with no shared record, switches to
-Library and scrolls to the tabs; `OverlapChip` for a friend. `ReasonText` turns only the
-literal `<i>…</i>` pairs into italic `<Text>` spans and unescapes the rest. The sheet's one
+`fetchOverlap` (`['overlap', viewer, id]`) on anyone but you and draws the same
+`OverlapPill` as web through `ProfileBanner`'s `overlap` slot — under the name, the
+handle line ("@name · since {Mon YYYY}") and the bio beside the avatar, and above the row
+of the score distribution (as wide as the avatar, under it) with the average below it in
+its score colour (the avatar's ring repeats it) and the four stats in a 2×2 grid beside
+them. The name's line has a `stickers` slot to its right, empty until stickers exist —
+for friends and strangers alike: both avatars, the percent with "taste overlap", up to three shared covers and
+"+N". The number goes to `compareWith` — `/album/{reason.albumId ?? connecting album}`
+(the album page draws `FriendCompare` once both copies are rated) or, with no shared
+record, Library scrolled to the tabs — and a cover compares that record. The header's
+friend button says the relationship; the reason isn't drawn on iPhone. The sheet's one
 mount is `PeopleSheetHost` in the root layout (`app/_layout.tsx`, beside What's New and
 the phone prompt), the only observer of `['people-sheet', userId]` (`lib/peopleSheet.ts`,
 `staleTime: Infinity`): it asks once at launch and again when `rate/[id].tsx`
@@ -1476,7 +1483,9 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
 - **Both apps set type in the same two families.** Playfair Display for page
   titles, album titles and scores (mobile `fonts.display*`, web `.font-display` —
   the name means the same on both); Plus Jakarta Sans for everything else (the web
-  `body` face). Clash Display is the wordmark only. Web used DM Sans until September
+  `body` face). A title that names an album keeps one face and sets the album in
+  Playfair italic (web `<i>` inside `.font-display`; mobile `fonts.displayItalic`, a
+  loaded face, because iOS can't slant a custom font with `fontStyle`). Clash Display is the wordmark only. Web used DM Sans until September
   2026, share card included; don't bring a third face back.
 - **A final album score is always shown to two decimals** (`8.20`, never `8.2`) —
   rated, predicted or projected, on both platforms. Song scores and factor values are

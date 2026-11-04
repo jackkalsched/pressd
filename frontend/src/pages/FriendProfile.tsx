@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, Clock, Image as ImageIcon, Loader2, Settings, UserPlus } from 'lucide-react'
+import { ArrowLeft, Check, Clock, Image as ImageIcon, Link2, Loader2, MoreHorizontal, Settings, UserMinus, UserPlus } from 'lucide-react'
 import { acceptFriendRequest, addFriend, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, fetchOverlap, getInviteLink, removeFriend } from '../api'
 import { useUser } from '../context/UserContext'
 import Library from './Library'
@@ -11,7 +11,7 @@ import { songScoreColor } from '../types'
 import { ScoreHistogram } from '../components/histograms'
 import ProfilePicks from '../components/ProfilePicks'
 import SettingsDialog from '../components/SettingsDialog'
-import { OverlapChip, OverlapPanel } from '../components/TasteOverlap'
+import { OverlapPill } from '../components/TasteOverlap'
 import Stats from './Stats'
 import Ratings from './Ratings'
 
@@ -43,6 +43,8 @@ export default function FriendProfile() {
   const [busy, setBusy] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [shared, setShared] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
   const valid = Number.isFinite(fid)
   // Your own page: Settings instead of the friend button, and picks you can change.
   const isSelf = activeUser?.id === fid
@@ -148,12 +150,15 @@ export default function FriendProfile() {
     if (personId != null && personName) setViewingUser({ id: personId, name: personName, avatarUrl: personAvatar })
   }, [personId, personName, personAvatar, setViewingUser])
 
-  async function handleFriendButton() {
-    if (!person || busy || requested) return
-    if (isFriend && !confirm(`Remove ${person.name} as a friend?`)) return
+  // The button only ever adds or accepts. Removing a friend lives in the "…"
+  // menu, so the filled Friends button can't undo a friendship on a stray click.
+  async function changeFriendship(remove = false) {
+    if (!person || busy) return
+    if (remove ? !isFriend : (isFriend || requested)) return
+    if (remove && !confirm(`Remove ${person.name} as a friend?`)) return
     setBusy(true)
     try {
-      if (isFriend) await removeFriend(activeUser!.id, fid)
+      if (remove) await removeFriend(activeUser!.id, fid)
       else if (theyAsked) await acceptFriendRequest(activeUser!.id, fid)
       else await addFriend(activeUser!.id, fid)
       queryClient.invalidateQueries({ queryKey: ['friends'] })
@@ -162,6 +167,15 @@ export default function FriendProfile() {
     } catch { /* the button stays as it was */ } finally {
       setBusy(false)
     }
+  }
+
+  async function copyProfileLink() {
+    setMenuOpen(false)
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch { /* nothing to copy to */ }
   }
 
   // Back to wherever you came from — For You, a thread, Social — now that a
@@ -270,6 +284,7 @@ export default function FriendProfile() {
           <p className="m-0 mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[15px] text-[#8a7f72]">
             {[
               `@${person.name}`,
+              profile?.created_at && `Pressing since ${new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`,
               !isSelf && mutualCount > 0 && `${mutualCount} mutual friend${mutualCount === 1 ? '' : 's'}`,
             ].filter(Boolean).map((part, i) => (
               <span key={i} className="flex items-center gap-2.5">
@@ -285,9 +300,21 @@ export default function FriendProfile() {
               {person.bio}
             </p>
           )}
-          {/* A friend's overlap is a chip under the name; for anyone else
-              it's the panel below, which makes the case for adding them. */}
-          {!isSelf && isFriend && overlap && <OverlapChip overlap={overlap} />}
+          {/* The same pill for a friend and a stranger: only the button beside
+              it says which they are. */}
+          {!isSelf && overlap && activeUser && (
+            <div>
+              <OverlapPill
+                overlap={overlap}
+                me={activeUser}
+                them={person}
+                onOpenLibrary={() => {
+                  setTab('library')
+                  tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }}
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-2.5 pt-4 md:pt-8">
@@ -307,45 +334,57 @@ export default function FriendProfile() {
               </button>
             </>
           ) : (
-            <button
-              onClick={handleFriendButton}
-              disabled={busy || requested}
-              title={isFriend ? "You're friends — click to remove" : undefined}
-              // Adding someone is the thing this page should invite, so it gets the
-              // loud green; already being friends is the settled, quieter state.
-              className={`shrink-0 flex items-center gap-2 font-semibold text-sm px-5 py-2.5 rounded-xl transition-[background-color,transform,box-shadow] duration-200 ease-out disabled:opacity-60 ${
-                isFriend || requested
-                  ? 'bg-[#2d6a4f]/10 text-[#2d6a4f] hover:bg-[#2d6a4f]/15'
-                  : 'bg-[#2d6a4f] text-white shadow-[0_10px_24px_-10px_rgba(45,106,79,0.75)] hover:bg-[#245c43] hover:-translate-y-px hover:shadow-[0_14px_28px_-10px_rgba(45,106,79,0.8)]'
-              }`}
-            >
-              {busy ? <Loader2 size={15} className="animate-spin" />
-                : isFriend ? <Check size={16} />
-                : requested ? <Clock size={15} />
-                : <UserPlus size={16} />}
-              {isFriend ? 'Friends' : requested ? 'Requested' : theyAsked ? 'Accept request' : 'Add friend'}
-            </button>
+            <>
+              <button
+                onClick={() => changeFriendship()}
+                disabled={busy || isFriend || requested}
+                // Filled for every state but a sent request: adding is what the
+                // page invites, and being friends is shown just as plainly.
+                className={`flex h-12 shrink-0 items-center gap-2 rounded-full px-6 text-[15px] font-semibold transition-[background-color,transform,box-shadow] duration-200 ease-out ${
+                  requested
+                    ? 'bg-[#2d6a4f]/12 text-[#2d6a4f]'
+                    : `bg-[#2d6a4f] text-white shadow-[0_10px_24px_-10px_rgba(45,106,79,0.75)] ${isFriend ? '' : 'hover:-translate-y-px hover:bg-[#245c43] hover:shadow-[0_14px_28px_-10px_rgba(45,106,79,0.8)]'}`
+                } disabled:cursor-default`}
+              >
+                {busy ? <Loader2 size={16} className="animate-spin" />
+                  : isFriend ? <Check size={17} />
+                  : requested ? <Clock size={16} />
+                  : <UserPlus size={17} />}
+                {isFriend ? 'Friends' : requested ? 'Requested' : theyAsked ? 'Accept request' : 'Add friend'}
+              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setMenuOpen(o => !o)}
+                  aria-label="More"
+                  aria-expanded={menuOpen}
+                  className="flex h-12 w-12 items-center justify-center rounded-full border border-[#e2dbd0] bg-white text-[#57534e] transition-colors hover:border-[#2d6a4f] hover:text-[#2d6a4f]"
+                >
+                  {linkCopied ? <Check size={18} className="pop text-[#2d6a4f]" /> : <MoreHorizontal size={20} />}
+                </button>
+                {menuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
+                    <div className="menu-in absolute right-0 top-14 z-30 min-w-[200px] overflow-hidden rounded-2xl border border-[#ece5da] bg-white py-1.5 shadow-[0_18px_40px_-18px_rgba(40,25,10,0.45)]">
+                      <button onClick={copyProfileLink} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[14px] font-medium text-[#1c1917] hover:bg-[#f5f0e8]">
+                        <Link2 size={16} className="text-[#8a7f72]" /> Copy profile link
+                      </button>
+                      {isFriend && (
+                        <button
+                          onClick={() => { setMenuOpen(false); changeFriendship(true) }}
+                          className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[14px] font-medium text-[#b1542f] hover:bg-[#f5f0e8]"
+                        >
+                          <UserMinus size={16} /> Remove friend
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>
 
-      {/* ── You & them ───────────────────────────────────────────
-          Across the page's width, under the name and over the numbers.
-          A pending request either way still counts as not friends. */}
-      {!isSelf && !isFriend && overlap && (
-        <OverlapPanel
-          overlap={overlap}
-          person={person}
-          onAdd={handleFriendButton}
-          requested={requested}
-          theyAsked={theyAsked}
-          busy={busy}
-          onOpenLibrary={() => {
-            setTab('library')
-            tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          }}
-        />
-      )}
 
       {/* ── Headline numbers, between two rules ─────────────────
           The average and the four counts, in mobile's order. */}

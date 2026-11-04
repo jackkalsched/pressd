@@ -29,6 +29,9 @@ export const colors = {
 export const fonts = {
   display: 'PlayfairDisplay_700Bold',
   displayRegular: 'PlayfairDisplay_400Regular',
+  // A real italic face: iOS can't slant a custom font, so fontStyle: 'italic'
+  // on `display` draws it upright.
+  displayItalic: 'PlayfairDisplay_700Bold_Italic',
   displayBlack: 'PlayfairDisplay_900Black',
   // The Pressd wordmark itself — Clash Display, per the brand mark. Not a
   // general-purpose face: use display/body for everything else.

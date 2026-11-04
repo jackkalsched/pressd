@@ -508,6 +508,9 @@ def _profile_payload(session: Session, user: PressUser) -> dict:
         "avatar_url": user.avatar_url,
         "banner_url": user.banner_url,
         "bio": user.bio,
+        # "Pressing since …" on the profile. Null for accounts older than the
+        # column, whose sign-up date was never stored (§10).
+        "created_at": user.created_at.isoformat() if user.created_at else None,
         # The client hides the picks row entirely below the threshold rather
         # than showing three empty slots on a new profile.
         "picks_unlocked": rated >= PICKS_MIN_RATED_ALBUMS,

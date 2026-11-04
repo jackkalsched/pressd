@@ -95,10 +95,9 @@ class FakeStore:
         copies = [a for a in self.rated_albums(uid) if a.subject_key == subject_key]
         return copies[0] if copies else None
 
-    def shared_record(self, me, uid):
+    def shared_records(self, me, uid):
         mine = {a.subject_key for a in self.rated_albums(me)}
-        theirs = [a for a in self.rated_albums(uid) if a.subject_key in mine]
-        return theirs[0] if theirs else None
+        return [a for a in self.rated_albums(uid) if a.subject_key in mine]
 
 
 # ---------------------------------------------------------------- owing a sheet
@@ -246,14 +245,27 @@ def test_self_overlap_is_null():
         def __getattr__(self, name):
             raise AssertionError(f"self overlap touched the store: {name}")
     assert profile_overlap(Untouchable(), 1, 1) == {
-        "percent": None, "reason": None, "connecting_album_id": None, "connecting_album": None}
+        "percent": None, "reason": None, "connecting_album_id": None, "connecting_album": None,
+        "shared_records": [], "shared_count": 0}
 
 
 def test_missing_pair_is_fifty_with_no_reason():
     store = FakeStore()
     assert profile_overlap(store, 1, 2) == {
-        "percent": 50, "reason": None, "connecting_album_id": None, "connecting_album": None}
+        "percent": 50, "reason": None, "connecting_album_id": None, "connecting_album": None,
+        "shared_records": [], "shared_count": 0}
     assert store.refreshed == [(1, {2})]
+
+
+def test_profile_shows_three_shared_covers_and_counts_the_rest():
+    subjects = [f"a|r{i}" for i in range(4)]
+    mine = {10 + i: album(10 + i, 1, name=f"R{i}", subject=k) for i, k in enumerate(subjects)}
+    theirs = {20 + i: album(20 + i, 2, name=f"R{i}", subject=k, rated_hours_ago=i) for i, k in enumerate(subjects)}
+    store = FakeStore(albums={**mine, **theirs, 30: album(30, 2, name="Only theirs", subject="b|x")})
+    out = profile_overlap(store, 1, 2)
+    assert out["shared_count"] == 4
+    assert [r["id"] for r in out["shared_records"]] == [20, 21, 22]   # their copies, three shown
+    assert out["connecting_album_id"] == 20
 
 
 def test_reason_points_at_their_copy():

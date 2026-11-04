@@ -1384,6 +1384,8 @@ export interface Profile {
    *  profile; null shows Pressd green. */
   banner_url: string | null
   bio: string | null
+  /** When the account was made (ISO); null for accounts older than the column. */
+  created_at: string | null
   /** False until `picks_required` albums are rated; the picks row stays hidden. */
   picks_unlocked: boolean
   picks_rated_count: number
@@ -2114,6 +2116,8 @@ export async function fetchOverlap(userId: number): Promise<Overlap> {
     reason: d.reason ? transformTasteReason(d.reason) : null,
     connectingAlbumId: (d.connecting_album_id as number | null) ?? null,
     connectingAlbum: d.connecting_album ? transformOverlapAlbum(d.connecting_album) : null,
+    sharedRecords: ((d.shared_records as Record<string, unknown>[] | undefined) ?? []).map(transformOverlapAlbum),
+    sharedCount: (d.shared_count as number | undefined) ?? 0,
   }
 }
 

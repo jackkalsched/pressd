@@ -252,7 +252,10 @@ export default function PeopleSheet({ data, visible, onClose }: {
                       <Avatar name={p.user.name} avatarUrl={p.user.avatarUrl} size={42} />
                     </Pressable>
                     <Text style={styles.name} numberOfLines={1} onPress={() => onOpenProfile(p)}>{p.user.name}</Text>
-                    <Text style={styles.percent} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{p.percent}%</Text>
+                    <View style={styles.overlap}>
+                      <Text style={styles.percent} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{p.percent}%</Text>
+                      <Text style={styles.overlapLabel} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>taste overlap</Text>
+                    </View>
                     <Pressable
                       style={[styles.addBtn, isAdded && styles.addBtnOn]}
                       onPress={() => add(p)}
@@ -315,8 +318,10 @@ const styles = StyleSheet.create({
   cover: { width: 56, height: 56, borderRadius: radii.md },
   coverFallback: { backgroundColor: colors.inset, alignItems: 'center', justifyContent: 'center' },
   coverInitial: { fontFamily: fonts.display, fontSize: 22, color: colors.inkMuted },
-  title: { flex: 1, minWidth: 0, fontFamily: fonts.bodyBold, fontSize: 19, lineHeight: 25, color: colors.ink },
-  titleAlbum: { fontFamily: fonts.display, fontStyle: 'italic' },
+  // One face for the whole line, a title's: the album stands out by italics,
+  // not by switching family mid-sentence.
+  title: { flex: 1, minWidth: 0, fontFamily: fonts.display, fontSize: 21, lineHeight: 27, color: colors.ink },
+  titleAlbum: { fontFamily: fonts.displayItalic },
 
   list: { flexGrow: 0 },
   person: {
@@ -328,7 +333,9 @@ const styles = StyleSheet.create({
   },
   personHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   name: { flex: 1, minWidth: 0, fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.ink },
-  percent: { fontFamily: fonts.display, fontSize: 24, color: colors.green, fontVariant: ['tabular-nums'] },
+  overlap: { alignItems: 'flex-end' },
+  percent: { fontFamily: fonts.display, fontSize: 24, lineHeight: 28, color: colors.green, fontVariant: ['tabular-nums'] },
+  overlapLabel: { fontFamily: fonts.bodySemiBold, fontSize: 11, color: colors.green },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',

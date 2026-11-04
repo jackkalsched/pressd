@@ -1,15 +1,17 @@
 // The profile header, shared by your own Profile tab and someone else's page:
-// the banner, identity, the average score, four headline stats, taste chips, and
-// the three picks below them. The `action` slot holds whatever control belongs to
-// the viewer (settings on your own page, the friend button on someone else's).
+// the banner, the avatar beside the name (stickers to its right), "@handle ·
+// since" and the bio, someone else's taste overlap, the score distribution and
+// average under the avatar with four headline stats in a 2×2 grid beside them,
+// taste chips, and the three picks below. The `action` slot holds whatever
+// control belongs to the viewer (settings on your own page, the friend button
+// on someone else's).
 //
-// The top follows web's profile (frontend/src/pages/FriendProfile.tsx): the
-// person's banner, sharp, in a rounded strip, Pressd green when there is none, and
-// the avatar riding up over its bottom edge on a disc of the page's cream. It
-// used to be their picture or favourite album blurred into a wash, which made an
-// uploaded banner unrecognisable. The numbers stay unboxed in Playfair. The
-// average is the headline figure, set large in its own score colour, and also
-// rings the avatar: the share of 10 you rate at, drawn around who you are.
+// The person's banner, sharp, in a rounded strip, Pressd green when there is
+// none, and the avatar below it rather than over its edge, so the whole picture
+// stays visible. It used to be their picture or favourite album blurred into a
+// wash, which made an uploaded banner unrecognisable. The numbers stay unboxed in Playfair. The
+// average rings the avatar in its own score colour — the share of 10 you rate at,
+// drawn around who you are — and is written out under the distribution.
 import { useMemo, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { Image } from 'expo-image'
@@ -23,11 +25,9 @@ import { colors, fonts, radii, spacing } from '../theme/tokens'
 import ScoreHistogram from './ScoreHistogram'
 
 // The server stores banners 24:5 (BANNER_SIZE, backend/routers/users.py). At phone
-// width that is a sliver, too thin to carry the avatar, so the strip is a little
-// taller and takes the crop from the sides. 4:1 keeps five-sixths of the width.
+// width that is a sliver, so the strip is a little taller and takes the crop from
+// the sides. 4:1 keeps five-sixths of the width.
 const BANNER_ASPECT = 4
-// How much of the avatar's disc sits over the strip.
-const AVATAR_OVERLAP = 0.5
 
 // How far type in this header is allowed to scale. The header is a fixed-shape
 // composition — a ringed avatar beside the name, a headline figure beside a
@@ -50,6 +50,8 @@ export default function ProfileBanner({
   action,
   topInset,
   bio,
+  overlap,
+  stickers,
   profile,
   picksHeading,
   onPickPress,
@@ -63,9 +65,13 @@ export default function ProfileBanner({
   subgenres: string[]
   action?: ReactNode
   topInset: number
-  /** Rendered between the taste chips and the picks — the prose belongs with
-   *  the identity above it, not stranded under a row of cards. */
+  /** Right under the @handle: the prose belongs with the identity it describes. */
   bio?: string | null
+  /** Someone else's taste overlap, between the bio and the average. */
+  overlap?: ReactNode
+  /** Earned stickers, drawn on the name's line to its right. Nothing passes
+   *  them yet; the slot is there so the line already leaves them room. */
+  stickers?: ReactNode
   /** Picks come from GET /users/{id}/profile; the row hides itself until the
    *  ten-album bar is cleared, so a new account never shows three empty slots. */
   profile?: Profile | null
@@ -116,6 +122,11 @@ export default function ProfileBanner({
     return Math.max(1, fits(rowW - MORE_W - GAP))
   }, [rowW, widths, tags])
 
+  const { fontScale } = useWindowDimensions()
+  const avatarSize = ringedAvatarSize(fontScale)
+  const hasScores = !!scores && scores.length > 0
+  const since = monthYear(profile?.created_at)
+
   const shownTags = tags.slice(0, fitCount)
   const overflowTags = tags.slice(fitCount)
   const overflowCount = overflowTags.length
@@ -128,52 +139,53 @@ export default function ProfileBanner({
         <View style={styles.bannerTop}>
           <RingedAvatar name={name} avatarUrl={avatarUrl} avg={avg} />
           <View style={styles.identity}>
-            {/* Capped because this is the column that gives way when the
-                avatar grows beside it — uncapped, a long name at a large
-                setting truncates to two or three characters. */}
-            <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
-              {name}
-            </Text>
+            {/* The name shares its line with the stickers slot, so it shrinks
+                before they do. Capped because this is the column that gives
+                way when the avatar grows beside it — uncapped, a long name at
+                a large setting truncates to two or three characters. */}
+            <View style={styles.nameRow}>
+              <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
+                {name}
+              </Text>
+              {stickers ? <View style={styles.stickers}>{stickers}</View> : null}
+            </View>
             <Text style={styles.handle} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
-              @{name}
+              @{name}{since ? ` · since ${since}` : ''}
             </Text>
+            {bio ? <Text style={styles.bio} numberOfLines={3} maxFontSizeMultiplier={HEADER_SCALE_CAP}>{bio}</Text> : null}
           </View>
-          {action ? <View style={styles.action}>{action}</View> : null}
+          {action ? <View>{action}</View> : null}
         </View>
 
-        {/* The average leads, large and in its own score colour; the other
-            four share a grid beside it. Unboxed, like the album pages' figures. */}
-        <View style={styles.figures}>
-          <View style={styles.hero}>
-            <Text
-              style={[styles.heroValue, { color: avg != null ? songScoreColor(avg) : colors.inkMuted }]}
-              numberOfLines={1}
-              maxFontSizeMultiplier={HEADER_SCALE_CAP}
-            >
-              {avg != null ? avg.toFixed(2) : '—'}
-            </Text>
-            <Text style={styles.statLabel} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
-              Avg score
-            </Text>
-            {scores && scores.length > 0 ? (
-              <View style={styles.heroChart}>
-                <ScoreHistogram scores={scores} height={26} axis={false} gap={2} />
-              </View>
-            ) : null}
-          </View>
-          <View style={styles.rule} />
+        {overlap}
+
+        {/* Under the avatar, as wide as it: the shape of every album score with
+            the average beneath it, in its own score colour. Beside them, the
+            four headline figures in a 2×2 grid split by faint rules. */}
+        <View style={styles.about}>
+          {(hasScores || avg != null) && (
+            <View style={{ width: avatarSize }}>
+              {hasScores && <ScoreHistogram scores={scores!} height={26} axis={false} gap={2} />}
+              {avg != null && (
+                <>
+                  <Text style={[styles.avgValue, { color: songScoreColor(avg) }]} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
+                    {avg.toFixed(2)}
+                  </Text>
+                  <Text style={styles.avgLabel} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
+                    Avg score
+                  </Text>
+                </>
+              )}
+            </View>
+          )}
           <View style={styles.grid}>
-            {stats.map((s) => (
-              <View key={s.label} style={styles.statCell}>
-                {/* Held to one line: unbounded, "5,692" wrapped and pushed its own
-                    label out of line. No adjustsFontSizeToFit: on iOS, with a set
-                    lineHeight, it collapsed "458" to a few points in a cell with
-                    room to spare. A five-digit count fits at full size. */}
-                <Text
-                  style={styles.statValue}
-                  numberOfLines={1}
-                  maxFontSizeMultiplier={HEADER_SCALE_CAP}
-                >
+            {stats.map((s, i) => (
+              <View key={s.label} style={[styles.statCell, i % 2 === 1 && styles.statCellLeft, i >= 2 && styles.statCellTop]}>
+                {/* Held to one line: unbounded, "5,692" wrapped and pushed its
+                    own label out of line. No adjustsFontSizeToFit: on iOS, with
+                    a set lineHeight, it collapsed "458" to a few points in a
+                    cell with room to spare. */}
+                <Text style={styles.statValue} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
                   {s.value}
                 </Text>
                 <Text style={styles.statLabel} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
@@ -244,8 +256,6 @@ export default function ProfileBanner({
           </>
         )}
       </View>
-
-      {bio ? <Text style={styles.bio}>{bio}</Text> : null}
 
       <PicksRow profile={profile} heading={picksHeading} onPickPress={onPickPress} />
     </>
@@ -422,20 +432,37 @@ function BannerStrip({ url }: { url?: string | null }) {
 /** The avatar, ringed by the average: the arc fills to score/10 in the
  *  score's own colour. It grows with the reader's text setting — capped — so
  *  it keeps its proportion to the name beside it. */
+const RING_SW = 3.25
+const RING_GAP = 3.5
+
+/** The ringed avatar's outer size: the distribution under it is drawn as wide. */
+function ringedAvatarSize(fontScale: number): number {
+  const k = Math.min(Math.max(fontScale, 1), HEADER_SCALE_CAP)
+  return 74 * k + (RING_SW + RING_GAP) * 2
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** "May 2026" from the account's created_at; null for accounts older than the column. */
+function monthYear(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? null : `${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+}
+
 function RingedAvatar({ name, avatarUrl, avg }: { name: string; avatarUrl?: string | null; avg: number | null }) {
   const { fontScale } = useWindowDimensions()
+  const SW = RING_SW
   const k = Math.min(Math.max(fontScale, 1), HEADER_SCALE_CAP)
-  const AV = 74 * k
-  const SW = 3.25
-  const GAP = 3.5
-  const SIZE = AV + (SW + GAP) * 2
+  const SIZE = ringedAvatarSize(fontScale)
+  const AV = SIZE - (RING_SW + RING_GAP) * 2
   const R = (SIZE - SW) / 2
   const C = 2 * Math.PI * R
   const frac = avg != null ? Math.max(0, Math.min(1, avg / 10)) : 0
   const mid = SIZE / 2
   return (
     <View
-      style={[styles.avatarDisc, { width: SIZE, height: SIZE, borderRadius: SIZE / 2, marginTop: -SIZE * AVATAR_OVERLAP }]}
+      style={[styles.avatarDisc, { width: SIZE, height: SIZE, borderRadius: SIZE / 2 }]}
       accessibilityLabel={avg != null ? `Average score ${avg.toFixed(2)}` : undefined}
     >
       <Svg width={SIZE} height={SIZE} style={StyleSheet.absoluteFill}>
@@ -494,13 +521,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.green,
   },
 
-  // The strip's clipping is its own, so nothing here cuts the avatar off. The
-  // text starts below the strip by its own padding, since the row aligns to the
-  // top and the avatar alone is pulled up.
-  bannerTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, paddingLeft: spacing.sm },
+  // Below the strip by its own gap; the name and the control centre on the avatar.
+  bannerTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.lg, paddingLeft: spacing.sm },
   avatarDisc: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg, zIndex: 1 },
-  identity: { flex: 1, minWidth: 0, paddingTop: spacing.sm },
-  action: { paddingTop: spacing.md },
+  identity: { flex: 1, minWidth: 0 },
   avatar: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -508,20 +532,29 @@ const styles = StyleSheet.create({
   },
   avatarImg: { width: '100%', height: '100%' },
   avatarInitial: { fontFamily: fonts.display, color: '#ffffff' },
-  name: { fontFamily: fonts.displayBlack, fontSize: 27, lineHeight: 33, color: colors.ink, letterSpacing: 0.2 },
-  handle: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.inkTertiary, marginTop: 2 },
-
-  figures: { flexDirection: 'row', alignItems: 'center', marginTop: 20 },
-  hero: { width: '33%', paddingRight: spacing.md },
-  heroChart: { marginTop: 8 },
-  heroValue: { fontFamily: fonts.display, fontSize: 42, lineHeight: 48, fontVariant: ['tabular-nums'] },
-  rule: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: 'rgba(28,25,23,0.16)' },
-  grid: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', paddingLeft: 14, rowGap: 10 },
-  statCell: { width: '50%', paddingRight: spacing.sm },
-  statValue: { fontFamily: fonts.display, fontSize: 20, lineHeight: 25, color: colors.ink, fontVariant: ['tabular-nums'] },
-  statLabel: {
+  name: { flexShrink: 1, fontFamily: fonts.displayBlack, fontSize: 27, lineHeight: 33, color: colors.ink, letterSpacing: 0.2 },
+  handle: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary, marginTop: 2 },
+  // The name and its stickers share a line; the slot is empty until stickers exist.
+  nameRow: { flexDirection: 'row', alignItems: 'center' },
+  stickers: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 6, flexShrink: 0 },
+  about: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginTop: spacing.lg, paddingLeft: spacing.sm },
+  avgValue: { fontFamily: fonts.display, fontSize: 26, lineHeight: 31, marginTop: 6, fontVariant: ['tabular-nums'] },
+  avgLabel: {
     fontFamily: fonts.bodyBold,
     fontSize: 9,
+    color: colors.inkMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1.05,
+  },
+
+  grid: { flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap' },
+  statCell: { width: '50%', paddingVertical: 8, paddingHorizontal: 12 },
+  statCellLeft: { borderLeftWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(28,25,23,0.09)' },
+  statCellTop: { borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(28,25,23,0.09)' },
+  statValue: { fontFamily: fonts.display, fontSize: 17, lineHeight: 22, color: colors.ink, fontVariant: ['tabular-nums'] },
+  statLabel: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 8.5,
     color: colors.inkMuted,
     textTransform: 'uppercase',
     letterSpacing: 1.05,
@@ -555,7 +588,7 @@ const styles = StyleSheet.create({
   chipMoreText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.inkTertiary },
   subRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 7 },
 
-  bio: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSecondary, lineHeight: 19, marginTop: spacing.md },
+  bio: { fontFamily: fonts.body, fontSize: 13.5, color: colors.inkSecondary, lineHeight: 19, marginTop: 4 },
 
   // Picks: three equal columns below the taste chips, each a slot label, a
   // square of art and the name. Same column rhythm as the Library grid, so the
