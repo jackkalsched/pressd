@@ -8,7 +8,7 @@
 // An "open" is a cold launch, or coming back after AWAY_MS in the background.
 // Flipping to another app and straight back is the same visit, not a new one.
 //
-// Same shape as recsSeen/whatsNew: Keychain-backed, an in-memory mirror for
+// Same shape as recsSeen: Keychain-backed, an in-memory mirror for
 // synchronous reads, and a subscribe layer so hydration re-renders.
 import { useSyncExternalStore } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'

@@ -22,17 +22,12 @@ import { AuthProvider, useAuth } from '../lib/auth'
 import { loadSocialSeen } from '../lib/socialSeen'
 import { loadRecsSeen } from '../lib/recsSeen'
 import { loadPassItOn } from '../lib/passItOn'
-import {
-  currentBuild, loadWhatsNewSeen, markWhatsNewSeen,
-  useWhatsNewHydrated, useWhatsNewSeen,
-} from '../lib/whatsNew'
-import { latestRelease, releaseFor } from '../lib/releaseNotes'
 import { attachPushListeners, pushPermissionStatus, syncPushToken } from '../lib/push'
 import { usePrefs } from '../lib/prefs'
 import NotifyPromptSheet from '../components/NotifyPromptSheet'
+import { useOnHeldScreen } from '../lib/onboarding'
 import { wireAppStateFocus } from '../lib/refresh'
 import { getMessaging, setBackgroundMessageHandler } from '@react-native-firebase/messaging'
-import WhatsNewSheet from '../components/WhatsNewSheet'
 import PhoneSheet from '../components/PhoneSheet'
 import { PeopleSheetHost } from '../components/PeopleSheet'
 import { colors } from '../theme/tokens'
@@ -41,7 +36,6 @@ SplashScreen.preventAutoHideAsync().catch(() => {})
 loadSocialSeen() // hydrate the Social "new activity" marker once at launch
 loadRecsSeen()   // and the watermark that keeps the recommendation banner to one showing
 loadPassItOn()   // and count this launch toward the next "Pass it on" suggestion
-loadWhatsNewSeen()  // and which build's release notes have already been read
 // Without this React Query never learns the app came back to the foreground —
 // refetchOnWindowFocus is a browser concept and no-ops in React Native.
 wireAppStateFocus()
@@ -58,16 +52,13 @@ const queryClient = new QueryClient({
 
 function RootNavigator() {
   const { user, ready } = useAuth()
-  // Whether the release notes are up, so the phone prompt can wait its turn.
-  const [whatsNewOpen, setWhatsNewOpen] = useState(false)
-  // And whether that's known yet — until the Keychain answers, the notes may
-  // still be about to open.
-  const whatsNewKnown = useWhatsNewHydrated()
   const router = useRouter()
   // Whether iOS has yet to ask this device about notifications: the launch
   // prompt is only worth showing before it has. null until iOS answers.
   const [pushUnasked, setPushUnasked] = useState<boolean | null>(null)
   const { pushPromptAnswered } = usePrefs()
+  // The first run and the rating flow have the floor: no prompt opens over them.
+  const onHeldScreen = useOnHeldScreen()
   useEffect(() => {
     if (!user) return
     pushPermissionStatus().then((s) => setPushUnasked(s === 'undetermined')).catch(() => setPushUnasked(false))
@@ -141,37 +132,32 @@ function RootNavigator() {
   if (!fontsLoaded || !ready) return null // splash stays up
 
   const pastFirstRun = !!user && user.tutorialSeen !== false
-  // The notifications ask comes after the username, the tutorial, the release
-  // notes and the phone prompt, and before the people sheet. Owed while iOS
+  // The notifications ask comes after the username, the tutorial and the phone
+  // prompt, and before the people sheet. Owed while iOS
   // hasn't answered whether it has asked, so the sheet can't slip in first.
   const otherPromptsDone =
-    pastFirstRun && user.usernameChosen !== false && whatsNewKnown && !whatsNewOpen && user.phonePromptDone === true
+    pastFirstRun && user.usernameChosen !== false && user.phonePromptDone === true
   const notifyOwed = !pushPromptAnswered && pushUnasked !== false
   return (
     <>
-    {/* Held back while the first-run tutorial is owed: a new account has no
-        previous build to compare against, and the tutorial marks the current
-        build's notes read when it closes. */}
-    <WhatsNew signedIn={pastFirstRun} onOpenChange={setWhatsNewOpen} />
-    {/* The one-time phone-number ask, after the tutorial and never on top of
-        the release notes — the build that brings it also brings those. An
-        explicit false: a session that hasn't heard of the field yet waits
+    {/* The one-time phone-number ask for an account older than the username
+        page's phone step, after the tutorial. An explicit false: a session that hasn't heard of the field yet waits
         for the launch refresh in lib/auth rather than asking twice. */}
     <PhoneSheet
       mode="prompt"
-      visible={pastFirstRun && user.phonePromptDone === false && whatsNewKnown && !whatsNewOpen}
+      visible={pastFirstRun && !onHeldScreen && user.phonePromptDone === false}
       onClose={() => {}}
     />
     {/* The people sheet a first rating owes, asked for at launch and again as
         the rating flow's share card closes. Last in line: the username page,
-        the tutorial, the release notes and the phone prompt each go first.
+        the tutorial, the phone prompt and the notifications ask each go first.
         Held until the phone answer is known to be in, so a session that
         learns from the launch refresh that the prompt is owed can't have
         the sheet already up underneath it. */}
-    <NotifyPromptSheet visible={otherPromptsDone && notifyOwed && pushUnasked === true} />
+    <NotifyPromptSheet visible={otherPromptsDone && !onHeldScreen && notifyOwed && pushUnasked === true} />
     <PeopleSheetHost
       held={
-        !pastFirstRun || user.usernameChosen === false || !whatsNewKnown || whatsNewOpen ||
+        !pastFirstRun || user.usernameChosen === false ||
         user.phonePromptDone !== true || notifyOwed
       }
     />
@@ -198,53 +184,6 @@ function RootNavigator() {
       </Stack.Protected>
     </Stack>
     </>
-  )
-}
-
-/** The release notes, once per build, for signed-in users only.
- *
- *  Gated on `signedIn` because notes describing recommendations and profile
- *  picks mean nothing to someone looking at the sign-in screen — and showing
- *  them there would spend the one appearance before the reader has an account.
- *
- *  Held until the Keychain has answered, so it never flashes up on a build
- *  whose notes were already read.
- */
-function WhatsNew({ signedIn, onOpenChange }: { signedIn: boolean; onOpenChange: (open: boolean) => void }) {
-  const seen = useWhatsNewSeen()
-  const hydrated = useWhatsNewHydrated()
-  const build = currentBuild()
-  // Fall back to the newest notes we have when the binary reports a build we
-  // shipped none for — better than a silent nothing on a build that shipped.
-  const release = releaseFor(build) ?? latestRelease()
-
-  const [dismissed, setDismissed] = useState(false)
-  // Derived rather than pushed into state from an effect: the answer is a pure
-  // function of what's already known, and setting state in an effect would
-  // render once with the sheet closed and again with it open for no reason.
-  const due = signedIn && hydrated && !!release && build > seen
-  // Pinned the first time it comes due, so marking it read — which moves `seen`
-  // and makes `due` false — doesn't yank the sheet out mid-read. State set
-  // during render rather than a ref: React re-renders straight away, and the
-  // parent can be told the sheet is open (the phone prompt waits on it).
-  const [pinned, setPinned] = useState(false)
-  if (due && !pinned) setPinned(true)
-
-  const open = !!release && pinned && !dismissed
-  useEffect(() => {
-    onOpenChange(open)
-  }, [open, onOpenChange])
-
-  if (!release) return null
-  return (
-    <WhatsNewSheet
-      release={release}
-      visible={open}
-      onClose={() => {
-        setDismissed(true)
-        markWhatsNewSeen(build)
-      }}
-    />
   )
 }
 

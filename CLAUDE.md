@@ -551,8 +551,10 @@ that Google-signed token (provider `phone`, verified within 10 minutes) and stor
 ten-billion-number space is reversed by brute force), plus `phone_last4` for Settings.
 One account per number (a partial unique index; 409 otherwise). `DELETE /users/me/phone`
 forgets it. A **one-time prompt** asks every account that hasn't answered
-(`phone_prompt` null — existing accounts included, unlike the tutorial), after the
-tutorial, never over What's New on mobile: *Add* records `added` via the add itself,
+(`phone_prompt` null — existing accounts included, unlike the tutorial). A new account
+meets it as the username page's second step, on both platforms (Continue opens the
+phone sheet / dialog there, and either answer moves on); an older one after the
+tutorial: *Add* records `added` via the add itself,
 *Not now* records `skipped` via `POST /users/me/phone-prompt`, each with
 `phone_prompt_at`. `own_user` carries `phone_prompt_done` and `phone_last4`. Both
 clients refresh `GET /users/me` behind the stored session — mobile at launch, web
@@ -781,12 +783,11 @@ vector) so that freshness is defined for everyone.
 **On web** (`components/TasteOverlap.tsx`, `components/PeopleSheet.tsx`, November
 2026). `FriendProfile` asks `fetchOverlap` (`['overlap', viewer, id]`) on anyone's profile
 but your own, and draws one `OverlapPill` under the bio for a friend and a stranger alike:
-your two avatars overlapping, the percent in Playfair green with "taste overlap", and —
-past a divider — up to three covers of the records you have both rated (the endpoint's
-`shared_records`, their copies, newest first) and "+N" for the rest (`shared_count`).
-The number opens `/album/{reason.albumId ?? connecting album}?view=compare`, or with no
-shared record their Library tab; a cover compares that record; the reason is the pill's
-tooltip. Only the button beside it says which relationship it is: **Add friend** /
+a small outlined pill, your own avatar then the percent in Playfair green with "taste
+overlap" — a figure to read, not a link; the reason is its tooltip. Until November 2026 it
+was filled, with both avatars and the covers of the records you'd both rated, each a link
+to compare. The endpoint still sends `shared_records` / `shared_count`, now unused by
+both apps. Only the button beside it says which relationship it is: **Add friend** /
 **Accept request** / **Friends** filled green, **Requested** tinted. Clicking **Friends**
 (or *Remove friend* in the round "…" menu, beside Copy profile link) opens a prompt —
 their avatar, "Remove {name} as a friend?", Cancel and Remove — so a stray click can't
@@ -812,8 +813,9 @@ cached sheet so a remount can't reopen it.
 
 **On iPhone** (`mobile/components/TasteOverlap.tsx`, `mobile/components/PeopleSheet.tsx`,
 November 2026) — the same features in mobile's layout. `app/friend/[id].tsx` asks
-`fetchOverlap` (`['overlap', viewer, id]`) on anyone but you and draws the same
-`OverlapPill` as web through `ProfileBanner`'s `overlap` slot — under the bio. The
+`fetchOverlap` (`['overlap', viewer, id]`) on anyone but you and draws the taste overlap
+through `ProfileBanner`'s `overlap` slot — under the bio, as web's outlined pill: your own
+avatar, then "80% taste overlap" with the number in Playfair green, not tappable. The
 header above it: the banner nearly edge to edge, the avatar (80pt, ringed in the page colour)
 riding up over its bottom edge with three figures beside it (Albums, Songs, and the
 average in its score colour), then the name with a `stickers` slot to its right (empty
@@ -826,17 +828,14 @@ notifications, preferences, sign-in methods, account (phone, sign out, delete), 
 Mobile edits the bio there, 240 characters as on web; before November 2026 it had no
 way to, and your own profile didn't show it. Below that, as many genre and subgenre chips as fit one line whole,
 at their own width — never shortened, and no "+N" for the rest. It is drawn
-for friends and strangers alike: both avatars, the percent with "taste overlap", up to three shared covers and
-"+N". The number goes to `compareWith` — `/album/{reason.albumId ?? connecting album}`
-(the album page draws `FriendCompare` once both copies are rated) or, with no shared
-record, Library scrolled to the tabs — and a cover compares that record. The header's
+for friends and strangers alike. The header's
 friend button says the relationship; the reason isn't drawn on iPhone. The sheet's one
-mount is `PeopleSheetHost` in the root layout (`app/_layout.tsx`, beside What's New and
-the phone prompt), the only observer of `['people-sheet', userId]` (`lib/peopleSheet.ts`,
+mount is `PeopleSheetHost` in the root layout (`app/_layout.tsx`, beside the phone and
+notifications prompts), the only observer of `['people-sheet', userId]` (`lib/peopleSheet.ts`,
 `staleTime: Infinity`): it asks once at launch and again when `rate/[id].tsx`
 invalidates the key as its share card closes (`closeFlow`). It is held — rendered with
-the Modal hidden — until the username is chosen, the tutorial seen, What's New closed
-and the phone prompt answered (`phonePromptDone === true`), and while the current route
+the Modal hidden — until the username is chosen, the tutorial seen, the phone prompt
+answered and the notifications ask settled (`phonePromptDone === true`), and while the current route
 is the rating flow or a first-run screen (`HELD_ON`), so it opens over the album page the
 flow lands on. A bottom sheet: dimmed backdrop, grab handle, dragged down or tapped
 outside to close; the cover and the same heading as web; one row per person — avatar
@@ -898,7 +897,11 @@ each of the four external factors **z-scored and weighted**:
 **EPs are ≤6 tracks** (`EP_MAX_TRACKS`): the flow skips the four factors and the score is
 just the song mean. Duplicated as `isEP` in both rating screens — change one, change all.
 **Singles are ≤2 tracks** (`is_single_release:88`): they score and count toward the
-user's library and artist stats, but stay off userbase-wide charts, where a one-track
+user's artist stats, but stay out of the library — `GET /albums/?exclude_singles=true`
+(one or two songs; a copy with no tracklist yet isn't one), asked for by Library,
+Rankings, the profile and genre pages on both platforms under their own cache key
+(`['albums', status, id, 'library']`), so the screens that need every copy keep theirs —
+and off userbase-wide charts, where a one-track
 release rated 10 would outrank every real album on one person's say-so.
 
 ### 6.2 The global Press'd rating, on the userbase distribution
@@ -1423,7 +1426,8 @@ for editing a review later, and both paths post into the thread through
    then the review, autosave, the `TopSongTiebreak` dialog and the share card. The
    desktop difference is a rail holding the running average and tracklist. Web's old
    "Clear all" button went with the form it belonged to; mobile never had it.
-9. **Release notes.** `WhatsNewSheet` is mobile-only. (The five-card tutorial and
+9. **Release notes.** Neither app has them: mobile's `WhatsNewSheet` (and `lib/whatsNew`,
+   `lib/releaseNotes`) was removed in November 2026. (The five-card tutorial and
    `markTutorialSeen` closed, September 2026: `frontend/src/pages/Tutorial.tsx`. Web's
    `HowItWorks.tsx` is the signed-out marketing page, a different thing.)
 
@@ -1665,9 +1669,10 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   accepted friends who have rated the record, when a review is first published — never
   an edit (`threads.sync_review_post` returns True only then; `albums._notify_review`).
   Since then the app also asks at launch (`mobile/components/NotifyPromptSheet.tsx`):
-  "Want to receive notifications?", after the username, tutorial, What's New and phone
-  prompts and before the people sheet, only while iOS hasn't asked this device yet, once
-  per device (`prefs.pushPromptAnswered`). Before it, the only way in was Settings →
+  "Want to receive notifications?", after the username, tutorial and phone prompts and before the people sheet, only while iOS hasn't asked this device yet, once
+  per device (`prefs.pushPromptAnswered`). No launch prompt or sheet opens over the first
+  run or the rating flow: the phone prompt, this one and the people sheet all
+  hold on `HELD_ON` screens (`mobile/lib/onboarding.ts`). Before it, the only way in was Settings →
   Notifications, and 2 of 110 accounts had a device registered. The switches are `GET`/`PUT /users/me/notifications`,
   shown in mobile Settings once iOS permission is granted. A new kind of push adds a
   column, a `NOTIFY_KINDS` entry and a Settings row — never a bare token lookup.

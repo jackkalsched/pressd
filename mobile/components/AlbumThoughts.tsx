@@ -1,9 +1,10 @@
 // The line under the rating button that leads into a record's discussion.
 //
-// Two jobs, because from the reader's side they are one: with no review written
-// it invites you to write one, and once you have it takes you to what everyone
-// else said. Writing a review does not need the thread's gate — that is your
-// own copy of the record — so only the second state can lock.
+// Two jobs, because from the reader's side they are one: on your own rated copy
+// with no review written it invites you to write one, and otherwise it takes
+// you to what everyone else said — locked until you've rated the record, as the
+// thread requires. Someone else's copy never offers a review: theirs isn't
+// yours to write, and you can't review a record you haven't finished.
 // PLAN_discussions.md §10, §4.1.
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
@@ -17,11 +18,14 @@ export default function AlbumThoughts({
   album,
   artist,
   hasReview,
+  canWriteReview,
   onWriteReview,
 }: {
   album: string
   artist: string
   hasReview: boolean
+  /** Your own copy, rated: the one place a review can be written from here. */
+  canWriteReview: boolean
   onWriteReview: () => void
 }) {
   const tc = useColors()
@@ -36,9 +40,10 @@ export default function AlbumThoughts({
 
   const canRead = !!meta?.canRead
   const people = meta?.participantCount ?? 0
-  const locked = hasReview && !canRead
+  const offerReview = canWriteReview && !hasReview
+  const locked = !offerReview && !canRead
 
-  const label = !hasReview
+  const label = offerReview
     ? 'Write a review!'
     : locked
       ? 'Finish rating to discuss'
@@ -50,7 +55,7 @@ export default function AlbumThoughts({
     <Pressable
       disabled={locked}
       onPress={() => {
-        if (!hasReview) return onWriteReview()
+        if (offerReview) return onWriteReview()
         router.push({
           pathname: '/thread/[subject]',
           params: { subject: 'album', artist, album, title: album },
@@ -60,7 +65,7 @@ export default function AlbumThoughts({
     >
       {locked ? (
         <Lock size={16} color={tc.inkMuted} />
-      ) : hasReview ? (
+      ) : !offerReview ? (
         <MessageCircle size={17} color={tc.green} />
       ) : (
         // Not a pencil: the rating button directly above already uses one, and

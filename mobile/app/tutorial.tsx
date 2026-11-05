@@ -21,7 +21,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useAuth } from '../lib/auth'
-import { markWhatsNewSeen } from '../lib/whatsNew'
 import {
   FriendsScene,
   FrontToBackScene,
@@ -98,8 +97,6 @@ export default function Tutorial() {
       router.back()
       return
     }
-    // The release notes describe changes from a build this account never ran.
-    markWhatsNewSeen()
     completeTutorial()
     router.replace('/welcome')
   }

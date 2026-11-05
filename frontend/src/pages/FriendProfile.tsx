@@ -113,8 +113,10 @@ export default function FriendProfile() {
   // Rated albums → "this week" count. Shares its query key with the embedded
   // Library, so React Query serves both from one fetch.
   const { data: rated = [] } = useQuery({
-    queryKey: ['albums', 'rated', fid],
-    queryFn: () => fetchAlbums({ status: 'rated', userId: fid }),
+    // A library leaves singles out; its own cache entry, so the screens that
+    // need every copy keep theirs.
+    queryKey: ['albums', 'rated', fid, 'library'],
+    queryFn: () => fetchAlbums({ status: 'rated', userId: fid, excludeSingles: true }),
     enabled: valid && !!person,
   })
   // The stat row's figures, counted as mobile's ProfileBanner counts them.
@@ -329,15 +331,7 @@ export default function FriendProfile() {
               it says which they are. */}
           {!isSelf && overlap && activeUser && (
             <div>
-              <OverlapPill
-                overlap={overlap}
-                me={activeUser}
-                them={person}
-                onOpenLibrary={() => {
-                  setTab('library')
-                  tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }}
-              />
+              <OverlapPill overlap={overlap} me={activeUser} />
             </div>
           )}
         </div>

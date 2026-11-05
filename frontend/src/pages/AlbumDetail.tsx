@@ -622,7 +622,7 @@ export default function AlbumDetail() {
             )}
 
             {!reviewInRail && (
-              <ReviewSection album={album} editable={own} authorName={ownerName} index={1} />
+              <ReviewSection album={album} editable={own && album.status === 'rated'} authorName={ownerName} index={1} />
             )}
 
             {/* The record's discussion: the step out from this copy to what

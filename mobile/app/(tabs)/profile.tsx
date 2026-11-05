@@ -176,15 +176,17 @@ export default function Profile() {
 
   // Rated set drives the header count + "this week"; shares its key with the
   // grid query when the Rated filter is active, so React Query serves one fetch.
+  // A library leaves singles out (exclude_singles); its own cache entry, so the
+  // screens that need every copy keep theirs.
   const { data: rated = [] } = useQuery({
-    queryKey: ['albums', 'rated', user?.id],
-    queryFn: () => fetchAlbums({ status: 'rated', userId: user!.id }),
+    queryKey: ['albums', 'rated', user?.id, 'library'],
+    queryFn: () => fetchAlbums({ status: 'rated', userId: user!.id, excludeSingles: true }),
     enabled: !!user,
   })
 
   const { data: grid = [], isLoading: gridLoading, refetch, isRefetching } = useQuery({
-    queryKey: ['albums', libStatus, user?.id],
-    queryFn: () => fetchAlbums({ status: libStatus, userId: user!.id }),
+    queryKey: ['albums', libStatus, user?.id, 'library'],
+    queryFn: () => fetchAlbums({ status: libStatus, userId: user!.id, excludeSingles: true }),
     enabled: !!user && tab === 'library',
   })
 

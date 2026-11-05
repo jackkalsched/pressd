@@ -129,8 +129,11 @@ export async function fetchAlbums(params?: {
   albumName?: string
   genre?: string
   userId?: number
+  /** Leave out singles (≤2 tracks): what a library shows. */
+  excludeSingles?: boolean
 }): Promise<Album[]> {
   const qs = new URLSearchParams()
+  if (params?.excludeSingles) qs.set('exclude_singles', 'true')
   if (params?.status) qs.set('status', params.status)
   if (params?.artist) qs.set('artist', params.artist)
   if (params?.albumName) qs.set('album_name', params.albumName)

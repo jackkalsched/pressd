@@ -773,6 +773,7 @@ export default function AlbumDetail() {
           album={album.albumName}
           artist={album.artist}
           hasReview={!!album.review}
+          canWriteReview={isMine && album.status === 'rated'}
           onWriteReview={() => setReviewEditing(true)}
         />
 
@@ -1333,7 +1334,6 @@ function FriendCompare({
 }) {
   const tc = useColors()
   const { user } = useAuth()
-  const openProfile = useOpenProfile()
   const [liked, setLiked] = useState(false)
 
   const theirScore = theirs.score!
@@ -1397,21 +1397,7 @@ function FriendCompare({
             <ArrowLeft size={18} color={tc.inkSecondary} />
             <Text style={styles.backText}>Back</Text>
           </Pressable>
-          <Pressable
-            style={[styles.ownerTag, { backgroundColor: tint(color, 0.1), paddingHorizontal: 10, paddingVertical: 5, borderRadius: radii.pill }]}
-            onPress={() => openProfile(owner.id)}
-            hitSlop={8}
-            accessibilityRole="link"
-          >
-            <View style={[styles.ownerPfp, { backgroundColor: color }]}>
-              {owner.avatarUrl ? (
-                <Image source={{ uri: owner.avatarUrl }} style={styles.ownerPfpImg} contentFit="cover" />
-              ) : (
-                <Text style={styles.ownerPfpInitial}>{owner.name[0]?.toUpperCase()}</Text>
-              )}
-            </View>
-            <Text style={[styles.ownerName, { color }]} numberOfLines={1}>{owner.name}'s rating</Text>
-          </Pressable>
+          {/* No "{name}'s rating" tag here: the comparison below names them. */}
         </View>
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>

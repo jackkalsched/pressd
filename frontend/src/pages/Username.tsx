@@ -12,6 +12,8 @@ import { useUser } from '../context/UserContext'
 import { updateUser } from '../api'
 import { cleanUsername, USERNAME_RE } from '../types'
 import VinylSpinner from '../components/VinylSpinner'
+import PhoneDialog from '../components/PhoneDialog'
+import { phoneVerifyConfigured } from '../lib/phoneVerify'
 
 export default function Username() {
   const navigate = useNavigate()
@@ -19,10 +21,15 @@ export default function Username() {
   const [value, setValue] = useState(() => cleanUsername(activeUser?.name ?? ''))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The phone number is this page's second step for an account that hasn't
+  // answered it, as on iPhone (mobile/app/username.tsx); Layout's one-time
+  // prompt then never asks.
+  const [askPhone, setAskPhone] = useState(false)
   const valid = USERNAME_RE.test(value)
 
-  // Someone who has already chosen and typed the URL has nothing to do here.
-  if (activeUser && activeUser.usernameChosen !== false) return <Navigate to="/for-you" replace />
+  // Someone who has already chosen and typed the URL has nothing to do here —
+  // unless they're on the phone step this page just opened.
+  if (activeUser && activeUser.usernameChosen !== false && !askPhone) return <Navigate to="/for-you" replace />
 
   async function save(e: FormEvent) {
     e.preventDefault()
@@ -31,8 +38,9 @@ export default function Username() {
     setError(null)
     try {
       const updated = await updateUser(activeUser.id, { name: value })
+      if (phoneVerifyConfigured && activeUser.phonePromptDone === false) setAskPhone(true)
       setActiveUser({ ...activeUser, name: updated.name, usernameChosen: true })
-      navigate('/for-you', { replace: true })
+      if (!(phoneVerifyConfigured && activeUser.phonePromptDone === false)) navigate('/for-you', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save your username')
       setSaving(false)
@@ -79,6 +87,7 @@ export default function Username() {
           {saving ? <VinylSpinner size={20} /> : 'Continue'}
         </button>
       </form>
+      {askPhone && <PhoneDialog mode="prompt" onClose={() => navigate('/for-you', { replace: true })} />}
     </div>
   )
 }

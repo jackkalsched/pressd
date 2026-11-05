@@ -53,8 +53,10 @@ export default function TagBoard() {
   // For "#12 overall" and the tag's lean against the whole library. Same keys
   // as Stats and the onboarding gate, so arriving from Stats costs nothing.
   const { data: rated = [] } = useQuery({
-    queryKey: ['albums', 'rated', userId],
-    queryFn: () => fetchAlbums({ status: 'rated', userId }),
+    // A library leaves singles out; its own cache entry, so the screens that
+    // need every copy keep theirs.
+    queryKey: ['albums', 'rated', userId, 'library'],
+    queryFn: () => fetchAlbums({ status: 'rated', userId, excludeSingles: true }),
     enabled: userId > 0,
     staleTime: 5 * 60_000,
   })

@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import VinylSpinner from '../components/VinylSpinner'
+import PhoneSheet from '../components/PhoneSheet'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { cleanUsername, USERNAME_RE } from '@pressd/shared/types'
@@ -21,6 +22,11 @@ export default function UsernameScreen() {
   const [value, setValue] = useState(() => cleanUsername(user?.name ?? ''))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The phone number is this page's second step for an account that hasn't
+  // answered it: asked here, as part of setting up who you are, rather than as
+  // a pop-up later over the first album. Answered either way, it moves on, and
+  // the launch prompt in app/_layout never asks again.
+  const [askPhone, setAskPhone] = useState(false)
   const valid = USERNAME_RE.test(value)
 
   async function save() {
@@ -29,7 +35,8 @@ export default function UsernameScreen() {
     setError(null)
     try {
       await updateProfile({ name: value })
-      router.replace('/(tabs)')
+      if (user?.phonePromptDone === false) setAskPhone(true)
+      else router.replace('/(tabs)')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save your username')
       setSaving(false)
@@ -81,6 +88,7 @@ export default function UsernameScreen() {
           {saving ? <VinylSpinner color="#fff" /> : <Text style={styles.ctaText}>Continue</Text>}
         </Pressable>
       </KeyboardAvoidingView>
+      <PhoneSheet mode="prompt" visible={askPhone} onClose={() => router.replace('/(tabs)')} />
     </SafeAreaView>
   )
 }

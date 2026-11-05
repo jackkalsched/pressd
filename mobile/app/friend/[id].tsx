@@ -127,9 +127,11 @@ export default function FriendProfile() {
     queryFn: () => fetchSummary(fid),
     enabled: Number.isFinite(fid),
   })
+  // A library leaves singles out (exclude_singles); its own cache entry, so the
+  // screens that need every copy keep theirs.
   const { data: rated = [] } = useQuery({
-    queryKey: ['albums', 'rated', fid],
-    queryFn: () => fetchAlbums({ status: 'rated', userId: fid }),
+    queryKey: ['albums', 'rated', fid, 'library'],
+    queryFn: () => fetchAlbums({ status: 'rated', userId: fid, excludeSingles: true }),
     enabled: Number.isFinite(fid),
   })
   const { data: scoreRange } = useQuery({
@@ -169,7 +171,6 @@ export default function FriendProfile() {
   })
   // Compare with no shared record goes to their library, scrolled to the tabs.
   const listRef = useRef<FlatList<Album | ArtistRank>>(null)
-  const [tabsY, setTabsY] = useState(0)
 
   const topGenres = useMemo(() => topTags(rated.map((a) => a.genre), 3), [rated])
   const topSubgenres = useMemo(
@@ -212,18 +213,6 @@ export default function FriendProfile() {
     } else {
       changeFriendship(() => addFriend(user.id, fid))
     }
-  }
-
-  function compareWith(albumId: number | null) {
-    if (albumId != null) {
-      // Their copy: the album page draws FriendCompare once you've rated it too.
-      router.push({ pathname: '/album/[id]', params: { id: String(albumId) } })
-      return
-    }
-    setTab('library')
-    // After the switch has rendered: leaving a list tab remounts the FlatList
-    // (its key changes with the column count), so the ref moves to a new one.
-    setTimeout(() => listRef.current?.scrollToOffset({ offset: Math.max(0, tabsY - spacing.lg), animated: true }), 60)
   }
 
   function openArtist(name: string) {
@@ -346,7 +335,7 @@ export default function FriendProfile() {
               // The same pill for a friend and a stranger: only the friend
               // button beside the name says which they are.
               overlap={!isSelf && overlap && user ? (
-                <OverlapPill overlap={overlap} me={user} them={person} onCompare={compareWith} />
+                <OverlapPill overlap={overlap} me={user} />
               ) : undefined}
               profile={profile}
               action={
@@ -376,7 +365,7 @@ export default function FriendProfile() {
             />
 
 
-            <View style={styles.tabBar} onLayout={(e) => setTabsY(e.nativeEvent.layout.y)}>
+            <View style={styles.tabBar}>
               {TABS.map(({ key, label }) => (
                 <Pressable key={key} style={styles.tab} onPress={() => setTab(key)}>
                   <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>

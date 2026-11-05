@@ -30,13 +30,15 @@ export default function Library({ embedded = false }: { embedded?: boolean } = {
   }, [userId])
 
   const { data: albums = [], isLoading } = useQuery({
-    queryKey: ['albums', activeTab, userId],
-    queryFn: () => fetchAlbums({ status: activeTab, userId }),
+    // A library leaves singles out; its own cache entry, so the screens that
+    // need every copy keep theirs.
+    queryKey: ['albums', activeTab, userId, 'library'],
+    queryFn: () => fetchAlbums({ status: activeTab, userId, excludeSingles: true }),
   })
 
-  const { data: rated = [] } = useQuery({ queryKey: ['albums', 'rated', userId], queryFn: () => fetchAlbums({ status: 'rated', userId }) })
-  const { data: listening = [] } = useQuery({ queryKey: ['albums', 'listening', userId], queryFn: () => fetchAlbums({ status: 'listening', userId }) })
-  const { data: toListen = [] } = useQuery({ queryKey: ['albums', 'to_listen', userId], queryFn: () => fetchAlbums({ status: 'to_listen', userId }) })
+  const { data: rated = [] } = useQuery({ queryKey: ['albums', 'rated', userId, 'library'], queryFn: () => fetchAlbums({ status: 'rated', userId, excludeSingles: true }) })
+  const { data: listening = [] } = useQuery({ queryKey: ['albums', 'listening', userId, 'library'], queryFn: () => fetchAlbums({ status: 'listening', userId, excludeSingles: true }) })
+  const { data: toListen = [] } = useQuery({ queryKey: ['albums', 'to_listen', userId, 'library'], queryFn: () => fetchAlbums({ status: 'to_listen', userId, excludeSingles: true }) })
 
   const counts = { rated: rated.length, listening: listening.length, to_listen: toListen.length }
 

@@ -99,14 +99,21 @@ def list_albums(
     album_name: Optional[str] = Query(None),
     genre: Optional[str] = Query(None),
     user_id: Optional[int] = Query(None),
+    exclude_singles: bool = Query(False),
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
     target_id = user_id if user_id is not None else user.id
     authorize_view(user, target_id, session)
-    # Short releases (EPs/singles) are included everywhere; the frontend
-    # renders an EP/Single tag to distinguish them from full albums
+    # Short releases (EPs/singles) are included unless asked otherwise; the
+    # frontend renders an EP/Single tag to distinguish them from full albums.
     q = select(Album).where(Album.user_id == target_id)
+    if exclude_singles:
+        # A library (Library and Rankings, both apps) leaves singles out: one
+        # or two songs, as scoring.is_single_release counts them. A copy with
+        # no tracklist yet isn't one — a recommendation not yet opened.
+        n = select(func.count(Song.id)).where(Song.album_id == Album.id).scalar_subquery()
+        q = q.where((n == 0) | (n > 2))
     if status:
         q = q.where(Album.status == status)
     if genre:

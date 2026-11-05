@@ -241,8 +241,10 @@ export default function Ratings({ embedded = false }: { embedded?: boolean } = {
 
   // Albums tab data
   const { data: albums = [], isLoading: loadingAlbums } = useQuery({
-    queryKey: ['albums', 'rated', userId],
-    queryFn: () => fetchAlbums({ status: 'rated', userId }),
+    // A library leaves singles out; its own cache entry, so the screens that
+    // need every copy keep theirs.
+    queryKey: ['albums', 'rated', userId, 'library'],
+    queryFn: () => fetchAlbums({ status: 'rated', userId, excludeSingles: true }),
   })
 
   // Artists tab data

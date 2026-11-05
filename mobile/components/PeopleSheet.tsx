@@ -37,6 +37,7 @@ import { useOpenProfile } from '../lib/useOpenProfile'
 import Avatar from './Avatar'
 import CoverImage from './CoverImage'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../theme/tokens'
+import { HELD_ON } from '../lib/onboarding'
 
 const DOWN = '#e0492b'
 
@@ -47,9 +48,6 @@ const DISMISS_DRAG = 110
 // the host re-renders it.
 const reported = new Set<number>()
 
-// Screens it never covers: the rating flow it follows (the sheet waits for the
-// album page the flow lands on), and the first run, which has the floor.
-const HELD_ON = new Set(['rate', 'tutorial', 'username', 'welcome', 'first-album', 'add'])
 
 /** A log is a measurement, not part of the action: it never holds one up. */
 function log(sheetId: number, action: SheetAction, targetUserId?: number) {
@@ -78,6 +76,8 @@ export function PeopleSheetHost({ held }: { held: boolean }) {
   // and nothing should reopen it before the next fetch.
   const close = useCallback(() => queryClient.setQueryData(key, null), [queryClient, key])
   if (!data || data.people.length === 0) return null
+  // Never over the rating flow it follows (it waits for the album page the flow
+  // lands on) or the first run: lib/onboarding's HELD_ON.
   const blocked = held || HELD_ON.has(segments[0] ?? '')
   return <PeopleSheet data={data} visible={!blocked} onClose={close} />
 }
