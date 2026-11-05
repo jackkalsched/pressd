@@ -32,7 +32,7 @@ import Constants from 'expo-constants'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Apple, Check, ChevronRight, LogOut, Trash2, X } from 'lucide-react-native'
+import { Apple, Check, ChevronDown, ChevronRight, LogOut, Trash2, X } from 'lucide-react-native'
 import { fetchLinkedProviders, unlinkProvider, deleteOwnAccount, uploadBanner, deleteBanner, type Profile } from '../lib/api'
 import { SHELF_SIZE, fetchNotificationPrefs, updateNotificationPrefs, type NotificationPrefs } from '@pressd/shared/api'
 import { cleanUsername, type AlbumStatus } from '@pressd/shared/types'
@@ -65,6 +65,7 @@ const NOTIFY_ROWS: { key: keyof NotificationPrefs; label: string }[] = [
   { key: 'friends', label: 'Friend requests' },
   { key: 'replies', label: 'Replies to your posts' },
   { key: 'reviews', label: 'Friends reviewing records you’ve rated' },
+  { key: 'ratings', label: 'Friends rating records you have' },
 ]
 
 const APPEARANCES: { key: AppearancePref; label: string }[] = [
@@ -190,6 +191,8 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
   const [appleAvailable, setAppleAvailable] = useState(false)
   const [nameDraft, setNameDraft] = useState<string | null>(null) // non-null while editing
   const [savingName, setSavingName] = useState(false)
+  // Whether the per-kind notification switches are showing.
+  const [notifyOpen, setNotifyOpen] = useState(false)
   const [locationDraft, setLocationDraft] = useState<string | null>(null) // non-null while editing
   const [savingLocation, setSavingLocation] = useState(false)
   const [bioDraft, setBioDraft] = useState<string | null>(null) // non-null while editing
@@ -766,7 +769,16 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
               Get told when a friend sends you a record. iOS only asks once, so if you
               turn this down you&rsquo;ll have to re-enable it in the Settings app.
             </Text>
-            <View style={[styles.pushRow, { borderColor: tc.border }]}>
+            {/* Once iOS will deliver, the row is a dropdown: it opens onto a
+                switch per kind, and stays shut by default so the four don't
+                fill the sheet. */}
+            <Pressable
+              style={[styles.pushRow, { borderColor: tc.border }]}
+              onPress={pushState === 'granted' && notifyPrefs ? () => setNotifyOpen((v) => !v) : undefined}
+              disabled={!(pushState === 'granted' && notifyPrefs)}
+              accessibilityRole={pushState === 'granted' ? 'button' : undefined}
+              accessibilityState={pushState === 'granted' ? { expanded: notifyOpen } : undefined}
+            >
               <Text style={styles.pushLabel}>
                 {pushState === 'granted'
                   ? 'On'
@@ -780,8 +792,14 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                 <Pressable onPress={turnOnPush} hitSlop={8}>
                   <Text style={styles.linkAction}>Turn on</Text>
                 </Pressable>
+              ) : pushState === 'granted' && notifyPrefs ? (
+                <ChevronDown
+                  size={18}
+                  color={tc.inkTertiary}
+                  style={{ transform: [{ rotate: notifyOpen ? '180deg' : '0deg' }] }}
+                />
               ) : null}
-            </View>
+            </Pressable>
             {__DEV__ && pushToken ? (
               // Dev only. Reading a token out of a log is miserable, and this is
               // the value a Firebase test send needs.
@@ -793,7 +811,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             ) : null}
             {/* Only once iOS will deliver anything: before that, a switch per
                 kind would be a promise the phone can't keep. */}
-            {pushState === 'granted' && notifyPrefs
+            {pushState === 'granted' && notifyPrefs && notifyOpen
               ? NOTIFY_ROWS.map((r) => (
                   <ToggleRow
                     key={r.key}

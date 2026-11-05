@@ -1658,7 +1658,10 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
 - **Every push names its kind, and the recipient can switch each kind off.**
   `push.tokens_for_user(session, user_id, kind)` returns no tokens when the
   recipient's `PressUser.notify_<kind>` column is off (`NOTIFY_KINDS`: recommendation,
-  friend, reply, review; all default on). `review` (November 2026) goes to the author's
+  friend, reply, review, rating; all default on). Reply and review notifications say
+  "Tap to see what they said.", never the text itself. `rating` goes to the rater's accepted
+  friends with the record in their library, any shelf, on a first rating that isn't of an
+  edition they'd rated before (`albums._notify_rating`), and opens their copy. `review` (November 2026) goes to the author's
   accepted friends who have rated the record, when a review is first published — never
   an edit (`threads.sync_review_post` returns True only then; `albums._notify_review`).
   Since then the app also asks at launch (`mobile/components/NotifyPromptSheet.tsx`):

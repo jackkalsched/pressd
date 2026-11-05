@@ -65,6 +65,8 @@ class PressUser(SQLModel, table=True):
     notify_replies: bool = Field(default=True)
     # A friend's first review of a record you've rated (albums._notify_review).
     notify_reviews: bool = Field(default=True)
+    # A friend's first rating of a record in your library (albums._notify_rating).
+    notify_ratings: bool = Field(default=True)
 
     # A verified phone number, for finding friends from contacts — stored only
     # as an HMAC under PHONE_HASH_KEY, never the number (backend/phone.py). Set

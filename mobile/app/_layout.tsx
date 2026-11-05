@@ -129,6 +129,11 @@ function RootNavigator() {
         case 'friend_request':
           router.push('/(tabs)/social')
           return
+        // Their copy of the record, where your rating sits beside theirs.
+        case 'rating':
+          if (!data.album_id) return
+          router.push({ pathname: '/album/[id]', params: { id: data.album_id } })
+          return
       }
     })
   }, [user, router])

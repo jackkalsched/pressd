@@ -95,6 +95,7 @@ def _notification_prefs(user: PressUser) -> dict:
         "friends": user.notify_friends,
         "replies": user.notify_replies,
         "reviews": user.notify_reviews,
+        "ratings": user.notify_ratings,
     }
 
 
@@ -109,11 +110,12 @@ def update_notification_prefs(
     current: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
-    """Set any of the four; keys left out keep their value."""
+    """Set any of the five; keys left out keep their value."""
     for key, column in (("recommendations", "notify_recommendations"),
                         ("friends", "notify_friends"),
                         ("replies", "notify_replies"),
-                        ("reviews", "notify_reviews")):
+                        ("reviews", "notify_reviews"),
+                        ("ratings", "notify_ratings")):
         if key in data:
             if not isinstance(data[key], bool):
                 raise HTTPException(status_code=400, detail=f"{key} must be true or false")

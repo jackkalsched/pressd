@@ -343,11 +343,10 @@ def create_reply(
     if root.user_id is not None and root.user_id != user.id:
         tokens = tokens_for_user(session, root.user_id, "reply")
         if tokens:
-            preview = payload.body.strip()
             background.add_task(
                 send_push, tokens,
                 f"{user.name} replied",
-                preview[:120] + ("…" if len(preview) > 120 else ""),
+                "Tap to see what they said.",
                 {
                     "kind": "reply",
                     # What the app needs to open the room, computed here — a

@@ -267,10 +267,36 @@ def create_album(
     return album
 
 
+def _notify_rating(session: Session, background: BackgroundTasks, album: Album, rater: PressUser) -> None:
+    """Tell the rater's friends who have this record in their library — rated,
+    listening or queued, any edition — that they've rated it. On a first rating
+    only (albums._first_rating), and not when they'd rated another edition
+    before. The score stays in the app: opening it is the point."""
+    if not album.subject_key:
+        return
+    friends = session.execute(_sql("""
+        SELECT DISTINCT a.user_id FROM album a
+        JOIN friendship f ON f.status = 'accepted'
+          AND ((f.user_id_a = :me AND f.user_id_b = a.user_id) OR (f.user_id_b = :me AND f.user_id_a = a.user_id))
+        WHERE a.subject_key = :k AND a.user_id <> :me"""),
+        {"me": rater.id, "k": album.subject_key}).scalars().all()
+    for friend_id in friends:
+        tokens = tokens_for_user(session, friend_id, "rating")
+        if tokens:
+            background.add_task(
+                send_push, tokens,
+                f"{rater.name} rated {album.album_name}",
+                "Tap to see what they gave it.",
+                # Their copy: the album page sets your rating beside theirs.
+                {"kind": "rating", "album_id": str(album.id)},
+            )
+
+
 @router.patch("/{album_id}")
 def update_album(
     album_id: int,
     data: dict,
+    background: BackgroundTasks,
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
@@ -304,9 +330,11 @@ def update_album(
     if data.get("status") == "rated":
         album.date_rated = date.today()
 
+    rated_elsewhere = False
     if first_rating:
         album.rated_at = datetime.now(timezone.utc)
-        if _owes_sheet(True, album.album_name, len(album.songs), _rated_elsewhere(session, album)):
+        rated_elsewhere = _rated_elsewhere(session, album)
+        if _owes_sheet(True, album.album_name, len(album.songs), rated_elsewhere):
             session.add(OverlapSheet(user_id=user.id, album_id=album.id))
 
     session.add(album)
@@ -324,6 +352,9 @@ def update_album(
         session.commit()
         invalidate_global_ratings()
         session.refresh(album)
+
+    if first_rating and not rated_elsewhere:
+        _notify_rating(session, background, album, user)
 
     if data.get("status") == "rated":
         _queue_song_repredictions(user.id)
@@ -1256,14 +1287,15 @@ def _notify_review(session: Session, background: BackgroundTasks, album: Album, 
           AND ((f.user_id_a = :me AND f.user_id_b = a.user_id) OR (f.user_id_b = :me AND f.user_id_a = a.user_id))
         WHERE a.subject_key = :k AND a.status = 'rated' AND a.user_id <> :me"""),
         {"me": author.id, "k": album.subject_key}).scalars().all()
-    preview = album.review.strip()
     for friend_id in friends:
         tokens = tokens_for_user(session, friend_id, "review")
         if tokens:
             background.add_task(
                 send_push, tokens,
                 f"{author.name} reviewed {album.album_name}",
-                preview[:120] + ("…" if len(preview) > 120 else ""),
+                # Not the review itself: the lock screen is no place for
+                # someone's take on a record, and opening it is the point.
+                "Tap to see what they said.",
                 # What the app needs to open the record's room, as the reply
                 # push carries it.
                 {"kind": "review", "subject_type": "album", "artist": album.artist,
