@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Animated, Pressable, StyleSheet, Text } from 'react-native'
 import * as haptics from '../lib/haptics'
 import { Heart } from 'lucide-react-native'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors } from '../theme/tokens'
 
 const LIKED = '#c0392b'
 
@@ -33,6 +33,7 @@ export default function LikeButton({
   onToggle: () => Promise<unknown> | void
   size?: number
 }) {
+  const tc = useColors()
   // Local mirror so the tap paints immediately, resynced whenever the server
   // answer arrives and changes what the parent passes down.
   const [on, setOn] = useState(liked)
@@ -77,7 +78,7 @@ export default function LikeButton({
       style={({ pressed }) => [styles.btn, on && styles.btnOn, pressed && styles.pressed]}
     >
       <Animated.View style={{ transform: [{ scale }] }}>
-        <Heart size={size} color={on ? LIKED : colors.inkTertiary} fill={on ? LIKED : 'transparent'} />
+        <Heart size={size} color={on ? LIKED : tc.inkTertiary} fill={on ? LIKED : 'transparent'} />
       </Animated.View>
       <Text
         style={[styles.count, on && styles.countOn]}

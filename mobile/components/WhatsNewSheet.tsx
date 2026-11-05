@@ -12,7 +12,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensio
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Sparkles } from 'lucide-react-native'
 import type { Release } from '../lib/releaseNotes'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors } from '../theme/tokens'
 
 export default function WhatsNewSheet({
   release,
@@ -23,6 +23,7 @@ export default function WhatsNewSheet({
   visible: boolean
   onClose: () => void
 }) {
+  const tc = useColors()
   const insets = useSafeAreaInsets()
   const { height } = useWindowDimensions()
 
@@ -34,7 +35,7 @@ export default function WhatsNewSheet({
 
           <View style={styles.head}>
             <View style={styles.badge}>
-              <Sparkles size={13} color={colors.green} />
+              <Sparkles size={13} color={tc.green} />
               <Text style={styles.badgeText} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={NUM_SCALE_CAP}>BUILD {release.build}</Text>
             </View>
             <Text style={styles.title}>What&rsquo;s New</Text>

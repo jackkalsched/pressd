@@ -167,6 +167,13 @@ def trending(
     return rows[:limit]
 
 
+# How many people must have rated a record before it charts: within the week
+# for the weekly board, ever for the all-time one. One rave from one listener
+# used to put a record at the top of both, ahead of things a dozen people had
+# rated well.
+MIN_CHART_RATERS = {"week": 3, "all": 5}
+
+
 @router.get("/charts")
 def charts(
     period: str = Query("week", pattern="^(week|all)$"),
@@ -180,7 +187,9 @@ def charts(
 ):
     """Userbase-wide album chart: rated albums grouped across every user's copy,
     ranked by aggregate average score. `period` scopes which ratings count —
-    "week" only counts copies rated in the last 7 days, "all" counts everything.
+    "week" only counts copies rated in the last 7 days, "all" counts everything —
+    and a record charts only once MIN_CHART_RATERS people have rated it in that
+    period.
     Optional filters by genre, decade, and/or year. Each entry carries its
     day-over-day rank movement (the ranking as it stood at the end of yesterday,
     excluding copies first rated today), and the response includes the filter
@@ -264,11 +273,18 @@ def charts(
         return sorted(groups.items(), key=lambda kv: (rank_score(kv), len(kv[1]["raters"])),
                       reverse=True)
 
-    # Singles don't chart — see the note in public.py's equivalent.
-    today_ranked = [kv for kv in build(pool) if not is_single(global_ratings, kv[0])]
+    # Singles don't chart — see the note in public.py's equivalent — and nor does
+    # a record below the period's rater bar. Yesterday's board is held to the
+    # same bar, so a record crossing it today reads as new, not as a climb.
+    min_raters = MIN_CHART_RATERS[period]
+
+    def charts_ok(kv) -> bool:
+        return not is_single(global_ratings, kv[0]) and len(kv[1]["raters"]) >= min_raters
+
+    today_ranked = [kv for kv in build(pool) if charts_ok(kv)]
     # Yesterday's board: copies first rated today don't count yet.
     yest_ranked = [kv for kv in build([r for r in pool if r.date_rated is None or r.date_rated < today])
-                   if not is_single(global_ratings, kv[0])]
+                   if charts_ok(kv)]
     yest_rank = {key: i + 1 for i, (key, _) in enumerate(yest_ranked)}
 
     items = []

@@ -1,9 +1,16 @@
 // Pressd design tokens — mirrors the website's palette (frontend/src/index.css
 // + Tailwind classes) so the two surfaces read as one brand.
 
-import { Dimensions } from 'react-native'
+import { DynamicColorIOS, Dimensions, useColorScheme, type ColorValue } from 'react-native'
+import { songScoreColor } from '@pressd/shared/types'
 
-export const colors = {
+// ── Colour ──────────────────────────────────────────────────────────────────
+// Two palettes: the cream page, and a very dark warm gray that keeps the cream
+// as its ink, so dark mode still reads as Pressd rather than as a generic black.
+// Which one shows follows the phone's setting, or the override in Settings →
+// Preferences (lib/prefs.ts sets it with Appearance.setColorScheme).
+
+const light = {
   // Surfaces
   bg: '#f9f8f6',
   raised: '#ffffff',
@@ -21,10 +28,119 @@ export const colors = {
   greenPressed: '#245c43',
   greenSoft: 'rgba(45, 106, 79, 0.10)',
 
+  // Brand fill that carries white text (buttons, the active pill): the same
+  // green on both pages, a touch lifted on the dark one.
+  greenFill: '#2d6a4f',
+  onGreen: '#ffffff',
+
+  // A dim layer over the page behind a sheet or dialog.
+  scrim: 'rgba(28, 25, 23, 0.35)',
+  // A hairline rule between rows.
+  hairline: 'rgba(28, 25, 23, 0.12)',
+
+  // Errors and destructive actions (Delete, Remove).
+  danger: '#b91c1c',
+  // A warm tint behind a warning.
+  warnSoft: '#fff7ed',
+  // Frosted white on the page: a quiet chip.
+  frost: 'rgba(255, 255, 255, 0.7)',
+  // An opaque pale green: the taste-overlap pill, and a green-edged card.
+  greenTint: '#dfe9e2',
+  // The danger zone's card.
+  dangerSoft: '#fdf5f5',
+  dangerBorder: '#f0d5d5',
+
   // Score chip on dark art
   scoreChipBg: 'rgba(28, 25, 23, 0.82)',
   scoreChipText: '#ffffff',
-} as const
+}
+
+const dark: typeof light = {
+  bg: '#171615',
+  raised: '#211f1d',
+  inset: '#2a2826',
+  border: '#34312e',
+
+  ink: '#f4efe7',
+  inkSecondary: '#d2cabe',
+  inkTertiary: '#a69e92',
+  inkMuted: '#857c72',
+
+  // Lifted to read as text on the dark page, and kept deep enough to carry
+  // white text where it's a fill: the one green does both jobs, as in light.
+  green: '#4f9a77',
+  greenPressed: '#438a69',
+  greenSoft: 'rgba(79, 154, 119, 0.18)',
+
+  greenFill: '#4f9a77',
+  onGreen: '#ffffff',
+
+  scrim: 'rgba(0, 0, 0, 0.55)',
+  hairline: 'rgba(244, 239, 231, 0.12)',
+
+  danger: '#f2867a',
+  warnSoft: 'rgba(234, 108, 10, 0.14)',
+  frost: 'rgba(255, 255, 255, 0.07)',
+  greenTint: '#1f2c26',
+  dangerSoft: 'rgba(242, 134, 122, 0.10)',
+  dangerBorder: 'rgba(242, 134, 122, 0.30)',
+
+  scoreChipBg: 'rgba(12, 11, 10, 0.82)',
+  scoreChipText: '#ffffff',
+}
+
+export type ColorName = keyof typeof light
+export type Palette = Record<ColorName, string>
+
+/** Both palettes as plain strings, for code that needs one directly. */
+export const palettes: { light: Palette; dark: Palette } = { light, dark }
+
+/**
+ * The palette as colours iOS resolves itself, for stylesheets. A view styled
+ * with these changes the moment the appearance does, with no re-render.
+ *
+ * Not for SVG (icons included) or gradients: those draw once and keep what they
+ * were given, so they take `useColors()`, which re-renders on the change.
+ */
+export const colors = Object.fromEntries(
+  (Object.keys(light) as ColorName[]).map((k) => [k, DynamicColorIOS({ light: light[k], dark: dark[k] })]),
+) as Record<ColorName, ColorValue>
+
+/** True while the dark palette is showing. */
+export function useIsDark(): boolean {
+  return useColorScheme() === 'dark'
+}
+
+/** The current palette as plain strings, re-rendering when it changes — for
+ *  icons, SVG, gradients and anything else that draws once. */
+export function useColors(): Palette {
+  return useIsDark() ? dark : light
+}
+
+// The page colour as an RGB triple, for veils and fades that need it at some
+// opacity: bg in each palette.
+const PAGE_RGB = { light: '249,248,246', dark: '23,22,21' }
+
+/** The page colour at `alpha`, for a stylesheet: a veil over content. */
+export function pageAlpha(alpha: number): ColorValue {
+  return DynamicColorIOS({ light: `rgba(${PAGE_RGB.light},${alpha})`, dark: `rgba(${PAGE_RGB.dark},${alpha})` })
+}
+
+/** The page colour's RGB triple ("249,248,246"), for gradients that fade into it. */
+export function usePageRgb(): string {
+  return PAGE_RGB[useIsDark() ? 'dark' : 'light']
+}
+
+/** A 1–10 score's colour for a stylesheet or text, resolving per appearance. */
+export function scoreColor(score: number): ColorValue {
+  return DynamicColorIOS({ light: songScoreColor(score), dark: songScoreColor(score, true) })
+}
+
+/** A score's colour as a plain string, for SVG and gradients. */
+export function useScoreColor(): (score: number) => string {
+  const isDark = useIsDark()
+  return (score: number) => songScoreColor(score, isDark)
+}
 
 export const fonts = {
   display: 'PlayfairDisplay_700Bold',

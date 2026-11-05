@@ -35,7 +35,6 @@ import {
 } from '../../lib/api'
 import {
   computeAlbumScore,
-  songScoreColor,
   BANG_THRESHOLD,
   SKIP_THRESHOLD,
   EP_MAX_TRACKS,
@@ -53,7 +52,7 @@ import AlbumBackdrop from '../../components/AlbumBackdrop'
 import CoverImage from '../../components/CoverImage'
 import { useDeleteAlbum } from '../../lib/useDeleteAlbum'
 import { useRecalibrationMessage } from '@pressd/shared/hooks/useRecalibration'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, pageAlpha, scoreColor } from '../../theme/tokens'
 
 const DANGER = '#b91c1c'
 
@@ -65,6 +64,7 @@ const DANGER = '#b91c1c'
  * is nothing useful to go back to until it lands.
  */
 function RecalibratingOverlay() {
+  const tc = useColors()
   const message = useRecalibrationMessage()
   // Held in state rather than a ref: reading `.current` during render to build
   // the style is exactly what the refs lint rule rejects, and a lazy useState
@@ -79,7 +79,7 @@ function RecalibratingOverlay() {
   return (
     <Modal visible transparent animationType="fade" onRequestClose={() => {}}>
       <View style={styles.recalRoot}>
-        <ActivityIndicator size="large" color={colors.green} />
+        <ActivityIndicator size="large" color={tc.green} />
         <Animated.Text style={[styles.recalMessage, { opacity: fade }]}>{message}</Animated.Text>
         <Text style={styles.recalSub}>
           Your score is being set against your library and the rest of Press&rsquo;d.
@@ -131,6 +131,7 @@ function runtime(ms?: number | null): string | null {
 }
 
 export default function RatingScreen() {
+  const tc = useColors()
   const { id } = useLocalSearchParams<{ id: string }>()
   const albumId = Number(id)
   const router = useRouter()
@@ -560,7 +561,7 @@ export default function RatingScreen() {
   if (isLoading || !album) {
     return (
       <SafeAreaView style={[styles.screen, styles.center]}>
-        <ActivityIndicator color={colors.green} />
+        <ActivityIndicator color={tc.green} />
       </SafeAreaView>
     )
   }
@@ -595,7 +596,7 @@ export default function RatingScreen() {
         {/* Header: album identity + save draft */}
         <View style={styles.topBar}>
           <Pressable onPress={() => router.back()} hitSlop={10}>
-            <ArrowLeft size={20} color={colors.inkSecondary} />
+            <ArrowLeft size={20} color={tc.inkSecondary} />
           </Pressable>
           {album.albumArtUrl ? (
             <Image source={{ uri: album.albumArtUrl }} style={styles.topArt} contentFit="cover" />
@@ -651,7 +652,7 @@ export default function RatingScreen() {
 
               <View style={styles.actions}>
                 <Pressable style={styles.listBtn} onPress={() => setListOpen(true)} accessibilityLabel="Jump to a track">
-                  <ListMusic size={20} color={colors.inkSecondary} />
+                  <ListMusic size={20} color={tc.inkSecondary} />
                 </Pressable>
                 <Pressable
                   style={({ pressed }) => [
@@ -711,7 +712,7 @@ export default function RatingScreen() {
                         }
                         style={({ pressed }) => [
                           styles.chip,
-                          { backgroundColor: v != null ? songScoreColor(v) : colors.inset },
+                          { backgroundColor: v != null ? scoreColor(v) : colors.inset },
                           i === idx && styles.chipCurrent,
                           pressed && open && styles.chipPressed,
                         ]}
@@ -769,7 +770,7 @@ export default function RatingScreen() {
                     onChangeText={(t) => setFactorText((prev) => ({ ...prev, [key]: cleanScoreText(t) }))}
                     keyboardType="decimal-pad"
                     placeholder="—"
-                    placeholderTextColor={colors.inkMuted}
+                    placeholderTextColor={tc.inkMuted}
                     maxLength={4}
                   />
                 </View>
@@ -789,7 +790,7 @@ export default function RatingScreen() {
                 onPress={() => setPhase('review')}
                 disabled={!canSubmit || busy}
               >
-                <ArrowRight size={16} color={canSubmit ? '#fff' : colors.inkMuted} />
+                <ArrowRight size={16} color={canSubmit ? '#fff' : tc.inkMuted} />
                 <Text style={[styles.submitText, !canSubmit && { color: colors.inkMuted }]}>
                   Next: your review
                 </Text>
@@ -816,7 +817,7 @@ export default function RatingScreen() {
                 value={review}
                 onChangeText={setReview}
                 placeholder="What did you make of it?"
-                placeholderTextColor={colors.inkMuted}
+                placeholderTextColor={tc.inkMuted}
                 multiline
                 textAlignVertical="top"
               />
@@ -895,16 +896,17 @@ function ScoreField({
   label: string
   autoFocus?: boolean
 }) {
+  const tc = useColors()
   const n = parseScore(value)
   return (
     <View style={styles.scoreWrap}>
       <TextInput
-        style={[styles.scoreInput, { color: n != null ? songScoreColor(n) : colors.inkMuted }]}
+        style={[styles.scoreInput, { color: n != null ? scoreColor(n) : colors.inkMuted }]}
         value={value}
         onChangeText={onChange}
         keyboardType="decimal-pad"
         placeholder="—"
-        placeholderTextColor={colors.inkMuted}
+        placeholderTextColor={tc.inkMuted}
         maxLength={4}
         autoFocus={autoFocus}
         selectTextOnFocus
@@ -959,7 +961,7 @@ function ScoreScale({ value }: { value: number | null }) {
     <View style={styles.scaleWrap}>
       <View style={styles.scaleTrack} onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}>
         {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-          <View key={i} style={{ flex: 1, backgroundColor: songScoreColor(i + 0.5) }} />
+          <View key={i} style={{ flex: 1, backgroundColor: scoreColor(i + 0.5) }} />
         ))}
       </View>
       <Animated.View
@@ -994,13 +996,14 @@ function TrackSheet({
   onPick: (i: number) => void
   onClose: () => void
 }) {
+  const tc = useColors()
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet}>
           <View style={styles.sheetHead}>
             <Text style={styles.sheetTitle}>Tracks</Text>
-            <Pressable onPress={onClose} hitSlop={10}><X size={20} color={colors.inkTertiary} /></Pressable>
+            <Pressable onPress={onClose} hitSlop={10}><X size={20} color={tc.inkTertiary} /></Pressable>
           </View>
           <ScrollView style={{ maxHeight: 380 }}>
             {songs.map((s, i) => {
@@ -1023,7 +1026,7 @@ function TrackSheet({
                     {s.title}
                   </Text>
                   {v != null ? (
-                    <Text style={[styles.sheetScore, { color: songScoreColor(v) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{v.toFixed(1)}</Text>
+                    <Text style={[styles.sheetScore, { color: scoreColor(v) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{v.toFixed(1)}</Text>
                   ) : isSkipped ? (
                     <Text style={styles.sheetMuted}>skipped</Text>
                   ) : i === current ? (
@@ -1208,7 +1211,7 @@ const styles = StyleSheet.create({
   upTitle: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.inkTertiary },
   upLocked: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted },
 
-  warn: { fontFamily: fonts.body, fontSize: 13, color: '#b91c1c', textAlign: 'center', marginTop: spacing.md },
+  warn: { fontFamily: fonts.body, fontSize: 13, color: colors.danger, textAlign: 'center', marginTop: spacing.md },
 
   factorRow: {
     flexDirection: 'row',
@@ -1237,13 +1240,13 @@ const styles = StyleSheet.create({
   previewScore: { fontFamily: fonts.display, fontSize: 52, lineHeight: 58 },
   previewLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.4, color: colors.inkMuted },
 
-  error: { fontFamily: fonts.bodyMedium, fontSize: 13, color: '#b91c1c', textAlign: 'center', marginTop: spacing.md },
+  error: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.danger, textAlign: 'center', marginTop: spacing.md },
   recalRoot: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
-    backgroundColor: 'rgba(249, 248, 246, 0.96)',
+    backgroundColor: pageAlpha(0.96),
   },
   recalMessage: {
     marginTop: spacing.lg,

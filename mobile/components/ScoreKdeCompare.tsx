@@ -8,10 +8,9 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import Svg, { Path, Line } from 'react-native-svg'
-import { colors, fonts, spacing } from '../theme/tokens'
+import { colors, fonts, spacing, useColors } from '../theme/tokens'
 
 const YOU = '#f97316'    // orange — you
-const THEM = '#2d6a4f'   // green  — everyone else
 const FILL = 0.22        // low enough that the overlap reads as a third tone — web's value
 
 const LO = 1
@@ -63,6 +62,9 @@ export default function ScoreKdeCompare({
   mine: number[]
   theirs: number[]
 }) {
+  // Green — everyone else. A plain colour, re-rendering with the theme, since
+  // the curves are SVG.
+  const THEM = useColors().green
   const [w, setW] = useState(0)
 
   const { mineD, theirsD, peak } = useMemo(() => {
@@ -125,7 +127,7 @@ const styles = StyleSheet.create({
   legend: { flexDirection: 'row', gap: spacing.lg, marginBottom: spacing.sm },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   swatch: { width: 10, height: 10, borderRadius: 5 },
-  legendText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: '#8a7f72' },
+  legendText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkTertiary },
   plot: { height: HEIGHT, width: '100%' },
   axis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   tick: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted },

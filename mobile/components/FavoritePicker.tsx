@@ -17,7 +17,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ArrowLeft, Check, Search, X } from 'lucide-react-native'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, useColors, pageAlpha } from '../theme/tokens'
 
 export default function FavoritePicker<T>({
   question,
@@ -54,6 +54,7 @@ export default function FavoritePicker<T>({
   error: string | null
   onBack: () => void
 }) {
+  const tc = useColors()
   const insets = useSafeAreaInsets()
 
   return (
@@ -74,13 +75,13 @@ export default function FavoritePicker<T>({
         ListHeaderComponent={
           <View>
             <View style={styles.searchBar}>
-              <Search size={15} color={colors.inkTertiary} />
+              <Search size={15} color={tc.inkTertiary} />
               <TextInput
                 style={styles.searchBarInput}
                 value={search}
                 onChangeText={onSearchChange}
                 placeholder={searchPlaceholder}
-                placeholderTextColor={colors.inkTertiary}
+                placeholderTextColor={tc.inkTertiary}
                 autoCorrect={false}
                 autoCapitalize="none"
                 returnKeyType="search"
@@ -88,7 +89,7 @@ export default function FavoritePicker<T>({
               />
               {search.length > 0 && (
                 <Pressable onPress={() => onSearchChange('')} hitSlop={8} accessibilityLabel="Clear search">
-                  <X size={14} color={colors.inkMuted} />
+                  <X size={14} color={tc.inkMuted} />
                 </Pressable>
               )}
             </View>
@@ -108,12 +109,12 @@ export default function FavoritePicker<T>({
             {/* The tick rides alongside the shared row components rather than
                 inside them, so the Ratings board doesn't grow a selection slot
                 it has no use for. */}
-            {isSelected(item) ? <Check size={18} color={colors.green} strokeWidth={2.6} /> : null}
+            {isSelected(item) ? <Check size={18} color={tc.green} strokeWidth={2.6} /> : null}
           </View>
         )}
         ListEmptyComponent={
           loading ? (
-            <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
+            <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
           ) : (
             <Text style={styles.empty}>{emptyText}</Text>
           )
@@ -122,7 +123,7 @@ export default function FavoritePicker<T>({
 
       {saving && (
         <View style={styles.savingOverlay} pointerEvents="auto">
-          <ActivityIndicator color={colors.green} />
+          <ActivityIndicator color={tc.green} />
         </View>
       )}
     </View>
@@ -162,7 +163,7 @@ const styles = StyleSheet.create({
   clearBtn: { alignSelf: 'flex-start', paddingVertical: spacing.md },
   clearText: { fontFamily: fonts.bodyMedium, fontSize: 13.5, color: colors.inkTertiary },
 
-  error: { fontFamily: fonts.bodyMedium, fontSize: 13, color: '#b91c1c', marginTop: spacing.md },
+  error: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.danger, marginTop: spacing.md },
   empty: {
     fontFamily: fonts.body,
     fontSize: 14,
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(249,248,246,0.6)',
+    backgroundColor: pageAlpha(0.6),
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
-import { colors, fonts, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, NUM_SCALE_CAP, useColors } from '../theme/tokens'
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
@@ -25,6 +25,7 @@ export default function ScoreDial({
   max?: number
   duration?: number
 }) {
+  const tc = useColors()
   const stroke = Math.max(6, size * 0.13)
   const r = (size - stroke) / 2
   const circumference = 2 * Math.PI * r
@@ -62,12 +63,12 @@ export default function ScoreDial({
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size}>
-        <Circle cx={mid} cy={mid} r={r} stroke={colors.inset} strokeWidth={stroke} fill="none" />
+        <Circle cx={mid} cy={mid} r={r} stroke={tc.inset} strokeWidth={stroke} fill="none" />
         <AnimatedCircle
           cx={mid}
           cy={mid}
           r={r}
-          stroke={colors.green}
+          stroke={tc.green}
           strokeWidth={stroke}
           fill="none"
           strokeDasharray={`${circumference} ${circumference}`}

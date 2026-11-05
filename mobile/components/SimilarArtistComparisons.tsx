@@ -10,7 +10,7 @@ import { Image } from 'expo-image'
 import type { SimilarArtistComparison } from '@pressd/shared/api'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
 
-const UP = '#2d6a4f'
+const UP = colors.green
 const DOWN = '#b5432f'
 const CELL = 132
 
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     width: CELL,
     height: CELL,
     borderRadius: radii.lg,
-    backgroundColor: '#ebe5dc',
+    backgroundColor: colors.inset,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
   artImg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   initial: { fontFamily: fonts.display, fontSize: 44, color: colors.inkMuted },
   name: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.ink, marginTop: 10 },
-  note: { fontFamily: fonts.body, fontSize: 12, lineHeight: 16, color: '#8a7f72', marginTop: 2 },
+  note: { fontFamily: fonts.body, fontSize: 12, lineHeight: 16, color: colors.inkTertiary, marginTop: 2 },
   noteSong: { fontFamily: fonts.bodyMedium, color: colors.inkSecondary },
   noteDiff: { fontFamily: fonts.bodyBold },
 })

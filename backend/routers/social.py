@@ -1,6 +1,7 @@
 from datetime import datetime, date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text as _sql
 from sqlmodel import Session, select, func
 from ..database import get_session
 from ..deps import current_user
@@ -84,6 +85,11 @@ def get_feed(
                 .where(Like.user_id == user_id)
             ).all())
 
+        # A review is also a post in the record's thread, and its likes and replies
+        # are the post's: one conversation, wherever it's read. Liking it here
+        # votes it up there, and its replies are the thread's.
+        review_posts = _review_posts(session, [a for a in rating_albums if a.review], user_id)
+
         for album in rating_albums:
             friend = friends.get(album.user_id)
             if not friend:
@@ -101,6 +107,15 @@ def get_feed(
             }
             if album.review and album.review_at:
                 # A rating that carries a review is a higher-signal event.
+                post = review_posts.get(album.id)
+                if post:
+                    base = {
+                        **base,
+                        "post_id": post["id"],
+                        "like_count": post["likes"],
+                        "liked_by_me": post["mine"],
+                        "comment_count": post["replies"],
+                    }
                 items.append({
                     **base,
                     "type": "review",
@@ -426,13 +441,53 @@ def get_compare(
     return {"items": items[:60]}
 
 
+def _review_posts(session: Session, albums: list, user_id: int) -> dict[int, dict]:
+    """Each album copy's review post in its record's thread, by album id: its id,
+    up-votes, replies, and whether `user_id` voted it up."""
+    if not albums:
+        return {}
+    rows = session.execute(_sql("""
+        SELECT p.id, p.user_id, t.subject_key, p.like_count, p.reply_count,
+               EXISTS (SELECT 1 FROM postlike v WHERE v.post_id = p.id AND v.user_id = :me AND v.value = 1)
+        FROM post p JOIN thread t ON t.id = p.thread_id
+        WHERE t.subject_type = 'album' AND p.kind = 'review' AND p.deleted_at IS NULL
+          AND p.user_id = ANY(:users) AND t.subject_key = ANY(:keys)"""),
+        {"me": user_id, "users": list({a.user_id for a in albums}),
+         "keys": list({a.subject_key for a in albums if a.subject_key})}).all()
+    by_owner = {(r[1], r[2]): {"id": r[0], "likes": r[3] or 0, "replies": r[4] or 0, "mine": bool(r[5])}
+                for r in rows}
+    return {a.id: by_owner[(a.user_id, a.subject_key)] for a in albums if (a.user_id, a.subject_key) in by_owner}
+
+
 @router.post("/like")
 def toggle_like(
     album_id: int = Query(...),
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
+    """Like a friend's rating, or unlike it. A rating with a review is liked as
+    its post in the thread — an up-vote, the same one the thread's arrow casts —
+    so the count is one number on both screens. The thread's own gate doesn't
+    apply: this is a friend's review you were shown, not a room you walked into."""
     user_id = user.id
+    album = session.get(Album, album_id)
+    post = _review_posts(session, [album], user_id).get(album_id) if album and album.review else None
+    if post:
+        if post["mine"]:
+            session.execute(_sql("DELETE FROM postlike WHERE user_id = :u AND post_id = :p"),
+                            {"u": user_id, "p": post["id"]})
+        else:
+            session.execute(_sql("""
+                INSERT INTO postlike (user_id, post_id, value, created_at) VALUES (:u, :p, 1, NOW())
+                ON CONFLICT (user_id, post_id) DO UPDATE SET value = 1, created_at = NOW()"""),
+                {"u": user_id, "p": post["id"]})
+        up, down = session.execute(_sql(
+            "SELECT COUNT(*) FILTER (WHERE value = 1), COUNT(*) FILTER (WHERE value = -1)"
+            " FROM postlike WHERE post_id = :p"), {"p": post["id"]}).first()
+        session.execute(_sql("UPDATE post SET like_count = :up, dislike_count = :down WHERE id = :p"),
+                        {"up": up or 0, "down": down or 0, "p": post["id"]})
+        session.commit()
+        return {"liked": not post["mine"], "like_count": up or 0}
     existing = session.exec(
         select(Like).where(Like.user_id == user_id, Like.album_id == album_id)
     ).first()

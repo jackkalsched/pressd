@@ -1594,6 +1594,9 @@ export interface FeedItem {
   recommended_at?: string
   review_excerpt?: string
   review_at?: string
+  /** Present on a review: its post in the record's thread. Then like_count,
+   *  liked_by_me and comment_count are that post's up-votes and replies. */
+  post_id?: number
   like_count?: number
   liked_by_me?: boolean
   comment_count?: number

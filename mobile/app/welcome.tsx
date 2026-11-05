@@ -23,7 +23,7 @@ import { useAuth } from '../lib/auth'
 import { setFirstAlbumPick, useFirstAlbumPick } from '../lib/firstAlbumPick'
 import { skipOnboarding } from '../lib/onboarding'
 import TracklistLoader from '../components/TracklistLoader'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors } from '../theme/tokens'
 
 const TILE = 84
 const GAP = 10
@@ -65,6 +65,7 @@ function Belt({ art, duration, reverse }: { art: string[]; duration: number; rev
 }
 
 export default function Welcome() {
+  const tc = useColors()
   const router = useRouter()
   const { user } = useAuth()
   // The search itself lives in the /first-album sheet; this screen only shows
@@ -150,7 +151,7 @@ export default function Welcome() {
               selected ? `Chosen: ${selected.album_name} by ${selected.artist}. Change album` : 'Search for an album'
             }
           >
-            <Search size={17} color={colors.inkMuted} />
+            <Search size={17} color={tc.inkMuted} />
             <Text
               style={[styles.searchText, !selected && styles.searchPlaceholder]}
               numberOfLines={1}
@@ -160,7 +161,7 @@ export default function Welcome() {
           </Pressable>
           {selected && (
             <Pressable onPress={clearPick} hitSlop={8} accessibilityLabel="Clear chosen album">
-              <X size={16} color={colors.inkMuted} />
+              <X size={16} color={tc.inkMuted} />
             </Pressable>
           )}
         </View>
@@ -283,7 +284,7 @@ const styles = StyleSheet.create({
   },
   pickedCover: { width: 48, height: 48, borderRadius: radii.sm },
 
-  error: { fontFamily: fonts.body, fontSize: 12.5, color: '#c0392b', textAlign: 'center', marginBottom: spacing.sm },
+  error: { fontFamily: fonts.body, fontSize: 12.5, color: colors.danger, textAlign: 'center', marginBottom: spacing.sm },
 
   cta: {
     flexDirection: 'row',

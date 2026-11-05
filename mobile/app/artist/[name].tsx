@@ -13,13 +13,12 @@ import Svg, { Defs, Pattern, Rect } from 'react-native-svg'
 import { ArrowLeft } from 'lucide-react-native'
 import { fetchArtistDetail, fetchAlbumColor, fetchArtistImage, fetchSimilarArtistComparisons } from '../../lib/api'
 import type { ArtistPopulation } from '@pressd/shared/api'
-import { songScoreColor } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import ScoreHistogram from '../../components/ScoreHistogram'
 import SongGapChart from '../../components/SongGapChart'
 import ScoreKdeCompare from '../../components/ScoreKdeCompare'
 import SimilarArtistComparisons from '../../components/SimilarArtistComparisons'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, usePageRgb, useScoreColor, scoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 
 /** Which rating set the page is showing.
@@ -47,9 +46,8 @@ const MARK_INSET_PCT = 3.4
 // Deficit red for the score comparison, matching the Social board's.
 const VS_DOWN = '#c0392b'
 
-// Fully transparent app-bg. Interpolating from the literal 'transparent'
-// keyword muddies through black on Android, so fade from this instead.
-const BG_CLEAR = 'rgba(249,248,246,0)'
+// The ramp fades from the page colour at no opacity rather than the literal
+// 'transparent' keyword, which muddies through black on Android.
 
 // How far above the catalog strip the photo starts dissolving.
 const FADE_LEAD = spacing.lg
@@ -60,7 +58,7 @@ const FADE_TAIL = 112
 // How much of that tail the body rides up over. Its last stretch is nearly the
 // page colour already, so the figures can sit there without cutting the fade;
 // the body is clear so the dissolve still finishes behind them.
-const BODY_OVERLAP = 80
+const BODY_OVERLAP = 104
 // Stops sampled along the dissolve. A plain two-stop fade leaves a seam where
 // it begins — alpha's slope jumps from nothing to constant, and the eye catches
 // that crease as a band. Sampling a smoothstep instead leaves the ramp flat at
@@ -72,12 +70,14 @@ type Ramp = {
   locations: readonly [number, number, ...number[]]
 }
 
-function fadeRamp(start: number): Ramp {
+/** `rgb` is the page colour's triple (usePageRgb), so the photo dissolves into
+ *  whichever palette is showing. */
+function fadeRamp(start: number, rgb: string): Ramp {
   const steps = Array.from({ length: FADE_STEPS }, (_, i) => (i + 1) / FADE_STEPS)
   return {
     // Held clear down to `start`, then eased in — smoothstep leaves the ramp
     // flat where it meets the clear run, so there is no crease at the join.
-    colors: [BG_CLEAR, BG_CLEAR, ...steps.map((t) => `rgba(249,248,246,${+(t * t * (3 - 2 * t)).toFixed(3)})`)],
+    colors: [`rgba(${rgb},0)`, `rgba(${rgb},0)`, ...steps.map((t) => `rgba(${rgb},${+(t * t * (3 - 2 * t)).toFixed(3)})`)],
     locations: [0, start, ...steps.map((t) => start + t * (1 - start))],
   }
 }
@@ -92,6 +92,8 @@ function ordinal(n: number): string {
 }
 
 export default function ArtistPage() {
+  const sc = useScoreColor()
+  const tc = useColors()
   const { name, mode: modeParam } = useLocalSearchParams<{ name: string; mode?: string }>()
   const artist = decodeURIComponent(name ?? '')
   const router = useRouter()
@@ -154,9 +156,11 @@ export default function ArtistPage() {
   const [catalogY, setCatalogY] = useState<number | null>(null)
   const [heroHeight, setHeroHeight] = useState<number | null>(null)
   const photoHeight = heroHeight
+  const pageRgb = usePageRgb()
   const anchor = photoHeight && catalogY != null ? clamp01(catalogY / photoHeight) : 0.66
   const fade = fadeRamp(
     photoHeight && catalogY != null ? clamp01((catalogY - FADE_LEAD) / photoHeight) : 0.55,
+    pageRgb,
   )
 
   // Pooled rows are one per record, so they open the record's community page;
@@ -178,7 +182,7 @@ export default function ArtistPage() {
   if (isLoading || !data) {
     return (
       <View style={[styles.root, styles.center]}>
-        <ActivityIndicator color={colors.green} />
+        <ActivityIndicator color={tc.green} />
       </View>
     )
   }
@@ -337,7 +341,7 @@ export default function ArtistPage() {
               <StatCell
                 value={fmt2(data.avg_song_score)}
                 label="Avg song"
-                color={data.avg_song_score != null ? songScoreColor(data.avg_song_score) : undefined}
+                color={data.avg_song_score != null ? sc(data.avg_song_score) : undefined}
               />
             </View>
           )}
@@ -379,11 +383,18 @@ export default function ArtistPage() {
             <>
               <View style={styles.sectionHead}>
                 <Text style={styles.sectionLabel}>PERCENTILE RANKINGS</Text>
+              </View>
+              {/* Laid out as a bar row is — label column, track, value column —
+                  so each word sits over the point it names: the track's start,
+                  its middle and its end. */}
+              <View style={styles.legendRow}>
+                <View style={styles.legendLabelCol} />
                 <View style={styles.legend}>
                   <Text style={[styles.legendItem, { color: barColor(0) }]}>POOR</Text>
-                  <Text style={[styles.legendItem, { color: barColor(50) }]}>AVG</Text>
+                  <Text style={[styles.legendItem, styles.legendMid, { color: barColor(50) }]}>AVG</Text>
                   <Text style={[styles.legendItem, { color: barColor(100) }]}>GREAT</Text>
                 </View>
+                <View style={styles.legendValueCol} />
               </View>
               <PercentileBar label="Avg Song"     value={fmt2(data.avg_song_score)}   percentile={p.avg_song_score}   globalPercentile={gp?.avg_song_score}   smallSample={data.small_sample} />
               <PercentileBar label="Song+"        value={plus(data.song_plus)}        percentile={p.song_plus}        globalPercentile={gp?.song_plus}        smallSample={data.small_sample} />
@@ -625,7 +636,7 @@ function ScoreVersus({ mine, theirs }: { mine: number | null; theirs: number | n
       <View style={styles.vsCol}>
         <Text style={styles.vsLabel}>MY AVG SONG</Text>
         <Text
-          style={[styles.vsScore, { color: mine != null ? songScoreColor(mine) : colors.inkMuted }]}
+          style={[styles.vsScore, { color: mine != null ? scoreColor(mine) : colors.inkMuted }]}
           numberOfLines={1}
           adjustsFontSizeToFit
         >
@@ -650,7 +661,7 @@ function ScoreVersus({ mine, theirs }: { mine: number | null; theirs: number | n
       <View style={styles.vsCol}>
         <Text style={styles.vsLabel}>PRESSD AVG SONG</Text>
         <Text
-          style={[styles.vsScore, { color: theirs != null ? songScoreColor(theirs) : colors.inkMuted }]}
+          style={[styles.vsScore, { color: theirs != null ? scoreColor(theirs) : colors.inkMuted }]}
           numberOfLines={1}
           adjustsFontSizeToFit
         >
@@ -825,7 +836,7 @@ function RecordList({ label, albums, pooled, onOpen }: {
               </Text>
             </View>
             <Text
-              style={[styles.recordScore, { color: a.score != null ? songScoreColor(a.score) : colors.inkMuted }]}
+              style={[styles.recordScore, { color: a.score != null ? scoreColor(a.score) : colors.inkMuted }]}
               maxFontSizeMultiplier={NUM_SCALE_CAP}
             >
               {a.score != null ? a.score.toFixed(2) : '—'}
@@ -878,7 +889,7 @@ const styles = StyleSheet.create({
     marginTop: -BODY_OVERLAP,
     zIndex: 1,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.sm,
     paddingBottom: 60,
   },
 
@@ -892,11 +903,11 @@ const styles = StyleSheet.create({
   statCell: { flex: 1, paddingRight: spacing.sm },
   statValue: { fontFamily: fonts.display, fontSize: 26, lineHeight: 30, color: colors.ink, fontVariant: ['tabular-nums'] },
   statValueAccent: { color: colors.ink },
-  statValueMissing: { color: '#c8c0b4' },
+  statValueMissing: { color: colors.inkMuted },
   statLabel: {
     fontFamily: fonts.bodyMedium,
     fontSize: 12,
-    color: '#8a7f72',
+    color: colors.inkTertiary,
     marginTop: 6,
   },
   sampleNote: {
@@ -916,8 +927,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     marginBottom: spacing.sm,
   },
-  legend: { flexDirection: 'row', gap: spacing.md },
+  // Matches pctRow: pctLabel's 84, pctValue's 48, and the gaps between.
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: 2 },
+  legendLabelCol: { width: 84 },
+  legendValueCol: { width: 48 },
+  legend: { flex: 1, flexDirection: 'row', justifyContent: 'space-between' },
   legendItem: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.2 },
+  // Centred on the track's midpoint whatever the two ends' widths.
+  legendMid: { position: 'absolute', left: 0, right: 0, textAlign: 'center' },
   heroBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   heroActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 0 },
   // Reads on a photo of any brightness: translucent white over the hero's own
@@ -970,7 +987,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   vsCol: { flex: 1, alignItems: 'center' },
-  vsLabel: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.6, color: '#44403c', marginTop: 6 },
+  vsLabel: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.6, color: colors.inkSecondary, marginTop: 6 },
   vsScore: { fontFamily: fonts.display, fontSize: 40, lineHeight: 44, fontVariant: ['tabular-nums'] },
   vsMiddle: { alignItems: 'center', gap: 1, flexShrink: 0 },
   // Set in the display face like the scores it separates, but small and muted —
@@ -981,7 +998,7 @@ const styles = StyleSheet.create({
   // Web's bar: a thin warm track, the badge doing the reading.
   pctRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 9 },
   pctLabel: { width: 84, textAlign: 'right', fontFamily: fonts.body, fontSize: 12.5, lineHeight: 15, color: colors.inkSecondary },
-  pctTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: '#ebe5dc', position: 'relative', justifyContent: 'center' },
+  pctTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.inset, position: 'relative', justifyContent: 'center' },
   pctFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 4, overflow: 'hidden' },
   // The track is 14 tall; contentFit="contain" on a ~2:1 mark fits by width, so
   // a 42-wide box renders about 21 tall — half again the bar's height, which is
@@ -1034,7 +1051,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
   },
   pctBadgeText: { fontFamily: fonts.bodyBold, fontSize: 10.5, letterSpacing: -0.2, color: '#ffffff', fontVariant: ['tabular-nums'] },
-  pctDash: { textAlign: 'center', color: '#c8c0b4', fontSize: 11 },
+  pctDash: { textAlign: 'center', color: colors.inkMuted, fontSize: 11 },
   pctValue: { width: 48, textAlign: 'right', fontFamily: fonts.display, fontSize: 14, color: colors.ink, fontVariant: ['tabular-nums'] },
   pctValueSmall: { color: colors.inkMuted },
 
@@ -1056,7 +1073,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderRadius: radii.lg,
   },
-  recordRowPressed: { backgroundColor: '#f2eee7' },
+  recordRowPressed: { backgroundColor: colors.inset },
   // Web's cover: rounded, with the same soft warm drop beneath it. The shadow
   // lives on a wrapper because overflow:hidden clips it on iOS.
   recordArtShadow: {
@@ -1071,14 +1088,14 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: radii.md,
     overflow: 'hidden',
-    backgroundColor: '#ebe5dc',
+    backgroundColor: colors.inset,
     alignItems: 'center',
     justifyContent: 'center',
   },
   recordInitial: { fontFamily: fonts.display, fontSize: 20, color: colors.inkMuted },
   recordText: { flex: 1, minWidth: 0 },
   recordName: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.ink },
-  recordYear: { fontFamily: fonts.body, fontSize: 12.5, color: '#8a7f72', marginTop: 2 },
+  recordYear: { fontFamily: fonts.body, fontSize: 12.5, color: colors.inkTertiary, marginTop: 2 },
   recordScore: { fontFamily: fonts.display, fontSize: 22, fontVariant: ['tabular-nums'] },
 
 })

@@ -7,19 +7,30 @@
 // action is a round arrow. The two callers differ only in what rides on the
 // cover (a friend's face) and around the arrow (a progress ring).
 import type { ReactNode } from 'react'
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { DynamicColorIOS, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Circle } from 'react-native-svg'
 import { ArrowRight } from 'lucide-react-native'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, useIsDark } from '../theme/tokens'
 import CoverImage from './CoverImage'
 
 // The same three colours per tone as web: the ink for the eyebrow and arrow,
 // the wash under the blurred cover, and the empty part of the progress ring.
-const TONES = {
+//
+// On the dark page the card is the raised surface every other card uses, not a
+// tinted slab: an opaque green-brown block read as a foreign object there. The
+// tone is only a faint glow from one corner, fading to nothing, and the record's
+// own blurred cover — stronger than on cream, where it would muddy the page —
+// gives the card its colour, as light does on a dark surface.
+type Tone = { ink: string; wash: readonly [string, string]; ring: string }
+const TONES: Record<'green' | 'orange', Tone> = {
   green: { ink: '#2d6a4f', wash: ['#e6f0ea', '#f6f4ef'], ring: '#cfe0d6' },
   orange: { ink: '#ea6c0a', wash: ['#ffeedd', '#f8f5f0'], ring: '#fbd5b5' },
-} as const
+}
+const DARK_TONES: Record<keyof typeof TONES, Tone> = {
+  green: { ink: '#5fa883', wash: ['rgba(95,168,131,0.16)', 'rgba(95,168,131,0)'], ring: 'rgba(244,239,231,0.10)' },
+  orange: { ink: '#e8843f', wash: ['rgba(232,132,63,0.15)', 'rgba(232,132,63,0)'], ring: 'rgba(244,239,231,0.10)' },
+}
 
 // Smaller than web's 92/58: a phone column is narrower than either of web's
 // cards, and every point here comes out of the title.
@@ -57,7 +68,8 @@ export default function SpotlightCard({
   progress?: number
   style?: StyleProp<ViewStyle>
 }) {
-  const t = TONES[tone]
+  const dark = useIsDark()
+  const t = dark ? DARK_TONES[tone] : TONES[tone]
   const r = (RING - RING_STROKE) / 2
   const circumference = 2 * Math.PI * r
 
@@ -78,7 +90,7 @@ export default function SpotlightCard({
           the edges so the blur has no hard border to fade against. */}
       {artUrl && (
         // Blurred to a wash: a small image is all it needs.
-        <CoverImage url={artUrl} displayPx={120} blurRadius={40} style={styles.glow} accessible={false} />
+        <CoverImage url={artUrl} displayPx={120} blurRadius={40} style={[styles.glow, dark && styles.glowDark]} accessible={false} />
       )}
 
       <View style={styles.row}>
@@ -134,13 +146,21 @@ export default function SpotlightCard({
 
 /** The eyebrow's text style, for callers that put an icon beside it. */
 export function eyebrowTextStyle(tone: keyof typeof TONES) {
-  return [styles.eyebrowText, { color: TONES[tone].ink }]
+  return [styles.eyebrowText, { color: DynamicColorIOS({ light: TONES[tone].ink, dark: DARK_TONES[tone].ink }) }]
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 26, overflow: 'hidden', backgroundColor: colors.bg },
+  // Cream on the light page; the raised surface, edged by a faint rule, on the dark.
+  card: {
+    borderRadius: 26,
+    overflow: 'hidden',
+    backgroundColor: DynamicColorIOS({ light: '#f9f8f6', dark: '#211f1d' }),
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: DynamicColorIOS({ light: 'transparent', dark: 'rgba(244,239,231,0.07)' }),
+  },
   cardPressed: { transform: [{ scale: 0.985 }] },
   glow: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.22, transform: [{ scale: 1.5 }] },
+  glowDark: { opacity: 0.3 },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: spacing.lg, paddingRight: 14 },
 
@@ -149,7 +169,7 @@ const styles = StyleSheet.create({
   coverTilt: {
     borderRadius: 16,
     transform: [{ rotate: '-5deg' }],
-    shadowColor: '#28190a',
+    shadowColor: DynamicColorIOS({ light: '#28190a', dark: '#000000' }),
     shadowOpacity: 0.35,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 10 },
@@ -164,7 +184,8 @@ const styles = StyleSheet.create({
     bottom: -6,
     borderRadius: radii.pill,
     borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.9)',
+    // Cut out of whatever surface the card is.
+    borderColor: DynamicColorIOS({ light: 'rgba(255,255,255,0.9)', dark: '#211f1d' }),
   },
 
   text: { flex: 1, minWidth: 0 },

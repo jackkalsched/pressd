@@ -1,5 +1,5 @@
 // Preferences that belong to this phone rather than the account: whether it
-// buzzes, and which shelf Library opens on. Kept in the Keychain beside the
+// buzzes, which shelf Library opens on, and light or dark. Kept in the Keychain beside the
 // session token, read once at launch (lib/auth.tsx awaits `loadPrefs` before
 // the app is marked ready), and held in memory after that so a haptic tap
 // never waits on storage.
@@ -7,17 +7,29 @@
 // Notification switches are *not* here — the server sends the pushes, so it is
 // the one that has to know (GET/PUT /users/me/notifications).
 import { useSyncExternalStore } from 'react'
+import { Appearance } from 'react-native'
 import * as SecureStore from 'expo-secure-store'
 import type { AlbumStatus } from '@pressd/shared/types'
 
 const PREFS_KEY = 'pressd_prefs'
 
+/** Follow the phone's light/dark setting, or hold one regardless of it. */
+export type AppearancePref = 'system' | 'light' | 'dark'
+
 export interface DevicePrefs {
   haptics: boolean
   libraryStart: AlbumStatus
+  appearance: AppearancePref
 }
 
-const DEFAULTS: DevicePrefs = { haptics: true, libraryStart: 'rated' }
+const DEFAULTS: DevicePrefs = { haptics: true, libraryStart: 'rated', appearance: 'system' }
+
+/** Every colour in theme/tokens resolves against the app's appearance, so
+ *  overriding it here is the whole switch: views change at once, and
+ *  useColors() re-renders whatever draws with plain colours. */
+function applyAppearance(value: AppearancePref): void {
+  Appearance.setColorScheme(value === 'system' ? 'unspecified' : value)
+}
 
 let prefs: DevicePrefs = DEFAULTS
 const listeners = new Set<() => void>()
@@ -31,6 +43,7 @@ export async function loadPrefs(): Promise<void> {
   } catch {
     // An unreadable blob just means the defaults.
   }
+  applyAppearance(prefs.appearance)
 }
 
 export function getPrefs(): DevicePrefs {
@@ -39,6 +52,7 @@ export function getPrefs(): DevicePrefs {
 
 export function setPref<K extends keyof DevicePrefs>(key: K, value: DevicePrefs[K]): void {
   prefs = { ...prefs, [key]: value }
+  if (key === 'appearance') applyAppearance(value as AppearancePref)
   listeners.forEach((l) => l())
   SecureStore.setItemAsync(PREFS_KEY, JSON.stringify(prefs)).catch(() => {})
 }

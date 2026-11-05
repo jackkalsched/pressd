@@ -5,7 +5,7 @@
 // axis, so both share one y-scale (never a dual axis).
 import { View, Text, StyleSheet } from 'react-native'
 import Svg, { Rect, Path, Line, Text as SvgText } from 'react-native-svg'
-import { colors, fonts, spacing } from '../theme/tokens'
+import { colors, fonts, spacing, useColors } from '../theme/tokens'
 
 const KDE_MIN_SONGS = 30
 
@@ -46,6 +46,7 @@ function kdeOverlay(scores: number[], bins: { score: number }[]): number[] {
 }
 
 export default function ArtistChart({ scores, width }: { scores: number[]; width: number }) {
+  const tc = useColors()
   if (scores.length === 0) return null
 
   const height = 170
@@ -91,10 +92,10 @@ export default function ArtistChart({ scores, width }: { scores: number[]; width
         )}
         {/* KDE curve */}
         {showKde && kdePath ? (
-          <Path d={kdePath.trim()} stroke="#57534e" strokeWidth={2} strokeOpacity={0.75} fill="none" />
+          <Path d={kdePath.trim()} stroke={tc.inkSecondary} strokeWidth={2} strokeOpacity={0.75} fill="none" />
         ) : null}
         {/* Baseline */}
-        <Line x1={0} y1={padTop + plotH} x2={width} y2={padTop + plotH} stroke={colors.border} strokeWidth={1} />
+        <Line x1={0} y1={padTop + plotH} x2={width} y2={padTop + plotH} stroke={tc.border} strokeWidth={1} />
         {/* X labels at integers 1..10 */}
         {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => {
           const i = (n - 1) * 10 // bin index for integer score
@@ -104,7 +105,7 @@ export default function ArtistChart({ scores, width }: { scores: number[]; width
               x={x(i) + barW / 2}
               y={height - 6}
               fontSize={9}
-              fill={colors.inkMuted}
+              fill={tc.inkMuted}
               textAnchor="middle"
             >
               {n}

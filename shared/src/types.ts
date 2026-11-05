@@ -151,10 +151,12 @@ export function shortReleaseLabel(album: Album): 'EP' | 'Single' | null {
   return n <= 2 ? 'Single' : 'EP'
 }
 
-// Maps a 1–10 song score to a gradient color (dark red → dark forest green)
-export function songScoreColor(score: number): string {
+// Maps a 1–10 song score to a gradient color (dark red → dark forest green).
+// On a dark page the same hues are lifted, so a low score still reads as red
+// rather than vanishing into the background.
+export function songScoreColor(score: number, dark = false): string {
   const hue = Math.round(((score - 1) / 9) * 130)
-  return `hsl(${hue}, 65%, 32%)`
+  return dark ? `hsl(${hue}, 55%, 62%)` : `hsl(${hue}, 65%, 32%)`
 }
 
 // Deterministic color for a user's default profile picture, derived from their

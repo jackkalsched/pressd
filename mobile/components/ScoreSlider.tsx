@@ -5,8 +5,7 @@ import { useRef } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import Slider from '@react-native-community/slider'
 import * as haptics from '../lib/haptics'
-import { songScoreColor } from '@pressd/shared/types'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useScoreColor, useColors, scoreColor } from '../theme/tokens'
 
 export default function ScoreSlider({
   value,
@@ -17,6 +16,8 @@ export default function ScoreSlider({
   onChange: (v: number | null) => void
   disabled?: boolean
 }) {
+  const sc = useScoreColor()
+  const tc = useColors()
   const lastTick = useRef<number | null>(value)
 
   function handleChange(raw: number) {
@@ -34,7 +35,7 @@ export default function ScoreSlider({
         {/* Sits in a row beside the clear control; capped so a large setting
             doesn't push "clear" off the edge mid-rating. */}
         <Text
-          style={[styles.value, { color: value !== null ? songScoreColor(value) : colors.inkMuted }]}
+          style={[styles.value, { color: value !== null ? scoreColor(value) : colors.inkMuted }]}
           numberOfLines={1}
           adjustsFontSizeToFit
           maxFontSizeMultiplier={NUM_SCALE_CAP}
@@ -55,9 +56,9 @@ export default function ScoreSlider({
         value={value ?? 0}
         disabled={disabled}
         onValueChange={handleChange}
-        minimumTrackTintColor={value !== null ? songScoreColor(value) : colors.green}
-        maximumTrackTintColor={colors.border}
-        thumbTintColor={value !== null ? songScoreColor(value) : colors.green}
+        minimumTrackTintColor={value !== null ? sc(value) : tc.green}
+        maximumTrackTintColor={tc.border}
+        thumbTintColor={value !== null ? sc(value) : tc.green}
       />
     </View>
   )

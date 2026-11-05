@@ -3,17 +3,7 @@
 // are pressers talking about" (userbase-wide top reviews for the day). No boxed
 // cards — sections are separated by whitespace and hairline rules.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
+import { ActivityIndicator, Animated, Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, DynamicColorIOS, type ColorValue } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
@@ -32,7 +22,7 @@ import {
   type TopReview,
   type TrendingAlbum,
 } from '../../lib/api'
-import { MIN_RATED_ALBUMS, songScoreColor, type Album } from '@pressd/shared/types'
+import { MIN_RATED_ALBUMS, type Album } from '@pressd/shared/types'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import RecommendationBanner from '../../components/RecommendationBanner'
 import PassItOnCell from '../../components/PassItOnCell'
@@ -52,7 +42,7 @@ import {
 } from '../../lib/passItOn'
 import { useAuth } from '../../lib/auth'
 import { revealStyle } from '../../lib/scrollReveal'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 
 const WINDOW_H = Dimensions.get('window').height
@@ -67,10 +57,12 @@ function greeting(): string {
 }
 
 // Light tint of a score's own hue (dark-red → dark-green), matching the web
-// ScorePill background; paired with songScoreColor() for the text.
-function scoreTint(s: number): string {
+// ScorePill background; paired with scoreColor() for the text. On the dark page
+// there's no tint at all: a pale chip there read as a white box, and the score's
+// own colour carries it alone.
+function scoreTint(s: number): ColorValue {
   const hue = Math.round(((s - 1) / 9) * 130)
-  return `hsl(${hue}, 46%, 94%)`
+  return DynamicColorIOS({ light: `hsl(${hue}, 46%, 94%)`, dark: 'transparent' })
 }
 
 function dayLabel(iso: string | null): string {
@@ -91,13 +83,14 @@ function SectionHead({ label, meta, onMetaPress, metaRef }: {
   /** The meta chip doubles as a dropdown trigger; the menu anchors to it. */
   metaRef?: React.RefObject<View | null>
 }) {
+  const tc = useColors()
   return (
     <View style={styles.sectionHead}>
       <Text style={styles.sectionLabel}>{label}</Text>
       {meta == null ? null : onMetaPress ? (
         <Pressable ref={metaRef} style={styles.sectionMetaBtn} onPress={onMetaPress} hitSlop={8}>
           <Text style={styles.sectionMetaBtnText}>{meta}</Text>
-          <ChevronDown size={12} color={colors.green} />
+          <ChevronDown size={12} color={tc.green} />
         </Pressable>
       ) : (
         <Text style={styles.sectionMeta}>{meta}</Text>
@@ -107,6 +100,7 @@ function SectionHead({ label, meta, onMetaPress, metaRef }: {
 }
 
 export default function ForYou() {
+  const tc = useColors()
   const router = useRouter()
   const openProfile = useOpenProfile()
   const queryClient = useQueryClient()
@@ -378,7 +372,7 @@ export default function ForYou() {
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.green} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={tc.green} />}
       >
         <Animated.View style={{ opacity: mastheadOpacity, transform: [{ translateY: mastheadShift }] }}>
           <View style={styles.masthead}>
@@ -480,7 +474,7 @@ export default function ForYou() {
                   </Text>
                 </View>
                 <View style={styles.predict}>
-                  <Text style={[styles.predictScore, { color: songScoreColor(pick.predictedScore) }]}>
+                  <Text style={[styles.predictScore, { color: scoreColor(pick.predictedScore) }]}>
                     {pick.predictedScore.toFixed(2)}
                   </Text>
                   <Text style={styles.predictLabel}>PREDICTED</Text>
@@ -511,7 +505,7 @@ export default function ForYou() {
                 </View>
                 {suggestion.predictedScore != null && (
                   <View style={styles.predict}>
-                    <Text style={[styles.predictScore, { color: songScoreColor(suggestion.predictedScore) }]}>
+                    <Text style={[styles.predictScore, { color: scoreColor(suggestion.predictedScore) }]}>
                       {suggestion.predictedScore.toFixed(2)}
                     </Text>
                     <Text style={styles.predictLabel}>PREDICTED</Text>
@@ -524,7 +518,7 @@ export default function ForYou() {
                 <Text style={styles.textCtaLabel}>
                   {suggestion.recommendedByName ? 'See album' : 'Start rating'}
                 </Text>
-                <ArrowRight size={14} color={colors.green} />
+                <ArrowRight size={14} color={tc.green} />
               </View>
             </Pressable>
           </View>
@@ -602,7 +596,7 @@ export default function ForYou() {
                 </Text>
                 <Pressable style={styles.reviewEmptyCta} onPress={() => router.push('/add')}>
                   <Text style={styles.textCtaLabel}>Add an album</Text>
-                  <ArrowRight size={14} color={colors.green} />
+                  <ArrowRight size={14} color={tc.green} />
                 </Pressable>
               </View>
             )}
@@ -639,6 +633,7 @@ function NewReleaseCard({ release, onOpen }: { release: NewRelease; onOpen: () =
 }
 
 function ReviewCell({ review, first, onOpen, onOpenUser, onLike }: { review: TopReview; first: boolean; onOpen: () => void; onOpenUser: (id: number) => void; onLike: () => void }) {
+  const tc = useColors()
   return (
     <View style={[styles.review, !first && styles.hairline]}>
       <Pressable onPress={onOpen}>
@@ -652,7 +647,7 @@ function ReviewCell({ review, first, onOpen, onOpenUser, onLike }: { review: Top
             <Text style={styles.reviewOn} numberOfLines={1}>reviewed {review.album_name}</Text>
           </View>
           {review.score != null && (
-            <Text style={[styles.reviewScore, { color: songScoreColor(review.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{review.score.toFixed(2)}</Text>
+            <Text style={[styles.reviewScore, { color: scoreColor(review.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{review.score.toFixed(2)}</Text>
           )}
         </View>
 
@@ -662,9 +657,9 @@ function ReviewCell({ review, first, onOpen, onOpenUser, onLike }: { review: Top
           <View style={styles.songNotes}>
             {review.top_song && (
               <View style={styles.songNote}>
-                <Triangle size={11} color={colors.green} fill={colors.green} />
+                <Triangle size={11} color={tc.green} fill={tc.green} />
                 <Text style={styles.songNoteText} numberOfLines={1}>{review.top_song.title}</Text>
-                <Text style={[styles.songNoteScore, { color: songScoreColor(review.top_song.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{review.top_song.score.toFixed(1)}</Text>
+                <Text style={[styles.songNoteScore, { color: scoreColor(review.top_song.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{review.top_song.score.toFixed(1)}</Text>
               </View>
             )}
             {review.bottom_song && (
@@ -673,7 +668,7 @@ function ReviewCell({ review, first, onOpen, onOpenUser, onLike }: { review: Top
                   <Triangle size={11} color="#e0492b" fill="#e0492b" />
                 </View>
                 <Text style={styles.songNoteText} numberOfLines={1}>{review.bottom_song.title}</Text>
-                <Text style={[styles.songNoteScore, { color: songScoreColor(review.bottom_song.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{review.bottom_song.score.toFixed(1)}</Text>
+                <Text style={[styles.songNoteScore, { color: scoreColor(review.bottom_song.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{review.bottom_song.score.toFixed(1)}</Text>
               </View>
             )}
           </View>
@@ -692,7 +687,7 @@ function ReviewCell({ review, first, onOpen, onOpenUser, onLike }: { review: Top
       <View style={styles.reviewActions}>
         <LikeButton liked={!!review.liked_by_me} count={review.like_count} onToggle={onLike} />
         <Pressable style={styles.reviewAction} onPress={onOpen} hitSlop={8}>
-          <MessageCircle size={15} color={colors.inkMuted} />
+          <MessageCircle size={15} color={tc.inkMuted} />
           <Text style={styles.reviewActionText}>{review.comment_count}</Text>
         </Pressable>
       </View>
@@ -740,7 +735,7 @@ function TrendRow({
         </View>
         {item.avg_score != null && (
           <View style={[styles.scorePill, { backgroundColor: scoreTint(item.avg_score) }]}>
-            <Text style={[styles.scorePillText, { color: songScoreColor(item.avg_score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{item.avg_score.toFixed(2)}</Text>
+            <Text style={[styles.scorePillText, { color: scoreColor(item.avg_score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{item.avg_score.toFixed(2)}</Text>
           </View>
         )}
       </Pressable>

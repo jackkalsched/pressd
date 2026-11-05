@@ -36,13 +36,13 @@ import { Apple, Check, ChevronRight, LogOut, Trash2, X } from 'lucide-react-nati
 import { fetchLinkedProviders, unlinkProvider, deleteOwnAccount, uploadBanner, deleteBanner, type Profile } from '../lib/api'
 import { SHELF_SIZE, fetchNotificationPrefs, updateNotificationPrefs, type NotificationPrefs } from '@pressd/shared/api'
 import { cleanUsername, type AlbumStatus } from '@pressd/shared/types'
-import { setPref, usePrefs } from '../lib/prefs'
+import { setPref, usePrefs, type AppearancePref } from '../lib/prefs'
 import { currentPushToken, enablePush, pushPermissionStatus } from '../lib/push'
 import { useAuth } from '../lib/auth'
 import { requestAppleCredential } from '../lib/appleSignIn'
 import PhoneSheet from './PhoneSheet'
 import { profileKey, useProfile } from '../lib/picks'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors } from '../theme/tokens'
 
 // The server owns the avatar's final shape — it crops, resizes to 512², strips
 // EXIF and re-encodes — so this only has to hand it something reasonable.
@@ -64,6 +64,12 @@ const NOTIFY_ROWS: { key: keyof NotificationPrefs; label: string }[] = [
   { key: 'recommendations', label: 'Recommendations' },
   { key: 'friends', label: 'Friend requests' },
   { key: 'replies', label: 'Replies to your posts' },
+]
+
+const APPEARANCES: { key: AppearancePref; label: string }[] = [
+  { key: 'system', label: 'System' },
+  { key: 'light', label: 'Light' },
+  { key: 'dark', label: 'Dark' },
 ]
 
 const SHELVES: { key: AlbumStatus; label: string }[] = [
@@ -104,6 +110,7 @@ function GoogleConnectButton({
 export type SheetMode = 'profile' | 'settings'
 
 export default function SettingsSheet({ visible, mode, onClose }: { visible: boolean; mode: SheetMode; onClose: () => void }) {
+  const tc = useColors()
   const editing = mode === 'profile'
   const title = editing ? 'Edit profile' : 'Settings'
   const { user, signOut, linkGoogleToken, linkAppleToken, updateProfile, uploadAvatarImage, removeAvatar, removePhoneNumber } = useAuth()
@@ -528,7 +535,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
           <View style={styles.sheetHead}>
             <Text style={styles.sheetTitle}>{title}</Text>
             <Pressable onPress={onClose} hitSlop={12} accessibilityLabel={`Close ${title.toLowerCase()}`}>
-              <X size={20} color={colors.inkTertiary} />
+              <X size={20} color={tc.inkTertiary} />
             </Pressable>
           </View>
 
@@ -558,7 +565,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                 <Text style={styles.providerLabel}>Profile picture</Text>
               </View>
               {avatarBusy ? (
-                <ActivityIndicator color={colors.green} />
+                <ActivityIndicator color={tc.green} />
               ) : (
                 <View style={styles.avatarActions}>
                   <Pressable onPress={pickAvatar} hitSlop={8}>
@@ -591,7 +598,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                 <Text style={styles.providerLabel}>Banner</Text>
               </View>
               {bannerBusy ? (
-                <ActivityIndicator color={colors.green} />
+                <ActivityIndicator color={tc.green} />
               ) : (
                 <View style={styles.avatarActions}>
                   <Pressable onPress={pickBanner} hitSlop={8}>
@@ -626,12 +633,12 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                     returnKeyType="done"
                     onSubmitEditing={saveName}
                     placeholder="Username"
-                    placeholderTextColor={colors.inkTertiary}
+                    placeholderTextColor={tc.inkTertiary}
                   />
                 )}
               </View>
               {savingName ? (
-                <ActivityIndicator color={colors.green} />
+                <ActivityIndicator color={tc.green} />
               ) : nameDraft === null ? (
                 <Pressable onPress={() => setNameDraft(cleanUsername(user?.name ?? ''))} hitSlop={8}>
                   <Text style={styles.linkAction}>Edit</Text>
@@ -670,7 +677,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                 )}
               </View>
               {savingLocation ? (
-                <ActivityIndicator color={colors.green} />
+                <ActivityIndicator color={tc.green} />
               ) : locationDraft === null ? (
                 <Pressable onPress={() => setLocationDraft(profile?.location ?? '')} hitSlop={8} disabled={!profile}>
                   <Text style={styles.linkAction}>{profile?.location ? 'Edit' : 'Add'}</Text>
@@ -711,7 +718,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                 )}
               </View>
               {savingBio ? (
-                <ActivityIndicator color={colors.green} />
+                <ActivityIndicator color={tc.green} />
               ) : bioDraft === null ? (
                 <Pressable onPress={() => setBioDraft(profile?.bio ?? user?.bio ?? '')} hitSlop={8}>
                   <Text style={styles.linkAction}>{profile?.bio || user?.bio ? 'Edit' : 'Add'}</Text>
@@ -732,7 +739,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             {/* Nothing is offered until the lock state is known: the rows would
                 otherwise flash as tappable and then 403 on save. */}
             {!profile ? (
-              <ActivityIndicator color={colors.green} style={{ marginVertical: spacing.lg }} />
+              <ActivityIndicator color={tc.green} style={{ marginVertical: spacing.lg }} />
             ) : !profile.picks_unlocked ? (
               <Text style={styles.sectionHint}>
                 Rate {Math.max(0, profile.picks_required - profile.picks_rated_count)} more{' '}
@@ -767,7 +774,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                     : 'Off'}
               </Text>
               {pushBusy ? (
-                <ActivityIndicator color={colors.green} />
+                <ActivityIndicator color={tc.green} />
               ) : pushState === 'undetermined' ? (
                 <Pressable onPress={turnOnPush} hitSlop={8}>
                   <Text style={styles.linkAction}>Turn on</Text>
@@ -798,6 +805,29 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
 
             <Text style={styles.sectionLabel}>PREFERENCES</Text>
             <ToggleRow label="Haptics" value={devicePrefs.haptics} onChange={(v) => setPref('haptics', v)} />
+            {/* System follows the phone, including its automatic sunset switch;
+                the other two hold regardless of it. */}
+            <View style={styles.settingRow}>
+              <Text style={[styles.providerLabel, { flex: 1 }]} numberOfLines={1}>Appearance</Text>
+              <View style={styles.shelves}>
+                {APPEARANCES.map((ap) => {
+                  const on = devicePrefs.appearance === ap.key
+                  return (
+                    <Pressable
+                      key={ap.key}
+                      onPress={() => setPref('appearance', ap.key)}
+                      style={[styles.shelf, on && styles.shelfOn]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                    >
+                      <Text style={[styles.shelfText, on && styles.shelfTextOn]} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+                        {ap.label}
+                      </Text>
+                    </Pressable>
+                  )
+                })}
+              </View>
+            </View>
             <View style={styles.settingRow}>
               <Text style={[styles.providerLabel, { flex: 1 }]} numberOfLines={1}>Library opens on</Text>
               <View style={styles.shelves}>
@@ -827,11 +857,11 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             </Text>
 
             {isLoading ? (
-              <ActivityIndicator color={colors.green} style={{ marginVertical: spacing.lg }} />
+              <ActivityIndicator color={tc.green} style={{ marginVertical: spacing.lg }} />
             ) : (
               <>
                 <ProviderRow
-                  icon={<Apple size={19} color={colors.ink} fill={colors.ink} />}
+                  icon={<Apple size={19} color={tc.ink} fill={tc.ink} />}
                   label="Apple"
                   linked={!!providers?.apple}
                   busy={busy === 'apple'}
@@ -887,7 +917,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             <View style={styles.settingRow}>
               <Text style={[styles.providerLabel, { flex: 1 }]} numberOfLines={1}>Phone number</Text>
               {phoneBusy ? (
-                <ActivityIndicator color={colors.green} />
+                <ActivityIndicator color={tc.green} />
               ) : user?.phoneLast4 ? (
                 <View style={styles.phoneOnFile}>
                   <Text style={styles.phoneDigits} maxFontSizeMultiplier={NUM_SCALE_CAP}>•••• {user.phoneLast4}</Text>
@@ -912,17 +942,17 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                 signOut()
               }}
             >
-              <LogOut size={17} color="#b91c1c" />
+              <LogOut size={17} color={tc.danger} />
               <Text style={styles.signOutText}>Sign out</Text>
             </Pressable>
             {/* Beside Sign out rather than at the foot of the sheet: App Review
                 rejected build 6 (Guideline 5.1.1(v)) without finding it there. */}
             <Pressable style={styles.deleteBtn} onPress={confirmDelete} disabled={deleting} accessibilityLabel="Delete account">
               {deleting ? (
-                <ActivityIndicator color="#b91c1c" />
+                <ActivityIndicator color={tc.danger} />
               ) : (
                 <>
-                  <Trash2 size={16} color="#b91c1c" />
+                  <Trash2 size={16} color={tc.danger} />
                   <Text style={styles.deleteText}>Delete account</Text>
                 </>
               )}
@@ -972,10 +1002,11 @@ function ToggleRow({ label, value, onChange }: { label: string; value: boolean; 
 
 /** A row that goes somewhere: a label and a chevron. */
 function LinkRow({ label, onPress }: { label: string; onPress: () => void }) {
+  const tc = useColors()
   return (
     <Pressable style={styles.settingRow} onPress={onPress} accessibilityRole="button">
       <Text style={[styles.providerLabel, { flex: 1 }]} numberOfLines={1}>{label}</Text>
-      <ChevronRight size={17} color={colors.inkMuted} />
+      <ChevronRight size={17} color={tc.inkMuted} />
     </Pressable>
   )
 }
@@ -991,6 +1022,7 @@ function PickSettingRow({
   value?: string | null
   onPress: () => void
 }) {
+  const tc = useColors()
   return (
     <Pressable style={styles.settingRow} onPress={onPress} accessibilityRole="button">
       <View style={{ flex: 1, minWidth: 0 }}>
@@ -999,7 +1031,7 @@ function PickSettingRow({
           {value || 'Not set'}
         </Text>
       </View>
-      <ChevronRight size={17} color={colors.inkMuted} />
+      <ChevronRight size={17} color={tc.inkMuted} />
     </Pressable>
   )
 }
@@ -1021,6 +1053,7 @@ function ProviderRow({
   onUnlink: () => void
   connect: React.ReactNode
 }) {
+  const tc = useColors()
   return (
     <View style={styles.providerRow}>
       <View style={styles.providerIcon}>{icon}</View>
@@ -1028,7 +1061,7 @@ function ProviderRow({
         <Text style={styles.providerLabel}>{label}</Text>
         {linked ? (
           <View style={styles.connectedRow}>
-            <Check size={13} color={colors.green} />
+            <Check size={13} color={tc.green} />
             <Text style={styles.connectedText}>Connected</Text>
           </View>
         ) : (
@@ -1036,7 +1069,7 @@ function ProviderRow({
         )}
       </View>
       {busy ? (
-        <ActivityIndicator color={colors.green} />
+        <ActivityIndicator color={tc.green} />
       ) : linked ? (
         canUnlink ? (
           <Pressable onPress={onUnlink} hitSlop={8}>
@@ -1197,7 +1230,7 @@ const styles = StyleSheet.create({
   onlyMethod: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted },
   phoneOnFile: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   phoneDigits: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary, fontVariant: ['tabular-nums'] },
-  phoneRemove: { fontFamily: fonts.bodySemiBold, fontSize: 13.5, color: '#b91c1c' },
+  phoneRemove: { fontFamily: fonts.bodySemiBold, fontSize: 13.5, color: colors.danger },
   unavailable: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted },
 
   emailRow: {
@@ -1212,7 +1245,7 @@ const styles = StyleSheet.create({
   error: {
     fontFamily: fonts.bodyMedium,
     fontSize: 13,
-    color: '#b91c1c',
+    color: colors.danger,
     marginTop: spacing.md,
   },
 
@@ -1225,10 +1258,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#f0d5d5',
-    backgroundColor: '#fdf5f5',
+    borderColor: colors.dangerBorder,
+    backgroundColor: colors.dangerSoft,
   },
-  signOutText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: '#b91c1c' },
+  signOutText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.danger },
 
   // Outlined rather than filled: destructive, but it should not compete with
   // Sign out for attention.
@@ -1241,9 +1274,9 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#e7cccc',
+    borderColor: colors.dangerBorder,
   },
-  deleteText: { fontFamily: fonts.bodySemiBold, fontSize: 14.5, color: '#b91c1c' },
+  deleteText: { fontFamily: fonts.bodySemiBold, fontSize: 14.5, color: colors.danger },
   idHint: {
     fontFamily: fonts.body,
     fontSize: 11.5,

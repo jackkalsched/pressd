@@ -24,7 +24,7 @@ import {
   fetchArtistStats,
   fetchScatterData,
 } from '../../lib/api'
-import { songScoreColor, type Album, type AlbumStatus } from '@pressd/shared/types'
+import { type Album, type AlbumStatus } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import { useProfile } from '../../lib/picks'
 import StatsView from '../../components/StatsView'
@@ -32,7 +32,7 @@ import ProfileBanner from '../../components/ProfileBanner'
 import { getPrefs } from '../../lib/prefs'
 import SettingsSheet, { type SheetMode } from '../../components/SettingsSheet'
 import AnchoredMenu from '../../components/AnchoredMenu'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 
 const GAP = 10
@@ -131,6 +131,7 @@ function topTags(tags: (string | null)[], n: number): string[] {
 const OTHER_TABS = new Set(['/', '/charts', '/social'])
 
 export default function Profile() {
+  const tc = useColors()
   const { user } = useAuth()
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -319,7 +320,7 @@ export default function Profile() {
         scrollEventThrottle={16}
         refreshControl={
           // Green, not the default gray, to match the banner under it.
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.green} />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={tc.green} />
         }
         ListHeaderComponent={
           <View>
@@ -346,10 +347,10 @@ export default function Profile() {
                 // Backed in the page's cream so they read on any picture.
                 <View style={styles.bannerBtns}>
                   <Pressable onPress={() => openSheet('profile')} hitSlop={8} style={styles.settingsBtn} accessibilityLabel="Edit profile">
-                    <Pencil size={16} color={colors.ink} />
+                    <Pencil size={16} color={tc.ink} />
                   </Pressable>
                   <Pressable onPress={() => openSheet('settings')} hitSlop={8} style={styles.settingsBtn} accessibilityLabel="Settings">
-                    <Settings size={17} color={colors.ink} />
+                    <Settings size={17} color={tc.ink} />
                   </Pressable>
                 </View>
               }
@@ -395,13 +396,13 @@ export default function Profile() {
                   ))}
                 </View>
                 <View style={styles.searchBar}>
-                  <Search size={15} color={colors.inkTertiary} />
+                  <Search size={15} color={tc.inkTertiary} />
                   <TextInput
                     style={styles.searchBarInput}
                     value={libSearch}
                     onChangeText={setLibSearch}
                     placeholder="Search album or artist"
-                    placeholderTextColor={colors.inkTertiary}
+                    placeholderTextColor={tc.inkTertiary}
                     autoCorrect={false}
                     autoCapitalize="none"
                     returnKeyType="search"
@@ -413,7 +414,7 @@ export default function Profile() {
                       hitSlop={8}
                       accessibilityLabel="Clear search"
                     >
-                      <X size={14} color={colors.inkMuted} />
+                      <X size={14} color={tc.inkMuted} />
                     </Pressable>
                   )}
                 </View>
@@ -441,22 +442,22 @@ export default function Profile() {
                     <Text style={styles.metricBtnText}>
                       {currentMetric.label} {rankDir === 'desc' ? '↓' : '↑'}
                     </Text>
-                    <ChevronDown size={13} color={colors.inkSecondary} />
+                    <ChevronDown size={13} color={tc.inkSecondary} />
                   </Pressable>
                 </View>
                 <View style={styles.searchBar}>
-                  <Search size={15} color={colors.inkTertiary} />
+                  <Search size={15} color={tc.inkTertiary} />
                   <TextInput
                     style={styles.searchBarInput}
                     value={rankSearch}
                     onChangeText={setRankSearch}
                     placeholder="Search your library"
-                    placeholderTextColor={colors.inkTertiary}
+                    placeholderTextColor={tc.inkTertiary}
                     autoCorrect={false}
                   />
                   {rankSearch.length > 0 && (
                     <Pressable onPress={() => setRankSearch('')} hitSlop={8}>
-                      <X size={14} color={colors.inkMuted} />
+                      <X size={14} color={tc.inkMuted} />
                     </Pressable>
                   )}
                 </View>
@@ -508,7 +509,7 @@ export default function Profile() {
         }
         ListEmptyComponent={
           tab === 'stats' ? null : isGrid && gridLoading ? (
-            <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
+            <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
           ) : isGrid ? (
             <Text style={styles.emptyText}>
               {/* A filtered-to-nothing shelf and an empty one look identical
@@ -637,7 +638,7 @@ function RatingRow({ album, rank, onPress }: { album: Album; rank: number; onPre
         </Text>
       </View>
       {album.score != null && (
-        <Text style={[styles.ratingScore, { color: songScoreColor(album.score) }]}>
+        <Text style={[styles.ratingScore, { color: scoreColor(album.score) }]}>
           {album.score.toFixed(2)}
         </Text>
       )}
@@ -671,7 +672,7 @@ function ArtistRankRow({
       case 'skip':
         return { text: pct(stat.skipPct) }
       default:
-        return { text: stat.avgSongScore.toFixed(2), color: songScoreColor(stat.avgSongScore) }
+        return { text: stat.avgSongScore.toFixed(2), color: scoreColor(stat.avgSongScore) }
     }
   })()
   return (
@@ -743,7 +744,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 6,
     right: 6,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.raised,
     borderRadius: radii.pill,
     borderWidth: 1.5,
     paddingHorizontal: 9,

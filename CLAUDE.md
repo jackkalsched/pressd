@@ -317,7 +317,11 @@ GET /discover/charts              discover.py:169
   → SELECT every rated album (no filter)
   → facets + filter + group in Python, TWICE (today + yesterday, for movement)
   → ranked by compute_global_ratings()   global_rating.py:59, 60s memo
+  → charts only with MIN_CHART_RATERS raters in the period: 3 this week, 5 all time
 ```
+The rater bar (November 2026) applies to yesterday's board too, so a record that
+crosses it today reads as new rather than as a climb. With ~30 raters it leaves about
+ten records on each board. The public charts (`public.py`) don't apply it.
 
 ### Journey: taste overlap
 
@@ -349,6 +353,23 @@ GET /users/{id}/overlap    vs that one person             → that pair only; ta
   read, commit, compute, write: the connection is back in the process's pool while computing;
   a recompute that fails rolls back and the stored numbers are served
 ```
+
+### Journey: a review in the feed and in its thread
+
+```
+GET /social/feed                 social.py    a review item carries post_id: its post in the record's thread
+  like_count / liked_by_me / comment_count  →  that post's up-votes, your up-vote, its reply_count
+POST /social/like?album_id=      toggle_like  a reviewed copy → an up-vote on the post (postlike, recounted);
+                                              a bare rating → the old per-copy `like` row
+```
+One conversation, wherever it's read (November 2026): liking a review in the feed is the
+thread's up-arrow, and its replies are the thread's — the feed's "N replies" opens the
+thread. The feed's like skips `thread_access`: you were shown a friend's review, you didn't
+walk into the room. Likes given in the feed before were moved onto their posts by a boot
+migration that also deletes the moved `like` rows (`database.py`), so an up-vote taken back
+can't return. Comments on a copy still mirror into the thread only when the commenter may
+read it (`threads.sync_comment_post`). On mobile the thread previews a post's first reply
+under it, two lines and "View all N replies"; web's thread doesn't yet.
 
 ### Journey: the Compare tab
 
@@ -1577,6 +1598,28 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   all of them stop under `prefers-reduced-motion`. A horizontal scroller clips
   vertically, so a rail of `COVER_LIFT` covers needs room inside it
   (`HeatedDiscussions` pads `py-5` and gives it back with `-my-5`).
+- **Mobile has a dark mode (November 2026); web doesn't yet.** `theme/tokens.ts` holds
+  two palettes — the cream page and a very dark warm gray (`#171615`) that keeps the
+  cream as its ink. It follows the phone, including iOS's automatic sunset switch,
+  unless Settings → Preferences → Appearance holds Light or Dark (`lib/prefs.ts`
+  calls `Appearance.setColorScheme`; `app.json` `userInterfaceStyle` is `automatic`).
+  Three rules keep it whole:
+  - **In a stylesheet or a `style` prop, use `colors.X`** — `DynamicColorIOS` values
+    iOS resolves itself, so a view changes the instant the appearance does — and
+    `scoreColor(n)` for a score, `pageAlpha(a)` for a veil of the page colour.
+  - **Anything that draws once — every icon's `color`, SVG `fill`/`stroke`,
+    `LinearGradient` colours — takes plain strings from `useColors()` (`tc.X`),
+    `useScoreColor()` (`sc(n)`) or `usePageRgb()`**, which re-render on the change.
+    react-native-svg resolves a dynamic colour when it's set and never again, so an
+    icon handed `colors.X` keeps the old palette until it remounts; the compiler
+    won't catch it, because icons accept any colour value.
+  - **Never write a page colour as a literal** (`'#ffffff'` for a card, a cream
+    `rgba(249,248,246,…)`, a pale tint). White text on green or on a photo, shadows,
+    and brand/score hues are fine as literals. The green is one value per palette for
+    text and fills alike (`#2d6a4f` / `#4f9a77`).
+  The share card stays light in both — it's a picture people post — so its card body
+  keeps literal colours and the light score scale (`songScoreColor(n)`, whose second
+  argument gives the dark one).
 - **Every push names its kind, and the recipient can switch each kind off.**
   `push.tokens_for_user(session, user_id, kind)` returns no tokens when the
   recipient's `PressUser.notify_<kind>` column is off (`NOTIFY_KINDS`: recommendation,
@@ -1594,7 +1637,8 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   Xcode as a Swift package either: React Native Firebase brings it through CocoaPods
   (`$RNFirebaseDisableSPM`), and two copies fail with `redefinition of module 'Firebase'`.
 - **Mobile device preferences live in `mobile/lib/prefs.ts`** (Keychain, loaded before
-  the app is ready): haptics on/off and which shelf Library opens on. Every buzz goes
+  the app is ready): haptics on/off, which shelf Library opens on, and appearance
+  (System / Light / Dark, Settings → Preferences). Every buzz goes
   through `mobile/lib/haptics.ts` (`selection` / `light` / `success`), which honours
   the switch; don't import `expo-haptics` in a component.
 - **Changing a rule that is duplicated across platforms means changing every copy.**

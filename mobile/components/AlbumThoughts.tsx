@@ -11,7 +11,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, Lock, MessageCircle, MessageCirclePlus } from 'lucide-react-native'
 import { resolveThread } from '../lib/api'
 import { threadKey } from '../lib/refresh'
-import { colors, fonts, spacing } from '../theme/tokens'
+import { colors, fonts, spacing, useColors } from '../theme/tokens'
 
 export default function AlbumThoughts({
   album,
@@ -24,6 +24,7 @@ export default function AlbumThoughts({
   hasReview: boolean
   onWriteReview: () => void
 }) {
+  const tc = useColors()
   const router = useRouter()
   const { data: meta } = useQuery({
     queryKey: threadKey('album', artist, album),
@@ -58,20 +59,20 @@ export default function AlbumThoughts({
       style={({ pressed }) => [styles.row, pressed && !locked && { opacity: 0.6 }]}
     >
       {locked ? (
-        <Lock size={16} color={colors.inkMuted} />
+        <Lock size={16} color={tc.inkMuted} />
       ) : hasReview ? (
-        <MessageCircle size={17} color={colors.green} />
+        <MessageCircle size={17} color={tc.green} />
       ) : (
         // Not a pencil: the rating button directly above already uses one, and
         // two identical icons stacked read as the same action twice. This row
         // is always about the conversation, so it keeps to that family.
-        <MessageCirclePlus size={17} color={colors.green} />
+        <MessageCirclePlus size={17} color={tc.green} />
       )}
       <Text style={[styles.label, locked && styles.labelLocked]} numberOfLines={1}>
         {label}
       </Text>
       <View style={{ flex: 1 }} />
-      {!locked && <ChevronRight size={18} color={colors.green} />}
+      {!locked && <ChevronRight size={18} color={tc.green} />}
     </Pressable>
   )
 }

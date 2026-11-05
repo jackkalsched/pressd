@@ -17,14 +17,14 @@
 // The verdicts are the server's flags (discover.py: LOVED_MEAN, HATED_MEAN,
 // CONTROVERSIAL_SPREAD), so the two platforms can't disagree on what counts.
 import { useEffect, useState } from 'react'
-import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { DynamicColorIOS, AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { Angry, Laugh, Meh, Smile, Swords, type LucideIcon } from 'lucide-react-native'
 import { fetchHeated } from '../lib/api'
-import { songScoreColor, type HeatedMood, type HeatedRecord } from '@pressd/shared/types'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import { type HeatedMood, type HeatedRecord } from '@pressd/shared/types'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useScoreColor, scoreColor } from '../theme/tokens'
 import CoverImage from './CoverImage'
 
 const CARD_W = 184
@@ -177,6 +177,7 @@ function Card({ record: r, index, animate, onPress }: { record: HeatedRecord; in
  *  at the mean and the mean itself beside it. The band grows out from the
  *  mean when the rail first appears, staggered card by card. */
 function RoomMeter({ mean, spread, index, animate }: { mean: number; spread: number; index: number; animate: boolean }) {
+  const sc = useScoreColor()
   const pos = (s: number) => ((Math.min(10, Math.max(1, s)) - 1) / 9) * 100
   const lo = Math.max(1, mean - spread)
   const hi = Math.min(10, mean + spread)
@@ -209,7 +210,7 @@ function RoomMeter({ mean, spread, index, animate }: { mean: number; spread: num
             {
               left: `${left}%`,
               width: `${width}%`,
-              shadowColor: songScoreColor(mean),
+              shadowColor: scoreColor(mean),
               // Array form: React Native misreads the string form's second value as z.
               transformOrigin: [`${Math.round(((pos(mean) - left) / width) * 100)}%`, '50%', 0],
               transform: [{ scaleX: grow }],
@@ -217,7 +218,7 @@ function RoomMeter({ mean, spread, index, animate }: { mean: number; spread: num
           ]}
         >
           <LinearGradient
-            colors={[songScoreColor(lo), songScoreColor(hi)]}
+            colors={[sc(lo), sc(hi)]}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}
             style={styles.meterFill}
@@ -226,11 +227,11 @@ function RoomMeter({ mean, spread, index, animate }: { mean: number; spread: num
         <View
           style={[
             styles.meterDot,
-            { left: `${pos(mean)}%`, borderColor: songScoreColor(mean), shadowColor: songScoreColor(mean) },
+            { left: `${pos(mean)}%`, borderColor: scoreColor(mean), shadowColor: scoreColor(mean) },
           ]}
         />
       </View>
-      <Text style={[styles.meterMean, { color: songScoreColor(mean) }]} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+      <Text style={[styles.meterMean, { color: scoreColor(mean) }]} maxFontSizeMultiplier={NUM_SCALE_CAP}>
         {mean.toFixed(2)}
       </Text>
     </View>
@@ -302,14 +303,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  newText: { fontFamily: fonts.bodyBold, fontSize: 9.5, letterSpacing: 0.8, color: '#fff' },
+  // The badge is ink, so cream on the dark page: its word inverts with it.
+  newText: { fontFamily: fonts.bodyBold, fontSize: 9.5, letterSpacing: 0.8, color: DynamicColorIOS({ light: '#ffffff', dark: '#171615' }) },
 
   album: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink, marginTop: 14 },
   artist: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
 
   meterRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
   meter: { flex: 1, height: 10, justifyContent: 'center' },
-  meterTrack: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 5, backgroundColor: '#ece6dc' },
+  meterTrack: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 5, backgroundColor: colors.inset },
   meterBand: {
     position: 'absolute',
     top: 0,

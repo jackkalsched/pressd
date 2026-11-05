@@ -24,9 +24,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react-native'
 import { fetchTagRecords, type TagRecord } from '../../lib/api'
-import { songScoreColor, avatarColor } from '@pressd/shared/types'
+import { avatarColor } from '@pressd/shared/types'
 import { revealStyle } from '../../lib/scrollReveal'
-import { colors, contentWidth, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+import { colors, contentWidth, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 
 // Podium proportions and numeral caps copied from Charts deliberately: the two
@@ -47,6 +47,7 @@ function possessive(name: string): string {
 }
 
 export default function TagRecordsBoard() {
+  const tc = useColors()
   const { tag, kind, userId, owner } = useLocalSearchParams<{
     tag: string
     kind?: string
@@ -118,7 +119,7 @@ export default function TagRecordsBoard() {
         pointerEvents={barLive ? 'auto' : 'none'}
       >
         <Pressable onPress={goBack} hitSlop={12} accessibilityLabel="Back">
-          <ArrowLeft size={18} color={colors.ink} />
+          <ArrowLeft size={18} color={tc.ink} />
         </Pressable>
         <Text style={styles.compactTitle} numberOfLines={1}>{label}</Text>
       </Animated.View>
@@ -134,7 +135,7 @@ export default function TagRecordsBoard() {
           <View>
             <Animated.View style={{ opacity: mastheadOpacity, transform: [{ translateY: mastheadShift }] }}>
               <Pressable onPress={goBack} hitSlop={12} style={styles.backBtn} accessibilityLabel="Back">
-                <ArrowLeft size={18} color={colors.inkSecondary} />
+                <ArrowLeft size={18} color={tc.inkSecondary} />
                 <Text style={styles.backText}>Back</Text>
               </Pressable>
               <Text style={styles.kicker}>{kicker}</Text>
@@ -151,7 +152,7 @@ export default function TagRecordsBoard() {
             </Animated.View>
 
             {isLoading && items.length === 0 ? (
-              <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
+              <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
             ) : items.length === 0 ? (
               <Text style={styles.empty}>
                 {ownerName ? `${ownerName} hasn't` : "You haven't"} rated anything in {label} yet.
@@ -200,7 +201,7 @@ function PodiumTile({ item, size, onOpen }: { item: TagRecord; size: number; onO
           {item.rank}
         </Text>
         <Text
-          style={[styles.podScore, { color: songScoreColor(item.score) }]}
+          style={[styles.podScore, { color: scoreColor(item.score) }]}
           numberOfLines={1}
           adjustsFontSizeToFit
           maxFontSizeMultiplier={NUM_SCALE_CAP}
@@ -258,7 +259,7 @@ function BoardRow({ item, onOpen }: { item: TagRecord; onOpen: (id: number) => v
         </Text>
       </View>
       <Text
-        style={[styles.rowScore, { color: songScoreColor(item.score) }]}
+        style={[styles.rowScore, { color: scoreColor(item.score) }]}
         numberOfLines={1}
         maxFontSizeMultiplier={NUM_SCALE_CAP}
       >

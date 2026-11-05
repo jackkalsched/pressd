@@ -11,9 +11,8 @@
 // to the old highest-score behaviour.
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Star } from 'lucide-react-native'
-import { songScoreColor } from '@pressd/shared/types'
 import type { Song } from '@pressd/shared/types'
-import { colors, fonts, radii, screenHeight, spacing } from '../theme/tokens'
+import { colors, fonts, radii, screenHeight, spacing, useColors, scoreColor } from '../theme/tokens'
 
 /** "both these songs" reads wrong the moment a third track ties. */
 function countPhrase(n: number): string {
@@ -36,18 +35,19 @@ export default function TopSongTiebreak({
   onPick: (songId: number) => void
   onSkip: () => void
 }) {
+  const tc = useColors()
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onSkip}>
       <View style={styles.backdrop}>
         <View style={styles.card}>
           <View style={styles.badge}>
-            <Star size={16} color={colors.green} fill={colors.green} strokeWidth={0} />
+            <Star size={16} color={tc.green} fill={tc.green} strokeWidth={0} />
           </View>
 
           <Text style={styles.title}>It&rsquo;s a tie</Text>
           <Text style={styles.body}>
             You rated {countPhrase(songs.length)} a{' '}
-            <Text style={[styles.bodyScore, { color: songScoreColor(score) }]}>{score.toFixed(1)}</Text>.
+            <Text style={[styles.bodyScore, { color: scoreColor(score) }]}>{score.toFixed(1)}</Text>.
             Which one was your favorite?
           </Text>
 

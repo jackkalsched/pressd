@@ -9,9 +9,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import * as haptics from '../lib/haptics'
 import { ThumbsDown, ThumbsUp } from 'lucide-react-native'
 import { votePost } from '../lib/api'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, useColors } from '../theme/tokens'
 
-const UP = '#2d6a4f'
 const DOWN = '#c0392b'
 
 export default function VoteButtons({
@@ -28,6 +27,9 @@ export default function VoteButtons({
   /** Replies sit indented under their parent and get the smaller treatment. */
   compact?: boolean
 }) {
+  const tc = useColors()
+  // Green for a vote up; a plain colour, since the thumbs are SVG.
+  const UP = tc.green
   const [vote, setVote] = useState(myVote)
   const [up, setUp] = useState(likes)
   const [down, setDown] = useState(dislikes)
@@ -69,7 +71,7 @@ export default function VoteButtons({
         style={({ pressed }) => [styles.btn, compact && styles.btnCompact,
           vote === 1 && styles.onUp, pressed && { opacity: 0.6 }]}
       >
-        <ThumbsUp size={size} color={vote === 1 ? UP : colors.inkTertiary}
+        <ThumbsUp size={size} color={vote === 1 ? UP : tc.inkTertiary}
           fill={vote === 1 ? UP : 'transparent'} />
         <Text style={[styles.count, compact && styles.countCompact, vote === 1 && { color: UP }]}>{up}</Text>
       </Pressable>
@@ -83,7 +85,7 @@ export default function VoteButtons({
         style={({ pressed }) => [styles.btn, compact && styles.btnCompact,
           vote === -1 && styles.onDown, pressed && { opacity: 0.6 }]}
       >
-        <ThumbsDown size={size} color={vote === -1 ? DOWN : colors.inkTertiary}
+        <ThumbsDown size={size} color={vote === -1 ? DOWN : tc.inkTertiary}
           fill={vote === -1 ? DOWN : 'transparent'} />
         <Text style={[styles.count, compact && styles.countCompact, vote === -1 && { color: DOWN }]}>{down}</Text>
       </Pressable>

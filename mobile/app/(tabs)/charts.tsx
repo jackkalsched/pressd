@@ -20,10 +20,10 @@ import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { ChevronDown, Triangle, X } from 'lucide-react-native'
 import { fetchCharts, type ChartItem } from '../../lib/api'
-import { songScoreColor, avatarColor } from '@pressd/shared/types'
+import { avatarColor } from '@pressd/shared/types'
 import AnchoredMenu, { type MenuOption } from '../../components/AnchoredMenu'
 import { revealStyle } from '../../lib/scrollReveal'
-import { colors, contentWidth, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+import { colors, contentWidth, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 
 const DOWN = '#c0392b'
@@ -82,6 +82,7 @@ function weekLabel(): string {
 }
 
 export default function Charts() {
+  const tc = useColors()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [period, setPeriod] = useState<'week' | 'all'>('week')
@@ -222,14 +223,14 @@ export default function Charts() {
                   value={yearText}
                   onChangeText={(t) => setYearText(t.replace(/[^0-9]/g, '').slice(0, 4))}
                   placeholder="Year"
-                  placeholderTextColor={colors.inkTertiary}
+                  placeholderTextColor={tc.inkTertiary}
                   keyboardType="number-pad"
                   maxLength={4}
                   returnKeyType="done"
                 />
                 {yearText ? (
                   <Pressable onPress={() => setYearText('')} hitSlop={6}>
-                    <X size={13} color={year != null ? colors.green : colors.inkTertiary} />
+                    <X size={13} color={year != null ? tc.green : tc.inkTertiary} />
                   </Pressable>
                 ) : null}
               </View>
@@ -241,21 +242,21 @@ export default function Charts() {
                   value={artistText}
                   onChangeText={setArtistText}
                   placeholder="Artist"
-                  placeholderTextColor={colors.inkTertiary}
+                  placeholderTextColor={tc.inkTertiary}
                   autoCapitalize="words"
                   autoCorrect={false}
                   returnKeyType="done"
                 />
                 {artistText ? (
                   <Pressable onPress={() => setArtistText('')} hitSlop={6}>
-                    <X size={13} color={artist ? colors.green : colors.inkTertiary} />
+                    <X size={13} color={artist ? tc.green : tc.inkTertiary} />
                   </Pressable>
                 ) : null}
               </View>
             </ScrollView>
 
             {isLoading && items.length === 0 ? (
-              <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
+              <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
             ) : items.length === 0 ? (
               <Text style={styles.empty}>No rated albums match these filters yet.</Text>
             ) : (
@@ -291,6 +292,7 @@ function FilterDropdown({
   options: MenuOption[]
   onSelect: (v: string | number) => void
 }) {
+  const tc = useColors()
   const [open, setOpen] = useState(false)
   const ref = useRef<View>(null)
   return (
@@ -303,7 +305,7 @@ function FilterDropdown({
         accessibilityLabel={`${title}: ${display}`}
       >
         <Text style={[styles.filterText, active && styles.filterTextOn]}>{display}</Text>
-        <ChevronDown size={13} color={active ? colors.green : colors.inkTertiary} />
+        <ChevronDown size={13} color={active ? tc.green : tc.inkTertiary} />
       </Pressable>
       <AnchoredMenu
         visible={open}
@@ -348,7 +350,7 @@ function PodiumTile({ item, size, onOpen }: { item: ChartItem; size: number; onO
         </Text>
         {item.avg_score != null && (
           <Text
-            style={[styles.podScore, { color: songScoreColor(item.avg_score) }]}
+            style={[styles.podScore, { color: scoreColor(item.avg_score) }]}
             numberOfLines={1}
             adjustsFontSizeToFit
             maxFontSizeMultiplier={NUM_SCALE_CAP}
@@ -364,11 +366,12 @@ function PodiumTile({ item, size, onOpen }: { item: ChartItem; size: number; onO
 }
 
 function Movement({ value }: { value: number | null }) {
+  const tc = useColors()
   if (value == null || value === 0) {
     return <Text style={styles.moveFlat} maxFontSizeMultiplier={NUM_SCALE_CAP}>–</Text>
   }
   const up = value > 0
-  const color = up ? colors.green : DOWN
+  const color = up ? tc.green : DOWN
   return (
     <View style={styles.moveWrap}>
       {up ? (
@@ -438,7 +441,7 @@ function ChartRow({ item, onOpen }: { item: ChartItem; onOpen: (id: number) => v
       </View>
       {item.avg_score != null && (
         <Text
-          style={[styles.rowScore, { color: songScoreColor(item.avg_score) }]}
+          style={[styles.rowScore, { color: scoreColor(item.avg_score) }]}
           numberOfLines={1}
           maxFontSizeMultiplier={NUM_SCALE_CAP}
         >

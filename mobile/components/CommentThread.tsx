@@ -7,7 +7,7 @@ import { Image } from 'expo-image'
 import { Send, Trash2 } from 'lucide-react-native'
 import { fetchComments, postComment, deleteComment } from '../lib/api'
 import { useOpenProfile } from '../lib/useOpenProfile'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors } from '../theme/tokens'
 
 function timeAgo(iso: string | null): string {
   if (!iso) return ''
@@ -29,6 +29,7 @@ export default function CommentThread({
    *  and stay deletable, since moderating your own page is the owner's job. */
   canComment?: boolean
 }) {
+  const tc = useColors()
   const openProfile = useOpenProfile()
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
@@ -72,7 +73,7 @@ export default function CommentThread({
           value={draft}
           onChangeText={setDraft}
           placeholder="Add a comment…"
-          placeholderTextColor={colors.inkMuted}
+          placeholderTextColor={tc.inkMuted}
           multiline
         />
         <Pressable
@@ -86,7 +87,7 @@ export default function CommentThread({
       )}
 
       {isLoading ? (
-        <ActivityIndicator color={colors.green} style={{ marginTop: spacing.md }} />
+        <ActivityIndicator color={tc.green} style={{ marginTop: spacing.md }} />
       ) : comments.length === 0 ? (
         <Text style={styles.empty}>
           {canComment ? 'No comments yet. Start the conversation.' : 'No comments yet.'}
@@ -109,7 +110,7 @@ export default function CommentThread({
                 <Text style={styles.time}>{timeAgo(c.created_at)}</Text>
                 {c.can_delete && (
                   <Pressable onPress={() => remove(c.id)} hitSlop={8}>
-                    <Trash2 size={13} color={colors.inkMuted} />
+                    <Trash2 size={13} color={tc.inkMuted} />
                   </Pressable>
                 )}
               </View>

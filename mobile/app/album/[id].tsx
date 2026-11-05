@@ -38,7 +38,7 @@ import {
   type CommunityAlbum as CommunityAlbumData,
   type CommunityTrack,
 } from '../../lib/api'
-import { songScoreColor, avatarColor, EP_MAX_TRACKS, type Album, type Song } from '@pressd/shared/types'
+import { avatarColor, EP_MAX_TRACKS, type Album, type Song } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
 import { useProfile } from '../../lib/picks'
 import { useOpenProfile } from '../../lib/useOpenProfile'
@@ -50,7 +50,7 @@ import RecommendSheet from '../../components/RecommendSheet'
 import AlbumThoughts from '../../components/AlbumThoughts'
 import NoComparisonYet from '../../components/NoComparisonYet'
 import { confirmDeleteAlbum, useDeleteAlbum } from '../../lib/useDeleteAlbum'
-import { colors, contentWidth, fitType, fonts, radii, spacing } from '../../theme/tokens'
+import { colors, contentWidth, fitType, fonts, radii, spacing, useColors, scoreColor } from '../../theme/tokens'
 
 const WINDOW_H = Dimensions.get('window').height
 
@@ -140,6 +140,7 @@ function CompareVerdict({
  *  without needing a second colour or a dial. React Native text has no stroke
  *  property, so this goes through SVG. */
 function OutlineScore({ value, size = SCORE_SIZE }: { value: number; size?: number }) {
+  const tc = useColors()
   const w = size * 2.6
   // Matches the filled numeral's line box exactly, so both columns' labels sit
   // on the same line beneath them.
@@ -153,7 +154,7 @@ function OutlineScore({ value, size = SCORE_SIZE }: { value: number; size?: numb
         fontFamily={fonts.display}
         fontSize={size}
         fill="none"
-        stroke={colors.green}
+        stroke={tc.green}
         strokeWidth={1.6}
       >
         {value.toFixed(2)}
@@ -163,6 +164,7 @@ function OutlineScore({ value, size = SCORE_SIZE }: { value: number; size?: numb
 }
 
 export default function AlbumDetail() {
+  const tc = useColors()
   const { id, community, name, artist, deezer, compare } = useLocalSearchParams<{
     id: string
     community?: string
@@ -297,7 +299,7 @@ export default function AlbumDetail() {
     if (communityLoading) {
       return (
         <SafeAreaView style={[styles.screen, styles.center]}>
-          <ActivityIndicator color={colors.green} />
+          <ActivityIndicator color={tc.green} />
         </SafeAreaView>
       )
     }
@@ -349,7 +351,7 @@ export default function AlbumDetail() {
   if (isLoading) {
     return (
       <SafeAreaView style={[styles.screen, styles.center]}>
-        <ActivityIndicator color={colors.green} />
+        <ActivityIndicator color={tc.green} />
       </SafeAreaView>
     )
   }
@@ -377,7 +379,7 @@ export default function AlbumDetail() {
   // the owner can be anyone.
   const owner = !isMine ? album.owner : null
   const isFriendsCopy = !isMine && friends.some((f) => f.id === album.userId)
-  const ownerColor = owner ? avatarColor(owner.name) : colors.green
+  const ownerColor = owner ? avatarColor(owner.name) : tc.green
 
   // The whole recommended presentation hangs off this one condition: it's your
   // copy and somebody sent it. On a friend's copy the sender is their business,
@@ -472,7 +474,7 @@ export default function AlbumDetail() {
       <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.topBar}>
         <Pressable onPress={leave} hitSlop={10} style={styles.backBtn}>
-          <ArrowLeft size={18} color={colors.inkSecondary} />
+          <ArrowLeft size={18} color={tc.inkSecondary} />
           <Text style={styles.backText}>Back</Text>
         </Pressable>
         {/* Whose rating this is — only on someone else's copy. */}
@@ -508,7 +510,7 @@ export default function AlbumDetail() {
             hitSlop={10}
             accessibilityLabel={`Share ${album.albumName}`}
           >
-            <Share2 size={17} color={colors.green} />
+            <Share2 size={17} color={tc.green} />
           </Pressable>
         )}
         {/* Only a record you've finished, and only your own copy: passing on an
@@ -842,6 +844,7 @@ function CommunityAlbum({
    *  just stopped existing. */
   onDeleted?: () => void
 }) {
+  const tc = useColors()
   const queryClient = useQueryClient()
   const [comparing, setComparing] = useState(initialComparing)
   const [rating, setRating] = useState(false)
@@ -868,7 +871,7 @@ function CommunityAlbum({
   const header = (
     <View style={styles.topBar}>
       <Pressable onPress={onBack} hitSlop={10} style={styles.backBtn}>
-        <ArrowLeft size={18} color={colors.inkSecondary} />
+        <ArrowLeft size={18} color={tc.inkSecondary} />
         <Text style={styles.backText}>Back</Text>
       </Pressable>
       <View style={styles.topBarRight}>
@@ -951,11 +954,11 @@ function CommunityAlbum({
     }
 
     const left = youLeft
-      ? { label: 'YOU', score: yourScore, color: colors.inkSecondary, head: colors.inkMuted }
-      : { label: "PRESSD USERS", score: avgScore, color: colors.green, head: colors.green }
+      ? { label: 'YOU', score: yourScore, color: tc.inkSecondary, head: tc.inkMuted }
+      : { label: "PRESSD USERS", score: avgScore, color: tc.green, head: tc.green }
     const right = youLeft
-      ? { label: "PRESSD USERS", score: avgScore, color: colors.green, head: colors.green }
-      : { label: 'YOU', score: yourScore, color: colors.inkSecondary, head: colors.inkMuted }
+      ? { label: "PRESSD USERS", score: avgScore, color: tc.green, head: tc.green }
+      : { label: 'YOU', score: yourScore, color: tc.inkSecondary, head: tc.inkMuted }
 
     return (
       <View style={styles.root}>
@@ -1108,7 +1111,7 @@ function CommunityAlbum({
                 <View style={styles.scoreCol}>
                   <OutlineScore value={data.predicted_score} />
                   <View style={styles.forYouRow}>
-                    <Star size={11} color={colors.green} fill={colors.green} strokeWidth={0} />
+                    <Star size={11} color={tc.green} fill={tc.green} strokeWidth={0} />
                     <Text style={styles.scoreLabel}>FOR YOU</Text>
                   </View>
                   <Text style={styles.raterLine}>predicted</Text>
@@ -1222,7 +1225,7 @@ function CommunityAlbum({
               <Text style={styles.trackTitle} numberOfLines={1}>{t.title}</Text>
               <BangSkip score={t.avg_score} />
               {t.avg_score != null ? (
-                <Text style={[styles.trackScore, { color: songScoreColor(t.avg_score) }]}>
+                <Text style={[styles.trackScore, { color: scoreColor(t.avg_score) }]}>
                   {t.avg_score.toFixed(1)}
                 </Text>
               ) : (
@@ -1277,7 +1280,7 @@ function TrackRow({
           <Text style={styles.trackTitle} numberOfLines={1}>{song.title}</Text>
           <BangSkip score={song.score} />
           {song.score != null ? (
-            <Text style={[styles.trackScore, { color: songScoreColor(song.score) }]}>
+            <Text style={[styles.trackScore, { color: scoreColor(song.score) }]}>
               {song.score.toFixed(1)}
             </Text>
           ) : (
@@ -1328,6 +1331,7 @@ function FriendCompare({
   onOpenArtist: (name: string) => void
   showComments: boolean
 }) {
+  const tc = useColors()
   const { user } = useAuth()
   const openProfile = useOpenProfile()
   const [liked, setLiked] = useState(false)
@@ -1367,11 +1371,11 @@ function FriendCompare({
   // follow the same order so nothing swaps places mid-page.
   const youLeft = myScore <= theirScore
   const left = youLeft
-    ? { label: 'YOU', score: myScore, color: colors.inkSecondary, head: colors.inkMuted }
+    ? { label: 'YOU', score: myScore, color: tc.inkSecondary, head: tc.inkMuted }
     : { label: shortName(owner.name, 10).toUpperCase(), score: theirScore, color, head: color }
   const right = youLeft
     ? { label: owner.name.toUpperCase(), score: theirScore, color, head: color }
-    : { label: 'YOU', score: myScore, color: colors.inkSecondary, head: colors.inkMuted }
+    : { label: 'YOU', score: myScore, color: tc.inkSecondary, head: tc.inkMuted }
 
 
   async function like() {
@@ -1390,7 +1394,7 @@ function FriendCompare({
       <SafeAreaView style={styles.screen} edges={['top']}>
         <View style={styles.topBar}>
           <Pressable onPress={onBack} hitSlop={10} style={styles.backBtn}>
-            <ArrowLeft size={18} color={colors.inkSecondary} />
+            <ArrowLeft size={18} color={tc.inkSecondary} />
             <Text style={styles.backText}>Back</Text>
           </Pressable>
           <Pressable
@@ -1480,7 +1484,7 @@ function FriendCompare({
               </Text>
               <Text style={styles.cmpQuote}>“{theirs.review}”</Text>
               <Pressable style={styles.cmpLike} onPress={like} hitSlop={8}>
-                <Heart size={16} color={liked ? '#c0392b' : colors.inkTertiary} fill={liked ? '#c0392b' : 'transparent'} />
+                <Heart size={16} color={liked ? '#c0392b' : tc.inkTertiary} fill={liked ? '#c0392b' : 'transparent'} />
                 <Text style={styles.cmpLikeText}>{liked ? 'Liked' : 'Like'}</Text>
               </Pressable>
             </View>
@@ -1524,10 +1528,11 @@ function FriendCompare({
 
 /** One exit off a comparison — half of the pair both compare screens end on. */
 function ForkBtn({ label, onPress }: { label: string; onPress: () => void }) {
+  const tc = useColors()
   return (
     <Pressable style={styles.cmpForkBtn} onPress={onPress} hitSlop={6}>
       <Text style={styles.cmpForkText} numberOfLines={1}>{label}</Text>
-      <ChevronRight size={15} color={colors.green} />
+      <ChevronRight size={15} color={tc.green} />
     </Pressable>
   )
 }
@@ -1543,6 +1548,7 @@ function ReviewSection({
   editing: boolean
   onEditingChange: (v: boolean) => void
 }) {
+  const tc = useColors()
 
   const queryClient = useQueryClient()
   // A Modal renders in its own native hierarchy, outside the SafeAreaProvider,
@@ -1597,7 +1603,7 @@ function ReviewSection({
           <Text style={styles.reviewBody}>{album.review}</Text>
           {editable && (
             <Pressable style={styles.reviewEdit} onPress={() => { setDraft(album.review ?? ''); onEditingChange(true) }}>
-              <Pencil size={13} color={colors.inkTertiary} />
+              <Pencil size={13} color={tc.inkTertiary} />
               <Text style={styles.reviewEditText}>Edit review</Text>
             </Pressable>
           )}
@@ -1617,7 +1623,7 @@ function ReviewSection({
             <Text style={styles.reviewSheetTitle} numberOfLines={1}>{album.albumName}</Text>
             <Pressable onPress={save} disabled={busy} hitSlop={10}>
               {busy ? (
-                <ActivityIndicator size="small" color={colors.green} />
+                <ActivityIndicator size="small" color={tc.green} />
               ) : (
                 <Text style={styles.reviewSheetSave}>Save</Text>
               )}
@@ -1633,14 +1639,14 @@ function ReviewSection({
               value={draft}
               onChangeText={setDraft}
               placeholder="Write your thoughts on this album…"
-              placeholderTextColor={colors.inkMuted}
+              placeholderTextColor={tc.inkMuted}
               multiline
               autoFocus
               textAlignVertical="top"
             />
             {album.review && (
               <Pressable style={styles.reviewSheetDelete} onPress={remove} disabled={busy} hitSlop={8}>
-                <Trash2 size={15} color="#b91c1c" />
+                <Trash2 size={15} color={tc.danger} />
                 <Text style={styles.reviewSheetDeleteText}>Delete review</Text>
               </Pressable>
             )}
@@ -1846,7 +1852,7 @@ const styles = StyleSheet.create({
     // shadow rather than an orange halo — left off deliberately.
   },
   recCard: {
-    backgroundColor: '#fff7ed',
+    backgroundColor: colors.warnSoft,
     borderWidth: 1,
     borderColor: 'rgba(249,115,22,0.30)',
     borderRadius: radii.md,
@@ -1963,7 +1969,7 @@ const styles = StyleSheet.create({
   factorLabel: { fontFamily: fonts.bodyMedium, fontSize: 10, color: colors.inkSecondary, marginTop: 2 },
 
   ctaRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xl },
-  copyError: { fontFamily: fonts.bodyMedium, fontSize: 13, color: '#b91c1c', textAlign: 'center', marginTop: spacing.sm },
+  copyError: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.danger, textAlign: 'center', marginTop: spacing.sm },
   // The standalone button — Edit rating on a finished album. Owns its own top
   // margin, since nothing wraps it.
   cta: {
@@ -2046,7 +2052,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: spacing.md,
   },
-  reviewSheetDeleteText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: '#b91c1c' },
+  reviewSheetDeleteText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.danger },
 
   reviewCancelText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkTertiary },
   reviewEdit: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.sm },

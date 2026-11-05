@@ -10,10 +10,10 @@ import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { ChevronDown, ChevronUp } from 'lucide-react-native'
 import { fetchArtistStats, fetchGenreStats, fetchSubgenreStats, fetchSongs } from '../lib/api'
-import { songScoreColor, BANG_THRESHOLD, SKIP_THRESHOLD } from '@pressd/shared/types'
+import { BANG_THRESHOLD, SKIP_THRESHOLD } from '@pressd/shared/types'
 import type { GenreStat } from '@pressd/shared/api'
 import ScoreHistogram from './ScoreHistogram'
-import { colors, fonts, spacing } from '../theme/tokens'
+import { colors, fonts, spacing, useColors, scoreColor } from '../theme/tokens'
 
 // Rows shown before the chart is expanded.
 const TAG_PREVIEW = 4
@@ -25,6 +25,7 @@ const RED = '#c0392b'
  *                    headed "Your top records" on a friend's profile would be
  *                    showing one person's ratings under another's name. */
 export default function StatsView({ userId, ownerName }: { userId: number; ownerName?: string }) {
+  const tc = useColors()
   const router = useRouter()
   const { data: artists = [], isLoading } = useQuery({
     queryKey: ['artist-stats', userId],
@@ -100,7 +101,7 @@ export default function StatsView({ userId, ownerName }: { userId: number; owner
       {/* Most rated artists */}
       <Text style={styles.sectionLabel}>MOST RATED ARTISTS</Text>
       {isLoading ? (
-        <ActivityIndicator color={colors.green} style={{ marginTop: spacing.md }} />
+        <ActivityIndicator color={tc.green} style={{ marginTop: spacing.md }} />
       ) : topArtists.length === 0 ? (
         <Text style={styles.empty}>Rate more albums to build artist stats.</Text>
       ) : (
@@ -114,7 +115,7 @@ export default function StatsView({ userId, ownerName }: { userId: number; owner
               <Text style={styles.artistName} numberOfLines={1}>{a.artist}</Text>
               <Text style={styles.artistMeta}>{a.count} song{a.count === 1 ? '' : 's'} · {(a.bangPct * 100).toFixed(0)}% bangs</Text>
             </View>
-            <Text style={[styles.artistScore, { color: songScoreColor(a.avgSongScore) }]}>
+            <Text style={[styles.artistScore, { color: scoreColor(a.avgSongScore) }]}>
               {a.avgSongScore.toFixed(2)}
             </Text>
           </Pressable>
@@ -147,6 +148,7 @@ function TagBars({
   userId: number
   ownerName?: string
 }) {
+  const tc = useColors()
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const ranked = useMemo(() => [...rows].sort((a, b) => b.count - a.count), [rows])
@@ -191,9 +193,9 @@ function TagBars({
             {open ? 'Show less' : `See all ${ranked.length}`}
           </Text>
           {open ? (
-            <ChevronUp size={14} color={colors.green} />
+            <ChevronUp size={14} color={tc.green} />
           ) : (
-            <ChevronDown size={14} color={colors.green} />
+            <ChevronDown size={14} color={tc.green} />
           )}
         </Pressable>
       )}

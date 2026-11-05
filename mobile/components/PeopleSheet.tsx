@@ -28,7 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useSegments } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Clock, MessageCircle, Triangle, UserPlus } from 'lucide-react-native'
-import { songScoreColor, type PeopleSheetData, type SheetAction, type SheetPerson } from '@pressd/shared/types'
+import { type PeopleSheetData, type SheetAction, type SheetPerson } from '@pressd/shared/types'
 import { addFriend, fetchPeopleSheet, logSheetEvent } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { light, selection } from '../lib/haptics'
@@ -36,7 +36,7 @@ import { PEOPLE_SHEET_KEY } from '../lib/peopleSheet'
 import { useOpenProfile } from '../lib/useOpenProfile'
 import Avatar from './Avatar'
 import CoverImage from './CoverImage'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../theme/tokens'
 
 const DOWN = '#e0492b'
 
@@ -84,15 +84,16 @@ export function PeopleSheetHost({ held }: { held: boolean }) {
 
 /** Drawn exactly as For You's review previews (ReviewCell) draw them. */
 function SongNotes({ person }: { person: SheetPerson }) {
+  const tc = useColors()
   const { topSong, bottomSong, fromAlbum } = person
   if (!topSong && !bottomSong) return null
   return (
     <View style={styles.songNotes}>
       {topSong && (
         <View style={styles.songNote}>
-          <Triangle size={11} color={colors.green} fill={colors.green} />
+          <Triangle size={11} color={tc.green} fill={tc.green} />
           <Text style={styles.songNoteText} numberOfLines={1}>{topSong.title}</Text>
-          <Text style={[styles.songNoteScore, { color: songScoreColor(topSong.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{topSong.score.toFixed(1)}</Text>
+          <Text style={[styles.songNoteScore, { color: scoreColor(topSong.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{topSong.score.toFixed(1)}</Text>
         </View>
       )}
       {bottomSong && (
@@ -101,7 +102,7 @@ function SongNotes({ person }: { person: SheetPerson }) {
             <Triangle size={11} color={DOWN} fill={DOWN} />
           </View>
           <Text style={styles.songNoteText} numberOfLines={1}>{bottomSong.title}</Text>
-          <Text style={[styles.songNoteScore, { color: songScoreColor(bottomSong.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{bottomSong.score.toFixed(1)}</Text>
+          <Text style={[styles.songNoteScore, { color: scoreColor(bottomSong.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{bottomSong.score.toFixed(1)}</Text>
         </View>
       )}
       {fromAlbum && (
@@ -118,6 +119,7 @@ export default function PeopleSheet({ data, visible, onClose }: {
   visible: boolean
   onClose: () => void
 }) {
+  const tc = useColors()
   const { user } = useAuth()
   const router = useRouter()
   const openProfile = useOpenProfile()
@@ -266,7 +268,7 @@ export default function PeopleSheet({ data, visible, onClose }: {
                       {adding === p.user.id ? (
                         <ActivityIndicator size="small" color="#ffffff" />
                       ) : isAdded ? (
-                        <Clock size={13} color={colors.green} strokeWidth={2.4} />
+                        <Clock size={13} color={tc.green} strokeWidth={2.4} />
                       ) : (
                         <UserPlus size={13} color="#ffffff" strokeWidth={2.4} />
                       )}
@@ -286,7 +288,7 @@ export default function PeopleSheet({ data, visible, onClose }: {
               <Text style={styles.notNowText}>Not now</Text>
             </Pressable>
             <Pressable style={styles.discuss} onPress={openDiscussion}>
-              <MessageCircle size={16} color={colors.green} />
+              <MessageCircle size={16} color={tc.green} />
               <Text style={styles.discussText} numberOfLines={1}>Open the discussion</Text>
             </Pressable>
           </View>
@@ -328,7 +330,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: '#ece5da',
+    borderColor: colors.border,
     backgroundColor: colors.raised,
   },
   personHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
@@ -377,7 +379,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#e2dbd0',
+    borderColor: colors.border,
     backgroundColor: colors.raised,
   },
   discussText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.green },

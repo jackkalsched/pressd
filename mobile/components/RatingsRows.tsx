@@ -5,11 +5,11 @@
 // diverging, which they already had: yours sorts by any metric in either
 // direction, theirs was a fixed score-descending list of albums with no artist
 // mode at all. The favourite-pickers list through the same three.
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { songScoreColor, type Album } from '@pressd/shared/types'
+import { Pressable, StyleSheet, Text, View, type ColorValue } from 'react-native'
+import { type Album } from '@pressd/shared/types'
 import type { RankedSong } from '@pressd/shared/api'
 import { NUM_SCALE_CAP, RANK_NUM_MIN_W, RANK_NUM_SIZE, type ArtistRank } from '../lib/rankings'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, scoreColor } from '../theme/tokens'
 import CoverImage from './CoverImage'
 
 export function RatingRow({
@@ -40,7 +40,7 @@ export function RatingRow({
         </Text>
       </View>
       {album.score != null && (
-        <Text style={[styles.ratingScore, { color: songScoreColor(album.score) }]}>
+        <Text style={[styles.ratingScore, { color: scoreColor(album.score) }]}>
           {album.score.toFixed(2)}
         </Text>
       )}
@@ -49,8 +49,8 @@ export function RatingRow({
 }
 
 /** A metric placed on the score gradient: t 0 is the red end, 1 the green. */
-function gradient(t: number): string {
-  return songScoreColor(1 + 9 * Math.min(1, Math.max(0, t)))
+function gradient(t: number): ColorValue {
+  return scoreColor(1 + 9 * Math.min(1, Math.max(0, t)))
 }
 
 // Where each metric's ends of the gradient sit. The plus stats are indexed to
@@ -63,7 +63,7 @@ const SKIP_RED = 0.3
 
 /** The trailing figure follows whichever metric the board is sorted by, so the
  *  number you ranked on is the number you can read — in that metric's colour. */
-function artistValue(stat: ArtistRank, metricKey: string): { text: string; color?: string } {
+function artistValue(stat: ArtistRank, metricKey: string): { text: string; color?: ColorValue } {
   const plus = (v: number | null) =>
     v == null ? { text: '—' } : { text: String(Math.round(v)), color: gradient((v - PLUS_RED) / (PLUS_GREEN - PLUS_RED)) }
   // /stats/artists reports bang/skip as a fraction, not a percentage — without
@@ -82,7 +82,7 @@ function artistValue(stat: ArtistRank, metricKey: string): { text: string; color
     case 'skip':
       return pct(stat.skipPct, (v) => 1 - v / SKIP_RED)
     default:
-      return { text: stat.avgSongScore.toFixed(2), color: songScoreColor(stat.avgSongScore) }
+      return { text: stat.avgSongScore.toFixed(2), color: scoreColor(stat.avgSongScore) }
   }
 }
 
@@ -147,7 +147,7 @@ export function SongRankRow({
         </Text>
       </View>
       {song.score != null && (
-        <Text style={[styles.ratingScore, { color: songScoreColor(song.score) }]}>
+        <Text style={[styles.ratingScore, { color: scoreColor(song.score) }]}>
           {song.score.toFixed(1)}
         </Text>
       )}

@@ -12,9 +12,9 @@
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { Image } from 'expo-image'
 import { Send } from 'lucide-react-native'
-import { avatarColor, songScoreColor } from '@pressd/shared/types'
+import { avatarColor } from '@pressd/shared/types'
 import type { RecommendSuggestion } from '@pressd/shared/api'
-import { colors, fonts, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, NUM_SCALE_CAP, scoreColor } from '../theme/tokens'
 import SpotlightCard, { eyebrowTextStyle } from './SpotlightCard'
 
 const AVATAR = 30
@@ -65,7 +65,7 @@ export default function PassItOnCell({
     >
       <Text style={styles.meta} numberOfLines={1}>
         {album.artist} · you rated it{' '}
-        <Text style={[styles.score, { color: songScoreColor(album.score) }]}>
+        <Text style={[styles.score, { color: scoreColor(album.score) }]}>
           {album.score.toFixed(2)}
         </Text>
       </Text>

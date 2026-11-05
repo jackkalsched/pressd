@@ -6,8 +6,7 @@
 // treatment). Shared by Profile → Stats, the artist pages, and — small and
 // without its axis — under the average in the profile header.
 import { StyleSheet, Text, View } from 'react-native'
-import { songScoreColor } from '@pressd/shared/types'
-import { colors, fonts } from '../theme/tokens'
+import { colors, fonts, scoreColor } from '../theme/tokens'
 
 export default function ScoreHistogram({
   scores,
@@ -42,7 +41,7 @@ export default function ScoreHistogram({
                 styles.bar,
                 {
                   height: Math.max(count > 0 ? Math.min(6, height * 0.2) : 2, (count / maxBin) * height),
-                  backgroundColor: songScoreColor(1 + i * binWidth),
+                  backgroundColor: scoreColor(1 + i * binWidth),
                 },
               ]}
             />

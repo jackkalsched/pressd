@@ -11,9 +11,10 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { cleanUsername, USERNAME_RE } from '@pressd/shared/types'
 import { useAuth } from '../lib/auth'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, useColors } from '../theme/tokens'
 
 export default function UsernameScreen() {
+  const tc = useColors()
   const router = useRouter()
   const { user, updateProfile } = useAuth()
   const [value, setValue] = useState(() => cleanUsername(user?.name ?? ''))
@@ -59,7 +60,7 @@ export default function UsernameScreen() {
               onSubmitEditing={save}
               maxLength={20}
               placeholder="username"
-              placeholderTextColor={colors.inkMuted}
+              placeholderTextColor={tc.inkMuted}
               accessibilityLabel="Username"
             />
           </View>
@@ -116,10 +117,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   fieldActive: { borderColor: colors.green },
-  fieldError: { borderColor: '#c0392b' },
+  fieldError: { borderColor: colors.danger },
   at: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.inkMuted },
   input: { flex: 1, fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink, paddingVertical: 0 },
-  error: { fontFamily: fonts.body, fontSize: 12.5, color: '#c0392b', textAlign: 'center', marginTop: spacing.sm },
+  error: { fontFamily: fonts.body, fontSize: 12.5, color: colors.danger, textAlign: 'center', marginTop: spacing.sm },
   cta: {
     alignItems: 'center',
     justifyContent: 'center',

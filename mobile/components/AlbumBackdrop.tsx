@@ -11,7 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Defs, Image as SvgImage, Mask, RadialGradient, Rect, Stop } from 'react-native-svg'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAlbumColor } from '../lib/api'
-import { colors } from '../theme/tokens'
+import { useColors, useIsDark, usePageRgb } from '../theme/tokens'
 
 const { width: W } = Dimensions.get('window')
 
@@ -26,9 +26,8 @@ const ART_TOP = -W * 0.2
 // page and clips whatever it carries there.
 const ART_LEFT = (W - ART) / 2
 
-// Fully transparent app-bg. Interpolating from the literal 'transparent'
-// keyword muddies through black on Android, so fade from this instead.
-const BG_CLEAR = 'rgba(249,248,246,0)'
+// The final fade runs from the page colour at no opacity rather than the
+// literal 'transparent' keyword, which muddies through black on Android.
 
 function hueOf(hsl: string | null | undefined): number | null {
   const m = hsl?.match(/hsl\((\d+)/)
@@ -49,6 +48,9 @@ export default function AlbumBackdrop({
    *  unchanged — only the artwork recedes. */
   subtle?: boolean
 }) {
+  const tc = useColors()
+  const isDark = useIsDark()
+  const pageRgb = usePageRgb()
   const { data } = useQuery({
     queryKey: ['album-color', album, artist],
     queryFn: () => fetchAlbumColor(album, artist),
@@ -58,11 +60,14 @@ export default function AlbumBackdrop({
   const hue = hueOf(data?.color)
 
   // Desktop's ramp, deepened a step (lower lightness, higher saturation) so the
-  // tint carries on a phone screen instead of washing out.
+  // tint carries on a phone screen instead of washing out. On the dark page the
+  // same hue sits low, a deep wash rather than a pastel one.
   const page = useMemo<[string, string, string, string]>(() => {
-    if (hue == null) return [colors.bg, colors.bg, colors.bg, colors.bg]
-    return [`hsl(${hue}, 46%, 80%)`, `hsl(${hue}, 34%, 89%)`, colors.bg, colors.bg]
-  }, [hue])
+    if (hue == null) return [tc.bg, tc.bg, tc.bg, tc.bg]
+    return isDark
+      ? [`hsl(${hue}, 32%, 20%)`, `hsl(${hue}, 18%, 14%)`, tc.bg, tc.bg]
+      : [`hsl(${hue}, 46%, 80%)`, `hsl(${hue}, 34%, 89%)`, tc.bg, tc.bg]
+  }, [hue, isDark, tc])
 
   return (
     <View style={styles.fill} pointerEvents="none">
@@ -106,7 +111,7 @@ export default function AlbumBackdrop({
       ) : null}
 
       <LinearGradient
-        colors={[BG_CLEAR, colors.bg]}
+        colors={[`rgba(${pageRgb},0)`, tc.bg]}
         locations={subtle ? [0.28, 0.62] : [0.42, 0.8]}
         style={styles.fill}
       />

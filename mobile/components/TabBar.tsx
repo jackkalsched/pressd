@@ -8,7 +8,7 @@ import { ListMusic, BarChart3, Users, CircleUser, Plus } from 'lucide-react-nati
 import { fetchFeed } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useSocialSeen, latestFeedTime } from '../lib/socialSeen'
-import { colors, fonts, radii, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, radii, NUM_SCALE_CAP, useColors } from '../theme/tokens'
 
 // Minimal structural slice of react-navigation's BottomTabBarProps — the
 // vendored expo-router copy and the standalone package disagree on exact
@@ -29,6 +29,7 @@ const TAB_META: Record<string, { label: string; Icon: typeof ListMusic }> = {
 }
 
 export default function TabBar({ state, navigation }: TabBarProps) {
+  const tc = useColors()
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const { user } = useAuth()
@@ -53,7 +54,7 @@ export default function TabBar({ state, navigation }: TabBarProps) {
     if (!meta) return null
     const index = state.routes.findIndex((r) => r.key === route.key)
     const focused = state.index === index
-    const color = focused ? colors.green : colors.inkMuted
+    const color = focused ? tc.green : tc.inkMuted
     const showDot = route.name === 'social' && socialHasNew && !focused
     return (
       <Pressable

@@ -7,7 +7,7 @@ import * as Google from 'expo-auth-session/providers/google'
 import * as AppleAuthentication from 'expo-apple-authentication'
 import { useAuth } from '../lib/auth'
 import { requestAppleCredential } from '../lib/appleSignIn'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, useColors } from '../theme/tokens'
 
 WebBrowser.maybeCompleteAuthSession()
 
@@ -53,6 +53,7 @@ function GoogleButton({
 }
 
 export default function SignIn() {
+  const tc = useColors()
   const { signInWithGoogleToken, signInWithAppleToken, signInWithDevToken } = useAuth()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -106,7 +107,7 @@ export default function SignIn() {
 
       <View style={styles.actions}>
         {busy ? (
-          <ActivityIndicator color={colors.green} />
+          <ActivityIndicator color={tc.green} />
         ) : (
           <>
             {appleAvailable ? (
@@ -173,5 +174,5 @@ const styles = StyleSheet.create({
   },
   devBtnText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary },
   hint: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, textAlign: 'center' },
-  error: { fontFamily: fonts.body, fontSize: 13, color: '#b91c1c', textAlign: 'center' },
+  error: { fontFamily: fonts.body, fontSize: 13, color: colors.danger, textAlign: 'center' },
 })

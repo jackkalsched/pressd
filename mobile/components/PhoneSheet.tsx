@@ -29,7 +29,7 @@ import { toE164 } from '@pressd/shared/api'
 import { useAuth } from '../lib/auth'
 import { success } from '../lib/haptics'
 import { sendPhoneCode } from '../lib/phoneVerify'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors } from '../theme/tokens'
 
 type Step = 'number' | 'code'
 
@@ -48,6 +48,7 @@ export default function PhoneSheet({
   mode: 'prompt' | 'settings'
   onClose: () => void
 }) {
+  const tc = useColors()
   const insets = useSafeAreaInsets()
   const { addPhoneNumber, skipPhoneNumber } = useAuth()
   const [step, setStep] = useState<Step>('number')
@@ -126,11 +127,11 @@ export default function PhoneSheet({
 
           <View style={styles.headRow}>
             <View style={styles.icon}>
-              <Phone size={18} color={colors.green} />
+              <Phone size={18} color={tc.green} />
             </View>
             {!prompt && (
               <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Close">
-                <X size={20} color={colors.inkTertiary} />
+                <X size={20} color={tc.inkTertiary} />
               </Pressable>
             )}
           </View>
@@ -147,7 +148,7 @@ export default function PhoneSheet({
                 value={number}
                 onChangeText={(t) => { setNumber(t); setError(null) }}
                 placeholder="(555) 123-4567"
-                placeholderTextColor={colors.inkMuted}
+                placeholderTextColor={tc.inkMuted}
                 keyboardType="phone-pad"
                 textContentType="telephoneNumber"
                 autoComplete="tel"
@@ -184,7 +185,7 @@ export default function PhoneSheet({
                   setError(null)
                 }}
                 placeholder="000000"
-                placeholderTextColor={colors.inkMuted}
+                placeholderTextColor={tc.inkMuted}
                 keyboardType="number-pad"
                 textContentType="oneTimeCode"
                 autoComplete="sms-otp"
@@ -260,7 +261,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   codeInput: { fontFamily: fonts.bodySemiBold, fontSize: 22, letterSpacing: 6, textAlign: 'center' },
-  error: { fontFamily: fonts.body, fontSize: 13, color: '#b91c1c', marginTop: spacing.sm },
+  error: { fontFamily: fonts.body, fontSize: 13, color: colors.danger, marginTop: spacing.sm },
   primary: {
     marginTop: spacing.lg,
     height: 52,

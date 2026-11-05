@@ -10,14 +10,14 @@
 // banner unrecognisable. The numbers stay unboxed in Playfair; the average is
 // written in its own score colour.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { AccessibilityInfo, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
+import { AccessibilityInfo, Pressable, StyleSheet, Text, useWindowDimensions, View, type ColorValue } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
 import { MapPin, Plus } from 'lucide-react-native'
 import { SHELF_SIZE, type Profile } from '@pressd/shared/api'
-import { avatarColor, songScoreColor } from '@pressd/shared/types'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { avatarColor } from '@pressd/shared/types'
+import { colors, fonts, radii, spacing, useColors, scoreColor } from '../theme/tokens'
 import CoverImage from './CoverImage'
 
 // The server stores banners 24:5 (BANNER_SIZE, backend/routers/users.py). At phone
@@ -90,6 +90,7 @@ export default function ProfileBanner({
    *  On someone else's page a cover opens their copy of the album. */
   onShelfSlotPress?: (slot: number) => void
 }) {
+  const tc = useColors()
   // One chip's height: the row is held to it, so the tags that don't fit
   // whole wrap out of sight rather than squeezing or adding a line.
   const [chipH, setChipH] = useState(0)
@@ -103,9 +104,9 @@ export default function ProfileBanner({
     [genres, subgenres],
   )
   // The caller's counts, then the average in its own score colour.
-  const figures: (BannerStatItem & { color?: string })[] = [
+  const figures: (BannerStatItem & { color?: ColorValue })[] = [
     ...stats,
-    { value: avg != null ? avg.toFixed(2) : '—', label: 'Avg score', color: avg != null ? songScoreColor(avg) : undefined },
+    { value: avg != null ? avg.toFixed(2) : '—', label: 'Avg score', color: avg != null ? scoreColor(avg) : undefined },
   ]
 
   return (
@@ -157,7 +158,7 @@ export default function ProfileBanner({
           {profile?.location ? (
             <>
               <Text style={styles.handleSep} maxFontSizeMultiplier={HEADER_SCALE_CAP}>|</Text>
-              <MapPin size={12} color={colors.inkTertiary} strokeWidth={2.2} />
+              <MapPin size={12} color={tc.inkTertiary} strokeWidth={2.2} />
               <Text style={[styles.handle, styles.location]} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
                 {profile.location}
               </Text>
@@ -221,6 +222,7 @@ function ShelfRow({
   name: string
   onSlotPress?: (slot: number) => void
 }) {
+  const tc = useColors()
   const router = useRouter()
   const { width } = useWindowDimensions()
   if (!profile?.picks_unlocked) return null
@@ -268,7 +270,7 @@ function ShelfRow({
               </View>
             ) : (
               <View style={[styles.shelfCover, styles.shelfEmpty]}>
-                <Plus size={20} color={colors.inkMuted} strokeWidth={2} />
+                <Plus size={20} color={tc.inkMuted} strokeWidth={2} />
               </View>
             )}
           </Pressable>
@@ -459,7 +461,7 @@ const styles = StyleSheet.create({
   chipGenre: { backgroundColor: 'rgba(45,106,79,0.12)' },
   chipGenreText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },
   // Subgenres as frosted white on the page: present, but a step quieter.
-  chipSub: { backgroundColor: 'rgba(255,255,255,0.7)' },
+  chipSub: { backgroundColor: colors.frost },
   chipSubText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary },
 
   bio: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSecondary, lineHeight: 20, marginTop: spacing.sm, paddingLeft: AVATAR_EDGE },

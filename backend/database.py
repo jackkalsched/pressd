@@ -254,6 +254,27 @@ def init_db():
             "ALTER TABLE pressuser ADD COLUMN IF NOT EXISTS shelf TEXT",
             "UPDATE pressuser SET shelf = '[' || favorite_album_id || ',null,null,null,null]' "
             "WHERE shelf IS NULL AND favorite_album_id IS NOT NULL",
+            # ── A review's likes are its thread post's up-votes (social.toggle_like).
+            #    Likes given in the feed before that move onto the post — an
+            #    up-vote each, dated when they were given — and leave the old
+            #    table, so a vote taken back since can't return on the next boot.
+            #    Then the moved posts' counters are recounted from their rows.
+            """INSERT INTO postlike (user_id, post_id, value, created_at)
+               SELECT l.user_id, p.id, 1, l.created_at
+               FROM "like" l
+               JOIN album a ON a.id = l.album_id
+               JOIN thread t ON t.subject_type = 'album' AND t.subject_key = a.subject_key
+               JOIN post p ON p.thread_id = t.id AND p.user_id = a.user_id AND p.kind = 'review'
+               ON CONFLICT (user_id, post_id) DO NOTHING""",
+            """DELETE FROM "like" l USING album a, thread t, post p
+               WHERE a.id = l.album_id AND t.subject_type = 'album' AND t.subject_key = a.subject_key
+                 AND p.thread_id = t.id AND p.user_id = a.user_id AND p.kind = 'review'""",
+            """UPDATE post SET like_count = v.up, dislike_count = v.down
+               FROM (SELECT post_id, COUNT(*) FILTER (WHERE value = 1) AS up,
+                            COUNT(*) FILTER (WHERE value = -1) AS down
+                     FROM postlike GROUP BY post_id) v
+               WHERE post.id = v.post_id AND post.kind = 'review'
+                 AND (post.like_count IS DISTINCT FROM v.up OR post.dislike_count IS DISTINCT FROM v.down)""",
             # ── Row-level security on every public table, last so it covers the
             #    tables create_all just made. Supabase serves the public schema
             #    over its REST API to anyone holding the project's publishable

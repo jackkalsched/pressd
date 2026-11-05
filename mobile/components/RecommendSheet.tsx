@@ -26,7 +26,7 @@ import { Check, Star, X } from 'lucide-react-native'
 import { fetchFriends, recommendAlbum, RECOMMENDATION_NOTE_MAX } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { Album } from '@pressd/shared/types'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors } from '../theme/tokens'
 
 // The recommendation accent, matching the star the recipient sees on the cover.
 const REC = '#f97316'
@@ -46,6 +46,7 @@ export default function RecommendSheet({
   initialFriendId?: number
   onSent?: () => void
 }) {
+  const tc = useColors()
   const { user } = useAuth()
   const qc = useQueryClient()
   const [selected, setSelected] = useState<number | null>(initialFriendId ?? null)
@@ -122,7 +123,7 @@ export default function RecommendSheet({
                 <Text style={styles.title}>Recommend</Text>
               </View>
               <Pressable onPress={close} hitSlop={12} accessibilityLabel="Close">
-                <X size={20} color={colors.inkTertiary} />
+                <X size={20} color={tc.inkTertiary} />
               </Pressable>
             </View>
 
@@ -133,7 +134,7 @@ export default function RecommendSheet({
 
             {sent ? (
               <View style={styles.sentBox}>
-                <Check size={16} color={colors.green} />
+                <Check size={16} color={tc.green} />
                 <Text style={styles.sentText}>{sent}</Text>
               </View>
             ) : friends.length === 0 ? (
@@ -179,7 +180,7 @@ export default function RecommendSheet({
                       value={note}
                       onChangeText={setNote}
                       placeholder={`Tell ${friendName ?? 'them'} why you think they'd like this!`}
-                      placeholderTextColor={colors.inkTertiary}
+                      placeholderTextColor={tc.inkTertiary}
                       multiline
                       maxLength={RECOMMENDATION_NOTE_MAX}
                       textAlignVertical="top"
@@ -250,7 +251,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.raised,
     marginBottom: spacing.sm,
   },
-  friendRowOn: { borderColor: REC, backgroundColor: '#fff7ed' },
+  friendRowOn: { borderColor: REC, backgroundColor: colors.warnSoft },
   avatar: {
     width: 30,
     height: 30,
@@ -303,9 +304,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: '#f0faf5',
+    backgroundColor: colors.greenSoft,
     borderWidth: 1,
-    borderColor: '#c3e6d8',
+    borderColor: colors.greenTint,
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
@@ -318,5 +319,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: spacing.xl,
   },
-  error: { fontFamily: fonts.bodyMedium, fontSize: 13, color: '#b91c1c', marginBottom: spacing.sm },
+  error: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.danger, marginBottom: spacing.sm },
 })

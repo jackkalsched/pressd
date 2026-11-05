@@ -12,9 +12,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import type { SongGap } from '@pressd/shared/api'
 import NoComparisonYet from './NoComparisonYet'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors } from '../theme/tokens'
 
-const UP = '#2d6a4f'    // you rate it higher
+const UP = colors.green // you rate it higher
 const DOWN = '#b5432f'  // you rate it lower
 // Below this a bar can't hold its own label, so the pill sets the floor.
 const MIN_PILL = 52
@@ -117,6 +117,7 @@ export default function SongGapChart({
   /** Given, the preview offers a way through to every shared track. */
   onSeeAll?: () => void
 }) {
+  const tc = useColors()
   const rows = useMemo(() => selectGaps(gaps), [gaps])
 
   const summary = useMemo(() => {
@@ -177,7 +178,7 @@ export default function SongGapChart({
           <Text style={styles.seeAllText}>
             See all {gaps.length} shared tracks
           </Text>
-          <ChevronRight size={15} color={colors.green} />
+          <ChevronRight size={15} color={tc.green} />
         </Pressable>
       )}
     </View>
@@ -200,7 +201,7 @@ const styles = StyleSheet.create({
   tileLabel: {
     fontFamily: fonts.bodyMedium,
     fontSize: 12,
-    color: '#8a7f72',
+    color: colors.inkTertiary,
     marginTop: 6,
   },
 
@@ -222,7 +223,7 @@ const styles = StyleSheet.create({
     top: -spacing.sm,
     bottom: -spacing.sm,
     width: 1,
-    backgroundColor: '#e6ded2',
+    backgroundColor: colors.inset,
   },
   bar: {
     position: 'absolute',

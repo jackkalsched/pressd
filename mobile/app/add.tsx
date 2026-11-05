@@ -21,7 +21,7 @@ import type { AlbumSearchResult } from '@pressd/shared/api'
 import { importAlbum, resolveAlbum } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import TracklistLoader from '../components/TracklistLoader'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors } from '../theme/tokens'
 
 /** "· 2016" when the year is known, "· 12 tracks" when it isn't (Deezer's
  *  search payload carries no release date), and nothing when neither is. */
@@ -32,6 +32,7 @@ function meta(r: AlbumSearchResult): string {
 }
 
 export default function AddAlbum() {
+  const tc = useColors()
   const router = useRouter()
   const { user } = useAuth()
   const [query, setQuery] = useState('')
@@ -115,20 +116,20 @@ export default function AddAlbum() {
       </View>
 
       <View style={styles.searchBar}>
-        <Search size={18} color={colors.inkMuted} />
+        <Search size={18} color={tc.inkMuted} />
         <TextInput
           style={styles.input}
           value={query}
           onChangeText={setQuery}
           placeholder="Search albums or artists"
-          placeholderTextColor={colors.inkMuted}
+          placeholderTextColor={tc.inkMuted}
           autoFocus
           autoCorrect={false}
           returnKeyType="search"
         />
         {query.length > 0 && (
           <Pressable onPress={() => setQuery('')} hitSlop={8}>
-            <X size={16} color={colors.inkMuted} />
+            <X size={16} color={tc.inkMuted} />
           </Pressable>
         )}
       </View>
@@ -143,7 +144,7 @@ export default function AddAlbum() {
         ListHeaderComponent={
           searching && results.length === 0 ? (
             <View style={styles.centerNote}>
-              <ActivityIndicator color={colors.green} />
+              <ActivityIndicator color={tc.green} />
             </View>
           ) : mbPending && results.length > 0 ? (
             <Text style={styles.pending}>Checking MusicBrainz for more…</Text>
@@ -195,7 +196,7 @@ export default function AddAlbum() {
                   accessibilityLabel={`Rate ${item.album_name} now`}
                   style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnOn]}
                 >
-                  <Star size={17} color={colors.green} strokeWidth={2.2} />
+                  <Star size={17} color={tc.green} strokeWidth={2.2} />
                 </Pressable>
                 <Pressable
                   onPress={() => pick(item, 'shelve')}
@@ -209,9 +210,9 @@ export default function AddAlbum() {
                   ]}
                 >
                   {done ? (
-                    <Check size={17} color={colors.green} strokeWidth={2.5} />
+                    <Check size={17} color={tc.green} strokeWidth={2.5} />
                   ) : (
-                    <Plus size={17} color={colors.green} strokeWidth={2.5} />
+                    <Plus size={17} color={tc.green} strokeWidth={2.5} />
                   )}
                 </Pressable>
               </View>
@@ -251,7 +252,7 @@ const styles = StyleSheet.create({
   error: {
     fontFamily: fonts.bodyMedium,
     fontSize: 13,
-    color: '#b91c1c',
+    color: colors.danger,
     textAlign: 'center',
     marginTop: spacing.sm,
   },

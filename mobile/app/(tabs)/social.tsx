@@ -5,21 +5,7 @@
 //   Reviews  — a feed of friends' written reviews.
 //   Friends  — your current friends.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  FlatList,
-  Linking,
-  Modal,
-  Pressable,
-  ScrollView,
-  SectionList,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { DynamicColorIOS, ActivityIndicator, Animated, Dimensions, FlatList, Linking, Modal, Pressable, ScrollView, SectionList, StyleSheet, Text, TextInput, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
@@ -60,8 +46,8 @@ import {
   type AddressBookEntry,
   type ContactsAccess,
 } from '../../lib/contacts'
-import { songScoreColor, avatarColor } from '@pressd/shared/types'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+import { avatarColor } from '@pressd/shared/types'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 
 const DOWN = '#c0392b'
@@ -149,7 +135,12 @@ function Cluster({ item, onOpenUser }: { item: { friend: { id: number; name: str
   )
 }
 
+// Your own initial's bubble, carrying a white letter: ink on the cream page, a
+// warm dark gray on the dark one, where ink turns cream and would lose it.
+const YOU_FILL = DynamicColorIOS({ light: '#1c1917', dark: '#4a4641' })
+
 export default function Social() {
+  const tc = useColors()
   const { user } = useAuth()
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -201,6 +192,13 @@ export default function Social() {
     queryFn: () => fetchAlbums({ status: 'rated', userId: user!.id }),
     enabled: !!user,
   })
+  // Every album in your library, any shelf: what decides whether a review offers
+  // Add to queue (you don't have it) or Compare (you do).
+  const { data: myAlbums = [] } = useQuery({
+    queryKey: ['albums', 'all', user?.id],
+    queryFn: () => fetchAlbums({ userId: user!.id }),
+    enabled: !!user,
+  })
   const { data: requests } = useQuery({
     queryKey: ['friend-requests', user?.id],
     queryFn: () => fetchFriendRequests(user!.id),
@@ -228,6 +226,7 @@ export default function Social() {
     for (const a of myRated) if (a.score != null) m.set(albumKey(a.albumName, a.artist), a.score)
     return m
   }, [myRated])
+  const inLibrary = useMemo(() => new Set(myAlbums.map((a) => albumKey(a.albumName, a.artist))), [myAlbums])
 
   const openFriend = useOpenProfile()
   function openAlbum(id: number) {
@@ -238,6 +237,8 @@ export default function Social() {
     await toggleLike(user.id, albumId)
     queryClient.invalidateQueries({ queryKey: ['feed', user.id] })
     queryClient.invalidateQueries({ queryKey: ['reviews'] })
+    // A review's like is its thread post's up-vote.
+    queryClient.invalidateQueries({ queryKey: ['threadPosts'] })
   }
   async function addToQueue(item: FeedItem) {
     if (!user || queued.has(item.album_id)) return
@@ -246,6 +247,7 @@ export default function Social() {
       // Clone the friend's exact album (metadata + tracklist) into your queue.
       await copyAlbumToLibrary(item.album_id, 'to_listen')
       queryClient.invalidateQueries({ queryKey: ['albums', 'to_listen', user.id] })
+      queryClient.invalidateQueries({ queryKey: ['albums', 'all', user.id] })
     } catch {
       setQueued((prev) => {
         const next = new Set(prev)
@@ -270,7 +272,7 @@ export default function Social() {
         <View style={styles.header}>
           <Text style={styles.pageTitle}>Social</Text>
           <Pressable style={styles.findBtn} onPress={() => setFindOpen(true)}>
-            <UserPlus size={17} color={colors.green} />
+            <UserPlus size={17} color={tc.green} />
             <Text style={styles.findBtnText}>Find friends</Text>
             {incomingCount > 0 && (
               <View style={styles.badge}>
@@ -297,7 +299,7 @@ export default function Social() {
 
       {tab === 'activity' ? (
         feedLoading && feed.length === 0 ? (
-          <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
+          <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
         ) : groups.length === 0 ? (
           <Text style={styles.empty}>No friend activity yet. Add friends to see their ratings.</Text>
         ) : (
@@ -321,11 +323,20 @@ export default function Social() {
                     first={i === 0}
                     myScore={item.score != null ? myScores.get(albumKey(item.album_name, item.artist)) ?? null : null}
                     queued={queued.has(item.album_id)}
+                    owned={inLibrary.has(albumKey(item.album_name, item.artist))}
                     onOpenAlbum={openAlbum}
                     onOpenUser={openFriend}
                     onLike={() => like(item.album_id)}
                     onRate={() => router.push({ pathname: '/rate/[id]', params: { id: String(item.album_id) } })}
                     onAddQueue={() => addToQueue(item)}
+                    onOpenReplies={() =>
+                      item.post_id != null
+                        ? router.push({
+                            pathname: '/thread/[subject]',
+                            params: { subject: 'album', artist: item.artist, album: item.album_name, title: item.album_name },
+                          })
+                        : openAlbum(item.album_id)
+                    }
                   />
                 ))}
               </View>
@@ -348,7 +359,7 @@ export default function Social() {
           )}
           ListEmptyComponent={
             compareLoading ? (
-              <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
+              <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
             ) : (
               <Text style={styles.empty}>
                 Nothing to compare yet. When you and a friend both rate an album, it shows up here.
@@ -408,7 +419,7 @@ export default function Social() {
           )}
           ListEmptyComponent={
             friendsLoading ? (
-              <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
+              <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
             ) : (
               <Text style={styles.empty}>No friends yet. Tap Find friends to add some.</Text>
             )
@@ -426,21 +437,26 @@ function ActivityRow({
   first,
   myScore,
   queued,
+  owned,
   onOpenAlbum,
   onOpenUser,
   onLike,
   onRate,
   onAddQueue,
+  onOpenReplies,
 }: {
   item: FeedItem
   first: boolean
   myScore: number | null
   queued: boolean
+  /** The record is already in your library, on any shelf. */
+  owned: boolean
   onOpenAlbum: (id: number) => void
   onOpenUser: (id: number) => void
   onLike: () => void
   onRate: () => void
   onAddQueue: () => void
+  onOpenReplies: () => void
 }) {
   const verb = item.type === 'review' ? 'reviewed' : item.type === 'recommendation' ? 'sent you' : 'rated'
   const time = relativeTime(timeOf(item))
@@ -470,7 +486,7 @@ function ActivityRow({
             </Pressable>
           ) : item.score != null ? (
             <>
-              <Text style={[styles.score, { color: songScoreColor(item.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{item.score.toFixed(2)}</Text>
+              <Text style={[styles.score, { color: scoreColor(item.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{item.score.toFixed(2)}</Text>
               {gap != null && (
                 <Text style={[styles.gap, { color: gap >= 0 ? colors.green : DOWN }]}>
                   {gap >= 0 ? '+' : '−'}{Math.abs(gap).toFixed(2)} vs you
@@ -486,12 +502,23 @@ function ActivityRow({
           <Text style={styles.reviewQuote}>“{item.review_excerpt}”</Text>
           <View style={styles.reviewActions}>
             <LikeButton liked={!!item.liked_by_me} count={item.like_count ?? 0} onToggle={onLike} />
-            <Pressable onPress={() => onOpenAlbum(item.album_id)} hitSlop={6}>
-              <Text style={styles.actionText}>{item.comment_count ?? 0} replies</Text>
+            {/* The review's replies are the thread's, so they're read there. */}
+            <Pressable onPress={onOpenReplies} hitSlop={6}>
+              <Text style={styles.actionText}>
+                {item.comment_count ?? 0} {item.comment_count === 1 ? 'reply' : 'replies'}
+              </Text>
             </Pressable>
-            <Pressable onPress={onAddQueue} hitSlop={6} disabled={queued}>
-              <Text style={styles.addQueue}>{queued ? 'Added' : 'Add to queue'}</Text>
-            </Pressable>
+            {/* Already yours: their copy's page, which sets your rating beside
+                theirs once you've both rated it. Otherwise, a way to get it. */}
+            {owned && !queued ? (
+              <Pressable onPress={() => onOpenAlbum(item.album_id)} hitSlop={6}>
+                <Text style={styles.addQueue}>Compare</Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={onAddQueue} hitSlop={6} disabled={queued}>
+                <Text style={styles.addQueue}>{queued ? 'Added' : 'Add to queue'}</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       ) : null}
@@ -524,7 +551,7 @@ function FeedPostRow({ item, onOpen, onOpenUser }: { item: FeedPost; onOpen: () 
       <View style={styles.fpBody}>
         {item.author.score != null && (
           <Text
-            style={[styles.fpScore, { color: songScoreColor(item.author.score) }]}
+            style={[styles.fpScore, { color: scoreColor(item.author.score) }]}
             maxFontSizeMultiplier={NUM_SCALE_CAP}
           >
             {item.author.score.toFixed(2)}
@@ -553,6 +580,7 @@ function FeedPostRow({ item, onOpen, onOpenUser }: { item: FeedPost; onOpen: () 
 }
 
 function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onClose: () => void; onOpenFriend: (id: number) => void }) {
+  const tc = useColors()
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const [q, setQ] = useState('')
@@ -608,20 +636,20 @@ function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onC
       <SafeAreaView style={styles.screen} edges={['top']}>
         <View style={styles.header}>
           <Text style={styles.title}>Find friends</Text>
-          <Pressable onPress={onClose} hitSlop={12}><X size={22} color={colors.inkTertiary} /></Pressable>
+          <Pressable onPress={onClose} hitSlop={12}><X size={22} color={tc.inkTertiary} /></Pressable>
         </View>
         <View style={styles.searchBar}>
-          <Search size={16} color={colors.inkMuted} />
+          <Search size={16} color={tc.inkMuted} />
           <TextInput
             style={styles.searchInput}
             value={q}
             onChangeText={setQ}
             placeholder="Search by name"
-            placeholderTextColor={colors.inkMuted}
+            placeholderTextColor={tc.inkMuted}
             autoFocus
             autoCorrect={false}
           />
-          {q.length > 0 && <Pressable onPress={() => setQ('')} hitSlop={8}><X size={15} color={colors.inkMuted} /></Pressable>}
+          {q.length > 0 && <Pressable onPress={() => setQ('')} hitSlop={8}><X size={15} color={tc.inkMuted} /></Pressable>}
         </View>
 
         {showRequests && (
@@ -659,7 +687,7 @@ function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onC
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.list}
           ListHeaderComponent={
-            isFetching ? <ActivityIndicator color={colors.green} style={{ marginVertical: spacing.md }} /> : null
+            isFetching ? <ActivityIndicator color={tc.green} style={{ marginVertical: spacing.md }} /> : null
           }
           renderItem={({ item }) => (
             <View style={styles.userRow}>
@@ -695,6 +723,7 @@ function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
   onRequest: (id: number) => Promise<void>
   onAccept: (id: number) => Promise<void>
 }) {
+  const tc = useColors()
   const { user } = useAuth()
   const [access, setAccess] = useState<ContactsAccess | null>(null)
   const [open, setOpen] = useState(false)
@@ -746,7 +775,7 @@ function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
   if (!granted) {
     return (
       <View style={styles.contactsCard}>
-        <View style={styles.contactsIcon}><BookUser size={20} color={colors.green} /></View>
+        <View style={styles.contactsIcon}><BookUser size={20} color={tc.green} /></View>
         {/* No explanation here: iOS's own prompt carries it
             (NSContactsUsageDescription), and nothing is read before it. */}
         <Text style={styles.contactsTitle}>Find friends from your contacts</Text>
@@ -772,7 +801,7 @@ function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
         accessibilityRole="button"
         accessibilityLabel="Open contacts"
       >
-        <View style={styles.contactsRowIcon}><BookUser size={18} color={colors.green} /></View>
+        <View style={styles.contactsRowIcon}><BookUser size={18} color={tc.green} /></View>
         <View style={{ flex: 1 }}>
           <Text style={styles.userName}>Contacts</Text>
           {data && (
@@ -781,19 +810,19 @@ function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
             </Text>
           )}
         </View>
-        <ChevronRight size={18} color={colors.inkMuted} />
+        <ChevronRight size={18} color={tc.inkMuted} />
       </Pressable>
     )
   }
 
   const back = (
     <Pressable style={styles.contactsBack} onPress={() => setOpen(false)} hitSlop={8} accessibilityRole="button">
-      <ChevronLeft size={18} color={colors.green} />
+      <ChevronLeft size={18} color={tc.green} />
       <Text style={styles.contactsBackText}>Contacts</Text>
     </Pressable>
   )
 
-  if (isLoading) return <View>{back}<ActivityIndicator color={colors.green} style={{ marginTop: spacing.xl }} /></View>
+  if (isLoading) return <View>{back}<ActivityIndicator color={tc.green} style={{ marginTop: spacing.xl }} /></View>
   if (error || !data) {
     return (
       <View>
@@ -860,6 +889,7 @@ function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
 // The 5–10 scale line: friends as colored bubbles at their score, you as a dark
 // tick. No numbers under it — the stack below carries the exact scores.
 function NumberLine({ raters }: { raters: CompareItem['raters'] }) {
+  const tc = useColors()
   const pos = (score: number) => ((clamp(score, 5, 10) - 5) / 5) * CONTENT_W
   return (
     <View style={styles.line}>
@@ -874,7 +904,7 @@ function NumberLine({ raters }: { raters: CompareItem['raters'] }) {
         // A real picture replaces the initial in the bubble; the tick below it
         // still takes the name's color, so the mark stays findable on the line
         // whether or not the photo reads at 26px.
-        const color = r.is_you ? colors.ink : avatarColor(r.name)
+        const color = r.is_you ? tc.ink : avatarColor(r.name)
         if (r.is_you) {
           // Same bubble as friends, set apart by a soft glow ring.
           return (
@@ -923,12 +953,13 @@ function CompareCard({
   onOpen: (id: number) => void
   onOpenUser: (id: number) => void
 }) {
+  const tc = useColors()
   const week = item.recent ? ' this week' : ''
   const subtitle =
     item.highlight === 'disagreement'
       ? `Widest disagreement${week} · ${item.spread.toFixed(1)} spread`
       : `${item.friend_count} ${item.friend_count === 1 ? 'friend' : 'friends'} rated${week}`
-  const subColor = item.highlight === 'disagreement' ? DOWN : colors.green
+  const subColor = item.highlight === 'disagreement' ? DOWN : tc.green
 
   return (
     <View style={styles.compareCard}>
@@ -972,7 +1003,7 @@ function CompareCard({
                 name={r.name}
                 url={r.avatar_url}
                 size={28}
-                style={r.is_you && !r.avatar_url ? { backgroundColor: colors.ink } : undefined}
+                style={r.is_you && !r.avatar_url ? { backgroundColor: YOU_FILL } : undefined}
               />
               <Text style={styles.stackName}>{r.is_you ? 'You' : r.name}</Text>
             </Pressable>
@@ -981,7 +1012,7 @@ function CompareCard({
             ) : (
               <View style={{ flex: 1 }} />
             )}
-            <Text style={[styles.stackScore, { color: songScoreColor(r.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{r.score.toFixed(2)}</Text>
+            <Text style={[styles.stackScore, { color: scoreColor(r.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{r.score.toFixed(2)}</Text>
           </View>
         ))}
       </View>
@@ -1142,7 +1173,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: colors.ink,
+    backgroundColor: YOU_FILL,
     borderWidth: 2,
     borderColor: colors.bg,
     alignItems: 'center',

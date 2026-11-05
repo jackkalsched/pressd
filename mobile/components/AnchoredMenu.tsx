@@ -21,7 +21,7 @@ import {
   type View as RNView,
 } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { colors, fonts, radii, screenHeight, screenWidth, spacing } from '../theme/tokens'
+import { colors, fonts, radii, screenHeight, screenWidth, spacing, useColors } from '../theme/tokens'
 
 export interface MenuOption {
   key: string
@@ -55,6 +55,7 @@ export default function AnchoredMenu({
    *  sits near the end of a row, so the menu opens inward. */
   align?: 'left' | 'right'
 }) {
+  const tc = useColors()
   const [anchor, setAnchor] = useState<Anchor | null>(null)
   // Kept mounted through the closing animation, so the menu fades out instead
   // of vanishing between frames.
@@ -128,7 +129,7 @@ export default function AnchoredMenu({
               <Text style={[styles.label, o.selected && styles.labelOn]} numberOfLines={1}>
                 {o.label}
               </Text>
-              {o.selected && <Check size={15} color={colors.green} />}
+              {o.selected && <Check size={15} color={tc.green} />}
             </Pressable>
           ))}
         </ScrollView>

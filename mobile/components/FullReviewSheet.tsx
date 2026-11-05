@@ -9,11 +9,10 @@
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useQuery } from '@tanstack/react-query'
 import { Triangle, X } from 'lucide-react-native'
-import { songScoreColor } from '@pressd/shared/types'
 import { fetchPostAuthorRating } from '../lib/api'
 import Avatar from './Avatar'
 import { useOpenProfile } from '../lib/useOpenProfile'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../theme/tokens'
 
 const DOWN = '#e0492b'
 
@@ -32,6 +31,7 @@ function ratedOn(iso: string | null): string | null {
 }
 
 export default function FullReviewSheet({ postId, onClose }: { postId: number | null; onClose: () => void }) {
+  const tc = useColors()
   const openProfile = useOpenProfile()
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['postRating', postId],
@@ -56,12 +56,12 @@ export default function FullReviewSheet({ postId, onClose }: { postId: number | 
         <View style={styles.head}>
           <Text style={styles.eyebrow}>FULL REVIEW</Text>
           <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Close">
-            <X size={20} color={colors.inkTertiary} />
+            <X size={20} color={tc.inkTertiary} />
           </Pressable>
         </View>
 
         {isLoading ? (
-          <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
+          <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
         ) : isError || !data ? (
           <Text style={styles.empty}>{(error as Error)?.message || 'Could not load that review.'}</Text>
         ) : (
@@ -86,7 +86,7 @@ export default function FullReviewSheet({ postId, onClose }: { postId: number | 
 
             {data.score != null && (
               <View style={styles.scoreRow}>
-                <Text style={[styles.score, { color: songScoreColor(data.score) }]} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+                <Text style={[styles.score, { color: scoreColor(data.score) }]} maxFontSizeMultiplier={NUM_SCALE_CAP}>
                   {data.score.toFixed(2)}
                 </Text>
                 <Text style={styles.scoreLabel}>FINAL SCORE</Text>
@@ -102,7 +102,7 @@ export default function FullReviewSheet({ postId, onClose }: { postId: number | 
                     <View key={f.key} style={styles.factor}>
                       <Text style={styles.factorLabel} numberOfLines={1}>{f.label}</Text>
                       <Text
-                        style={[styles.factorValue, { color: v != null ? songScoreColor(v) : colors.inkMuted }]}
+                        style={[styles.factorValue, { color: v != null ? scoreColor(v) : colors.inkMuted }]}
                         maxFontSizeMultiplier={NUM_SCALE_CAP}
                       >
                         {v != null ? v.toFixed(1) : '—'}
@@ -136,7 +136,7 @@ export default function FullReviewSheet({ postId, onClose }: { postId: number | 
                     >
                       {s.title}
                     </Text>
-                    {s.score != null && isTop(s) && <Triangle size={9} color={colors.green} />}
+                    {s.score != null && isTop(s) && <Triangle size={9} color={tc.green} />}
                     {s.score != null && s.score === worst && worst !== best && (
                       <View style={{ transform: [{ rotate: '180deg' }] }}>
                         <Triangle size={9} color={DOWN} />
@@ -145,12 +145,12 @@ export default function FullReviewSheet({ postId, onClose }: { postId: number | 
                   </View>
                   {s.score != null && (
                     <View style={styles.bar}>
-                      <View style={[styles.barFill, { width: `${s.score * 10}%`, backgroundColor: songScoreColor(s.score) }]} />
+                      <View style={[styles.barFill, { width: `${s.score * 10}%`, backgroundColor: scoreColor(s.score) }]} />
                     </View>
                   )}
                 </View>
                 <Text
-                  style={[styles.trackScore, { color: s.score != null ? songScoreColor(s.score) : colors.inkMuted }]}
+                  style={[styles.trackScore, { color: s.score != null ? scoreColor(s.score) : colors.inkMuted }]}
                   maxFontSizeMultiplier={NUM_SCALE_CAP}
                 >
                   {s.score != null ? s.score.toFixed(1) : 'skip'}

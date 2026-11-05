@@ -27,7 +27,7 @@ import { Search, X } from 'lucide-react-native'
 import { useAlbumSearch } from '@pressd/shared/hooks/useAlbumSearch'
 import type { AlbumSearchResult } from '@pressd/shared/api'
 import { setFirstAlbumPick } from '../lib/firstAlbumPick'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, useColors } from '../theme/tokens'
 
 /** "· 2016" when the year is known, "· 12 tracks" when it isn't (Deezer's
  *  search payload carries no release date), and nothing when neither is. */
@@ -38,6 +38,7 @@ function meta(r: AlbumSearchResult): string {
 }
 
 export default function FirstAlbumSheet() {
+  const tc = useColors()
   const router = useRouter()
   const [query, setQuery] = useState('')
   const { results, searching, mbPending, noResults } = useAlbumSearch(query)
@@ -61,21 +62,21 @@ export default function FirstAlbumSheet() {
       </View>
 
       <View style={styles.searchBar}>
-        <Search size={18} color={colors.inkMuted} />
+        <Search size={18} color={tc.inkMuted} />
         <TextInput
           style={styles.input}
           value={query}
           onChangeText={setQuery}
           placeholder="Search any album or artist"
-          placeholderTextColor={colors.inkMuted}
+          placeholderTextColor={tc.inkMuted}
           autoFocus
           autoCorrect={false}
           returnKeyType="search"
         />
-        {searching && <ActivityIndicator size="small" color={colors.inkMuted} />}
+        {searching && <ActivityIndicator size="small" color={tc.inkMuted} />}
         {query.length > 0 && !searching && (
           <Pressable onPress={() => setQuery('')} hitSlop={8}>
-            <X size={16} color={colors.inkMuted} />
+            <X size={16} color={tc.inkMuted} />
           </Pressable>
         )}
       </View>
@@ -91,7 +92,7 @@ export default function FirstAlbumSheet() {
         ListHeaderComponent={
           searching && results.length === 0 ? (
             <View style={styles.centerNote}>
-              <ActivityIndicator color={colors.green} />
+              <ActivityIndicator color={tc.green} />
             </View>
           ) : mbPending && results.length > 0 ? (
             <Text style={styles.pending}>Checking more sources…</Text>

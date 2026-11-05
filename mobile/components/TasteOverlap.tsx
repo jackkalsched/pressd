@@ -24,7 +24,7 @@ type Face = { name: string; avatarUrl?: string | null }
 
 const FACE = 30
 const COVER = 30
-const PILL_BG = '#dfe9e2'
+const PILL_BG = colors.greenTint
 
 export function OverlapPill({ overlap, me, them, onCompare }: {
   overlap: Overlap

@@ -16,7 +16,7 @@ import { ArrowLeft } from 'lucide-react-native'
 import { fetchArtistDetail } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { GapAxisLabels, GapList } from '../../components/SongGapChart'
-import { colors, fonts, spacing } from '../../theme/tokens'
+import { colors, fonts, spacing, useColors } from '../../theme/tokens'
 
 // Green into cream. A two-stop gradient creases where it meets the solid
 // header — the colour's rate of change jumps from nothing to constant, and the
@@ -34,12 +34,17 @@ function mix(a: string, b: string, t: number): string {
   return `rgb(${c(r1, r2)},${c(g1, g2)},${c(b1, b2)})`
 }
 
-const FADE_COLORS = Array.from({ length: FADE_STEPS + 1 }, (_, i) => {
-  const t = i / FADE_STEPS
-  return mix(colors.green, colors.bg, t * t * (3 - 2 * t))
-}) as unknown as readonly [string, string, ...string[]]
+function fadeColors(from: string, to: string) {
+  return Array.from({ length: FADE_STEPS + 1 }, (_, i) => {
+    const t = i / FADE_STEPS
+    return mix(from, to, t * t * (3 - 2 * t))
+  }) as unknown as readonly [string, string, ...string[]]
+}
 
 export default function ArtistSplits() {
+  const tc = useColors()
+  // Green into the page, in whichever palette is showing.
+  const fade = useMemo(() => fadeColors(tc.green, tc.bg), [tc])
   const { name } = useLocalSearchParams<{ name: string }>()
   const artist = decodeURIComponent(name ?? '')
   const router = useRouter()
@@ -82,11 +87,11 @@ export default function ArtistSplits() {
       </View>
       {/* Sits between the header and the body rather than over either, so the
           content below starts on flat cream. */}
-      <LinearGradient colors={FADE_COLORS} style={styles.fade} pointerEvents="none" />
+      <LinearGradient colors={fade} style={styles.fade} pointerEvents="none" />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {isLoading ? (
-          <ActivityIndicator color={colors.green} style={{ marginTop: spacing.xxl }} />
+          <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
         ) : rows.length === 0 ? (
           <Text style={styles.empty}>Nobody else has rated {artist} yet.</Text>
         ) : (

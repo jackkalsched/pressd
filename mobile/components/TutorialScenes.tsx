@@ -18,7 +18,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, ArrowUp, MessageCircle } from 'lucide-react-native'
 import { avatarColor } from '@pressd/shared/types'
 import { fetchArtStrip } from '../lib/api'
-import { colors, fonts, radii, spacing, songScoreColor, NUM_SCALE_CAP } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../theme/tokens'
 
 type SceneProps = { active: boolean }
 
@@ -164,7 +164,7 @@ export function FrontToBackScene({ active }: SceneProps) {
         <Text style={styles.rateTitle} numberOfLines={1}>{t.title}</Text>
         <Text style={styles.rateMeta}>{t.time}</Text>
         <Text
-          style={[styles.rateScore, { color: value != null ? songScoreColor(value) : colors.inkMuted }]}
+          style={[styles.rateScore, { color: value != null ? scoreColor(value) : colors.inkMuted }]}
           maxFontSizeMultiplier={NUM_SCALE_CAP}
         >
           {field || '—'}
@@ -174,7 +174,7 @@ export function FrontToBackScene({ active }: SceneProps) {
 
       <View style={styles.ramp} onLayout={(e) => setRampW(e.nativeEvent.layout.width)}>
         {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-          <View key={i} style={{ flex: 1, backgroundColor: songScoreColor(i + 0.5) }} />
+          <View key={i} style={{ flex: 1, backgroundColor: scoreColor(i + 0.5) }} />
         ))}
         <Animated.View style={[styles.rampDot, { opacity: value == null ? 0 : 1, transform: [{ translateX: dotX }] }]} />
       </View>
@@ -195,7 +195,7 @@ export function FrontToBackScene({ active }: SceneProps) {
               key={x.title}
               style={[
                 styles.chip,
-                { backgroundColor: i < done ? songScoreColor(parseFloat(x.score)) : colors.inset },
+                { backgroundColor: i < done ? scoreColor(parseFloat(x.score)) : colors.inset },
                 i === at && i >= done && styles.chipCurrent,
               ]}
             />
@@ -443,6 +443,7 @@ function Avatar({ name }: { name: string }) {
 }
 
 export function FriendsScene({ active }: SceneProps) {
+  const tc = useColors()
   const reduce = useReduceMotion()
   const art = useArt()
   const [rows] = useState(() => [0, 1, 2].map(() => new Animated.Value(0)))
@@ -476,7 +477,7 @@ export function FriendsScene({ active }: SceneProps) {
           <Text style={styles.feedName}>Maya</Text> rated an album
         </Text>
         <Cover uri={art[2]} size={34} seed="c" />
-        <View style={[styles.scoreChip, { backgroundColor: songScoreColor(9.12) }]}>
+        <View style={[styles.scoreChip, { backgroundColor: scoreColor(9.12) }]}>
           <Text style={styles.scoreChipText} maxFontSizeMultiplier={NUM_SCALE_CAP}>9.12</Text>
         </View>
       </Animated.View>
@@ -487,7 +488,7 @@ export function FriendsScene({ active }: SceneProps) {
           <Text style={styles.bubbleText} numberOfLines={2}>The closer makes the whole record.</Text>
         </View>
         <View style={styles.replies}>
-          <MessageCircle size={13} color={colors.inkMuted} />
+          <MessageCircle size={13} color={tc.inkMuted} />
           <Text style={styles.repliesText} maxFontSizeMultiplier={NUM_SCALE_CAP}>12</Text>
         </View>
       </Animated.View>
@@ -495,7 +496,7 @@ export function FriendsScene({ active }: SceneProps) {
       <Animated.View style={[styles.feedRow, rise(rows[2])]}>
         <Text style={styles.rank} maxFontSizeMultiplier={NUM_SCALE_CAP}>#3</Text>
         <View style={styles.move}>
-          <ArrowUp size={12} color={colors.green} strokeWidth={2.6} />
+          <ArrowUp size={12} color={tc.green} strokeWidth={2.6} />
           <Text style={styles.moveText} maxFontSizeMultiplier={NUM_SCALE_CAP}>2</Text>
         </View>
         <Cover uri={art[3]} size={34} seed="d" />
@@ -514,6 +515,7 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 const PREDICTED = [8.94, 8.13, 9.31]
 
 export function LearnsYouScene({ active }: SceneProps) {
+  const tc = useColors()
   const reduce = useReduceMotion()
   const art = useArt()
   const [progress] = useState(() => new Animated.Value(0)) // albums rated, 0–10
@@ -552,12 +554,12 @@ export function LearnsYouScene({ active }: SceneProps) {
       <View style={styles.ringRow}>
         <View style={{ width: RING, height: RING }}>
           <Svg width={RING} height={RING}>
-            <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={colors.inset} strokeWidth={RING_STROKE} fill="none" />
+            <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={tc.inset} strokeWidth={RING_STROKE} fill="none" />
             <AnimatedCircle
               cx={RING / 2}
               cy={RING / 2}
               r={r}
-              stroke={colors.green}
+              stroke={tc.green}
               strokeWidth={RING_STROKE}
               fill="none"
               strokeDasharray={`${circumference} ${circumference}`}

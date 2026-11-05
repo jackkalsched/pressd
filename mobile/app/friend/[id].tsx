@@ -45,7 +45,7 @@ import {
 } from '../../lib/rankings'
 import ProfileBanner from '../../components/ProfileBanner'
 import { OverlapPill } from '../../components/TasteOverlap'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 
 const GAP = 10
@@ -75,6 +75,7 @@ function topTags(tags: (string | null)[], n: number): string[] {
 }
 
 export default function FriendProfile() {
+  const tc = useColors()
   const { id } = useLocalSearchParams<{ id: string }>()
   const fid = Number(id)
   const router = useRouter()
@@ -268,14 +269,14 @@ export default function FriendProfile() {
       <View style={[styles.screen, styles.center]}>
         <View style={[styles.backWrap, { top: insets.top + 6 }]}>
           <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-            <ArrowLeft size={18} color={colors.ink} />
+            <ArrowLeft size={18} color={tc.ink} />
             <Text style={styles.backText}>Back</Text>
           </Pressable>
         </View>
         {profileError || !Number.isFinite(fid) ? (
           <Text style={styles.empty}>This profile isn&rsquo;t available.</Text>
         ) : (
-          <ActivityIndicator color={colors.green} />
+          <ActivityIndicator color={tc.green} />
         )}
       </View>
     )
@@ -294,7 +295,7 @@ export default function FriendProfile() {
       {/* Back sits above the header, on the page rather than on the picture. */}
       <View style={[styles.backWrap, { top: insets.top + 6 }]}>
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-          <ArrowLeft size={18} color={colors.ink} />
+          <ArrowLeft size={18} color={tc.ink} />
           <Text style={styles.backText}>Back</Text>
         </Pressable>
       </View>
@@ -348,9 +349,9 @@ export default function FriendProfile() {
                     accessibilityLabel={isFriend ? 'Friends. Remove friend' : requested ? 'Friend request sent' : theyAsked ? 'Accept friend request' : 'Add friend'}
                   >
                     {isFriend ? (
-                      <Check size={14} color={colors.green} strokeWidth={2.6} />
+                      <Check size={14} color={tc.green} strokeWidth={2.6} />
                     ) : requested ? (
-                      <Clock size={14} color={colors.green} strokeWidth={2.4} />
+                      <Clock size={14} color={tc.green} strokeWidth={2.4} />
                     ) : theyAsked ? null : (
                       <UserPlus size={14} color="#ffffff" strokeWidth={2.4} />
                     )}
@@ -395,7 +396,7 @@ export default function FriendProfile() {
                   <Text style={styles.metricBtnText}>
                     {currentMetric.label} {rankDir === 'desc' ? '↓' : '↑'}
                   </Text>
-                  <ChevronDown size={13} color={colors.inkSecondary} />
+                  <ChevronDown size={13} color={tc.inkSecondary} />
                 </Pressable>
               </View>
             )}
@@ -559,7 +560,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 6,
     right: 6,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.raised,
     borderRadius: radii.pill,
     borderWidth: 1.5,
     paddingHorizontal: 9,

@@ -29,7 +29,7 @@ import {
   pickTopSong,
 } from '@pressd/shared/types'
 import { fetchAlbums, fetchAlbumColor } from '../lib/api'
-import { colors, fonts } from '../theme/tokens'
+import { colors, fonts, useColors } from '../theme/tokens'
 
 // The web card's palette, kept as literals rather than tokens — this is a
 // fixed-composition image, not a themed screen, and it must not drift.
@@ -68,6 +68,7 @@ function hueOf(hsl: string | null | undefined): number | null {
 }
 
 export default function ShareCard({ album, onClose }: { album: Album; onClose: () => void }) {
+  const tc = useColors()
   const cardRef = useRef<View>(null)
   const [sharing, setSharing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -181,7 +182,7 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
       <View style={styles.header}>
         <Text allowFontScaling={false} style={styles.headerTitle}>Share card</Text>
         <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Close">
-          <X size={22} color={colors.inkTertiary} />
+          <X size={22} color={tc.inkTertiary} />
         </Pressable>
       </View>
 
