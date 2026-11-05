@@ -1,4 +1,5 @@
 import os
+import re
 from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.engine import URL
@@ -40,11 +41,41 @@ def _build_engine():
 engine = _build_engine()
 
 
+_ADD_COLUMN = re.compile(r"^\s*ALTER TABLE\s+(\w+)\s+ADD COLUMN\s+(?:IF NOT EXISTS\s+)?(\w+)", re.I)
+_CREATE_INDEX = re.compile(r"^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF NOT EXISTS\s+(\w+)", re.I)
+
+
+def _already_applied(conn, stmt: str) -> bool:
+    """True when an ADD COLUMN or CREATE INDEX IF NOT EXISTS has nothing to do.
+
+    Asked of the catalog, which takes no lock, before the statement runs: an
+    ALTER TABLE takes an exclusive lock on its table *before* it finds the
+    column already there. On every boot that lock waited behind the live app's
+    open transactions, and while it waited Postgres queued every read of the
+    table behind it — on 2026-11-05, two backends booting at once stalled every
+    album read in production until each ALTER hit the statement timeout."""
+    m = _ADD_COLUMN.match(stmt)
+    if m:
+        return conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema = 'public' AND table_name = :t AND column_name = :c"),
+            {"t": m.group(1).lower(), "c": m.group(2).lower()}).first() is not None
+    m = _CREATE_INDEX.match(stmt)
+    if m:
+        return conn.execute(text(
+            "SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = :i"),
+            {"i": m.group(1).lower()}).first() is not None
+    return False
+
+
 def _exec_migration(conn, stmt: str):
     """Run one idempotent migration statement. Expected idempotency errors
     (column/index already exists) stay quiet; anything else is logged so
     schema drift is never silently swallowed."""
     try:
+        if _already_applied(conn, stmt):
+            conn.rollback()  # end the catalog read's transaction
+            return
         conn.execute(text(stmt))
         conn.commit()
     except Exception as e:
@@ -65,9 +96,16 @@ def init_db():
             conn.rollback()
             print(f"[init_db] seed user failed: {e}")
 
-        # Disable statement timeout for DDL (Supabase pooler sets a short default)
+        # Disable statement timeout for DDL (Supabase pooler sets a short default),
+        # but cap how long any one statement may wait for a lock: a migration that
+        # needs one gives up after 5s and is tried again on the next boot, rather
+        # than queueing the live app's reads of its table behind it. Committed,
+        # because _exec_migration rolls back after its catalog checks and would
+        # otherwise undo both.
         try:
             conn.execute(text("SET statement_timeout = 0"))
+            conn.execute(text("SET lock_timeout = '5s'"))
+            conn.commit()
         except Exception:
             conn.rollback()  # not Postgres (e.g. sqlite in tests) — fine
 

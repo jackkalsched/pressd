@@ -228,6 +228,13 @@ about deploy config from it.
 There is no Alembic and no version table. Adding a column means adding a SQLModel field
 **and** appending an `ALTER TABLE … ADD COLUMN` line. `_exec_migration` (`:33`) swallows
 "already exists" and logs everything else, so drift is loud rather than silent.
+Before an `ADD COLUMN` or `CREATE INDEX IF NOT EXISTS` it asks the catalog, which takes no
+lock, and skips one already applied (`_already_applied`); the boot also sets `lock_timeout`
+to 5s. Both since 2026-11-05, when two backends booting at once against a prediction job's
+open transaction stalled every album read in production: an `ALTER TABLE` takes its
+exclusive lock *before* it finds the column there, and Postgres queues every later read of
+the table behind a waiting one. A migration that does need a lock and can't get it in 5s
+logs and runs again on the next boot.
 
 ---
 
