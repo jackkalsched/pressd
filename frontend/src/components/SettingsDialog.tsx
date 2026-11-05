@@ -1,10 +1,11 @@
-// Settings — your own account, opened from the top right of your profile
-// (FriendProfile, when it's you) and, before that page existed, from the
-// sidebar. Mobile's SettingsSheet, as a dialog: photo, banner, username and
-// bio, phone number, Google link, the tutorial replay and sign-out.
+// Edit profile and Settings — your own account, opened from the pencil and the
+// gear at the top right of your profile's banner (FriendProfile, when it's
+// you). Mobile's SettingsSheet, as one dialog in two modes, as there: Edit
+// profile holds photo, banner, username, bio and location; Settings holds the
+// phone number, Google link, the tutorial replay and sign-out.
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useGoogleLogin } from '@react-oauth/google'
 import { ChevronRight, Loader2, X } from 'lucide-react'
 import { useUser } from '../context/UserContext'
@@ -37,7 +38,10 @@ function resizeImageToBase64(file: File, size = 200): Promise<string> {
   })
 }
 
-export default function SettingsDialog({ onClose }: { onClose: () => void }) {
+export type SettingsMode = 'profile' | 'settings'
+
+export default function SettingsDialog({ mode, onClose }: { mode: SettingsMode; onClose: () => void }) {
+  const editing = mode === 'profile'
   const { activeUser, setActiveUser, signOut, removePhoneNumber } = useUser()
   const [phoneOpen, setPhoneOpen] = useState(false)
   const [phoneBusy, setPhoneBusy] = useState(false)
@@ -54,9 +58,13 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
     }
   }
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [name, setName] = useState(activeUser?.name ?? '')
   const [avatarUrl, setAvatarUrl] = useState(activeUser?.avatarUrl ?? '')
   const [bio, setBio] = useState(activeUser?.bio ?? '')
+  // Seeded from the profile once it arrives; null until then, so an early save
+  // can't send an empty string and clear what's stored.
+  const [location, setLocation] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const banner = useBanner(activeUser?.id)
@@ -69,6 +77,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
     enabled: !!activeUser,
     staleTime: 60_000,
   })
+  const locationValue = location ?? ownProfile?.location ?? ''
 
   const googleLink = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
@@ -116,7 +125,10 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         name: name.trim() !== activeUser.name ? name.trim() : undefined,
         avatarUrl: avatarUrl !== (activeUser.avatarUrl ?? '') ? avatarUrl : undefined,
         bio: bio.trim() !== (activeUser.bio ?? '') ? bio.trim() : undefined,
+        location: location !== null && location.trim() !== (ownProfile?.location ?? '') ? location.trim() : undefined,
       })
+      // The profile page reads location from the profile query, not the session.
+      queryClient.setQueryData(['profile', activeUser.id], updated)
       setActiveUser({
         ...activeUser,
         id: updated.id,
@@ -142,10 +154,11 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm fade-in" onClick={onClose} />
       <div className="relative bg-white border border-[#e2e2e2] rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl pop-in">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-[#111] font-semibold">Settings</h2>
+          <h2 className="text-[#111] font-semibold">{editing ? 'Edit profile' : 'Settings'}</h2>
           <button onClick={onClose} className="text-[#aaa] hover:text-[#555] transition-colors"><X size={18} /></button>
         </div>
 
+        {editing && (<>
         {/* Avatar preview + upload button */}
         <div className="flex flex-col items-center gap-2 mb-5">
           <Avatar name={preview.name} avatarUrl={preview.avatarUrl} size={80} />
@@ -211,6 +224,14 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             />
             <p className="text-[11px] text-[#999] mt-1 text-right">{bio.length}/240</p>
           </div>
+          <div>
+            <label className="text-xs text-[#888] mb-1 block">Location</label>
+            <input
+              value={locationValue}
+              onChange={(e) => setLocation(e.target.value.slice(0, 40))}
+              className="w-full bg-[#f5f5f5] border border-[#e2e2e2] text-[#111] text-sm px-4 py-2.5 rounded-lg focus:outline-none focus:border-[#2d6a4f] transition-colors"
+            />
+          </div>
           {(error ?? banner.error) && <p className="text-[#c0392b] text-xs">{error ?? banner.error}</p>}
           <button
             type="submit"
@@ -220,8 +241,10 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             {loading ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save'}
           </button>
         </form>
+        </>)}
 
-        <div className="mt-4 pt-4 border-t border-[#f0f0f0] flex flex-col gap-2">
+        {!editing && (
+        <div className="flex flex-col gap-2">
           {!activeUser?.avatarUrl && (
             <button
               onClick={() => googleLink()}
@@ -279,6 +302,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             Sign out
           </button>
         </div>
+        )}
       </div>
       {phoneOpen && <PhoneDialog mode="settings" onClose={() => setPhoneOpen(false)} />}
       {banner.cropper}

@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, Clock, Image as ImageIcon, Link2, Loader2, MoreHorizontal, Settings, UserMinus, UserPlus } from 'lucide-react'
+import { ArrowLeft, Check, Clock, Link2, Loader2, MapPin, MoreHorizontal, Pencil, Settings, UserMinus, UserPlus } from 'lucide-react'
 import { acceptFriendRequest, addFriend, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, fetchOverlap, getInviteLink, removeFriend } from '../api'
 import { useUser } from '../context/UserContext'
 import Library from './Library'
-import { useBanner } from '../lib/useBanner'
 import { stagger } from '../lib/format'
 import { songScoreColor } from '../types'
 import { ScoreHistogram } from '../components/histograms'
 import ProfilePicks from '../components/ProfilePicks'
-import SettingsDialog from '../components/SettingsDialog'
+import SettingsDialog, { type SettingsMode } from '../components/SettingsDialog'
 import { OverlapPill } from '../components/TasteOverlap'
+import Avatar from '../components/Avatar'
 import Stats from './Stats'
 import Ratings from './Ratings'
 
@@ -41,14 +41,16 @@ export default function FriendProfile() {
   const { activeUser, setViewingUser } = useUser()
   const [tab, setTab] = useState<Tab>('library')
   const [busy, setBusy] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  // The banner's pencil and gear: Edit profile and Settings, one dialog in two modes.
+  const [sheet, setSheet] = useState<SettingsMode | null>(null)
   const [shared, setShared] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  // Removing a friend always asks first, from the Friends button or the menu.
+  const [confirmRemove, setConfirmRemove] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const valid = Number.isFinite(fid)
   // Your own page: Settings instead of the friend button, and picks you can change.
   const isSelf = activeUser?.id === fid
-  const banner = useBanner(isSelf ? fid : undefined)
 
   // Who this is. Profiles are public (backend/deps.py, authorize_view), so the
   // identity comes from the profile endpoint rather than from your friends
@@ -155,10 +157,12 @@ export default function FriendProfile() {
   async function changeFriendship(remove = false) {
     if (!person || busy) return
     if (remove ? !isFriend : (isFriend || requested)) return
-    if (remove && !confirm(`Remove ${person.name} as a friend?`)) return
     setBusy(true)
     try {
-      if (remove) await removeFriend(activeUser!.id, fid)
+      if (remove) {
+        await removeFriend(activeUser!.id, fid)
+        setConfirmRemove(false)
+      }
       else if (theyAsked) await acceptFriendRequest(activeUser!.id, fid)
       else await addFriend(activeUser!.id, fid)
       queryClient.invalidateQueries({ queryKey: ['friends'] })
@@ -220,7 +224,7 @@ export default function FriendProfile() {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'library', label: 'Library' },
     { key: 'stats', label: 'Stats' },
-    { key: 'ratings', label: 'Ratings' },
+    { key: 'ratings', label: 'Rankings' },
   ]
 
   return (
@@ -236,15 +240,29 @@ export default function FriendProfile() {
         {profile?.banner_url && (
           <img src={profile.banner_url} alt="" className="absolute inset-0 h-full w-full object-cover" />
         )}
+        {/* Mobile's two banner buttons, backed in the page's cream so they
+            read on any picture. The banner itself changes in Edit profile. */}
         {isSelf && (
-          <label className="absolute right-4 top-4 flex cursor-pointer items-center gap-2 rounded-full bg-black/55 px-4 py-2 text-[13.5px] font-semibold text-white backdrop-blur-sm transition-colors hover:bg-black/70 md:right-6 md:top-5">
-            {banner.busy ? <Loader2 size={15} className="animate-spin" /> : <ImageIcon size={15} />}
-            Edit banner
-            <input type="file" accept="image/*" className="hidden" onChange={banner.onFile} disabled={banner.busy} />
-          </label>
+          <div className="absolute right-4 top-4 flex gap-2 md:right-6 md:top-5">
+            <button
+              onClick={() => setSheet('profile')}
+              aria-label="Edit profile"
+              title="Edit profile"
+              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border-none bg-[#f9f8f6] text-[#1c1917] shadow-[0_6px_16px_-8px_rgba(0,0,0,0.5)] hover:bg-white"
+            >
+              <Pencil size={16} />
+            </button>
+            <button
+              onClick={() => setSheet('settings')}
+              aria-label="Settings"
+              title="Settings"
+              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border-none bg-[#f9f8f6] text-[#1c1917] shadow-[0_6px_16px_-8px_rgba(0,0,0,0.5)] hover:bg-white"
+            >
+              <Settings size={17} />
+            </button>
+          </div>
         )}
       </div>
-      {banner.error && <p className="m-0 mt-2 text-[13px] text-[#b91c1c]">{banner.error}</p>}
 
       {/* ── Identity ────────────────────────────────────────────────
           The avatar rides up over the banner's edge, ringed in the page's
@@ -284,6 +302,12 @@ export default function FriendProfile() {
           <p className="m-0 mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[15px] text-[#8a7f72]">
             {[
               `@${person.name}`,
+              profile?.location && (
+                <span className="flex items-center gap-1">
+                  <MapPin size={14} strokeWidth={2.2} aria-hidden />
+                  {profile.location}
+                </span>
+              ),
               profile?.created_at && `Pressing since ${new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`,
               !isSelf && mutualCount > 0 && `${mutualCount} mutual friend${mutualCount === 1 ? '' : 's'}`,
             ].filter(Boolean).map((part, i) => (
@@ -326,24 +350,20 @@ export default function FriendProfile() {
               >
                 {shared ? <><Check size={16} className="pop" /> Link copied</> : 'Share profile'}
               </button>
-              <button
-                onClick={() => setSettingsOpen(true)}
-                className="flex h-11 items-center gap-2 rounded-full border border-[#e2dbd0] bg-white px-5 text-[14.5px] font-semibold text-[#2d6a4f] hover:border-[#2d6a4f]"
-              >
-                <Settings size={16} /> Settings
-              </button>
             </>
           ) : (
             <>
               <button
-                onClick={() => changeFriendship()}
-                disabled={busy || isFriend || requested}
+                // Friends opens the removal prompt; the others add or accept.
+                onClick={() => (isFriend ? setConfirmRemove(true) : changeFriendship())}
+                disabled={busy || requested}
+                aria-label={isFriend ? `Friends. Remove ${person.name} as a friend` : undefined}
                 // Filled for every state but a sent request: adding is what the
                 // page invites, and being friends is shown just as plainly.
                 className={`flex h-12 shrink-0 items-center gap-2 rounded-full px-6 text-[15px] font-semibold transition-[background-color,transform,box-shadow] duration-200 ease-out ${
                   requested
                     ? 'bg-[#2d6a4f]/12 text-[#2d6a4f]'
-                    : `bg-[#2d6a4f] text-white shadow-[0_10px_24px_-10px_rgba(45,106,79,0.75)] ${isFriend ? '' : 'hover:-translate-y-px hover:bg-[#245c43] hover:shadow-[0_14px_28px_-10px_rgba(45,106,79,0.8)]'}`
+                    : 'bg-[#2d6a4f] text-white shadow-[0_10px_24px_-10px_rgba(45,106,79,0.75)] hover:-translate-y-px hover:bg-[#245c43] hover:shadow-[0_14px_28px_-10px_rgba(45,106,79,0.8)]'
                 } disabled:cursor-default`}
               >
                 {busy ? <Loader2 size={16} className="animate-spin" />
@@ -370,7 +390,7 @@ export default function FriendProfile() {
                       </button>
                       {isFriend && (
                         <button
-                          onClick={() => { setMenuOpen(false); changeFriendship(true) }}
+                          onClick={() => { setMenuOpen(false); setConfirmRemove(true) }}
                           className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[14px] font-medium text-[#b1542f] hover:bg-[#f5f0e8]"
                         >
                           <UserMinus size={16} /> Remove friend
@@ -459,8 +479,36 @@ export default function FriendProfile() {
       {tab === 'stats' && <Stats embedded />}
       {tab === 'ratings' && <Ratings embedded />}
       </div>
-      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
-      {banner.cropper}
+      {sheet && <SettingsDialog mode={sheet} onClose={() => setSheet(null)} />}
+      {confirmRemove && person && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm fade-in" onClick={busy ? undefined : () => setConfirmRemove(false)} />
+          <div role="alertdialog" aria-modal="true" aria-labelledby="unfriend-title" className="relative w-full max-w-sm rounded-3xl bg-[#f9f8f6] p-6 text-center shadow-xl pop-in">
+            <div className="mx-auto w-fit"><Avatar name={person.name} avatarUrl={person.avatarUrl} size={56} /></div>
+            <h2 id="unfriend-title" className="font-display m-0 mt-4 text-[22px] font-bold leading-snug text-[#1c1917]">
+              Remove {person.name} as a friend?
+            </h2>
+            <div className="mt-6 flex gap-2.5">
+              <button
+                onClick={() => setConfirmRemove(false)}
+                disabled={busy}
+                autoFocus
+                className="h-11 flex-1 rounded-full border border-[#e2dbd0] bg-white text-[14.5px] font-semibold text-[#57534e] hover:border-[#a8998a]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => changeFriendship(true)}
+                disabled={busy}
+                className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#b1542f] text-[14.5px] font-semibold text-white hover:bg-[#9a4727] disabled:opacity-60"
+              >
+                {busy ? <Loader2 size={16} className="animate-spin" /> : <UserMinus size={16} />}
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

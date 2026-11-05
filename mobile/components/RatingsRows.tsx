@@ -48,24 +48,39 @@ export function RatingRow({
   )
 }
 
+/** A metric placed on the score gradient: t 0 is the red end, 1 the green. */
+function gradient(t: number): string {
+  return songScoreColor(1 + 9 * Math.min(1, Math.max(0, t)))
+}
+
+// Where each metric's ends of the gradient sit. The plus stats are indexed to
+// 100, the library's average artist, so 100 lands mid-way; bang is good high and
+// skip good low, each over the range real libraries cover.
+const PLUS_RED = 60
+const PLUS_GREEN = 140
+const BANG_GREEN = 0.5
+const SKIP_RED = 0.3
+
 /** The trailing figure follows whichever metric the board is sorted by, so the
- *  number you ranked on is the number you can read. */
+ *  number you ranked on is the number you can read — in that metric's colour. */
 function artistValue(stat: ArtistRank, metricKey: string): { text: string; color?: string } {
-  const plus = (v: number | null) => (v == null ? '—' : String(Math.round(v)))
+  const plus = (v: number | null) =>
+    v == null ? { text: '—' } : { text: String(Math.round(v)), color: gradient((v - PLUS_RED) / (PLUS_GREEN - PLUS_RED)) }
   // /stats/artists reports bang/skip as a fraction, not a percentage — without
   // the scale every row on a friend's board rounded to "0%".
-  const pct = (v: number | null) => (v == null ? '—' : `${Math.round(v * 100)}%`)
+  const pct = (v: number | null, t: (v: number) => number) =>
+    v == null ? { text: '—' } : { text: `${Math.round(v * 100)}%`, color: gradient(t(v)) }
   switch (metricKey) {
     case 'songPlus':
-      return { text: plus(stat.songPlus) }
+      return plus(stat.songPlus)
     case 'wSongPlus':
-      return { text: plus(stat.wSongPlus) }
+      return plus(stat.wSongPlus)
     case 'consPlus':
-      return { text: plus(stat.consistencyPlus) }
+      return plus(stat.consistencyPlus)
     case 'bang':
-      return { text: pct(stat.bangPct) }
+      return pct(stat.bangPct, (v) => v / BANG_GREEN)
     case 'skip':
-      return { text: pct(stat.skipPct) }
+      return pct(stat.skipPct, (v) => 1 - v / SKIP_RED)
     default:
       return { text: stat.avgSongScore.toFixed(2), color: songScoreColor(stat.avgSongScore) }
   }
@@ -91,7 +106,7 @@ export function ArtistRankRow({
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.ratingName} numberOfLines={1}>{stat.artist}</Text>
         <Text style={styles.ratingArtist} numberOfLines={1}>
-          {stat.songs} songs · avg {stat.avgSongScore.toFixed(2)}
+          {stat.songs} songs
         </Text>
       </View>
       <Text style={[styles.ratingScore, value.color ? { color: value.color } : { color: colors.ink }]}>

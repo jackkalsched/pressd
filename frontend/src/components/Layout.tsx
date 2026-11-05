@@ -46,7 +46,7 @@ const nav = [
   // already Stats — this board is about movement, not your own distribution.
   { to: '/charts', label: 'Charts', icon: TrendingUp },
   { to: '/library', label: 'Library', icon: Library },
-  { to: '/ratings', label: 'Ratings', icon: List },
+  { to: '/ratings', label: 'Rankings', icon: List },
   { to: '/stats', label: 'Stats', icon: BarChart2 },
   { to: '/social', label: 'Social', icon: Users },
 ]

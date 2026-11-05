@@ -1384,6 +1384,8 @@ export interface Profile {
    *  profile; null shows Pressd green. */
   banner_url: string | null
   bio: string | null
+  /** Where they say they are, typed by them; null when they haven't said. */
+  location: string | null
   /** When the account was made (ISO); null for accounts older than the column. */
   created_at: string | null
   /** False until `picks_required` albums are rated; the picks row stays hidden. */
@@ -1391,8 +1393,22 @@ export interface Profile {
   picks_rated_count: number
   picks_required: number
   favorite_artist: string | null
+  /** The shelf: SHELF_SIZE slots in order, each an album or empty. */
+  shelf: (ProfileAlbumPick | null)[]
   favorite_album: ProfileAlbumPick | null
   favorite_song: ProfileSongPick | null
+}
+
+/** How many albums a shelf holds (SHELF_SIZE in backend/routers/users.py). */
+export const SHELF_SIZE = 4
+
+/** The shelf with one slot changed, as the ids PATCH /users/{id} takes. An
+ *  album already elsewhere on the shelf moves to the new slot. */
+export function shelfWith(shelf: (ProfileAlbumPick | null)[], slot: number, albumId: number | null): (number | null)[] {
+  const ids = Array.from({ length: SHELF_SIZE }, (_, i) => shelf[i]?.id ?? null)
+  if (albumId != null) for (let i = 0; i < ids.length; i++) if (ids[i] === albumId) ids[i] = null
+  ids[slot] = albumId
+  return ids
 }
 
 /** Readable for any user, so a friend's page renders their picks the same way
@@ -1414,9 +1430,13 @@ export async function updateUser(
     name?: string
     avatarUrl?: string | null
     bio?: string
+    /** Free text; an empty string clears it. */
+    location?: string
     favoriteAlbumId?: number | null
     favoriteSongId?: number | null
     favoriteArtist?: string | null
+    /** Every slot, in order: an album id of your own rated albums, or null. */
+    shelf?: (number | null)[]
   },
 ): Promise<Profile> {
   const res = await apiFetch(`${BASE()}/users/${userId}`, {
@@ -1428,9 +1448,11 @@ export async function updateUser(
       name: data.name,
       avatar_url: data.avatarUrl,
       bio: data.bio,
+      location: data.location,
       favorite_album_id: data.favoriteAlbumId,
       favorite_song_id: data.favoriteSongId,
       favorite_artist: data.favoriteArtist,
+      shelf: data.shelf,
     }),
   })
   if (!res.ok) {

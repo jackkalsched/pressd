@@ -2,7 +2,7 @@
 // Library / Stats / Ratings switcher. Library (the score-badged art grid with a
 // Rated / Listening / To Listen filter) is built out here; Stats and Ratings are
 // placeholders until their phases land.
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
@@ -15,13 +15,12 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
-import { useRouter } from 'expo-router'
-import { ChevronDown, Search, Settings, Star, X } from 'lucide-react-native'
+import { usePathname, useRouter } from 'expo-router'
+import { ChevronDown, Pencil, Search, Settings, Star, X } from 'lucide-react-native'
 import {
   fetchAlbums,
   fetchSummary,
   fetchScoreRange,
-  fetchFriends,
   fetchArtistStats,
   fetchScatterData,
 } from '../../lib/api'
@@ -29,9 +28,9 @@ import { songScoreColor, type Album, type AlbumStatus } from '@pressd/shared/typ
 import { useAuth } from '../../lib/auth'
 import { useProfile } from '../../lib/picks'
 import StatsView from '../../components/StatsView'
-import ProfileBanner, { type PickKind } from '../../components/ProfileBanner'
+import ProfileBanner from '../../components/ProfileBanner'
 import { getPrefs } from '../../lib/prefs'
-import SettingsSheet from '../../components/SettingsSheet'
+import SettingsSheet, { type SheetMode } from '../../components/SettingsSheet'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
@@ -56,7 +55,7 @@ type Tab = 'library' | 'stats' | 'ratings'
 const TABS: { key: Tab; label: string }[] = [
   { key: 'library', label: 'Library' },
   { key: 'stats', label: 'Stats' },
-  { key: 'ratings', label: 'Ratings' },
+  { key: 'ratings', label: 'Rankings' },
 ]
 
 const STATUSES: { key: AlbumStatus; label: string }[] = [
@@ -128,6 +127,9 @@ function topTags(tags: (string | null)[], n: number): string[] {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([t]) => t)
 }
 
+// The other tabs' paths: coming from one of them is a new visit to Profile.
+const OTHER_TABS = new Set(['/', '/charts', '/social'])
+
 export default function Profile() {
   const { user } = useAuth()
   const router = useRouter()
@@ -146,7 +148,23 @@ export default function Profile() {
   // library, and re-typing to follow a record between them is busywork.
   const [libSearch, setLibSearch] = useState('')
   const [metricOpen, setMetricOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  // The two banner sheets, Edit profile (pencil) and Settings (gear), share one
+  // sheet. The mode outlives the open flag so a closing sheet keeps its contents
+  // while it slides away.
+  // A visit is arriving on this tab from another one. The tab stays mounted
+  // underneath the others, so the path is what says it came back; returning
+  // from a screen pushed over it (an album) is the same visit.
+  const pathname = usePathname()
+  const lastPath = useRef(pathname)
+  const [visit, setVisit] = useState(0)
+  useEffect(() => {
+    if (pathname === '/profile' && OTHER_TABS.has(lastPath.current)) setVisit((v) => v + 1)
+    lastPath.current = pathname
+  }, [pathname])
+
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [sheetMode, setSheetMode] = useState<SheetMode>('settings')
+  const openSheet = (mode: SheetMode) => { setSheetMode(mode); setSheetOpen(true) }
 
   function switchRankMode(m: RankMode) {
     setRankMode(m)
@@ -184,12 +202,6 @@ export default function Profile() {
   const badgeMu = scoreRange?.mu ?? 7.0
   const badgeSd = scoreRange?.sd ?? 1.0
 
-  const { data: friends = [] } = useQuery({
-    queryKey: ['friends', user?.id],
-    queryFn: () => fetchFriends(user!.id),
-    enabled: !!user,
-  })
-
   // Name, avatar and the three picks, resolved server-side. The banner hides
   // the picks row on its own until the ten-album bar is cleared.
   const { data: profile } = useProfile(user?.id)
@@ -210,17 +222,6 @@ export default function Profile() {
   })
 
   // Favorite tags: top three genres + top three subgenres, one scrolling line.
-  // The header's small distribution: one bar per whole point, over albums.
-  // Different artists rated — range, beside the volume of Albums and Songs.
-  // Case and spacing folded, so one artist's records don't count twice.
-  const artistCount = useMemo(
-    () => new Set(rated.flatMap((a) => [a.artist, ...a.extraArtists].map((n) => n.trim().toLowerCase()))).size,
-    [rated],
-  )
-  const albumScores = useMemo(
-    () => rated.flatMap((a) => (a.score != null ? [a.score] : [])),
-    [rated],
-  )
   const topGenres = useMemo(() => topTags(rated.map((a) => a.genre), 3), [rated])
   const topSubgenres = useMemo(
     () => topTags(rated.flatMap((a) => [a.subGenre1, a.subGenre2, a.subGenre3]), 3),
@@ -327,27 +328,30 @@ export default function Profile() {
               avatarUrl={user.avatarUrl}
               avg={summary?.avg_album_score ?? null}
               stats={[
-                { value: String(rated.length), label: 'ALBUMS' },
+                { value: String(rated.length), label: 'Albums' },
                 {
                   value: summary?.total_songs_rated != null ? summary.total_songs_rated.toLocaleString() : '—',
-                  label: 'SONGS',
+                  label: 'Songs',
                 },
-                { value: artistCount.toLocaleString(), label: 'ARTISTS' },
-                { value: String(friends.length), label: 'FRIENDS' },
               ]}
               genres={topGenres}
               subgenres={topSubgenres}
               topInset={insets.top}
+              countKey={`${user.id}:${visit}`}
               profile={profile}
-              picksHeading="MY PICKS"
-              scores={albumScores}
-              onPickPress={(kind: PickKind) => router.push(`/favorite/${kind}`)}
-              action={
-                // Sign out moved inside Settings, alongside the sign-in methods
-                // it belongs with.
-                <Pressable onPress={() => setSettingsOpen(true)} hitSlop={12} accessibilityLabel="Settings">
-                  <Settings size={20} color={colors.inkSecondary} />
-                </Pressable>
+              bio={profile?.bio ?? user.bio}
+              onShelfSlotPress={(slot) => router.push(`/favorite/album?slot=${slot}`)}
+              bannerAction={
+                // Editing the profile and the app's settings are two sheets.
+                // Backed in the page's cream so they read on any picture.
+                <View style={styles.bannerBtns}>
+                  <Pressable onPress={() => openSheet('profile')} hitSlop={8} style={styles.settingsBtn} accessibilityLabel="Edit profile">
+                    <Pencil size={16} color={colors.ink} />
+                  </Pressable>
+                  <Pressable onPress={() => openSheet('settings')} hitSlop={8} style={styles.settingsBtn} accessibilityLabel="Settings">
+                    <Settings size={17} color={colors.ink} />
+                  </Pressable>
+                </View>
               }
             />
 
@@ -553,7 +557,7 @@ export default function Profile() {
         onClose={() => setMetricOpen(false)}
       />
 
-      <SettingsSheet visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsSheet visible={sheetOpen} mode={sheetMode} onClose={() => setSheetOpen(false)} />
     </View>
   )
 }
@@ -692,6 +696,15 @@ function ArtistRankRow({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: spacing.lg, paddingBottom: 120, gap: GAP + 4 },
+  bannerBtns: { flexDirection: 'row', gap: spacing.sm },
+  settingsBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bg,
+  },
 
   compactHeader: {
     position: 'absolute',

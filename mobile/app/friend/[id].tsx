@@ -54,7 +54,7 @@ type Tab = 'library' | 'stats' | 'ratings'
 const TABS: { key: Tab; label: string }[] = [
   { key: 'library', label: 'Library' },
   { key: 'stats', label: 'Stats' },
-  { key: 'ratings', label: 'Ratings' },
+  { key: 'ratings', label: 'Rankings' },
 ]
 
 // Score-badge color relative to this user's own mean/sd, matching Profile.
@@ -72,12 +72,6 @@ function topTags(tags: (string | null)[], n: number): string[] {
   const counts = new Map<string, number>()
   for (const t of tags) if (t) counts.set(t, (counts.get(t) ?? 0) + 1)
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([t]) => t)
-}
-
-/** The picks heading on someone else's page. "MY PICKS" here would be reading
- *  the wrong person's profile back at you, so the name carries it instead. */
-function possessive(name: string): string {
-  return /s$/i.test(name) ? `${name}'` : `${name}'s`
 }
 
 export default function FriendProfile() {
@@ -118,11 +112,6 @@ export default function FriendProfile() {
     queryFn: () => fetchFriends(user!.id),
     enabled: !!user,
   })
-  const { data: theirFriends = [] } = useQuery({
-    queryKey: ['friends', fid],
-    queryFn: () => fetchFriends(fid),
-    enabled: Number.isFinite(fid),
-  })
   const { data: summary } = useQuery({
     queryKey: ['stats', 'summary', fid],
     queryFn: () => fetchSummary(fid),
@@ -140,7 +129,7 @@ export default function FriendProfile() {
     staleTime: 5 * 60_000,
   })
   // Their picks — the same endpoint your own page reads, so the row renders
-  // identically here. No onPickPress: someone else's cards aren't editable.
+  // identically here. No onShelfSlotPress: someone else's shelf isn't editable.
   const { data: profile, isError: profileError } = useProfile(Number.isFinite(fid) ? fid : undefined)
   const badgeMu = scoreRange?.mu ?? 7.0
   const badgeSd = scoreRange?.sd ?? 1.0
@@ -149,6 +138,8 @@ export default function FriendProfile() {
     ? { name: profile.name, avatarUrl: profile.avatar_url, bio: profile.bio }
     : null
   const isSelf = user?.id === fid
+  // One visit per time this page is opened: the figures count up once.
+  const [visitId] = useState(() => `${Date.now()}`)
   const isFriend = myFriends.some((f) => f.id === fid)
   const { data: requests } = useQuery({
     queryKey: ['friend-requests', user?.id],
@@ -170,17 +161,6 @@ export default function FriendProfile() {
   const listRef = useRef<FlatList<Album | ArtistRank>>(null)
   const [tabsY, setTabsY] = useState(0)
 
-  // The header's small distribution: one bar per whole point, over albums.
-  // Different artists rated — range, beside the volume of Albums and Songs.
-  // Case and spacing folded, so one artist's records don't count twice.
-  const artistCount = useMemo(
-    () => new Set(rated.flatMap((a) => [a.artist, ...a.extraArtists].map((n) => n.trim().toLowerCase()))).size,
-    [rated],
-  )
-  const albumScores = useMemo(
-    () => rated.flatMap((a) => (a.score != null ? [a.score] : [])),
-    [rated],
-  )
   const topGenres = useMemo(() => topTags(rated.map((a) => a.genre), 3), [rated])
   const topSubgenres = useMemo(
     () => topTags(rated.flatMap((a) => [a.subGenre1, a.subGenre2, a.subGenre3]), 3),
@@ -339,17 +319,16 @@ export default function FriendProfile() {
               avatarUrl={person.avatarUrl}
               avg={summary?.avg_album_score ?? null}
               stats={[
-                { value: String(summary?.total_albums_rated ?? rated.length), label: 'ALBUMS' },
+                { value: String(summary?.total_albums_rated ?? rated.length), label: 'Albums' },
                 {
                   value: summary?.total_songs_rated != null ? summary.total_songs_rated.toLocaleString() : '—',
-                  label: 'SONGS',
+                  label: 'Songs',
                 },
-                { value: artistCount.toLocaleString(), label: 'ARTISTS' },
-                { value: String(theirFriends.length), label: 'FRIENDS' },
               ]}
               genres={topGenres}
               subgenres={topSubgenres}
-              topInset={insets.top + 22}
+              topInset={insets.top}
+              countKey={`${fid}:${visitId}`}
               bio={person.bio}
               // The same pill for a friend and a stranger: only the friend
               // button beside the name says which they are.
@@ -357,8 +336,6 @@ export default function FriendProfile() {
                 <OverlapPill overlap={overlap} me={user} them={person} onCompare={compareWith} />
               ) : undefined}
               profile={profile}
-              picksHeading={`${possessive(person.name)} picks`}
-              scores={albumScores}
               action={
                 isSelf ? undefined : (
                   // Adding someone is what this page should invite, so it gets

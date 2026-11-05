@@ -32,6 +32,8 @@ export const fonts = {
   // A real italic face: iOS can't slant a custom font, so fontStyle: 'italic'
   // on `display` draws it upright.
   displayItalic: 'PlayfairDisplay_700Bold_Italic',
+  // Wide and heavy, for the shelf's name alone.
+  wide: 'Unbounded_700Bold',
   displayBlack: 'PlayfairDisplay_900Black',
   // The Pressd wordmark itself — Clash Display, per the brand mark. Not a
   // general-purpose face: use display/body for everything else.

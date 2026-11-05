@@ -246,6 +246,14 @@ def init_db():
             "ALTER TABLE friendship ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ",
             "ALTER TABLE album ADD COLUMN IF NOT EXISTS rated_at TIMESTAMPTZ",
             "CREATE INDEX IF NOT EXISTS ix_overlapsheet_user_status ON overlapsheet (user_id, status)",
+            # ── Profile location: free text the person types, beside the handle ──
+            "ALTER TABLE pressuser ADD COLUMN IF NOT EXISTS location TEXT",
+            # ── The shelf (models.py): seeded once from the favourite album, so
+            #    nobody's pick vanishes. A cleared shelf is stored as five nulls,
+            #    never NULL, so this never refills it.
+            "ALTER TABLE pressuser ADD COLUMN IF NOT EXISTS shelf TEXT",
+            "UPDATE pressuser SET shelf = '[' || favorite_album_id || ',null,null,null,null]' "
+            "WHERE shelf IS NULL AND favorite_album_id IS NOT NULL",
             # ── Row-level security on every public table, last so it covers the
             #    tables create_all just made. Supabase serves the public schema
             #    over its REST API to anyone holding the project's publishable

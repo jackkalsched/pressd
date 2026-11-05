@@ -57,6 +57,10 @@ const FADE_LEAD = spacing.lg
 // With only the strip's height to work with it ran out in about 100pt, or 30pt
 // for an artist with no strip, and read as a hard edge.
 const FADE_TAIL = 112
+// How much of that tail the body rides up over. Its last stretch is nearly the
+// page colour already, so the figures can sit there without cutting the fade;
+// the body is clear so the dissolve still finishes behind them.
+const BODY_OVERLAP = 80
 // Stops sampled along the dissolve. A plain two-stop fade leaves a seam where
 // it begins — alpha's slope jumps from nothing to constant, and the eye catches
 // that crease as a band. Sampling a smoothstep instead leaves the ramp flat at
@@ -309,6 +313,10 @@ export default function ArtistPage() {
         </View>
 
         <View style={styles.body}>
+          {/* The page colour from where the hero ends: the root behind it is the
+              artist's colour, for the overscroll, and the top BODY_OVERLAP of
+              the body is the hero's own fade. */}
+          <View style={styles.bodyFill} pointerEvents="none" />
           {/* Headline ranks — placements within whichever population you're
               reading. Compare mode drops them for the score comparison below:
               a Song+ rank is a position in one league table, and holding yours
@@ -867,11 +875,14 @@ const styles = StyleSheet.create({
 
   body: {
     flexGrow: 1,
-    backgroundColor: colors.bg,
+    marginTop: -BODY_OVERLAP,
+    zIndex: 1,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: 60,
   },
+
+  bodyFill: { position: 'absolute', top: BODY_OVERLAP, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
 
   // Headline ranks — the ProfileBanner stat treatment (Playfair figure over a
   // small uppercase label), with no card or rules around them.

@@ -1,6 +1,8 @@
-// Settings — a bottom sheet off the Profile banner. It carries the profile
-// itself (name, picture, the three picks) and, its other main job, sign-in
-// methods: an account reached only through Apple and one reached only through
+// Settings and Edit profile — one bottom sheet off the Profile banner, opened in
+// one of two modes. Edit profile (the pencil) carries the profile itself:
+// picture, banner, username, location, bio and the shelf. Settings (the
+// gear) carries everything about the app and the account, chief among them
+// sign-in methods: an account reached only through Apple and one reached only through
 // Google are two different accounts, so linking both here is what lets someone
 // come back either way (see the Hide My Email note in mobile/TESTFLIGHT.md).
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -32,7 +34,7 @@ import { useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Apple, Check, ChevronRight, LogOut, Trash2, X } from 'lucide-react-native'
 import { fetchLinkedProviders, unlinkProvider, deleteOwnAccount, uploadBanner, deleteBanner, type Profile } from '../lib/api'
-import { fetchNotificationPrefs, updateNotificationPrefs, type NotificationPrefs } from '@pressd/shared/api'
+import { SHELF_SIZE, fetchNotificationPrefs, updateNotificationPrefs, type NotificationPrefs } from '@pressd/shared/api'
 import { cleanUsername, type AlbumStatus } from '@pressd/shared/types'
 import { setPref, usePrefs } from '../lib/prefs'
 import { currentPushToken, enablePush, pushPermissionStatus } from '../lib/push'
@@ -99,7 +101,11 @@ function GoogleConnectButton({
   )
 }
 
-export default function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export type SheetMode = 'profile' | 'settings'
+
+export default function SettingsSheet({ visible, mode, onClose }: { visible: boolean; mode: SheetMode; onClose: () => void }) {
+  const editing = mode === 'profile'
+  const title = editing ? 'Edit profile' : 'Settings'
   const { user, signOut, linkGoogleToken, linkAppleToken, updateProfile, uploadAvatarImage, removeAvatar, removePhoneNumber } = useAuth()
   const [phoneOpen, setPhoneOpen] = useState(false)
   const [phoneBusy, setPhoneBusy] = useState(false)
@@ -176,9 +182,13 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
   const [appleAvailable, setAppleAvailable] = useState(false)
   const [nameDraft, setNameDraft] = useState<string | null>(null) // non-null while editing
   const [savingName, setSavingName] = useState(false)
+  const [locationDraft, setLocationDraft] = useState<string | null>(null) // non-null while editing
+  const [savingLocation, setSavingLocation] = useState(false)
+  const [bioDraft, setBioDraft] = useState<string | null>(null) // non-null while editing
+  const [savingBio, setSavingBio] = useState(false)
   const [avatarBusy, setAvatarBusy] = useState(false)
   const [bannerBusy, setBannerBusy] = useState(false)
-  // Reset each time the sheet comes back up; see openPicker.
+  // Reset each time the sheet comes back up; see openShelfSlot.
   const navigatingRef = useRef(false)
 
   const devicePrefs = usePrefs()
@@ -268,6 +278,46 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
       setError(e instanceof Error ? e.message : 'Could not save your username')
     } finally {
       setSavingName(false)
+    }
+  }
+
+  async function saveLocation() {
+    const next = (locationDraft ?? '').trim()
+    if (!user || next === (profile?.location ?? '')) {
+      setLocationDraft(null)
+      return
+    }
+    setSavingLocation(true)
+    setError(null)
+    try {
+      // Empty clears it. The profile query is where the header reads it from.
+      const updated = await updateProfile({ location: next })
+      qc.setQueryData(profileKey(user.id), updated)
+      setLocationDraft(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save your location')
+    } finally {
+      setSavingLocation(false)
+    }
+  }
+
+  async function saveBio() {
+    const next = (bioDraft ?? '').trim()
+    if (!user || next === (profile?.bio ?? user.bio ?? '')) {
+      setBioDraft(null)
+      return
+    }
+    setSavingBio(true)
+    setError(null)
+    try {
+      // Empty clears it, as on web.
+      const updated = await updateProfile({ bio: next })
+      qc.setQueryData(profileKey(user.id), updated)
+      setBioDraft(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save your bio')
+    } finally {
+      setSavingBio(false)
     }
   }
 
@@ -396,14 +446,15 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
    *  so it has to get out of the way before the push lands, and it has to stop
    *  taking taps in the gap while it animates out. Without the guard a second
    *  tap opens a second picker behind the first. */
-  function openPicker(kind: 'song' | 'album' | 'artist') {
+  /** One shelf slot's picker, a full screen: the sheet closes first. */
+  function openShelfSlot(slot: number) {
     if (navigatingRef.current) return
     navigatingRef.current = true
     onClose()
-    router.push(`/favorite/${kind}`)
+    router.push(`/favorite/album?slot=${slot}`)
   }
 
-  /** Same hand-off as openPicker: the tutorial is a full screen too. */
+  /** Same hand-off as openShelfSlot: the tutorial is a full screen too. */
   function openTutorial() {
     if (navigatingRef.current) return
     navigatingRef.current = true
@@ -466,7 +517,7 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
     <Modal visible={mounted} transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Animated.View style={[styles.dim, { opacity: progress }]}>
-          <Pressable style={styles.fill} onPress={onClose} accessibilityLabel="Close settings" />
+          <Pressable style={styles.fill} onPress={onClose} accessibilityLabel={`Close ${title.toLowerCase()}`} />
         </Animated.View>
         <Animated.View
           style={{
@@ -475,13 +526,14 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
         >
         <Pressable style={styles.sheet}>
           <View style={styles.sheetHead}>
-            <Text style={styles.sheetTitle}>Settings</Text>
-            <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Close settings">
+            <Text style={styles.sheetTitle}>{title}</Text>
+            <Pressable onPress={onClose} hitSlop={12} accessibilityLabel={`Close ${title.toLowerCase()}`}>
               <X size={20} color={colors.inkTertiary} />
             </Pressable>
           </View>
 
           <ScrollView style={{ maxHeight: screenH * 0.68 }} showsVerticalScrollIndicator={false}>
+            {editing && (<>
             <Text style={styles.sectionLabel}>PROFILE</Text>
 
             <View style={styles.avatarRow}>
@@ -596,7 +648,87 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
               )}
             </View>
 
-            <Text style={styles.sectionLabel}>MY PICKS</Text>
+            {/* Typed, never read from the phone: people choose how specific to be. */}
+            <View style={styles.settingRow}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.providerLabel}>Location</Text>
+                {locationDraft === null ? (
+                  <Text style={[styles.settingValue, !profile?.location && { color: colors.inkTertiary }]} numberOfLines={1}>
+                    {profile?.location || 'Not set'}
+                  </Text>
+                ) : (
+                  <TextInput
+                    style={styles.nameInput}
+                    value={locationDraft}
+                    onChangeText={setLocationDraft}
+                    autoFocus
+                    autoCapitalize="words"
+                    maxLength={40}
+                    returnKeyType="done"
+                    onSubmitEditing={saveLocation}
+                  />
+                )}
+              </View>
+              {savingLocation ? (
+                <ActivityIndicator color={colors.green} />
+              ) : locationDraft === null ? (
+                <Pressable onPress={() => setLocationDraft(profile?.location ?? '')} hitSlop={8} disabled={!profile}>
+                  <Text style={styles.linkAction}>{profile?.location ? 'Edit' : 'Add'}</Text>
+                </Pressable>
+              ) : (
+                <View style={styles.avatarActions}>
+                  <Pressable onPress={() => setLocationDraft(null)} hitSlop={8}>
+                    <Text style={styles.removeText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable onPress={saveLocation} hitSlop={8}>
+                    <Text style={styles.linkAction}>Save</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+
+            {/* The bio edits in place too, a few lines tall. */}
+            <View style={styles.settingRow}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.providerLabel}>Bio</Text>
+                {bioDraft === null ? (
+                  <Text style={[styles.settingValue, !(profile?.bio ?? user?.bio) && { color: colors.inkTertiary }]} numberOfLines={3}>
+                    {profile?.bio || user?.bio || 'Not set'}
+                  </Text>
+                ) : (
+                  <>
+                    <TextInput
+                      style={[styles.nameInput, styles.bioInput]}
+                      value={bioDraft}
+                      onChangeText={setBioDraft}
+                      autoFocus
+                      multiline
+                      maxLength={240}
+                      textAlignVertical="top"
+                    />
+                    <Text style={styles.bioCount}>{bioDraft.length}/240</Text>
+                  </>
+                )}
+              </View>
+              {savingBio ? (
+                <ActivityIndicator color={colors.green} />
+              ) : bioDraft === null ? (
+                <Pressable onPress={() => setBioDraft(profile?.bio ?? user?.bio ?? '')} hitSlop={8}>
+                  <Text style={styles.linkAction}>{profile?.bio || user?.bio ? 'Edit' : 'Add'}</Text>
+                </Pressable>
+              ) : (
+                <View style={styles.avatarActions}>
+                  <Pressable onPress={() => setBioDraft(null)} hitSlop={8}>
+                    <Text style={styles.removeText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable onPress={saveBio} hitSlop={8}>
+                    <Text style={styles.linkAction}>Save</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+
+            <Text style={styles.sectionLabel}>SHELF</Text>
             {/* Nothing is offered until the lock state is known: the rows would
                 otherwise flash as tappable and then 403 on save. */}
             {!profile ? (
@@ -605,28 +737,22 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
               <Text style={styles.sectionHint}>
                 Rate {Math.max(0, profile.picks_required - profile.picks_rated_count)} more{' '}
                 {profile.picks_required - profile.picks_rated_count === 1 ? 'album' : 'albums'} to
-                choose your favourite song, album and artist.
+                fill your shelf.
               </Text>
             ) : (
-              <>
+              Array.from({ length: SHELF_SIZE }, (_, slot) => (
                 <PickSettingRow
-                  label="Favourite song"
-                  value={profile?.favorite_song?.title}
-                  onPress={() => openPicker('song')}
+                  key={slot}
+                  label={`Shelf ${slot + 1}`}
+                  value={profile.shelf?.[slot]?.album_name}
+                  onPress={() => openShelfSlot(slot)}
                 />
-                <PickSettingRow
-                  label="Favourite album"
-                  value={profile?.favorite_album?.album_name}
-                  onPress={() => openPicker('album')}
-                />
-                <PickSettingRow
-                  label="Favourite artist"
-                  value={profile?.favorite_artist}
-                  onPress={() => openPicker('artist')}
-                />
-              </>
+              ))
             )}
 
+            </>)}
+
+            {!editing && (<>
             <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
             <Text style={styles.sectionHint}>
               Get told when a friend sends you a record. iOS only asks once, so if you
@@ -820,6 +946,7 @@ export default function SettingsSheet({ visible, onClose }: { visible: boolean; 
             ) : null}
 
             {user ? <Text style={styles.idHint}>Signed in as {user.name}</Text> : null}
+            </>)}
           </ScrollView>
         </Pressable>
         </Animated.View>
@@ -926,6 +1053,8 @@ function ProviderRow({
 }
 
 const styles = StyleSheet.create({
+  bioInput: { minHeight: 72, paddingTop: 8 },
+  bioCount: { fontFamily: fonts.body, fontSize: 11, color: colors.inkTertiary, textAlign: 'right', marginTop: 4 },
   backdrop: { flex: 1, justifyContent: 'flex-end' },
   dim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(28,25,23,0.35)' },
   fill: { flex: 1 },

@@ -38,7 +38,8 @@ Vocabulary of the core loop:
 - **Recommending** an album drops it into a friend's To Listen, tagged with who sent it
   (`recommended_by`, `recommendation_note`).
 
-Surfaces: **Library/profile** (three buckets plus stats), **Ratings** (rankings by
+Surfaces: **Library/profile** (three buckets plus stats), **Rankings** (labelled Ratings until November 2026; the `ratings` keys and web's
+`/ratings` route keep the old name — rankings by
 various metrics, including baseball-style artist stats — SAR, consistency+, bang %,
 skip %), **Charts** (userbase-wide, week and all-time), **For You** (home feed),
 **Social** (activity, reviews, discussions, friend comparison), and **threads** (one
@@ -538,9 +539,10 @@ stored **24:5 at 1920×400** (`BANNER_SIZE`) through the same decode path as
 avatars (`_normalize_image` in `users.py`: EXIF stripped, rotation applied, pixel-bomb
 guard). Both apps show it **sharp**, as a rounded strip at the top of every profile
 (Pressd green when there's none) — on web with the avatar riding up over its bottom
-edge, in front of it; on iPhone with the avatar set below it, so the whole strip shows; web has *Edit banner* on your own. Mobile's strip (`ProfileBanner`,
-`BANNER_ASPECT`) is cropped to 4:1, about 90pt on a phone, so it loses a little of the
-sides of what was framed. It was 480×200 while it was only ever
+edge, in front of it; on iPhone nearly edge to edge (`BANNER_INSET`, 6pt from the screen's sides and below
+the status bar), with the avatar riding up over its bottom edge the same way; web has
+a pencil (Edit profile, where the banner changes) and a gear (Settings) on your own. Mobile's strip (`ProfileBanner`, `BANNER_HEIGHT`) is 112pt
+tall, so it loses a little of the sides of what was framed. It was 480×200 while it was only ever
 blurred — no banner had been uploaded when it changed. Both apps crop to 24:5 before
 uploading (mobile's picker `aspect: [24, 5]`; web's `BannerCropper`, drag and zoom,
 opened whenever the picked picture isn't already 24:5 — `lib/banner.ts`, and
@@ -568,15 +570,27 @@ strip, the avatar riding up over its edge, the name with "@handle" under it, the
 the album-score distribution (`ScoreHistogram`, no axis) under the avatar, and a stat
 row between two rules in mobile's order: Avg score, Albums, Artists (distinct,
 case-folded), Songs and Friends. When it's you, the friend button becomes **Share profile** (your invite link,
-through the share sheet or the clipboard — a profile itself is behind sign-in) and
-**Settings** (`components/SettingsDialog.tsx`, which was the Edit Profile
-modal inside `Layout.tsx`): photo, banner, username, bio, phone, Google link, the
-tutorial replay, sign-out. Every profile now shows **My Picks**
-(`components/ProfilePicks.tsx`) — favourite song, album and artist, editable on your own
-through a picker over the same sources as mobile's `app/favorite/*` (rated albums best
-first, `fetchRankedSongs`, `fetchArtistStats`), saved with `PATCH /users/{id}`. The picks
-are columns on the account, so one set shows on both platforms; hidden below ten rated
-albums, as on mobile. Someone else's profile adds the taste overlap under the name
+through the share sheet or the clipboard — a profile itself is behind sign-in), and the
+banner carries mobile's pencil and gear, opening `components/SettingsDialog.tsx` (which
+was the Edit Profile modal inside `Layout.tsx`) in `mode` `profile` — photo, banner,
+username, bio, location — or `settings` — phone, Google link, the tutorial replay,
+sign-out. Every profile now shows **the shelf**
+(`components/ProfilePicks.tsx`; mobile's `ProfileBanner` `ShelfRow`) — "{name}'s shelf":
+four of the person's own rated albums, by slot, drawn as covers overlapping and
+staggered (`TILT` / `LIFT`, `SHELF_TILT` / `SHELF_LIFT`), under a heading in Unbounded Bold. On your own page
+every slot shows, empty ones dashed with a +, and a slot opens a picker over your rated
+albums best first (web's `ShelfDialog`, mobile's `app/favorite/album?slot=N`, also
+reached from Edit profile → Shelf); an album already on the shelf moves to the new slot
+(`shelfWith` in `shared/src/api.ts`). On someone else's only the albums show, each
+opening their copy, and a bare shelf isn't drawn. Stored as `PressUser.shelf`, a JSON
+array of `SHELF_SIZE` (4) album ids or nulls (it was 5 for a day; a longer stored array reads as its first four), written by `PATCH /users/{id}` with
+`shelf` (each one of the caller's rated albums, none twice) and served resolved on
+`GET /users/{id}/profile` (a deleted album reads as an empty slot). Its migration seeded
+slot 1 from `favorite_album_id`. It replaced **My Picks** (favourite song, album and
+artist) in November 2026: those columns and their `favorite_*` payload fields stay, for
+app builds that predate the shelf, but neither app shows or edits them, and mobile's
+`app/favorite/song.tsx` / `artist.tsx` are unreachable. Hidden below ten rated albums
+(`picks_unlocked`), on both platforms. Someone else's profile adds the taste overlap under the name
 (below). Account deletion
 now removes both picture rows; before this it never removed `UserAvatar`, whose
 foreign key blocked deleting any account that had a photo.
@@ -613,6 +627,15 @@ Pressd works* and web's Edit Profile dialog replay it with `?replay=1`, which re
 nothing. Web keeps the flag in `UserContext`, so every web sign-in site must pass
 `tutorialSeen` through. The last card promises predictions after
 10 rated albums, restating `MIN_RATED_ALBUMS` — change both.
+
+**Profile location (November 2026).** `PressUser.location`: free text the person types
+("Brooklyn, NY"), up to `LOCATION_MAX` (40) characters, whitespace folded, empty clears
+it — set through `PATCH /users/{id}` (`location`) and returned on
+`GET /users/{id}/profile`, never on `public_user`. Never read from the device: people
+choose how specific to be. Edited on both platforms (mobile's Edit profile sheet;
+web's `SettingsDialog`), both of which write the answer into the
+`['profile', id]` cache. Shown beside the handle with a pin: mobile `ProfileBanner`
+("@name | 📍 …", the location truncating first), web `FriendProfile`'s handle line.
 
 **Usernames (October 2026).** `PressUser.name` is a username, not a display name: 3–20
 characters of lowercase letters, numbers, `.` and `_`, unique regardless of case
@@ -736,9 +759,10 @@ past a divider — up to three covers of the records you have both rated (the en
 The number opens `/album/{reason.albumId ?? connecting album}?view=compare`, or with no
 shared record their Library tab; a cover compares that record; the reason is the pill's
 tooltip. Only the button beside it says which relationship it is: **Add friend** /
-**Accept request** / **Friends** filled green, **Requested** tinted. Removing a friend
-moved to the round "…" menu (with Copy profile link), so the filled Friends button can't
-undo a friendship on a stray click. The handle line adds "Pressing since {Mon YYYY}" from
+**Accept request** / **Friends** filled green, **Requested** tinted. Clicking **Friends**
+(or *Remove friend* in the round "…" menu, beside Copy profile link) opens a prompt —
+their avatar, "Remove {name} as a friend?", Cancel and Remove — so a stray click can't
+undo a friendship. The handle line adds "Pressing since {Mon YYYY}" from
 the profile's `created_at` (absent for accounts older than the column). 50% is drawn like
 any other number. The reason's `text` is only ever plain text — the tooltip drops its
 `<i>` tags and unescapes the entities the server put in the rest — never HTML. The sheet has one mount, `PeopleSheetHost` in
@@ -761,11 +785,19 @@ cached sheet so a remount can't reopen it.
 **On iPhone** (`mobile/components/TasteOverlap.tsx`, `mobile/components/PeopleSheet.tsx`,
 November 2026) — the same features in mobile's layout. `app/friend/[id].tsx` asks
 `fetchOverlap` (`['overlap', viewer, id]`) on anyone but you and draws the same
-`OverlapPill` as web through `ProfileBanner`'s `overlap` slot — under the name, the
-handle line ("@name · since {Mon YYYY}") and the bio beside the avatar, and above the row
-of the score distribution (as wide as the avatar, under it) with the average below it in
-its score colour (the avatar's ring repeats it) and the four stats in a 2×2 grid beside
-them. The name's line has a `stickers` slot to its right, empty until stickers exist —
+`OverlapPill` as web through `ProfileBanner`'s `overlap` slot — under the bio. The
+header above it: the banner nearly edge to edge, the avatar (80pt, ringed in the page colour)
+riding up over its bottom edge with three figures beside it (Albums, Songs, and the
+average in its score colour), then the name with a `stickers` slot to its right (empty
+until stickers exist) and the friend button at the far end, the gray "@name" under
+it (with "| 📍 {location}" when they've set one), then the bio — all three lined up with the picture's edge (`AVATAR_EDGE`). Your own
+page has no button there: a pencil (Edit profile) and a gear (Settings) sit in the
+banner's top-right corner (`bannerAction`). Both open `SettingsSheet`, in `mode`
+`profile` — picture, banner, username, location, bio, the shelf — or `settings` —
+notifications, preferences, sign-in methods, account (phone, sign out, delete), about.
+Mobile edits the bio there, 240 characters as on web; before November 2026 it had no
+way to, and your own profile didn't show it. Below that, as many genre and subgenre chips as fit one line whole,
+at their own width — never shortened, and no "+N" for the rest. It is drawn
 for friends and strangers alike: both avatars, the percent with "taste overlap", up to three shared covers and
 "+N". The number goes to `compareWith` — `/album/{reason.albumId ?? connecting album}`
 (the album page draws `FriendCompare` once both copies are rated) or, with no shared
@@ -1326,9 +1358,9 @@ for editing a review later, and both paths post into the thread through
 **Surfaces that exist on both, where web is the thinner one.**
 
 4. **Profile.** Mobile unifies library + stats + identity in `app/(tabs)/profile.tsx`
-   (849) with `ProfileBanner` (617): a banner strip with the avatar overlapping it, the average ringing the avatar, headline stats, taste chips, and
-   **My Picks** (`favorite_album/artist/song_id`, `setTopSong`). Web's profile page
-   gained My Picks, the banner and Settings in October 2026 (§5), but still splits
+   (849) with `ProfileBanner` (617): a full-width banner with the avatar overlapping it, three headline figures beside it (the average among them), taste chips, and
+   the shelf (`PressUser.shelf`). Web's profile page
+   gained the shelf (then My Picks), the banner and Settings in October 2026 (§5), but still splits
    library and stats across `Library.tsx` and `Stats.tsx` tabs and draws no score ring —
    `Library.tsx` calls only `fetchAlbums`, where mobile also calls `fetchSummary`,
    `fetchScoreRange`, `fetchArtistStats`, `fetchScatterData`. Custom banners
@@ -1485,7 +1517,7 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   the name means the same on both); Plus Jakarta Sans for everything else (the web
   `body` face). A title that names an album keeps one face and sets the album in
   Playfair italic (web `<i>` inside `.font-display`; mobile `fonts.displayItalic`, a
-  loaded face, because iOS can't slant a custom font with `fontStyle`). Clash Display is the wordmark only. Web used DM Sans until September
+  loaded face, because iOS can't slant a custom font with `fontStyle`). Clash Display is the wordmark only, and Unbounded Bold (mobile `fonts.wide`, web `.font-wide`) the shelf's heading only. Web used DM Sans until September
   2026, share card included; don't bring a third face back.
 - **A final album score is always shown to two decimals** (`8.20`, never `8.2`) —
   rated, predicted or projected, on both platforms. Song scores and factor values are
@@ -1534,7 +1566,9 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   special treatment.
 - **Hover feedback stays small.** `COVER_LIFT` is a 4% lift and a 1° lean on an
   ease-out; it was 13% and 3° on a springy curve and made rows of covers jump. Keep
-  new hover scales in that range.
+  new hover scales in that range. The one exception, by request, is the shelf
+  (`.shelf-record` in `index.css`): a hovered record is lifted 22px out of the row on
+  an overshooting curve, straightening as it rises — four covers, not a row of them.
 - **Web motion has one vocabulary, in `frontend/src/index.css`** ("Interaction
   feedback"): every button presses in, `page-enter` on route change (keyed in
   `Layout`), `fade-in` + `pop-in` for dialogs, `menu-in` for dropdowns, `rise-in` /

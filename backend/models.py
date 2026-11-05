@@ -15,6 +15,9 @@ class PressUser(SQLModel, table=True):
     # in place of the favourite album's cover. Null falls back to that cover.
     banner_url: Optional[str] = None
     bio: Optional[str] = None
+    # Where they are, as they put it ("Brooklyn, NY"): free text, optional,
+    # shown on the profile beside the handle. Never derived from the device.
+    location: Optional[str] = None
 
     # Three picks the user pins to their profile. Albums and songs are stored by
     # id and must be their own rated copy — the picker only ever offers those —
@@ -24,6 +27,12 @@ class PressUser(SQLModel, table=True):
     favorite_album_id: Optional[int] = None
     favorite_song_id: Optional[int] = None
     favorite_artist: Optional[str] = None
+    # The shelf: four slots of the user's own rated albums, by position, as a
+    # JSON array of ids or nulls ('[12,null,40,null]'). It was five for a day;
+    # a longer stored array is read as its first four. It replaced the
+    # three picks on both apps in November 2026; the song and artist picks are
+    # still stored and still served, for app builds that predate it.
+    shelf: Optional[str] = None
 
     google_sub: Optional[str] = Field(default=None, unique=True, index=True)
     apple_sub: Optional[str] = Field(default=None, unique=True, index=True)

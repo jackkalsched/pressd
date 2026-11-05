@@ -27,6 +27,7 @@ export interface PickPatch {
   favoriteAlbumId?: number | null
   favoriteSongId?: number | null
   favoriteArtist?: string | null
+  shelf?: (number | null)[]
 }
 
 /** Save one pick and go back. The server answers with the whole profile — picks

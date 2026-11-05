@@ -119,6 +119,12 @@ body {
   font-family: 'Playfair Display', Georgia, serif;
 }
 
+/* Wide and heavy, for the shelf's name alone. */
+.font-wide {
+  font-family: 'Unbounded', 'Arial Black', sans-serif;
+  font-weight: 700;
+}
+
 /* ── Interaction feedback ────────────────────────────────────────────────────
    One small vocabulary shared by every surface, so a press, an entrance and an
    arrival feel the same wherever they happen. Short and eased out: feedback
@@ -223,4 +229,31 @@ button:not(:disabled):active {
   button:not(:disabled):active { transform: none; }
   .page-enter, .fade-in, .pop-in, .menu-in, .rise-in, .pop, .flash, .grow-x,
   .slide-next, .slide-prev { animation: none; }
+}
+
+/* The shelf's records (ProfilePicks). Each stands at its own lean and lift
+   (--tilt, --lift); hovered, it's lifted up out of the row — rising past where
+   it settles, straightening, and casting a longer shadow — and dropped back the
+   same way. Deliberately livelier than COVER_LIFT: picking a record up off a
+   shelf is the gesture. */
+.shelf-record {
+  transform: translateY(var(--lift)) rotate(var(--tilt));
+  box-shadow: 4px 10px 22px -12px rgba(40, 25, 10, 0.6);
+  transition:
+    transform 520ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.shelf-record:hover,
+.shelf-record:focus-visible {
+  z-index: 10 !important;
+  transform: translateY(calc(var(--lift) - 22px)) rotate(calc(var(--tilt) * -0.4)) scale(1.06);
+  box-shadow: 6px 26px 34px -16px rgba(40, 25, 10, 0.55);
+  transition-duration: 460ms, 460ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shelf-record,
+  .shelf-record:hover,
+  .shelf-record:focus-visible {
+    transition: none;
+  }
 }

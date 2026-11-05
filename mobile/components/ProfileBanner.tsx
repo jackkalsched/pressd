@@ -1,33 +1,38 @@
 // The profile header, shared by your own Profile tab and someone else's page:
-// the banner, the avatar beside the name (stickers to its right), "@handle ·
-// since" and the bio, someone else's taste overlap, the score distribution and
-// average under the avatar with four headline stats in a 2×2 grid beside them,
-// taste chips, and the three picks below. The `action` slot holds whatever
-// control belongs to the viewer (settings on your own page, the friend button
-// on someone else's).
+// the banner edge to edge, the avatar riding up over its bottom edge with three
+// figures beside it (albums, songs, the average), the name with its stickers and
+// the viewer's control, the bio, someone else's taste overlap, taste chips, and
+// their shelf below. The `action` slot holds whatever control belongs to the
+// viewer (settings on your own page, the friend button on someone else's).
 //
-// The person's banner, sharp, in a rounded strip, Pressd green when there is
-// none, and the avatar below it rather than over its edge, so the whole picture
-// stays visible. It used to be their picture or favourite album blurred into a
-// wash, which made an uploaded banner unrecognisable. The numbers stay unboxed in Playfair. The
-// average rings the avatar in its own score colour — the share of 10 you rate at,
-// drawn around who you are — and is written out under the distribution.
-import { useMemo, useState, type ReactNode } from 'react'
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
+// The person's banner, sharp, Pressd green when there is none. It used to be
+// their picture or favourite album blurred into a wash, which made an uploaded
+// banner unrecognisable. The numbers stay unboxed in Playfair; the average is
+// written in its own score colour.
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { AccessibilityInfo, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
-import Svg, { Circle } from 'react-native-svg'
-import { useQuery } from '@tanstack/react-query'
-import type { Profile } from '@pressd/shared/api'
+import { useRouter } from 'expo-router'
+import { MapPin, Plus } from 'lucide-react-native'
+import { SHELF_SIZE, type Profile } from '@pressd/shared/api'
 import { avatarColor, songScoreColor } from '@pressd/shared/types'
-import { fetchArtistImage } from '../lib/api'
 import { colors, fonts, radii, spacing } from '../theme/tokens'
-import ScoreHistogram from './ScoreHistogram'
+import CoverImage from './CoverImage'
 
 // The server stores banners 24:5 (BANNER_SIZE, backend/routers/users.py). At phone
-// width that is a sliver, so the strip is a little taller and takes the crop from
-// the sides. 4:1 keeps five-sixths of the width.
-const BANNER_ASPECT = 4
+// width that is a sliver, so the strip stands this tall and takes the crop from
+// the sides, BANNER_INSET from the screen's edges and below the status bar.
+const BANNER_HEIGHT = 112
+const BANNER_INSET = 6
+
+// The avatar, its ring in the page colour, and how much of it the banner covers.
+const AVATAR = 80
+const AVATAR_RING = 4
+const AVATAR_OVERLAP = 40
+// The disc's inset from the content edge, and where the picture itself begins.
+const AVATAR_LEFT = 4
+const AVATAR_EDGE = AVATAR_LEFT + AVATAR_RING
 
 // How far type in this header is allowed to scale. The header is a fixed-shape
 // composition — a ringed avatar beside the name, a headline figure beside a
@@ -52,10 +57,10 @@ export default function ProfileBanner({
   bio,
   overlap,
   stickers,
+  bannerAction,
+  countKey,
   profile,
-  picksHeading,
-  onPickPress,
-  scores,
+  onShelfSlotPress,
 }: {
   name: string
   avatarUrl?: string | null
@@ -65,31 +70,31 @@ export default function ProfileBanner({
   subgenres: string[]
   action?: ReactNode
   topInset: number
-  /** Right under the @handle: the prose belongs with the identity it describes. */
+  /** Right under the name: the prose belongs with the identity it describes. */
   bio?: string | null
   /** Someone else's taste overlap, between the bio and the average. */
   overlap?: ReactNode
   /** Earned stickers, drawn on the name's line to its right. Nothing passes
    *  them yet; the slot is there so the line already leaves them room. */
   stickers?: ReactNode
+  /** Names one visit to this profile. The figures count up once per visit:
+   *  the list rebuilding the header (Library → Stats → Rankings) keeps the
+   *  same key, so they hold their value; a new key counts them up again. */
+  countKey: string
+  /** A control pinned to the banner's top-right corner (Settings, on your own page). */
+  bannerAction?: ReactNode
   /** Picks come from GET /users/{id}/profile; the row hides itself until the
    *  ten-album bar is cleared, so a new account never shows three empty slots. */
   profile?: Profile | null
-  /** "MY PICKS" on your own page, a possessive on someone else's — the banner
-   *  can't tell whose page it is, so whoever renders it says. */
-  picksHeading?: string
-  /** Only your own page passes this; a friend's cards are not editable. */
-  onPickPress?: (kind: PickKind) => void
-  /** Every rated album's score: drawn as a small distribution under the
-   *  average, the Stats tab's chart in miniature. */
-  scores?: number[]
+  /** Only your own page passes this: a slot was tapped, to fill or change it.
+   *  On someone else's page a cover opens their copy of the album. */
+  onShelfSlotPress?: (slot: number) => void
 }) {
-  const [expanded, setExpanded] = useState(false)
-  const [rowW, setRowW] = useState(0)
-  const [widths, setWidths] = useState<number[]>([])
+  // One chip's height: the row is held to it, so the tags that don't fit
+  // whole wrap out of sight rather than squeezing or adding a line.
+  const [chipH, setChipH] = useState(0)
 
-  // Genres lead, subgenres follow; the split between shown and collapsed is
-  // decided purely by what fits, not by which kind a tag is.
+  // Genres lead, subgenres follow.
   const tags = useMemo(
     () => [
       ...genres.map((label) => ({ label, sub: false })),
@@ -97,96 +102,34 @@ export default function ProfileBanner({
     ],
     [genres, subgenres],
   )
-
-  // Chip text width + its own horizontal padding/border; the count chip needs
-  // room reserved on the line whenever anything is going to overflow.
-  const CHIP_PAD = 22
-  const GAP = 6
-  const MORE_W = 38
-
-  const fitCount = useMemo(() => {
-    if (!rowW || widths.length < tags.length || widths.some((w) => w == null)) return tags.length
-    const fits = (budget: number) => {
-      let used = 0
-      let n = 0
-      for (let i = 0; i < tags.length; i++) {
-        const w = widths[i] + CHIP_PAD + (i > 0 ? GAP : 0)
-        if (used + w > budget) break
-        used += w
-        n += 1
-      }
-      return n
-    }
-    const all = fits(rowW)
-    if (all >= tags.length) return tags.length
-    return Math.max(1, fits(rowW - MORE_W - GAP))
-  }, [rowW, widths, tags])
-
-  const { fontScale } = useWindowDimensions()
-  const avatarSize = ringedAvatarSize(fontScale)
-  const hasScores = !!scores && scores.length > 0
-  const since = monthYear(profile?.created_at)
-
-  const shownTags = tags.slice(0, fitCount)
-  const overflowTags = tags.slice(fitCount)
-  const overflowCount = overflowTags.length
+  // The caller's counts, then the average in its own score colour.
+  const figures: (BannerStatItem & { color?: string })[] = [
+    ...stats,
+    { value: avg != null ? avg.toFixed(2) : '—', label: 'Avg score', color: avg != null ? songScoreColor(avg) : undefined },
+  ]
 
   return (
     <>
-      <View style={[styles.banner, { paddingTop: topInset + spacing.sm }]}>
-        <BannerStrip url={profile?.banner_url} />
-
-        <View style={styles.bannerTop}>
-          <RingedAvatar name={name} avatarUrl={avatarUrl} avg={avg} />
-          <View style={styles.identity}>
-            {/* The name shares its line with the stickers slot, so it shrinks
-                before they do. Capped because this is the column that gives
-                way when the avatar grows beside it — uncapped, a long name at
-                a large setting truncates to two or three characters. */}
-            <View style={styles.nameRow}>
-              <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
-                {name}
-              </Text>
-              {stickers ? <View style={styles.stickers}>{stickers}</View> : null}
-            </View>
-            <Text style={styles.handle} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
-              @{name}{since ? ` · since ${since}` : ''}
-            </Text>
-            {bio ? <Text style={styles.bio} numberOfLines={3} maxFontSizeMultiplier={HEADER_SCALE_CAP}>{bio}</Text> : null}
-          </View>
-          {action ? <View>{action}</View> : null}
+      <View style={styles.banner}>
+        <View style={{ height: topInset + BANNER_INSET }} />
+        <View>
+          <BannerStrip url={profile?.banner_url} height={BANNER_HEIGHT} />
+          {bannerAction ? <View style={styles.bannerAction}>{bannerAction}</View> : null}
         </View>
 
-        {overlap}
-
-        {/* Under the avatar, as wide as it: the shape of every album score with
-            the average beneath it, in its own score colour. Beside them, the
-            four headline figures in a 2×2 grid split by faint rules. */}
-        <View style={styles.about}>
-          {(hasScores || avg != null) && (
-            <View style={{ width: avatarSize }}>
-              {hasScores && <ScoreHistogram scores={scores!} height={26} axis={false} gap={2} />}
-              {avg != null && (
-                <>
-                  <Text style={[styles.avgValue, { color: songScoreColor(avg) }]} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
-                    {avg.toFixed(2)}
-                  </Text>
-                  <Text style={styles.avgLabel} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
-                    Avg score
-                  </Text>
-                </>
-              )}
-            </View>
-          )}
-          <View style={styles.grid}>
-            {stats.map((s, i) => (
-              <View key={s.label} style={[styles.statCell, i % 2 === 1 && styles.statCellLeft, i >= 2 && styles.statCellTop]}>
+        {/* The avatar rides up over the banner's bottom edge; the figures sit
+            beside it, level with the part below the picture. */}
+        <View style={styles.headRow}>
+          <PlainAvatar name={name} avatarUrl={avatarUrl} />
+          <View style={styles.figures}>
+            {figures.map((s) => (
+              <View key={s.label} style={styles.figure}>
                 {/* Held to one line: unbounded, "5,692" wrapped and pushed its
                     own label out of line. No adjustsFontSizeToFit: on iOS, with
                     a set lineHeight, it collapsed "458" to a few points in a
                     cell with room to spare. */}
-                <Text style={styles.statValue} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
-                  {s.value}
+                <Text style={[styles.statValue, s.color ? { color: s.color } : null]} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
+                  <CountUp value={s.value} cacheKey={`${countKey}:${s.label}`} />
                 </Text>
                 <Text style={styles.statLabel} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
                   {s.label}
@@ -196,217 +139,206 @@ export default function ProfileBanner({
           </View>
         </View>
 
+        {/* The name shares its line with the stickers slot, so it shrinks
+            before they do, and with the viewer's control at the far end. */}
+        <View style={styles.nameRow}>
+          <View style={styles.nameCell}>
+            <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
+              {name}
+            </Text>
+            {stickers ? <View style={styles.stickers}>{stickers}</View> : null}
+          </View>
+          {action ? <View>{action}</View> : null}
+        </View>
+        {/* The handle, and where they say they are when they've said. The
+            location gives way first on a narrow line. */}
+        <View style={styles.handleRow}>
+          <Text style={styles.handle} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>@{name}</Text>
+          {profile?.location ? (
+            <>
+              <Text style={styles.handleSep} maxFontSizeMultiplier={HEADER_SCALE_CAP}>|</Text>
+              <MapPin size={12} color={colors.inkTertiary} strokeWidth={2.2} />
+              <Text style={[styles.handle, styles.location]} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
+                {profile.location}
+              </Text>
+            </>
+          ) : null}
+        </View>
+        {bio ? <Text style={styles.bio} maxFontSizeMultiplier={HEADER_SCALE_CAP}>{bio}</Text> : null}
+
+        {overlap}
+
         {/* Taste chips, last thing in the header: genres first (green), then
             subgenres (white). Borderless and translucent, so they read as part of
-            the page rather than as white boxes laid over it. Only as many as actually fit the line are
-            shown — the rest collapse behind a count chip that reveals them
-            below, so the headline row is always exactly one line. */}
+            the page rather than as white boxes laid over it. As many as fit
+            the line whole, in order, at their own width; never cut short. */}
         {tags.length > 0 && (
-          <>
-            {/* Off-screen pass that measures each chip at its natural width;
-                the visible row is sliced from these, so it never reflows. */}
-            <View style={styles.measure} pointerEvents="none">
-              {tags.map((t, i) => (
-                <View key={`m-${t.label}`} style={[styles.chip, styles.chipNatural, t.sub ? styles.chipSub : styles.chipGenre]}>
-                  <Text
-                    style={t.sub ? styles.chipSubText : styles.chipGenreText}
-                    onLayout={(e) => {
-                      const w = e.nativeEvent.layout.width
-                      setWidths((prev) => {
-                        if (Math.abs((prev[i] ?? -1) - w) < 0.5) return prev
-                        const next = [...prev]
-                        next[i] = w
-                        return next
-                      })
-                    }}
-                  >
-                    {t.label}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.chipsRow} onLayout={(e) => setRowW(e.nativeEvent.layout.width)}>
-              {shownTags.map((t) => (
-                <View key={t.label} style={[styles.chip, t.sub ? styles.chipSub : styles.chipGenre]}>
-                  <Text style={t.sub ? styles.chipSubText : styles.chipGenreText} numberOfLines={1}>{t.label}</Text>
-                </View>
-              ))}
-              {(overflowCount > 0 || expanded) && (
-                <Pressable
-                  style={[styles.chip, styles.chipMore]}
-                  onPress={() => setExpanded((v) => !v)}
-                  hitSlop={6}
-                  accessibilityLabel={expanded ? 'Show fewer tags' : `Show ${overflowCount} more tags`}
-                >
-                  <Text style={styles.chipMoreText}>{expanded ? 'Hide' : `+${overflowCount}`}</Text>
-                </Pressable>
-              )}
-            </View>
-
-            {expanded && overflowTags.length > 0 && (
-              <View style={styles.subRow}>
-                {overflowTags.map((t) => (
-                  <View key={`o-${t.label}`} style={[styles.chip, t.sub ? styles.chipSub : styles.chipGenre]}>
-                    <Text style={t.sub ? styles.chipSubText : styles.chipGenreText} numberOfLines={1}>{t.label}</Text>
-                  </View>
-                ))}
+          // Hidden until the first chip has said how tall a line is, so the
+          // wrapped extras never flash on screen.
+          <View style={[styles.chipsRow, { height: chipH || undefined, opacity: chipH ? 1 : 0 }]}>
+            {tags.map((t, i) => (
+              <View
+                key={t.label}
+                style={[styles.chip, t.sub ? styles.chipSub : styles.chipGenre]}
+                onLayout={i === 0 ? (e) => setChipH(Math.ceil(e.nativeEvent.layout.height)) : undefined}
+              >
+                <Text style={t.sub ? styles.chipSubText : styles.chipGenreText}>{t.label}</Text>
               </View>
-            )}
-          </>
+            ))}
+          </View>
         )}
       </View>
 
-      <PicksRow profile={profile} heading={picksHeading} onPickPress={onPickPress} />
+      <ShelfRow profile={profile} name={name} onSlotPress={onShelfSlotPress} />
     </>
   )
 }
 
-export type PickKind = 'song' | 'album' | 'artist'
+/** "jack's", "james'": the shelf is named for whoever's page it is. */
+function possessive(name: string): string {
+  return /s$/i.test(name) ? `${name}'` : `${name}'s`
+}
 
-/** The three pinned favourites, under the taste chips.
+// Each cover's lean and lift along the shelf, so the row reads as records stood
+// up by hand rather than a grid.
+const SHELF_TILT = [-3, 2, -1.5, 2.5]
+const SHELF_LIFT = [0, -7, -2, -8]
+const SHELF_OVERLAP = 18
+
+/** The shelf: four of their rated albums, overlapping and staggered.
  *
- *  Hidden wholesale below the unlock bar rather than shown as three empty
- *  slots: a profile with nothing rated yet has nothing to say here, and the
- *  server refuses to set a pick that early anyway.
+ *  Hidden wholesale below the unlock bar, as the picks were: the server refuses
+ *  to fill it that early anyway. On your own page every slot shows, the empty
+ *  ones as the invitation to fill them; on someone else's only the albums do,
+ *  and a bare shelf isn't drawn at all.
  */
-function PicksRow({
+function ShelfRow({
   profile,
-  heading,
-  onPickPress,
+  name,
+  onSlotPress,
 }: {
   profile?: Profile | null
-  heading?: string
-  onPickPress?: (kind: PickKind) => void
+  name: string
+  onSlotPress?: (slot: number) => void
 }) {
-  // An artist is a name, not a row, so it has no art of its own — this is the
-  // same lookup the artist page runs, sharing its cache key and its permanent
-  // staleTime, so whichever screen is opened first pays for it once.
-  //
-  // Above the early returns on purpose: hooks can't sit behind a conditional.
-  const artist = profile?.favorite_artist ?? null
-  const { data: artistImage } = useQuery({
-    queryKey: ['artist-image', artist],
-    queryFn: () => fetchArtistImage(artist!),
-    enabled: !!artist,
-    staleTime: Infinity,
-  })
-
+  const router = useRouter()
+  const { width } = useWindowDimensions()
   if (!profile?.picks_unlocked) return null
 
-  const song = profile.favorite_song
-  const album = profile.favorite_album
-  const editable = !!onPickPress
+  const editable = !!onSlotPress
+  const slots = (profile.shelf ?? []).slice(0, SHELF_SIZE).map((album, slot) => ({ album, slot }))
+  const shown = editable ? slots : slots.filter((s) => s.album)
+  if (shown.length === 0) return null
 
-  // On someone else's page an untouched set of picks is just noise, so the row
-  // waits until there's something to show. On your own the empty slots are the
-  // invitation to fill them, so they always render.
-  if (!editable && !song && !album && !artist) return null
+  // Four covers across the content width, each overlapping the last.
+  const rowW = width - spacing.lg * 2
+  const cover = (rowW + SHELF_OVERLAP * (SHELF_SIZE - 1)) / SHELF_SIZE
 
   return (
-    <View style={styles.picks}>
-      <Text style={styles.picksHeading}>{heading ?? 'PICKS'}</Text>
-      <View style={styles.picksRow}>
-        <PickCard
-          label="SONG"
-          artUrl={song?.album_art_url}
-          fallback={song?.title}
-          title={song?.title}
-          subtitle={song?.artist ?? song?.album_name}
-          editable={editable}
-          onPress={() => onPickPress?.('song')}
-        />
-        <PickCard
-          label="ALBUM"
-          artUrl={album?.album_art_url}
-          fallback={album?.album_name}
-          title={album?.album_name}
-          subtitle={album?.artist}
-          editable={editable}
-          onPress={() => onPickPress?.('album')}
-        />
-        <PickCard
-          label="ARTIST"
-          // A press photo is rarely square and never centred the way cover art
-          // is, so it fills the tile and takes the crop rather than letterboxing
-          // beside the two album covers next to it.
-          artUrl={artistImage}
-          fallback={artist}
-          title={artist}
-          editable={editable}
-          onPress={() => onPickPress?.('artist')}
-        />
+    <View style={styles.shelf}>
+      <Text style={styles.shelfHeading} numberOfLines={1}>{possessive(name)} shelf</Text>
+      <View style={styles.shelfRow}>
+        {shown.map(({ album, slot }, i) => (
+          <Pressable
+            key={slot}
+            onPress={() => (editable ? onSlotPress!(slot) : album && router.push(`/album/${album.id}`))}
+            style={[
+              styles.shelfItem,
+              {
+                width: cover,
+                height: cover,
+                marginLeft: i > 0 ? -SHELF_OVERLAP : 0,
+                zIndex: i,
+                transform: [{ translateY: SHELF_LIFT[i] }, { rotate: `${SHELF_TILT[i]}deg` }],
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={
+              album
+                ? `${album.album_name} by ${album.artist}${editable ? '. Change' : ''}`
+                : 'Add an album to your shelf'
+            }
+          >
+            {album ? (
+              <View style={styles.shelfCover}>
+                <Text style={styles.shelfInitial}>{album.album_name[0]?.toUpperCase()}</Text>
+                {album.album_art_url ? (
+                  <CoverImage url={album.album_art_url} displayPx={Math.round(cover)} style={StyleSheet.absoluteFill} />
+                ) : null}
+              </View>
+            ) : (
+              <View style={[styles.shelfCover, styles.shelfEmpty]}>
+                <Plus size={20} color={colors.inkMuted} strokeWidth={2} />
+              </View>
+            )}
+          </Pressable>
+        ))}
       </View>
     </View>
   )
 }
 
-function PickCard({
-  label,
-  artUrl,
-  fallback,
-  title,
-  subtitle,
-  editable,
-  onPress,
-}: {
-  label: string
-  artUrl?: string | null
-  fallback?: string | null
-  title?: string | null
-  subtitle?: string | null
-  editable: boolean
-  onPress: () => void
-}) {
-  const empty = !title
-  return (
-    <Pressable
-      style={styles.pickCard}
-      onPress={onPress}
-      disabled={!editable}
-      accessibilityRole={editable ? 'button' : undefined}
-      accessibilityLabel={
-        editable
-          ? `${empty ? 'Choose your favorite' : 'Change your favorite'} ${label.toLowerCase()}`
-          : undefined
+const COUNT_MS = 1300
+
+// Where each figure last got to, by visit and label, so a header rebuilt
+// mid-visit starts from there rather than from zero.
+const counted = new Map<string, number>()
+
+/** A figure that counts up to its value as the profile loads — "6,098" from
+ *  zero, "7.22" through the decimals — and from the old value when it changes.
+ *  Anything that isn't a number ("—") is shown as it is, and Reduce Motion
+ *  shows the value straight away. */
+function CountUp({ value, cacheKey }: { value: string; cacheKey: string }) {
+  const target = Number(value.replace(/,/g, ''))
+  const numeric = value.trim() !== '' && Number.isFinite(target)
+  const decimals = numeric ? (value.split('.')[1]?.length ?? 0) : 0
+  const grouped = value.includes(',')
+  const [shown, setShown] = useState(() => counted.get(cacheKey) ?? 0)
+  const from = useRef(counted.get(cacheKey) ?? 0)
+
+  useEffect(() => {
+    if (!numeric) return
+    let frame = 0
+    let cancelled = false
+    const start = from.current
+    AccessibilityInfo.isReduceMotionEnabled().then((reduce) => {
+      if (cancelled) return
+      if (reduce || start === target) {
+        from.current = target
+        counted.set(cacheKey, target)
+        setShown(target)
+        return
       }
-    >
-      <Text style={styles.pickLabel}>{label}</Text>
-      <View style={[styles.pickArt, empty && styles.pickArtEmpty]}>
-        {/* The initial shows through underneath, so an artist whose photo is
-            still in flight — or who has none — reads as a filled pick rather
-            than a hole. */}
-        <Text style={[styles.pickInitial, empty && styles.pickInitialEmpty]}>
-          {empty ? '+' : fallback?.[0]?.toUpperCase() ?? '?'}
-        </Text>
-        {artUrl ? (
-          <Image
-            source={{ uri: artUrl }}
-            style={styles.pickArtImg}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            recyclingKey={artUrl}
-            transition={140}
-          />
-        ) : null}
-      </View>
-      <Text style={[styles.pickTitle, empty && styles.pickTitleEmpty]} numberOfLines={1}>
-        {title ?? (editable ? 'Choose' : 'Not set')}
-      </Text>
-      {/* An artist card has no second line, and a blank one would leave the
-          three columns sitting at different heights. */}
-      {subtitle ? (
-        <Text style={styles.pickSubtitle} numberOfLines={1}>{subtitle}</Text>
-      ) : null}
-    </Pressable>
-  )
+      const t0 = Date.now()
+      const tick = () => {
+        const t = Math.min(1, (Date.now() - t0) / COUNT_MS)
+        // Quintic ease-out: most of the climb early, a long settle into the value.
+        const eased = 1 - Math.pow(1 - t, 5)
+        const v = start + (target - start) * eased
+        from.current = v
+        counted.set(cacheKey, v)
+        setShown(v)
+        if (t < 1) frame = requestAnimationFrame(tick)
+      }
+      frame = requestAnimationFrame(tick)
+    })
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(frame)
+    }
+  }, [numeric, target, cacheKey])
+
+  if (!numeric) return <>{value}</>
+  const text = decimals > 0 ? shown.toFixed(decimals) : Math.round(shown).toString()
+  return <>{grouped ? Number(text).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : text}</>
 }
 
-/** Their picture exactly as uploaded, or Pressd green. A plain image rather than
- *  CoverImage: that sizes album covers per host, and a banner has one size. */
-function BannerStrip({ url }: { url?: string | null }) {
+/** Their picture exactly as uploaded, or Pressd green, edge to edge and up under
+ *  the status bar. A plain image rather than CoverImage: that sizes album covers
+ *  per host, and a banner has one size. */
+function BannerStrip({ url, height }: { url?: string | null; height: number }) {
   return (
-    <View style={styles.strip} pointerEvents="none">
+    <View style={[styles.strip, { height }]} pointerEvents="none">
       <LinearGradient
         colors={['#245c43', '#2d6a4f', '#3d8463']}
         locations={[0, 0.45, 1]}
@@ -429,59 +361,12 @@ function BannerStrip({ url }: { url?: string | null }) {
   )
 }
 
-/** The avatar, ringed by the average: the arc fills to score/10 in the
- *  score's own colour. It grows with the reader's text setting — capped — so
- *  it keeps its proportion to the name beside it. */
-const RING_SW = 3.25
-const RING_GAP = 3.5
-
-/** The ringed avatar's outer size: the distribution under it is drawn as wide. */
-function ringedAvatarSize(fontScale: number): number {
-  const k = Math.min(Math.max(fontScale, 1), HEADER_SCALE_CAP)
-  return 74 * k + (RING_SW + RING_GAP) * 2
-}
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-/** "May 2026" from the account's created_at; null for accounts older than the column. */
-function monthYear(iso: string | null | undefined): string | null {
-  if (!iso) return null
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? null : `${MONTHS[d.getMonth()]} ${d.getFullYear()}`
-}
-
-function RingedAvatar({ name, avatarUrl, avg }: { name: string; avatarUrl?: string | null; avg: number | null }) {
-  const { fontScale } = useWindowDimensions()
-  const SW = RING_SW
-  const k = Math.min(Math.max(fontScale, 1), HEADER_SCALE_CAP)
-  const SIZE = ringedAvatarSize(fontScale)
-  const AV = SIZE - (RING_SW + RING_GAP) * 2
-  const R = (SIZE - SW) / 2
-  const C = 2 * Math.PI * R
-  const frac = avg != null ? Math.max(0, Math.min(1, avg / 10)) : 0
-  const mid = SIZE / 2
+/** The avatar in a ring of the page's own colour, so it reads as cut out of the
+ *  banner it overlaps. Fixed size: the figures beside it give way instead. */
+function PlainAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string | null }) {
   return (
-    <View
-      style={[styles.avatarDisc, { width: SIZE, height: SIZE, borderRadius: SIZE / 2 }]}
-      accessibilityLabel={avg != null ? `Average score ${avg.toFixed(2)}` : undefined}
-    >
-      <Svg width={SIZE} height={SIZE} style={StyleSheet.absoluteFill}>
-        <Circle cx={mid} cy={mid} r={R} stroke="rgba(45,106,79,0.12)" strokeWidth={SW} fill="none" />
-        {avg != null && (
-          <Circle
-            cx={mid}
-            cy={mid}
-            r={R}
-            stroke={songScoreColor(avg)}
-            strokeWidth={SW}
-            fill="none"
-            strokeDasharray={`${C * frac} ${C}`}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${mid} ${mid})`}
-          />
-        )}
-      </Svg>
-      <View style={[styles.avatar, { width: AV, height: AV, borderRadius: AV / 2, backgroundColor: avatarColor(name) }]}>
+    <View style={styles.avatarDisc}>
+      <View style={[styles.avatar, { backgroundColor: avatarColor(name) }]}>
         {avatarUrl ? (
           // The URL carries a ?v= stamp that only changes when the picture
           // does, and the server marks it immutable — so this can be held
@@ -495,14 +380,7 @@ function RingedAvatar({ name, avatarUrl, avg }: { name: string; avatarUrl?: stri
             transition={120}
           />
         ) : (
-          // A letter in a fixed disc: capped and allowed to shrink. Nobody
-          // needs to *read* an initial at a larger size — it's identity.
-          <Text
-            style={[styles.avatarInitial, { fontSize: 31 * k }]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            maxFontSizeMultiplier={1}
-          >
+          <Text style={styles.avatarInitial} numberOfLines={1} maxFontSizeMultiplier={1}>
             {name[0]?.toUpperCase()}
           </Text>
         )}
@@ -513,66 +391,66 @@ function RingedAvatar({ name, avatarUrl, avg }: { name: string; avatarUrl?: stri
 
 const styles = StyleSheet.create({
   banner: { paddingBottom: 20 },
+  // Nearly edge to edge: the list pads its content by spacing.lg, and the strip
+  // takes back all but BANNER_INSET of it, below the status bar.
   strip: {
-    width: '100%',
-    aspectRatio: BANNER_ASPECT,
+    marginHorizontal: -(spacing.lg - BANNER_INSET),
     borderRadius: radii.lg,
     overflow: 'hidden',
     backgroundColor: colors.green,
   },
 
-  // Below the strip by its own gap; the name and the control centre on the avatar.
-  bannerTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.lg, paddingLeft: spacing.sm },
-  avatarDisc: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg, zIndex: 1 },
-  identity: { flex: 1, minWidth: 0 },
+  bannerAction: { position: 'absolute', top: spacing.sm, right: -(spacing.lg - BANNER_INSET) + spacing.sm },
+
+  // Pulled up so the banner covers the avatar's top AVATAR_OVERLAP points.
+  headRow: { flexDirection: 'row', marginTop: -AVATAR_OVERLAP, paddingLeft: AVATAR_LEFT },
+  avatarDisc: {
+    width: AVATAR + AVATAR_RING * 2,
+    height: AVATAR + AVATAR_RING * 2,
+    borderRadius: (AVATAR + AVATAR_RING * 2) / 2,
+    padding: AVATAR_RING,
+    backgroundColor: colors.bg,
+  },
   avatar: {
+    width: AVATAR,
+    height: AVATAR,
+    borderRadius: AVATAR / 2,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   avatarImg: { width: '100%', height: '100%' },
-  avatarInitial: { fontFamily: fonts.display, color: '#ffffff' },
-  name: { flexShrink: 1, fontFamily: fonts.displayBlack, fontSize: 27, lineHeight: 33, color: colors.ink, letterSpacing: 0.2 },
-  handle: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary, marginTop: 2 },
+  avatarInitial: { fontFamily: fonts.display, fontSize: 32, color: '#ffffff' },
+  // Starts just below the banner's edge, so the figures sit on the page.
+  figures: { flex: 1, minWidth: 0, flexDirection: 'row', justifyContent: 'space-between', paddingTop: AVATAR_OVERLAP + 14, paddingLeft: spacing.xl, paddingRight: spacing.md },
+  figure: { alignItems: 'center', minWidth: 0, flexShrink: 1 },
+  statValue: { fontFamily: fonts.display, fontSize: 19, lineHeight: 24, color: colors.ink, fontVariant: ['tabular-nums'] },
+  statLabel: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
+
   // The name and its stickers share a line; the slot is empty until stickers exist.
-  nameRow: { flexDirection: 'row', alignItems: 'center' },
+  // Text lines up with the picture's edge, not the ring around it.
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: 10, paddingLeft: AVATAR_EDGE },
+  nameCell: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
+  name: { flexShrink: 1, fontFamily: fonts.displayBlack, fontSize: 25, lineHeight: 31, color: colors.ink, letterSpacing: 0.2 },
+  handleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, paddingLeft: AVATAR_EDGE },
+  handle: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary, flexShrink: 0 },
+  handleSep: { fontFamily: fonts.body, fontSize: 13, color: colors.border, marginHorizontal: 7 },
+  location: { flexShrink: 1, marginLeft: 3 },
   stickers: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 6, flexShrink: 0 },
-  about: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginTop: spacing.lg, paddingLeft: spacing.sm },
-  avgValue: { fontFamily: fonts.display, fontSize: 26, lineHeight: 31, marginTop: 6, fontVariant: ['tabular-nums'] },
-  avgLabel: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 9,
-    color: colors.inkMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1.05,
-  },
 
-  grid: { flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap' },
-  statCell: { width: '50%', paddingVertical: 8, paddingHorizontal: 12 },
-  statCellLeft: { borderLeftWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(28,25,23,0.09)' },
-  statCellTop: { borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(28,25,23,0.09)' },
-  statValue: { fontFamily: fonts.display, fontSize: 17, lineHeight: 22, color: colors.ink, fontVariant: ['tabular-nums'] },
-  statLabel: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 8.5,
-    color: colors.inkMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1.05,
-    marginTop: 2,
-  },
-
+  // Wraps, but is clipped to one line: what wraps is simply not shown.
   chipsRow: {
     flexDirection: 'row',
-    flexWrap: 'nowrap',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
+    rowGap: 20,
     marginTop: 16,
+    overflow: 'hidden',
   },
-  // Off-screen measuring row — natural widths, never painted.
-  measure: { position: 'absolute', top: 0, left: 0, flexDirection: 'row', opacity: 0 },
-  chipNatural: { flexShrink: 0 },
-  // No border: CHIP_PAD above is the horizontal padding alone.
+  // No border; its own width, never shrunk.
   chip: {
+    flexShrink: 0,
     borderRadius: radii.pill,
     paddingHorizontal: 11,
     paddingVertical: 5,
@@ -583,56 +461,35 @@ const styles = StyleSheet.create({
   // Subgenres as frosted white on the page: present, but a step quieter.
   chipSub: { backgroundColor: 'rgba(255,255,255,0.7)' },
   chipSubText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary },
-  // The count reads as a control, not a tag: no fill, just the words.
-  chipMore: { paddingHorizontal: 8 },
-  chipMoreText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.inkTertiary },
-  subRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 7 },
 
-  bio: { fontFamily: fonts.body, fontSize: 13.5, color: colors.inkSecondary, lineHeight: 19, marginTop: 4 },
+  bio: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSecondary, lineHeight: 20, marginTop: spacing.sm, paddingLeft: AVATAR_EDGE },
 
-  // Picks: three equal columns below the taste chips, each a slot label, a
-  // square of art and the name. Same column rhythm as the Library grid, so the
-  // page reads as one thing rather than a banner with a widget bolted on.
-  picks: { marginTop: spacing.lg },
-  picksHeading: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 10,
-    letterSpacing: 1.2,
-    color: colors.inkMuted,
-    textTransform: 'uppercase',
-    marginBottom: spacing.sm,
+  // Close under the taste chips: the banner already pads its own foot.
+  shelf: { marginTop: 0 },
+  shelfHeading: { fontFamily: fonts.wide, fontSize: 15, lineHeight: 20, color: colors.ink, letterSpacing: 0.2, marginBottom: spacing.md, paddingLeft: AVATAR_EDGE },
+  // Room above for the lifted covers.
+  shelfRow: { flexDirection: 'row', alignItems: 'flex-end', paddingTop: 10 },
+  shelfItem: {
+    borderRadius: radii.sm,
+    shadowColor: '#2a1a0a',
+    shadowOpacity: 0.28,
+    shadowRadius: 6,
+    shadowOffset: { width: 2, height: 4 },
   },
-  picksRow: { flexDirection: 'row', gap: 10 },
-  pickCard: { flex: 1, minWidth: 0 },
-  pickLabel: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 8.5,
-    letterSpacing: 1,
-    color: colors.green,
-    marginBottom: 5,
-  },
-  pickArt: {
-    width: '100%',
-    aspectRatio: 1,
-    borderRadius: radii.md,
+  shelfCover: {
+    flex: 1,
+    borderRadius: radii.sm,
+    overflow: 'hidden',
     backgroundColor: colors.inset,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
   // An unfilled slot reads as an invitation, not as art that failed to load.
-  pickArtEmpty: {
-    backgroundColor: 'transparent',
+  shelfEmpty: {
+    backgroundColor: colors.bg,
     borderWidth: 1.5,
     borderStyle: 'dashed',
     borderColor: colors.border,
   },
-  // Absolute so it covers the initial sitting behind it rather than displacing
-  // it — the letter is the placeholder, not a sibling.
-  pickArtImg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  pickInitial: { fontFamily: fonts.display, fontSize: 30, color: colors.inkMuted },
-  pickInitialEmpty: { fontFamily: fonts.body, fontSize: 24, color: colors.inkMuted },
-  pickTitle: { fontFamily: fonts.bodySemiBold, fontSize: 12.5, color: colors.ink, marginTop: 6 },
-  pickTitleEmpty: { fontFamily: fonts.bodyMedium, color: colors.inkMuted },
-  pickSubtitle: { fontFamily: fonts.body, fontSize: 11, color: colors.inkTertiary, marginTop: 1 },
+  shelfInitial: { fontFamily: fonts.display, fontSize: 26, color: colors.inkMuted },
 })

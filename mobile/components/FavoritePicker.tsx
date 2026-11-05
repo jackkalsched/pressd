@@ -32,6 +32,7 @@ export default function FavoritePicker<T>({
   emptyText,
   hasPick,
   onClear,
+  clearLabel = 'Clear this pick',
   saving,
   error,
   onBack,
@@ -48,6 +49,7 @@ export default function FavoritePicker<T>({
   emptyText: string
   hasPick: boolean
   onClear: () => void
+  clearLabel?: string
   saving: boolean
   error: string | null
   onBack: () => void
@@ -95,7 +97,7 @@ export default function FavoritePicker<T>({
                 control — there is no row that means "none of these". */}
             {hasPick && (
               <Pressable style={styles.clearBtn} onPress={onClear} disabled={saving}>
-                <Text style={styles.clearText}>Clear this pick</Text>
+                <Text style={styles.clearText}>{clearLabel}</Text>
               </Pressable>
             )}
           </View>

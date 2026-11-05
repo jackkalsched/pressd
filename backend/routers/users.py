@@ -1,4 +1,5 @@
 import base64
+import json
 import io
 import os
 import uuid
@@ -450,6 +451,13 @@ def accept_invite(
 # model for someone — below it, there isn't enough of a person there yet.
 PICKS_MIN_RATED_ALBUMS = 10
 
+# The shelf holds this many albums, by slot.
+SHELF_SIZE = 4
+
+# Room for "City, State" or "City, Country" and little more: it shares a line
+# with the handle on a phone.
+LOCATION_MAX = 40
+
 
 def _rated_album_count(session: Session, user_id: int) -> int:
     return session.exec(
@@ -477,6 +485,28 @@ def _own_rated_album(session: Session, user_id: int, album_id) -> int | None:
     return album_id
 
 
+def _shelf_ids(user: PressUser) -> list[int | None]:
+    """The stored shelf as SHELF_SIZE slots; anything malformed reads as empty."""
+    try:
+        raw = json.loads(user.shelf) if user.shelf else []
+    except ValueError:
+        raw = []
+    ids = [i if isinstance(i, int) else None for i in raw][:SHELF_SIZE] if isinstance(raw, list) else []
+    return ids + [None] * (SHELF_SIZE - len(ids))
+
+
+def _validated_shelf(session: Session, user_id: int, shelf) -> str:
+    """A shelf from the client: up to SHELF_SIZE slots, each null or one of the
+    user's own rated albums, none twice."""
+    if not isinstance(shelf, list) or len(shelf) > SHELF_SIZE:
+        raise HTTPException(status_code=400, detail=f"A shelf holds {SHELF_SIZE} albums")
+    slots = [None if a is None else _own_rated_album(session, user_id, a) for a in shelf]
+    picked = [a for a in slots if a is not None]
+    if len(picked) != len(set(picked)):
+        raise HTTPException(status_code=400, detail="An album can sit on the shelf once")
+    return json.dumps(slots + [None] * (SHELF_SIZE - len(slots)), separators=(",", ":"))
+
+
 def _own_rated_song(session: Session, user_id: int, song_id) -> int | None:
     """Same for a song — scored, and on an album this user owns."""
     if song_id is None:
@@ -489,6 +519,23 @@ def _own_rated_song(session: Session, user_id: int, song_id) -> int | None:
     if owned is None:
         raise HTTPException(status_code=400, detail="Pick one of your own rated songs")
     return song_id
+
+
+def _shelf_payload(session: Session, user: PressUser) -> list[dict | None]:
+    ids = _shelf_ids(user)
+    wanted = [i for i in ids if i is not None]
+    albums = {
+        a.id: a for a in session.exec(
+            select(Album).where(Album.id.in_(wanted), Album.user_id == user.id)
+        ).all()
+    } if wanted else {}
+    return [
+        {
+            "id": a.id, "album_name": a.album_name, "artist": a.artist,
+            "album_art_url": a.album_art_url, "score": a.score,
+        } if (a := albums.get(i)) else None
+        for i in ids
+    ]
 
 
 def _profile_payload(session: Session, user: PressUser) -> dict:
@@ -508,6 +555,7 @@ def _profile_payload(session: Session, user: PressUser) -> dict:
         "avatar_url": user.avatar_url,
         "banner_url": user.banner_url,
         "bio": user.bio,
+        "location": user.location,
         # "Pressing since …" on the profile. Null for accounts older than the
         # column, whose sign-up date was never stored (§10).
         "created_at": user.created_at.isoformat() if user.created_at else None,
@@ -516,6 +564,9 @@ def _profile_payload(session: Session, user: PressUser) -> dict:
         "picks_unlocked": rated >= PICKS_MIN_RATED_ALBUMS,
         "picks_rated_count": rated,
         "picks_required": PICKS_MIN_RATED_ALBUMS,
+        # Each slot resolved against the user's albums: one since deleted, or no
+        # longer theirs, comes back an empty slot rather than a stale title.
+        "shelf": _shelf_payload(session, user),
         "favorite_artist": user.favorite_artist,
         "favorite_album": {
             "id": album.id, "album_name": album.album_name, "artist": album.artist,
@@ -563,6 +614,13 @@ def update_user(
         if len(bio) > 240:
             raise HTTPException(status_code=400, detail="Bio must be 240 characters or fewer")
         user.bio = bio or None
+    if "location" in data:
+        # Typed, not looked up: one line, runs of whitespace folded, and
+        # empty clears it.
+        location = " ".join((data["location"] or "").split())
+        if len(location) > LOCATION_MAX:
+            raise HTTPException(status_code=400, detail=f"Location must be {LOCATION_MAX} characters or fewer")
+        user.location = location or None
     # One-way: the tutorial can be replayed from Settings, but that never puts
     # it back on the first-run path, so there is nothing to unset.
     if data.get("tutorial_seen") and user.tutorial_seen_at is None:
@@ -571,13 +629,15 @@ def update_user(
     # Favourites. An album or song has to be one this user has rated — the
     # picker only offers those, and accepting anything else would let a profile
     # advertise a record its owner never scored. null clears the pick.
-    picks = ("favorite_album_id", "favorite_song_id", "favorite_artist")
+    picks = ("favorite_album_id", "favorite_song_id", "favorite_artist", "shelf")
     if any(k in data for k in picks) and not _picks_unlocked(session, user_id):
         raise HTTPException(
             status_code=403,
             detail=f"Rate {PICKS_MIN_RATED_ALBUMS} albums to choose your picks",
         )
 
+    if "shelf" in data:
+        user.shelf = _validated_shelf(session, user_id, data["shelf"])
     if "favorite_album_id" in data:
         user.favorite_album_id = _own_rated_album(session, user_id, data["favorite_album_id"])
     if "favorite_song_id" in data:

@@ -10,6 +10,7 @@ import {
   PlayfairDisplay_700Bold_Italic,
   PlayfairDisplay_900Black,
 } from '@expo-google-fonts/playfair-display'
+import { Unbounded_700Bold } from '@expo-google-fonts/unbounded'
 import {
   PlusJakartaSans_400Regular,
   PlusJakartaSans_500Medium,
@@ -67,6 +68,7 @@ function RootNavigator() {
     PlayfairDisplay_700Bold,
     PlayfairDisplay_700Bold_Italic,
     PlayfairDisplay_900Black,
+    Unbounded_700Bold,
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
     PlusJakartaSans_600SemiBold,

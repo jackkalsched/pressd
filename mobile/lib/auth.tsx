@@ -42,9 +42,11 @@ interface AuthContextValue {
     name?: string
     avatarUrl?: string | null
     bio?: string
+    location?: string
     favoriteAlbumId?: number | null
     favoriteSongId?: number | null
     favoriteArtist?: string | null
+    shelf?: (number | null)[]
   }) => Promise<Profile>
   /** Upload a profile picture and adopt the cache-busted URL it returns. */
   uploadAvatarImage: (image: { base64: string; contentType: string }) => Promise<void>
@@ -157,9 +159,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       name?: string
       avatarUrl?: string | null
       bio?: string
+      location?: string
       favoriteAlbumId?: number | null
       favoriteSongId?: number | null
       favoriteArtist?: string | null
+      shelf?: (number | null)[]
     }): Promise<Profile> => {
       if (!user) throw new Error('Not signed in')
       const profile = await updateUser(user.id, data)
