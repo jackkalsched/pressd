@@ -12,7 +12,8 @@
 // against *that album's owner*, since "ranked #4 of 412" is a claim about the
 // person who rated it, not whoever is looking.
 import { useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import VinylSpinner from './VinylSpinner'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -380,7 +381,7 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
           accessibilityLabel={`Share ${album.albumName}`}
         >
           {sharing ? (
-            <ActivityIndicator color="#fff" />
+            <VinylSpinner color="#fff" />
           ) : (
             <>
               <Share2 size={17} color="#fff" />
@@ -388,7 +389,7 @@ export default function ShareCard({ album, onClose }: { album: Album; onClose: (
             </>
           )}
         </Pressable>
-        <Pressable style={styles.doneBtn} onPress={onClose}>
+        <Pressable style={[styles.doneBtn, { borderColor: tc.border }]} onPress={onClose}>
           <Text allowFontScaling={false} style={styles.doneBtnText}>Done</Text>
         </Pressable>
       </View>
@@ -552,7 +553,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.raised,
   },
   doneBtnText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.inkSecondary },

@@ -13,7 +13,6 @@
 // it appears once, and a stray tap would record a decision nobody made.
 import { useRef, useState } from 'react'
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -23,6 +22,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import VinylSpinner from './VinylSpinner'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Phone, X } from 'lucide-react-native'
 import { toE164 } from '@pressd/shared/api'
@@ -144,7 +144,7 @@ export default function PhoneSheet({
                 easier. It’s never shown on your profile.
               </Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { borderColor: tc.border }]}
                 value={number}
                 onChangeText={(t) => { setNumber(t); setError(null) }}
                 placeholder="(555) 123-4567"
@@ -165,7 +165,7 @@ export default function PhoneSheet({
                 disabled={busy || !number.trim()}
                 accessibilityRole="button"
               >
-                {busy ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.primaryText}>Text me a code</Text>}
+                {busy ? <VinylSpinner color="#ffffff" /> : <Text style={styles.primaryText}>Text me a code</Text>}
               </Pressable>
               {prompt && (
                 <Pressable style={styles.secondary} onPress={notNow} disabled={busy} accessibilityRole="button">
@@ -178,7 +178,7 @@ export default function PhoneSheet({
               <Text style={styles.title}>Enter the code</Text>
               <Text style={styles.body}>We texted a 6-digit code to {sentTo ? pretty(sentTo) : 'your phone'}.</Text>
               <TextInput
-                style={[styles.input, styles.codeInput]}
+                style={[[styles.input, { borderColor: tc.border }], styles.codeInput]}
                 value={code}
                 onChangeText={(t) => {
                   setCode(t.replace(/\D/g, '').slice(0, 6))
@@ -202,7 +202,7 @@ export default function PhoneSheet({
                 disabled={busy || code.length < 6}
                 accessibilityRole="button"
               >
-                {busy ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.primaryText}>Verify</Text>}
+                {busy ? <VinylSpinner color="#ffffff" /> : <Text style={styles.primaryText}>Verify</Text>}
               </Pressable>
               <View style={styles.codeLinks}>
                 <Pressable onPress={() => { setStep('number'); setError(null) }} disabled={busy} hitSlop={8}>
@@ -253,7 +253,6 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.raised,
     paddingHorizontal: spacing.md,
     fontFamily: fonts.bodyMedium,

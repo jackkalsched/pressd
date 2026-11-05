@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import VinylSpinner from '../components/VinylSpinner'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import * as WebBrowser from 'expo-web-browser'
@@ -107,7 +108,7 @@ export default function SignIn() {
 
       <View style={styles.actions}>
         {busy ? (
-          <ActivityIndicator color={tc.green} />
+          <VinylSpinner size={48} />
         ) : (
           <>
             {appleAvailable ? (
@@ -125,7 +126,7 @@ export default function SignIn() {
             ) : null}
 
             {DEV_TOKEN ? (
-              <Pressable style={styles.devBtn} onPress={handleDevToken}>
+              <Pressable style={[styles.devBtn, { borderColor: tc.border }]} onPress={handleDevToken}>
                 <Text style={styles.devBtnText}>Continue with dev token</Text>
               </Pressable>
             ) : null}
@@ -169,7 +170,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.raised,
   },
   devBtnText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary },

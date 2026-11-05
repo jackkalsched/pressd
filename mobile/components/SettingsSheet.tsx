@@ -7,7 +7,6 @@
 // come back either way (see the Hide My Email note in mobile/TESTFLIGHT.md).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  ActivityIndicator,
   Alert,
   Animated,
   Easing,
@@ -23,6 +22,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native'
+import VinylSpinner from './VinylSpinner'
 import * as Google from 'expo-auth-session/providers/google'
 import * as AppleAuthentication from 'expo-apple-authentication'
 import * as ImagePicker from 'expo-image-picker'
@@ -543,7 +543,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             {editing && (<>
             <Text style={styles.sectionLabel}>PROFILE</Text>
 
-            <View style={styles.avatarRow}>
+            <View style={[styles.avatarRow, { borderColor: tc.border }]}>
               <Pressable onPress={pickAvatar} disabled={avatarBusy} accessibilityLabel="Change profile picture">
                 <View style={styles.avatar}>
                   {user?.avatarUrl ? (
@@ -565,7 +565,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                 <Text style={styles.providerLabel}>Profile picture</Text>
               </View>
               {avatarBusy ? (
-                <ActivityIndicator color={tc.green} />
+                <VinylSpinner color={tc.green} />
               ) : (
                 <View style={styles.avatarActions}>
                   <Pressable onPress={pickAvatar} hitSlop={8}>
@@ -580,7 +580,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
               )}
             </View>
 
-            <View style={styles.avatarRow}>
+            <View style={[styles.avatarRow, { borderColor: tc.border }]}>
               <Pressable onPress={pickBanner} disabled={bannerBusy} accessibilityLabel="Change profile banner">
                 <View style={styles.bannerThumb}>
                   {profile?.banner_url ? (
@@ -598,7 +598,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                 <Text style={styles.providerLabel}>Banner</Text>
               </View>
               {bannerBusy ? (
-                <ActivityIndicator color={tc.green} />
+                <VinylSpinner color={tc.green} />
               ) : (
                 <View style={styles.avatarActions}>
                   <Pressable onPress={pickBanner} hitSlop={8}>
@@ -615,14 +615,14 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
 
             {/* Username edits in place rather than on its own screen — it's
                 one field, and the name is right there to check against. */}
-            <View style={styles.settingRow}>
+            <View style={[styles.settingRow, { borderColor: tc.border }]}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.providerLabel}>Username</Text>
                 {nameDraft === null ? (
                   <Text style={styles.settingValue} numberOfLines={1}>{user?.name}</Text>
                 ) : (
                   <TextInput
-                    style={styles.nameInput}
+                    style={[styles.nameInput, { borderColor: tc.border }]}
                     value={nameDraft}
                     onChangeText={(t) => setNameDraft(cleanUsername(t))}
                     autoFocus
@@ -638,7 +638,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                 )}
               </View>
               {savingName ? (
-                <ActivityIndicator color={tc.green} />
+                <VinylSpinner color={tc.green} />
               ) : nameDraft === null ? (
                 <Pressable onPress={() => setNameDraft(cleanUsername(user?.name ?? ''))} hitSlop={8}>
                   <Text style={styles.linkAction}>Edit</Text>
@@ -656,7 +656,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             </View>
 
             {/* Typed, never read from the phone: people choose how specific to be. */}
-            <View style={styles.settingRow}>
+            <View style={[styles.settingRow, { borderColor: tc.border }]}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.providerLabel}>Location</Text>
                 {locationDraft === null ? (
@@ -665,7 +665,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                   </Text>
                 ) : (
                   <TextInput
-                    style={styles.nameInput}
+                    style={[styles.nameInput, { borderColor: tc.border }]}
                     value={locationDraft}
                     onChangeText={setLocationDraft}
                     autoFocus
@@ -677,7 +677,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                 )}
               </View>
               {savingLocation ? (
-                <ActivityIndicator color={tc.green} />
+                <VinylSpinner color={tc.green} />
               ) : locationDraft === null ? (
                 <Pressable onPress={() => setLocationDraft(profile?.location ?? '')} hitSlop={8} disabled={!profile}>
                   <Text style={styles.linkAction}>{profile?.location ? 'Edit' : 'Add'}</Text>
@@ -695,7 +695,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             </View>
 
             {/* The bio edits in place too, a few lines tall. */}
-            <View style={styles.settingRow}>
+            <View style={[styles.settingRow, { borderColor: tc.border }]}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.providerLabel}>Bio</Text>
                 {bioDraft === null ? (
@@ -705,7 +705,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                 ) : (
                   <>
                     <TextInput
-                      style={[styles.nameInput, styles.bioInput]}
+                      style={[[styles.nameInput, { borderColor: tc.border }], styles.bioInput]}
                       value={bioDraft}
                       onChangeText={setBioDraft}
                       autoFocus
@@ -718,7 +718,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                 )}
               </View>
               {savingBio ? (
-                <ActivityIndicator color={tc.green} />
+                <VinylSpinner color={tc.green} />
               ) : bioDraft === null ? (
                 <Pressable onPress={() => setBioDraft(profile?.bio ?? user?.bio ?? '')} hitSlop={8}>
                   <Text style={styles.linkAction}>{profile?.bio || user?.bio ? 'Edit' : 'Add'}</Text>
@@ -739,7 +739,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             {/* Nothing is offered until the lock state is known: the rows would
                 otherwise flash as tappable and then 403 on save. */}
             {!profile ? (
-              <ActivityIndicator color={tc.green} style={{ marginVertical: spacing.lg }} />
+              <VinylSpinner size={32} style={{ marginVertical: spacing.lg }} />
             ) : !profile.picks_unlocked ? (
               <Text style={styles.sectionHint}>
                 Rate {Math.max(0, profile.picks_required - profile.picks_rated_count)} more{' '}
@@ -765,7 +765,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
               Get told when a friend sends you a record. iOS only asks once, so if you
               turn this down you&rsquo;ll have to re-enable it in the Settings app.
             </Text>
-            <View style={styles.pushRow}>
+            <View style={[styles.pushRow, { borderColor: tc.border }]}>
               <Text style={styles.pushLabel}>
                 {pushState === 'granted'
                   ? 'On'
@@ -774,7 +774,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                     : 'Off'}
               </Text>
               {pushBusy ? (
-                <ActivityIndicator color={tc.green} />
+                <VinylSpinner color={tc.green} />
               ) : pushState === 'undetermined' ? (
                 <Pressable onPress={turnOnPush} hitSlop={8}>
                   <Text style={styles.linkAction}>Turn on</Text>
@@ -807,7 +807,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             <ToggleRow label="Haptics" value={devicePrefs.haptics} onChange={(v) => setPref('haptics', v)} />
             {/* System follows the phone, including its automatic sunset switch;
                 the other two hold regardless of it. */}
-            <View style={styles.settingRow}>
+            <View style={[styles.settingRow, { borderColor: tc.border }]}>
               <Text style={[styles.providerLabel, { flex: 1 }]} numberOfLines={1}>Appearance</Text>
               <View style={styles.shelves}>
                 {APPEARANCES.map((ap) => {
@@ -828,7 +828,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                 })}
               </View>
             </View>
-            <View style={styles.settingRow}>
+            <View style={[styles.settingRow, { borderColor: tc.border }]}>
               <Text style={[styles.providerLabel, { flex: 1 }]} numberOfLines={1}>Library opens on</Text>
               <View style={styles.shelves}>
                 {SHELVES.map((sh) => {
@@ -857,7 +857,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             </Text>
 
             {isLoading ? (
-              <ActivityIndicator color={tc.green} style={{ marginVertical: spacing.lg }} />
+              <VinylSpinner size={32} style={{ marginVertical: spacing.lg }} />
             ) : (
               <>
                 <ProviderRow
@@ -901,7 +901,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             <Text style={styles.sectionLabel}>ACCOUNT</Text>
             {providers?.email ? (
               <>
-                <View style={styles.emailRow}>
+                <View style={[styles.emailRow, { borderColor: tc.border }]}>
                   <Text style={styles.emailText} numberOfLines={1}>{providers.email}</Text>
                 </View>
                 {providers.email.endsWith('privaterelay.appleid.com') ? (
@@ -914,10 +914,10 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             ) : null}
             {/* Only the last four digits ever come back from the server: the
                 number itself is stored as a keyed hash (backend/phone.py). */}
-            <View style={styles.settingRow}>
+            <View style={[styles.settingRow, { borderColor: tc.border }]}>
               <Text style={[styles.providerLabel, { flex: 1 }]} numberOfLines={1}>Phone number</Text>
               {phoneBusy ? (
-                <ActivityIndicator color={tc.green} />
+                <VinylSpinner color={tc.green} />
               ) : user?.phoneLast4 ? (
                 <View style={styles.phoneOnFile}>
                   <Text style={styles.phoneDigits} maxFontSizeMultiplier={NUM_SCALE_CAP}>•••• {user.phoneLast4}</Text>
@@ -936,7 +936,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
             <Pressable
-              style={styles.signOutBtn}
+              style={[styles.signOutBtn, { borderColor: tc.dangerBorder }]}
               onPress={() => {
                 onClose()
                 signOut()
@@ -947,9 +947,9 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             </Pressable>
             {/* Beside Sign out rather than at the foot of the sheet: App Review
                 rejected build 6 (Guideline 5.1.1(v)) without finding it there. */}
-            <Pressable style={styles.deleteBtn} onPress={confirmDelete} disabled={deleting} accessibilityLabel="Delete account">
+            <Pressable style={[styles.deleteBtn, { borderColor: tc.dangerBorder }]} onPress={confirmDelete} disabled={deleting} accessibilityLabel="Delete account">
               {deleting ? (
-                <ActivityIndicator color={tc.danger} />
+                <VinylSpinner color={tc.danger} />
               ) : (
                 <>
                   <Trash2 size={16} color={tc.danger} />
@@ -987,8 +987,9 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
 
 /** A labelled switch, in the sheet's card row. */
 function ToggleRow({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+  const tc = useColors()
   return (
-    <View style={styles.settingRow}>
+    <View style={[styles.settingRow, { borderColor: tc.border }]}>
       <Text style={[styles.providerLabel, { flex: 1 }]} numberOfLines={1}>{label}</Text>
       <Switch
         value={value}
@@ -1004,7 +1005,7 @@ function ToggleRow({ label, value, onChange }: { label: string; value: boolean; 
 function LinkRow({ label, onPress }: { label: string; onPress: () => void }) {
   const tc = useColors()
   return (
-    <Pressable style={styles.settingRow} onPress={onPress} accessibilityRole="button">
+    <Pressable style={[styles.settingRow, { borderColor: tc.border }]} onPress={onPress} accessibilityRole="button">
       <Text style={[styles.providerLabel, { flex: 1 }]} numberOfLines={1}>{label}</Text>
       <ChevronRight size={17} color={tc.inkMuted} />
     </Pressable>
@@ -1024,7 +1025,7 @@ function PickSettingRow({
 }) {
   const tc = useColors()
   return (
-    <Pressable style={styles.settingRow} onPress={onPress} accessibilityRole="button">
+    <Pressable style={[styles.settingRow, { borderColor: tc.border }]} onPress={onPress} accessibilityRole="button">
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.providerLabel}>{label}</Text>
         <Text style={[styles.settingValue, !value && styles.settingValueEmpty]} numberOfLines={1}>
@@ -1055,7 +1056,7 @@ function ProviderRow({
 }) {
   const tc = useColors()
   return (
-    <View style={styles.providerRow}>
+    <View style={[styles.providerRow, { borderColor: tc.border }]}>
       <View style={styles.providerIcon}>{icon}</View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.providerLabel}>{label}</Text>
@@ -1069,7 +1070,7 @@ function ProviderRow({
         )}
       </View>
       {busy ? (
-        <ActivityIndicator color={tc.green} />
+        <VinylSpinner color={tc.green} />
       ) : linked ? (
         canUnlink ? (
           <Pressable onPress={onUnlink} hitSlop={8}>
@@ -1125,7 +1126,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     backgroundColor: colors.raised,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
@@ -1139,7 +1139,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     backgroundColor: colors.raised,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radii.md,
     padding: spacing.md,
     marginTop: spacing.sm,
@@ -1160,7 +1159,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     backgroundColor: colors.raised,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radii.md,
     padding: spacing.md,
     marginTop: spacing.sm,
@@ -1180,7 +1178,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     marginTop: 1,
     borderBottomWidth: 1,
-    borderColor: colors.border,
   },
   avatarRow: {
     flexDirection: 'row',
@@ -1188,7 +1185,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     backgroundColor: colors.raised,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radii.md,
     padding: spacing.md,
     marginTop: spacing.sm,
@@ -1236,7 +1232,6 @@ const styles = StyleSheet.create({
   emailRow: {
     backgroundColor: colors.raised,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radii.md,
     padding: spacing.md,
   },
@@ -1258,7 +1253,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.dangerBorder,
     backgroundColor: colors.dangerSoft,
   },
   signOutText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.danger },
@@ -1274,7 +1268,6 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.dangerBorder,
   },
   deleteText: { fontFamily: fonts.bodySemiBold, fontSize: 14.5, color: colors.danger },
   idHint: {

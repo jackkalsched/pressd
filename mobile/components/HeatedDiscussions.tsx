@@ -227,7 +227,7 @@ function RoomMeter({ mean, spread, index, animate }: { mean: number; spread: num
         <View
           style={[
             styles.meterDot,
-            { left: `${pos(mean)}%`, borderColor: scoreColor(mean), shadowColor: scoreColor(mean) },
+            { left: `${pos(mean)}%`, borderColor: sc(mean), shadowColor: scoreColor(mean) },
           ]}
         />
       </View>

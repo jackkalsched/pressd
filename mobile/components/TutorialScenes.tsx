@@ -66,6 +66,7 @@ const TRACKS = [
 const LAST = TRACKS.length - 1
 
 export function FrontToBackScene({ active }: SceneProps) {
+  const tc = useColors()
   const reduce = useReduceMotion()
   const [idx, setIdx] = useState(0) // the track on screen
   const [rated, setRated] = useState(0) // how many are scored
@@ -176,7 +177,7 @@ export function FrontToBackScene({ active }: SceneProps) {
         {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
           <View key={i} style={{ flex: 1, backgroundColor: scoreColor(i + 0.5) }} />
         ))}
-        <Animated.View style={[styles.rampDot, { opacity: value == null ? 0 : 1, transform: [{ translateX: dotX }] }]} />
+        <Animated.View style={[[styles.rampDot, { borderColor: tc.green }], { opacity: value == null ? 0 : 1, transform: [{ translateX: dotX }] }]} />
       </View>
 
       <Animated.View style={[styles.rateNext, { opacity: press }]}>
@@ -196,7 +197,7 @@ export function FrontToBackScene({ active }: SceneProps) {
               style={[
                 styles.chip,
                 { backgroundColor: i < done ? scoreColor(parseFloat(x.score)) : colors.inset },
-                i === at && i >= done && styles.chipCurrent,
+                i === at && i >= done && [styles.chipCurrent, { borderColor: tc.ink }],
               ]}
             />
           ))}
@@ -228,6 +229,7 @@ const SONG_AVG = 8.48
 const ALBUM_SCORE = 8.72
 
 export function TheRecordScene({ active }: SceneProps) {
+  const tc = useColors()
   const reduce = useReduceMotion()
   const [typed, setTyped] = useState<string[]>(() => FACTOR_DEMO.map(() => ''))
   const [typing, setTyping] = useState(-1) // the factor being typed into
@@ -313,12 +315,12 @@ export function TheRecordScene({ active }: SceneProps) {
 
       <View style={styles.factorList}>
         {FACTOR_DEMO.map((f, i) => (
-          <View key={f.label} style={[styles.factorRow, i === FACTOR_DEMO.length - 1 && styles.factorRowLast]}>
+          <View key={f.label} style={[[styles.factorRow, { borderColor: tc.border }], i === FACTOR_DEMO.length - 1 && styles.factorRowLast]}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.factorLabel} numberOfLines={1}>{f.label}</Text>
               <Text style={styles.factorDesc} numberOfLines={1}>{f.desc}</Text>
             </View>
-            <View style={[styles.factorInput, typing === i && styles.factorInputActive]}>
+            <View style={[[styles.factorInput, { borderColor: tc.border }], typing === i && [styles.factorInputActive, { borderColor: tc.green }]]}>
               <Text
                 style={[styles.factorValue, !values[i] && { color: colors.inkMuted }]}
                 maxFontSizeMultiplier={NUM_SCALE_CAP}
@@ -346,6 +348,7 @@ const SHELVES = ['To Listen', 'Listening', 'Rated'] as const
 const TILE = 54
 
 export function YourCatalogScene({ active }: SceneProps) {
+  const tc = useColors()
   const reduce = useReduceMotion()
   const art = useArt()
   const [width, setWidth] = useState(0)
@@ -387,7 +390,7 @@ export function YourCatalogScene({ active }: SceneProps) {
     <View style={styles.stageInner} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       <View style={styles.shelves}>
         {SHELVES.map((s) => (
-          <View key={s} style={styles.shelf}>
+          <View key={s} style={[styles.shelf, { borderColor: tc.border }]}>
             <Text style={styles.shelfLabel} numberOfLines={1}>{s.toUpperCase()}</Text>
           </View>
         ))}
@@ -471,7 +474,7 @@ export function FriendsScene({ active }: SceneProps) {
 
   return (
     <View style={[styles.stageInner, { gap: spacing.sm }]}>
-      <Animated.View style={[styles.feedRow, rise(rows[0])]}>
+      <Animated.View style={[[styles.feedRow, { borderColor: tc.border }], rise(rows[0])]}>
         <Avatar name="Maya" />
         <Text style={styles.feedText} numberOfLines={1}>
           <Text style={styles.feedName}>Maya</Text> rated an album
@@ -482,7 +485,7 @@ export function FriendsScene({ active }: SceneProps) {
         </View>
       </Animated.View>
 
-      <Animated.View style={[styles.feedRow, rise(rows[1])]}>
+      <Animated.View style={[[styles.feedRow, { borderColor: tc.border }], rise(rows[1])]}>
         <Avatar name="Sam" />
         <View style={styles.bubble}>
           <Text style={styles.bubbleText} numberOfLines={2}>The closer makes the whole record.</Text>
@@ -493,7 +496,7 @@ export function FriendsScene({ active }: SceneProps) {
         </View>
       </Animated.View>
 
-      <Animated.View style={[styles.feedRow, rise(rows[2])]}>
+      <Animated.View style={[[styles.feedRow, { borderColor: tc.border }], rise(rows[2])]}>
         <Text style={styles.rank} maxFontSizeMultiplier={NUM_SCALE_CAP}>#3</Text>
         <View style={styles.move}>
           <ArrowUp size={12} color={tc.green} strokeWidth={2.6} />
@@ -582,7 +585,7 @@ export function LearnsYouScene({ active }: SceneProps) {
             <Cover uri={art[4 + i]} size={64} seed={`p${i}`} />
             <Animated.View
               style={[
-                styles.predChip,
+                [styles.predChip, { borderColor: tc.raised }],
                 { opacity: chips[i], transform: [{ scale: chips[i].interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }] },
               ]}
             >
@@ -633,7 +636,6 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     backgroundColor: '#fff',
     borderWidth: 2,
-    borderColor: colors.green,
   },
   rateNext: {
     flexDirection: 'row',
@@ -652,7 +654,7 @@ const styles = StyleSheet.create({
   runValue: { fontFamily: fonts.display, fontSize: 20, color: colors.green },
   chipRow: { flexDirection: 'row', gap: 4, marginTop: spacing.sm },
   chip: { flex: 1, height: 18, borderRadius: 4 },
-  chipCurrent: { borderWidth: 1.5, borderColor: colors.ink },
+  chipCurrent: { borderWidth: 1.5, },
   upRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingTop: spacing.md },
   upNum: { width: 14, fontFamily: fonts.body, fontSize: 11, color: colors.inkMuted },
   upTitle: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary },
@@ -666,7 +668,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   factorRowLast: { borderBottomWidth: 0 },
   factorLabel: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink },
@@ -678,9 +679,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.raised,
     borderRadius: radii.sm,
     borderWidth: 1,
-    borderColor: colors.border,
   },
-  factorInputActive: { borderColor: colors.green },
+  factorInputActive: { },
   factorValue: { fontFamily: fonts.display, fontSize: 19, color: colors.ink },
   finalBlock: { alignItems: 'center', marginTop: spacing.sm },
   finalScore: { fontFamily: fonts.display, fontSize: 46, lineHeight: 54, color: colors.green },
@@ -693,7 +693,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
     paddingTop: spacing.sm,
   },
@@ -733,7 +732,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.sm,
     minHeight: 54,
   },
@@ -774,7 +772,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.green,
     borderRadius: radii.pill,
     borderWidth: 2,
-    borderColor: colors.raised,
     paddingHorizontal: 7,
     paddingVertical: 2,
   },

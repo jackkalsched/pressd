@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, Clock, Link2, Loader2, MapPin, MoreHorizontal, Pencil, Settings, UserMinus, UserPlus } from 'lucide-react'
+import { ArrowLeft, Check, Clock, Link2, MapPin, MoreHorizontal, Pencil, Settings, UserMinus, UserPlus } from 'lucide-react'
 import { acceptFriendRequest, addFriend, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, fetchOverlap, getInviteLink, removeFriend } from '../api'
 import { useUser } from '../context/UserContext'
 import Library from './Library'
@@ -14,6 +14,7 @@ import { OverlapPill } from '../components/TasteOverlap'
 import Avatar from '../components/Avatar'
 import Stats from './Stats'
 import Ratings from './Ratings'
+import VinylSpinner from '../components/VinylSpinner'
 
 type Tab = 'library' | 'stats' | 'ratings'
 
@@ -215,7 +216,7 @@ export default function FriendProfile() {
       <div className="min-h-screen bg-(--c-f9f8f6) p-4 md:p-8">
         {backToFriends}
         <div className="flex items-center justify-center py-24 text-(--c-a8998a) gap-2">
-          <Loader2 size={16} className="animate-spin" /> <span className="text-sm">Loading…</span>
+          <VinylSpinner size={64} /> <span className="text-sm">Loading…</span>
         </div>
       </div>
     )
@@ -366,7 +367,7 @@ export default function FriendProfile() {
                     : 'bg-(--c-green-fill) text-white shadow-[0_10px_24px_-10px_rgba(45,106,79,0.75)] hover:-translate-y-px hover:bg-(--c-green-fill-hover) hover:shadow-[0_14px_28px_-10px_rgba(45,106,79,0.8)]'
                 } disabled:cursor-default`}
               >
-                {busy ? <Loader2 size={16} className="animate-spin" />
+                {busy ? <VinylSpinner size={18} />
                   : isFriend ? <Check size={17} />
                   : requested ? <Clock size={16} />
                   : <UserPlus size={17} />}
@@ -499,7 +500,7 @@ export default function FriendProfile() {
                 disabled={busy}
                 className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-(--c-b1542f) text-[14.5px] font-semibold text-white hover:bg-(--c-9a4727) disabled:opacity-60"
               >
-                {busy ? <Loader2 size={16} className="animate-spin" /> : <UserMinus size={16} />}
+                {busy ? <VinylSpinner size={18} /> : <UserMinus size={16} />}
                 Remove
               </button>
             </div>

@@ -7,7 +7,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useGoogleLogin } from '@react-oauth/google'
-import { ChevronRight, Loader2, X } from 'lucide-react'
+import { ChevronRight, X } from 'lucide-react'
 import { useUser } from '../context/UserContext'
 import { fetchProfile, updateUser, linkGoogle } from '../api'
 import type { UserInfo } from '../api'
@@ -17,6 +17,7 @@ import PhoneDialog from './PhoneDialog'
 import { phoneVerifyConfigured } from '../lib/phoneVerify'
 import { useBanner } from '../lib/useBanner'
 import { setAppearance, useAppearance, type Appearance } from '../lib/appearance'
+import VinylSpinner from './VinylSpinner'
 
 function resizeImageToBase64(file: File, size = 200): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -188,7 +189,7 @@ export default function SettingsDialog({ mode, onClose }: { mode: SettingsMode; 
             <p className="m-0 text-sm font-medium text-(--c-111)">Banner</p>
             <div className="mt-0.5 flex items-center gap-3 text-xs font-medium">
               {banner.busy ? (
-                <Loader2 size={13} className="animate-spin text-(--c-2d6a4f)" />
+                <VinylSpinner size={15} />
               ) : (
                 <>
                   <label className="cursor-pointer text-(--c-2d6a4f) hover:text-(--c-245c43) transition-colors">
@@ -246,7 +247,7 @@ export default function SettingsDialog({ mode, onClose }: { mode: SettingsMode; 
             disabled={loading || !name.trim()}
             className="w-full py-2.5 rounded-xl text-sm font-semibold bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {loading ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save'}
+            {loading ? <><VinylSpinner size={16} /> Saving…</> : 'Save'}
           </button>
         </form>
         </>)}
@@ -273,7 +274,7 @@ export default function SettingsDialog({ mode, onClose }: { mode: SettingsMode; 
             <div className="flex w-full items-center gap-2 px-3 py-2">
               <span className="flex-1 text-sm font-medium text-(--c-111)">Phone number</span>
               {phoneBusy ? (
-                <Loader2 size={14} className="animate-spin text-(--c-2d6a4f)" />
+                <VinylSpinner size={16} />
               ) : activeUser.phoneLast4 ? (
                 <>
                   <span className="text-sm tabular-nums text-(--c-57534e)">•••• {activeUser.phoneLast4}</span>

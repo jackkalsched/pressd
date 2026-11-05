@@ -13,7 +13,6 @@
 // now" that costs nothing.
 import { useCallback, useMemo, useState } from 'react'
 import {
-  ActivityIndicator,
   Animated,
   Modal,
   PanResponder,
@@ -24,6 +23,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native'
+import VinylSpinner from './VinylSpinner'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useSegments } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -244,7 +244,7 @@ export default function PeopleSheet({ data, visible, onClose }: {
             {people.map((p) => {
               const isAdded = added.has(p.user.id)
               return (
-                <View key={p.user.id} style={styles.person}>
+                <View key={p.user.id} style={[styles.person, { borderColor: tc.border }]}>
                   <View style={styles.personHead}>
                     <Pressable
                       onPress={() => onOpenProfile(p)}
@@ -266,7 +266,7 @@ export default function PeopleSheet({ data, visible, onClose }: {
                       accessibilityLabel={isAdded ? 'Friend request sent' : `Add ${p.user.name}`}
                     >
                       {adding === p.user.id ? (
-                        <ActivityIndicator size="small" color="#ffffff" />
+                        <VinylSpinner size="small" color="#ffffff" />
                       ) : isAdded ? (
                         <Clock size={13} color={tc.green} strokeWidth={2.4} />
                       ) : (
@@ -287,7 +287,7 @@ export default function PeopleSheet({ data, visible, onClose }: {
             <Pressable style={styles.notNow} onPress={() => { selection(); dismiss() }}>
               <Text style={styles.notNowText}>Not now</Text>
             </Pressable>
-            <Pressable style={styles.discuss} onPress={openDiscussion}>
+            <Pressable style={[styles.discuss, { borderColor: tc.border }]} onPress={openDiscussion}>
               <MessageCircle size={16} color={tc.green} />
               <Text style={styles.discussText} numberOfLines={1}>Open the discussion</Text>
             </Pressable>
@@ -330,7 +330,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.raised,
   },
   personHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
@@ -379,7 +378,6 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.raised,
   },
   discussText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.green },

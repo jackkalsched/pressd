@@ -11,11 +11,12 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Loader2, Plus, Search, X } from 'lucide-react'
+import { Check, Plus, Search, X } from 'lucide-react'
 import { SHELF_SIZE, fetchAlbums, shelfWith, updateUser, type Profile } from '../api'
 import CoverImg from './CoverImg'
 import { Cover } from './covers'
 import { songScoreColor } from '../types'
+import VinylSpinner from './VinylSpinner'
 
 // Each cover's lean and lift, so the row reads as records stood up by hand
 // rather than a grid. Mobile's SHELF_TILT / SHELF_LIFT, scaled up.
@@ -156,7 +157,7 @@ function ShelfDialog({ slot, profile, onClose }: { slot: number; profile: Profil
         </div>
         <ul className="m-0 min-h-0 flex-1 list-none overflow-y-auto px-3 pb-4">
           {albums.isLoading ? (
-            <li className="flex justify-center py-10"><Loader2 size={18} className="animate-spin text-(--c-2d6a4f)" /></li>
+            <li className="flex justify-center py-10"><VinylSpinner size={32} /></li>
           ) : rows.length === 0 ? (
             <li className="py-10 text-center text-[14px] text-(--c-8a7f72)">{q ? 'Nothing matches your search.' : 'No rated albums yet.'}</li>
           ) : rows.map((a, i) => (

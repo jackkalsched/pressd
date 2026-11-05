@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Library, BarChart2, List, Mail, X, Loader2, MessageCircle, Users, Plus, Sparkles, TrendingUp, ChevronDown } from 'lucide-react'
+import { Library, BarChart2, List, Mail, X, MessageCircle, Users, Plus, Sparkles, TrendingUp, ChevronDown } from 'lucide-react'
 import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
 import { fetchFriends, getInviteLink, removeFriend } from '../api'
@@ -10,6 +10,7 @@ import AddAlbumModal from './AddAlbumModal'
 import PhoneDialog from './PhoneDialog'
 import { PeopleSheetHost } from './PeopleSheet'
 import { phoneVerifyConfigured } from '../lib/phoneVerify'
+import VinylSpinner from './VinylSpinner'
 
 function avatarColor(name: string): string {
   const colors = ['var(--c-2d6a4f)', 'var(--c-1d4ed8)', 'var(--c-7c3aed)', 'var(--c-b45309)', 'var(--c-0f766e)', 'var(--c-be185d)', 'var(--c-c2410c)']
@@ -104,7 +105,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
 
         {loading ? (
           <div className="flex items-center justify-center py-6 text-(--c-aaa) gap-2">
-            <Loader2 size={14} className="animate-spin" /> Generating…
+            <VinylSpinner size={32} /> Generating…
           </div>
         ) : error ? (
           <p className="text-(--c-c0392b) text-xs">{error}</p>

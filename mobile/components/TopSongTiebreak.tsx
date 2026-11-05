@@ -57,7 +57,7 @@ export default function TopSongTiebreak({
             {songs.map((s) => (
               <Pressable
                 key={s.id}
-                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                style={({ pressed }) => [[styles.row, { borderColor: tc.border }], pressed && [styles.rowPressed, { borderColor: tc.green }]]}
                 onPress={() => onPick(s.id)}
                 disabled={busy}
                 accessibilityRole="button"
@@ -130,11 +130,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.raised,
     marginBottom: spacing.sm,
   },
-  rowPressed: { borderColor: colors.green, backgroundColor: colors.greenSoft },
+  rowPressed: { backgroundColor: colors.greenSoft },
   // minWidth, not width — a double-digit track number has somewhere to go.
   trackNum: {
     fontFamily: fonts.display,

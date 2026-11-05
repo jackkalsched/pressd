@@ -5,7 +5,8 @@
 //   4. genres as horizontal count bars
 // plus the most-rated artists list linking into artist pages.
 import { useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import VinylSpinner from './VinylSpinner'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { ChevronDown, ChevronUp } from 'lucide-react-native'
@@ -101,14 +102,14 @@ export default function StatsView({ userId, ownerName }: { userId: number; owner
       {/* Most rated artists */}
       <Text style={styles.sectionLabel}>MOST RATED ARTISTS</Text>
       {isLoading ? (
-        <ActivityIndicator color={tc.green} style={{ marginTop: spacing.md }} />
+        <VinylSpinner size={32} style={{ marginTop: spacing.md }} />
       ) : topArtists.length === 0 ? (
         <Text style={styles.empty}>Rate more albums to build artist stats.</Text>
       ) : (
         topArtists.map((a) => (
           <Pressable
             key={a.artist}
-            style={styles.artistRow}
+            style={[styles.artistRow, { borderColor: tc.border }]}
             onPress={() => router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent(a.artist) } })}
           >
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -245,7 +246,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   artistName: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.ink },
   artistMeta: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },

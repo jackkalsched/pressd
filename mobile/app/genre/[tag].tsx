@@ -11,7 +11,6 @@
 import type { NativeScrollEvent, NativeSyntheticEvent, StyleProp, ViewStyle } from 'react-native'
 import { useRef, useState } from 'react'
 import {
-  ActivityIndicator,
   Animated,
   Dimensions,
   Pressable,
@@ -19,6 +18,7 @@ import {
   Text,
   View,
 } from 'react-native'
+import VinylSpinner from '../../components/VinylSpinner'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
@@ -115,7 +115,7 @@ export default function TagRecordsBoard() {
       {/* Covers the masthead's back control once you've scrolled, so it carries
           its own. */}
       <Animated.View
-        style={[styles.compactHeader, { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
+        style={[[styles.compactHeader, { borderColor: tc.border }], { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
         pointerEvents={barLive ? 'auto' : 'none'}
       >
         <Pressable onPress={goBack} hitSlop={12} accessibilityLabel="Back">
@@ -152,7 +152,7 @@ export default function TagRecordsBoard() {
             </Animated.View>
 
             {isLoading && items.length === 0 ? (
-              <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
+              <VinylSpinner size={48} style={{ marginTop: spacing.xxl }} />
             ) : items.length === 0 ? (
               <Text style={styles.empty}>
                 {ownerName ? `${ownerName} hasn't` : "You haven't"} rated anything in {label} yet.
@@ -240,8 +240,9 @@ function RevealCell({
 }
 
 function BoardRow({ item, onOpen }: { item: TagRecord; onOpen: (id: number) => void }) {
+  const tc = useColors()
   return (
-    <Pressable style={styles.row} onPress={() => onOpen(item.album_id)}>
+    <Pressable style={[styles.row, { borderColor: tc.border }]} onPress={() => onOpen(item.album_id)}>
       <Text style={styles.rowRank} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>
         {item.rank}
       </Text>
@@ -286,7 +287,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   compactTitle: { flex: 1, fontFamily: fonts.displayBlack, fontSize: 20, color: colors.ink, letterSpacing: 0.5 },
 
@@ -347,7 +347,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   rowRank: {
     fontFamily: fonts.displayBlack,

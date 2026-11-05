@@ -631,3 +631,11 @@ button:not(:disabled):active {
 .group:hover .spot-glow { opacity: 0.36; }
 :root.dark .spot-glow { opacity: 0.3; }
 :root.dark .group:hover .spot-glow { opacity: 0.42; }
+
+/* The loading record (VinylSpinner): its reflections sweep round once every
+   1.6s while the record holds still. Still under reduced motion. */
+@keyframes vinyl-turn { to { transform: rotate(360deg); } }
+.vinyl-spinner-light { transform-origin: 50px 50px; animation: vinyl-turn 1.6s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .vinyl-spinner-light { animation: none; }
+}

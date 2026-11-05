@@ -7,7 +7,6 @@
 // the profile endpoint. Web's FriendProfile.tsx does the same.
 import { useMemo, useRef, useState } from 'react'
 import {
-  ActivityIndicator,
   Alert,
   Animated,
   FlatList,
@@ -17,6 +16,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import VinylSpinner from '../../components/VinylSpinner'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -111,6 +111,11 @@ export default function FriendProfile() {
     queryFn: () => fetchScatterData(fid),
     enabled: tab === 'ratings',
     staleTime: 5 * 60_000,
+  })
+  const { data: theirFriends = [] } = useQuery({
+    queryKey: ['friends', fid],
+    queryFn: () => fetchFriends(fid),
+    enabled: Number.isFinite(fid),
   })
   const { data: myFriends = [] } = useQuery({
     queryKey: ['friends', user?.id],
@@ -282,7 +287,7 @@ export default function FriendProfile() {
         {profileError || !Number.isFinite(fid) ? (
           <Text style={styles.empty}>This profile isn&rsquo;t available.</Text>
         ) : (
-          <ActivityIndicator color={tc.green} />
+          <VinylSpinner size={64} />
         )}
       </View>
     )
@@ -292,7 +297,7 @@ export default function FriendProfile() {
     <View style={styles.screen}>
       {/* Compact bar: only the name remains once the banner scrolls off. */}
       <Animated.View
-        style={[styles.compactHeader, { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
+        style={[[styles.compactHeader, { borderColor: tc.border }], { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
         pointerEvents="none"
       >
         <Text style={styles.compactTitle} numberOfLines={1}>{person.name}</Text>
@@ -331,6 +336,7 @@ export default function FriendProfile() {
                   value: summary?.total_songs_rated != null ? summary.total_songs_rated.toLocaleString() : '—',
                   label: 'Songs',
                 },
+                { value: String(theirFriends.length), label: 'Friends' },
               ]}
               genres={topGenres}
               subgenres={topSubgenres}
@@ -514,8 +520,6 @@ const styles = StyleSheet.create({
     height: 42,
     backgroundColor: colors.raised,
     borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   searchBarInput: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: colors.ink },
   rankFilters: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg },
@@ -547,7 +551,6 @@ const styles = StyleSheet.create({
     zIndex: 20,
     backgroundColor: colors.bg,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
   },

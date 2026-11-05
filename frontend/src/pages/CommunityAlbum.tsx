@@ -25,7 +25,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, Loader2, Plus, Play, Star, Trash2 } from 'lucide-react'
+import { ArrowLeft, Check, Plus, Play, Star, Trash2 } from 'lucide-react'
 import {
   copyAlbumToLibrary, deleteAlbum, fetchCommunityAlbum, fetchCommunityAlbumByName, importAlbum,
   resolveDeezerAlbum, resolveReleaseByName,
@@ -39,6 +39,7 @@ import { useUser } from '../context/UserContext'
 import CoverImg from '../components/CoverImg'
 import { BangSkip, CompareScores, CoverWash, DANGER, GREEN, PILL, RECOMMEND, RevealRow, SECTION_LABEL, StatFigure } from '../components/albumView'
 import { stagger } from '../lib/format'
+import VinylSpinner from '../components/VinylSpinner'
 
 export default function CommunityAlbum() {
   const { id } = useParams<{ id: string }>()
@@ -82,7 +83,7 @@ export default function CommunityAlbum() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-(--c-f9f8f6) flex items-center justify-center gap-2 text-(--c-a8998a)">
-        <Loader2 size={16} className="animate-spin" /> Loading…
+        <VinylSpinner size={44} /> Loading…
       </div>
     )
   }
@@ -204,7 +205,7 @@ export default function CommunityAlbum() {
                 className="ml-1 flex h-9 w-9 items-center justify-center rounded-full hover:bg-red-50 disabled:opacity-50"
                 style={{ color: DANGER }}
               >
-                {busy === 'delete' ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={16} />}
+                {busy === 'delete' ? <VinylSpinner size={17} /> : <Trash2 size={16} />}
               </button>
             )}
           </div>
@@ -391,7 +392,7 @@ function AveragedView({
               disabled={busy === 'rate'}
               className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-(--c-green-fill) text-[15px] font-semibold text-white hover:bg-(--c-green-fill-hover) disabled:opacity-70"
             >
-              {busy === 'rate' ? <Loader2 size={16} className="animate-spin" /> : <Play size={14} fill="currentColor" />}
+              {busy === 'rate' ? <VinylSpinner size={18} /> : <Play size={14} fill="currentColor" />}
               {data.your_status === 'listening' ? 'Continue' : 'Rate now'}
             </button>
           )}
@@ -403,7 +404,7 @@ function AveragedView({
                 queued ? 'bg-(--c-2d6a4f)/10 text-(--c-2d6a4f)' : 'border border-(--c-d7cfc3) bg-(--c-fff) text-(--c-1c1917) hover:border-(--c-2d6a4f)'
               }`}
             >
-              {busy === 'queue' ? <Loader2 size={16} className="animate-spin" /> : queued ? <Check size={16} className="pop" /> : <Plus size={16} />}
+              {busy === 'queue' ? <VinylSpinner size={18} /> : queued ? <Check size={16} className="pop" /> : <Plus size={16} />}
               {queued ? 'Added' : 'Add to Library'}
             </button>
           )}

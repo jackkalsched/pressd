@@ -1592,6 +1592,18 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   The colours and icons are duplicated in the two `HeatedDiscussions.tsx` files; change
   both. Trending on Pressd stays a plain ranked list (`TrendingBoard`): no rank gets
   special treatment.
+- **Every wait shows the spinning record** (November 2026): `VinylSpinner`, one per
+  platform (`frontend/src/components/`, `mobile/components/`) — the disc from the Pressd
+  mark, held still while its reflections sweep round it, black in both themes, still
+  under reduced motion. Never `Loader2 animate-spin` on web or `ActivityIndicator` on mobile; mobile's
+  takes `ActivityIndicator`'s props (`size` small/large/points, `color` ignored) and
+  centres itself the same way. The drawing is duplicated across the two files; change both.
+  Sized by what's waiting: 64 for a whole screen, 44–48 for a list or sheet, 32 for a
+  section of a page, and a button's or row's own small size inside one.
+  While a rating settles, both rating screens show it large over
+  `useRecalibrationMessage` (`shared/src/hooks/useRecalibration.ts`): two status lines,
+  then the nudges (`RECALIBRATION_NUDGES` — reviews, friends, recommending, the room,
+  the charts, the shelf) shuffled and cycling every 3.6s, never "Almost there…", with no subtext under them.
 - **Hover feedback stays small.** `COVER_LIFT` is a 4% lift and a 1° lean on an
   ease-out; it was 13% and 3° on a springy curve and made rows of covers jump. Keep
   new hover scales in that range. The one exception, by request, is the shelf
@@ -1632,6 +1644,10 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
     react-native-svg resolves a dynamic colour when it's set and never again, so an
     icon handed `colors.X` keeps the old palette until it remounts; the compiler
     won't catch it, because icons accept any colour value.
+  - **Borders take plain colours too: never `borderColor: colors.X` in a stylesheet.**
+    iOS draws a `DynamicColorIOS` border wrongly — dark gray in light mode, on one side
+    or all four — so a border's colour is set where the element is drawn, from the
+    hook: `[styles.row, { borderColor: tc.border }]`. Fills and text are unaffected.
   - **Never write a page colour as a literal** (`'#ffffff'` for a card, a cream
     `rgba(249,248,246,…)`, a pale tint). White text on green or on a photo, shadows,
     and brand/score hues are fine as literals. The green is one value per palette for

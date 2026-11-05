@@ -14,11 +14,12 @@
 import { useMemo, type CSSProperties } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { fetchAlbums, fetchSummary, fetchTagRecords } from '../api'
 import { songScoreColor } from '../types'
 import { Cover, COVER_LIFT, ScorePill } from '../components/covers'
 import { useUser } from '../context/UserContext'
+import VinylSpinner from '../components/VinylSpinner'
 
 /** The --i a staggered animation (rise-in in index.css) reads. */
 function stagger(i: number): CSSProperties {
@@ -133,7 +134,7 @@ export default function TagBoard() {
 
         {isLoading ? (
           <div className="py-16 flex justify-center text-(--c-aaa)">
-            <Loader2 size={20} className="animate-spin" />
+            <VinylSpinner size={48} />
           </div>
         ) : isError ? (
           <p className="py-16 text-center text-sm text-(--c-777) m-0">Couldn't load these records just now.</p>

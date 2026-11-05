@@ -7,7 +7,6 @@
 // search.
 import { type ReactElement } from 'react'
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   StyleSheet,
@@ -15,6 +14,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import VinylSpinner from './VinylSpinner'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ArrowLeft, Check, Search, X } from 'lucide-react-native'
 import { colors, fonts, radii, spacing, useColors, pageAlpha } from '../theme/tokens'
@@ -74,7 +74,7 @@ export default function FavoritePicker<T>({
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View>
-            <View style={styles.searchBar}>
+            <View style={[styles.searchBar, { borderColor: tc.border }]}>
               <Search size={15} color={tc.inkTertiary} />
               <TextInput
                 style={styles.searchBarInput}
@@ -114,7 +114,7 @@ export default function FavoritePicker<T>({
         )}
         ListEmptyComponent={
           loading ? (
-            <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
+            <VinylSpinner size={48} style={{ marginTop: spacing.xxl }} />
           ) : (
             <Text style={styles.empty}>{emptyText}</Text>
           )
@@ -123,7 +123,7 @@ export default function FavoritePicker<T>({
 
       {saving && (
         <View style={styles.savingOverlay} pointerEvents="auto">
-          <ActivityIndicator color={tc.green} />
+          <VinylSpinner size={48} />
         </View>
       )}
     </View>
@@ -154,7 +154,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.raised,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   searchBarInput: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: colors.ink },
 

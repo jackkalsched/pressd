@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Play, ChevronRight, Star, Trash2, Music, Sparkles, Loader2 } from 'lucide-react'
+import { Play, ChevronRight, Star, Trash2, Music, Sparkles } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Album } from '../types'
 import { SKIP_THRESHOLD, shortReleaseLabel } from '../types'
@@ -8,6 +8,7 @@ import RecommendModal from './RecommendModal'
 import { deleteAlbum, fetchScoreRange } from '../api'
 import { useUser } from '../context/UserContext'
 import CoverImg from './CoverImg'
+import VinylSpinner from './VinylSpinner'
 
 interface Props {
   album: Album
@@ -289,7 +290,7 @@ export default function AlbumCard({ album, showActions = true }: Props) {
                       title={deleteError ? "Couldn't delete — try again" : 'Delete'}
                     >
                       {deleting ? (
-                        <Loader2 size={12} className="animate-spin" />
+                        <VinylSpinner size={14} />
                       ) : (
                         <Trash2 size={12} className={confirmDelete ? 'pop' : undefined} />
                       )}

@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { X, Loader2, Search, Music, ArrowLeft } from 'lucide-react'
+import { X, Search, Music, ArrowLeft } from 'lucide-react'
 import { importAlbum, createAlbum, resolveAlbum } from '../api'
 import type { AlbumSearchResult } from '../api'
 import { useAlbumSearch } from '../hooks/useAlbumSearch'
 import TracklistLoader from './TracklistLoader'
 import CoverImg from './CoverImg'
+import VinylSpinner from './VinylSpinner'
 
 export default function AddAlbumModal({ onClose, userId }: { onClose: () => void; userId: number }) {
   const [query, setQuery] = useState('')
@@ -119,7 +120,7 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
             {error && <p className="text-(--c-c0392b) text-xs">{error}</p>}
             <button type="submit" disabled={loading || !albumName.trim() || !artist.trim()}
               className="w-full py-2.5 rounded-xl text-sm font-semibold bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-              {loading ? <><Loader2 size={14} className="animate-spin" /> Adding…</> : 'Add to List'}
+              {loading ? <><VinylSpinner size={16} /> Adding…</> : 'Add to List'}
             </button>
           </form>
         ) : (
@@ -128,7 +129,7 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
             <div ref={dropdownRef} className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--c-bbb) pointer-events-none" />
               {searching && (
-                <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-(--c-bbb) animate-spin pointer-events-none" />
+                <VinylSpinner size={15} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               )}
               <input
                 autoFocus
@@ -179,7 +180,7 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
                   ))}
                   {mbPending && (
                     <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-(--c-a8998a) border-t border-(--c-f0f0f0) bg-(--c-fafafa)">
-                      <Loader2 size={11} className="animate-spin shrink-0" />
+                      <VinylSpinner size={13} className="shrink-0" />
                       Checking more sources for new &amp; upcoming releases…
                     </div>
                   )}
@@ -235,7 +236,7 @@ export default function AddAlbumModal({ onClose, userId }: { onClose: () => void
 
             <button type="button" onClick={handleAdd} disabled={loading || !selected}
               className="w-full py-2.5 rounded-xl text-sm font-semibold bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-              {loading ? <><Loader2 size={14} className="animate-spin" /> Adding…</> : 'Confirm'}
+              {loading ? <><VinylSpinner size={16} /> Adding…</> : 'Confirm'}
             </button>
 
             {/* Manual fallback — always available */}

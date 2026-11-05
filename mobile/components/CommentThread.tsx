@@ -1,7 +1,8 @@
 // Comment thread for an album, shared by the album detail screen. Anyone who
 // can see the album can post; you can delete your own (server sets can_delete).
 import { useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import VinylSpinner from './VinylSpinner'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { Send, Trash2 } from 'lucide-react-native'
@@ -69,7 +70,7 @@ export default function CommentThread({
       {canComment && (
       <View style={styles.composer}>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { borderColor: tc.border }]}
           value={draft}
           onChangeText={setDraft}
           placeholder="Add a comment…"
@@ -81,13 +82,13 @@ export default function CommentThread({
           onPress={submit}
           disabled={!draft.trim() || busy}
         >
-          {busy ? <ActivityIndicator size="small" color="#fff" /> : <Send size={16} color="#fff" />}
+          {busy ? <VinylSpinner size="small" color="#fff" /> : <Send size={16} color="#fff" />}
         </Pressable>
       </View>
       )}
 
       {isLoading ? (
-        <ActivityIndicator color={tc.green} style={{ marginTop: spacing.md }} />
+        <VinylSpinner size={32} style={{ marginTop: spacing.md }} />
       ) : comments.length === 0 ? (
         <Text style={styles.empty}>
           {canComment ? 'No comments yet. Start the conversation.' : 'No comments yet.'}
@@ -140,7 +141,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.raised,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     fontFamily: fonts.body,

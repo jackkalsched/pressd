@@ -4,7 +4,6 @@
 // placeholders until their phases land.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ActivityIndicator,
   Animated,
   Pressable,
   RefreshControl,
@@ -13,6 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import VinylSpinner from '../../components/VinylSpinner'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { usePathname, useRouter } from 'expo-router'
@@ -21,6 +21,7 @@ import {
   fetchAlbums,
   fetchSummary,
   fetchScoreRange,
+  fetchFriends,
   fetchArtistStats,
   fetchScatterData,
 } from '../../lib/api'
@@ -200,6 +201,11 @@ export default function Profile() {
     enabled: !!user,
     staleTime: 5 * 60_000,
   })
+  const { data: friends = [] } = useQuery({
+    queryKey: ['friends', user?.id],
+    queryFn: () => fetchFriends(user!.id),
+    enabled: !!user,
+  })
   const badgeMu = scoreRange?.mu ?? 7.0
   const badgeSd = scoreRange?.sd ?? 1.0
 
@@ -304,7 +310,7 @@ export default function Profile() {
     <View style={styles.screen}>
       {/* Compact bar: only the profile name remains once the banner scrolls off. */}
       <Animated.View
-        style={[styles.compactHeader, { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
+        style={[[styles.compactHeader, { borderColor: tc.border }], { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
         pointerEvents="none"
       >
         <Text style={styles.compactTitle} numberOfLines={1}>{user.name}</Text>
@@ -334,6 +340,7 @@ export default function Profile() {
                   value: summary?.total_songs_rated != null ? summary.total_songs_rated.toLocaleString() : '—',
                   label: 'Songs',
                 },
+                { value: String(friends.length), label: 'Friends' },
               ]}
               genres={topGenres}
               subgenres={topSubgenres}
@@ -509,7 +516,7 @@ export default function Profile() {
         }
         ListEmptyComponent={
           tab === 'stats' ? null : isGrid && gridLoading ? (
-            <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
+            <VinylSpinner size={48} style={{ marginTop: spacing.xxl }} />
           ) : isGrid ? (
             <Text style={styles.emptyText}>
               {/* A filtered-to-nothing shelf and an empty one look identical
@@ -717,7 +724,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: colors.ink, letterSpacing: 0.5 },
 
@@ -810,8 +816,6 @@ const styles = StyleSheet.create({
     height: 42,
     backgroundColor: colors.raised,
     borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   searchBarInput: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: colors.ink },
   // minWidth, not width: a library past 99 albums needs three digits and
@@ -840,7 +844,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderColor: colors.border,
   },
   optionText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.ink },
   sheetHint: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted, marginTop: spacing.md },

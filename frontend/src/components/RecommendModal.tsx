@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { X, Star, Loader2, Check } from 'lucide-react'
+import { X, Star, Check } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchFriends, recommendAlbum, RECOMMENDATION_NOTE_MAX } from '../api'
 import { useUser } from '../context/UserContext'
 import type { Album } from '../types'
 import type { UserInfo } from '../api'
 import Avatar from './Avatar'
+import VinylSpinner from './VinylSpinner'
 
 interface Props {
   album: Pick<Album, 'id' | 'albumName' | 'artist'>
@@ -139,7 +140,7 @@ export default function RecommendModal({ album, onClose, initialFriendId, onSent
               disabled={!selected || loading}
               className="w-full py-2.5 rounded-xl text-sm font-semibold bg-(--c-f97316) hover:bg-(--c-ea6c0a) text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {loading ? <><Loader2 size={14} className="animate-spin" /> Sending…</> : <>
+              {loading ? <><VinylSpinner size={16} /> Sending…</> : <>
                 <Star size={14} fill="white" /> Recommend
               </>}
             </button>

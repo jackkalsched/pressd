@@ -11,7 +11,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowLeft, ChevronDown, ChevronUp, FileText, Loader2, Lock, MoreHorizontal, Send, Triangle,
+  ArrowLeft, ChevronDown, ChevronUp, FileText, Lock, MoreHorizontal, Send, Triangle,
 } from 'lucide-react'
 import {
   createThreadPost, fetchReplies, fetchThreadPosts, flagSpoiler, replyToPost,
@@ -27,6 +27,7 @@ import VoteButtons from '../components/VoteButtons'
 import Avatar from '../components/Avatar'
 import FullReviewModal from '../components/FullReviewModal'
 import CoverImg from '../components/CoverImg'
+import VinylSpinner from '../components/VinylSpinner'
 
 // Matches the red For You uses for a worst track.
 const DOWN = 'var(--c-e0492b)'
@@ -177,7 +178,7 @@ export default function Thread() {
           <main className="flex-1 min-w-0">
             {metaLoading ? (
               <div className="flex items-center gap-2 text-(--c-aaa) text-sm py-16 justify-center">
-                <Loader2 size={16} className="animate-spin" /> Loading…
+                <VinylSpinner size={44} /> Loading…
               </div>
             ) : locked ? (
               <div className="flex flex-col items-center text-center gap-3 py-20 lg:py-32 px-6 rounded-2xl border border-dashed border-(--c-e2dbd0)">
@@ -261,7 +262,7 @@ export default function Thread() {
                         aria-label="Post"
                         className="w-10 h-10 shrink-0 rounded-full bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) disabled:bg-(--c-ececec) disabled:text-(--c-bbb) text-white flex items-center justify-center transition-colors"
                       >
-                        {send.isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                        {send.isPending ? <VinylSpinner size={18} /> : <Send size={16} />}
                       </button>
                     </div>
                     {send.isError && (
@@ -275,7 +276,7 @@ export default function Thread() {
                 {/* ── The conversation ───────────────────────────────── */}
                 {postsLoading && threadId ? (
                   <div className="flex items-center gap-2 text-(--c-aaa) text-sm py-10 justify-center">
-                    <Loader2 size={16} className="animate-spin" /> Loading posts…
+                    <VinylSpinner size={44} /> Loading posts…
                   </div>
                 ) : posts.length === 0 ? (
                   <p className="text-center text-sm text-(--c-a8998a) py-12 m-0">
@@ -627,7 +628,7 @@ function PostRow({
         <div className="mt-3 pl-3.5 border-l-2 border-(--c-f0ebe3)">
           {repliesLoading ? (
             <div className="flex items-center gap-1.5 text-(--c-bbb) text-xs py-2">
-              <Loader2 size={12} className="animate-spin" /> Loading replies…
+              <VinylSpinner size={44} /> Loading replies…
             </div>
           ) : (
             replies.map((r, ri) => (

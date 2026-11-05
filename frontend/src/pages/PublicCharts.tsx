@@ -9,10 +9,11 @@
 // nothing here is personalised and no per-user field is ever fetched.
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Loader2, Triangle } from 'lucide-react'
+import { Triangle } from 'lucide-react'
 import { fetchPublicCharts } from '../api'
 import type { ChartItem } from '../api'
 import PublicShell from '../components/PublicShell'
+import VinylSpinner from '../components/VinylSpinner'
 
 const DOWN = 'var(--c-e07a6a)'
 const UP = 'var(--c-9fd6b0)'
@@ -192,7 +193,7 @@ export default function PublicCharts() {
         </div>
 
         {isLoading ? (
-          <div className="state"><Loader2 size={20} className="animate-spin" /></div>
+          <div className="state"><VinylSpinner size={22} /></div>
         ) : isError ? (
           <div className="state">Couldn't load the charts just now. Please try again.</div>
         ) : items.length === 0 ? (

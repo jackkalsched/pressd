@@ -103,7 +103,7 @@ export default function AnchoredMenu({
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       <Animated.View
         style={[
-          styles.menu,
+          [styles.menu, { borderColor: tc.border }],
           {
             top,
             left,
@@ -144,7 +144,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.raised,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
     paddingVertical: spacing.xs,
     overflow: 'hidden',
     // Carries the menu off the page on its own, now that nothing dims behind it.

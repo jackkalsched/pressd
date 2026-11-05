@@ -4,7 +4,8 @@
 // same thing (you finished it), so a locked thread shows the lock instead of
 // its contents. PLAN_discussions.md §4, §5, §6.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DynamicColorIOS, ActivityIndicator, Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type View as RNView } from 'react-native'
+import { DynamicColorIOS, Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type View as RNView } from 'react-native'
+import VinylSpinner from '../../components/VinylSpinner'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -144,7 +145,7 @@ export default function ThreadScreen() {
         </View>
 
         {metaLoading ? (
-          <View style={styles.center}><ActivityIndicator color={tc.green} /></View>
+          <View style={styles.center}><VinylSpinner size={64} /></View>
         ) : locked ? (
           <View style={styles.center}>
             <Lock size={28} color={tc.inkMuted} />
@@ -165,7 +166,7 @@ export default function ThreadScreen() {
                   <Pressable
                     key={s.key}
                     onPress={() => setSort(s.key)}
-                    style={[styles.sortChip, sort === s.key && styles.sortChipOn]}
+                    style={[styles.sortChip, sort === s.key && [styles.sortChipOn, { borderColor: tc.ink }]]}
                   >
                     <Text style={[styles.sortText, sort === s.key && styles.sortTextOn]}>
                       {s.label}
@@ -190,7 +191,7 @@ export default function ThreadScreen() {
               {page?.summary && <Summary summary={page.summary} />}
 
               {postsLoading && threadId ? (
-                <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xl }} />
+                <VinylSpinner size={48} style={{ marginTop: spacing.xl }} />
               ) : posts.length === 0 ? (
                 <Text style={styles.empty}>
                   Nobody has said anything yet. Be the first.
@@ -203,7 +204,7 @@ export default function ThreadScreen() {
             </ScrollView>
 
             {meta?.canPost && (
-              <View style={[styles.composer, { paddingBottom: composerPad }]}>
+              <View style={[[styles.composer, { borderColor: tc.border }], { paddingBottom: composerPad }]}>
                 {replyTo && (
                   <View style={styles.replyBanner}>
                     <Text style={styles.replyBannerText} numberOfLines={1}>
@@ -259,7 +260,7 @@ function Summary({ summary }: { summary: ThreadSummary }) {
   const worst = summary.bottomTrack?.title
 
   return (
-    <View style={styles.summaryWrap}>
+    <View style={[styles.summaryWrap, { borderColor: tc.border }]}>
       <View style={styles.summary}>
         <Text
           style={[styles.summaryValue, { color: scoreColor(summary.meanScore) }]}
@@ -455,11 +456,11 @@ function PostRow({
   }
 
   if (post.deleted) {
-    return <Text style={styles.tombstone}>This post was removed.</Text>
+    return <Text style={[styles.tombstone, { borderColor: tc.border }]}>This post was removed.</Text>
   }
 
   return (
-    <View ref={anchor} style={[styles.post, system && styles.postSystem]}>
+    <View ref={anchor} style={[[styles.post, { borderColor: tc.border }], system && styles.postSystem]}>
       {system ? (
         <Text style={styles.systemLabel}>PRESS&rsquo;D</Text>
       ) : (
@@ -531,7 +532,7 @@ function PostRow({
           one at a glance. Tapping it opens them all. */}
       {preview && (
         <Pressable
-          style={[styles.replies, styles.preview]}
+          style={[[styles.replies, { borderColor: tc.border }], styles.preview]}
           onPress={() => setOpen(true)}
           accessibilityRole="button"
           accessibilityLabel={`Show ${post.replyCount} ${post.replyCount === 1 ? 'reply' : 'replies'}`}
@@ -548,14 +549,14 @@ function PostRow({
       )}
 
       {open && (
-        <View style={styles.replies}>
+        <View style={[styles.replies, { borderColor: tc.border }]}>
           {repliesLoading ? (
-            <ActivityIndicator color={tc.green} style={{ marginVertical: spacing.sm }} />
+            <VinylSpinner size={32} style={{ marginVertical: spacing.sm }} />
           ) : (
             replies.map((r) => (
               <View key={r.id} style={styles.reply}>
                 {r.deleted ? (
-                  <Text style={styles.tombstone}>This reply was removed.</Text>
+                  <Text style={[styles.tombstone, { borderColor: tc.border }]}>This reply was removed.</Text>
                 ) : (
                   <>
                     <View style={styles.postHead}>
@@ -656,7 +657,6 @@ const styles = StyleSheet.create({
   // instead — a cream fill there was a white slab with its label lost in it.
   sortChipOn: {
     backgroundColor: DynamicColorIOS({ light: '#1c1917', dark: '#2a2826' }),
-    borderColor: DynamicColorIOS({ light: '#1c1917', dark: '#f4efe7' }),
   },
   sortText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary },
   sortTextOn: { color: DynamicColorIOS({ light: '#ffffff', dark: '#f4efe7' }) },
@@ -671,7 +671,6 @@ const styles = StyleSheet.create({
   summaryWrap: {
     paddingTop: spacing.sm, paddingBottom: spacing.lg, marginBottom: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   summary: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
   everyToggle: { marginTop: spacing.md, alignSelf: 'flex-start' },
@@ -690,7 +689,7 @@ const styles = StyleSheet.create({
   summaryTrack: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   summaryTrackTitle: { flex: 1, minWidth: 0, fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.ink },
   summaryTrackScore: { fontFamily: fonts.display, fontSize: 15 },
-  post: { paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  post: { paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, },
   postSystem: {
     backgroundColor: colors.greenSoft, borderRadius: radii.md, borderBottomWidth: 0,
     paddingHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: spacing.sm,
@@ -717,7 +716,7 @@ const styles = StyleSheet.create({
   // above it rather than as another post in the thread.
   replies: {
     marginTop: spacing.sm, marginLeft: spacing.md, paddingLeft: spacing.md,
-    borderLeftWidth: 2, borderColor: colors.border,
+    borderLeftWidth: 2,
   },
   reply: { paddingVertical: spacing.sm },
   preview: { paddingVertical: spacing.sm },
@@ -730,10 +729,10 @@ const styles = StyleSheet.create({
   replyActions: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   tombstone: {
     fontFamily: fonts.body, fontSize: 13, color: colors.inkMuted, fontStyle: 'italic',
-    paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
+    paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth,
   },
 
-  composer: { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: spacing.md, gap: spacing.sm },
+  composer: { borderTopWidth: StyleSheet.hairlineWidth, padding: spacing.md, gap: spacing.sm },
   replyBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   replyBannerText: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, flexShrink: 1 },
   replyCancel: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },

@@ -29,7 +29,7 @@ import {
   TheRecordScene,
   YourCatalogScene,
 } from '../components/TutorialScenes'
-import { colors, fonts, radii, spacing } from '../theme/tokens'
+import { colors, fonts, radii, spacing, useColors } from '../theme/tokens'
 
 const CARDS = [
   {
@@ -65,13 +65,14 @@ const CARDS = [
  *  under a large text setting, the copy below keeps its space and the picture
  *  shrinks, rather than the two overlapping. */
 function FitStage({ children }: { children: ReactNode }) {
+  const tc = useColors()
   const [room, setRoom] = useState(0)
   const [natural, setNatural] = useState(0)
   const scale = room > 0 && natural > room ? room / natural : 1
   return (
     <View style={styles.stageWrap} onLayout={(e) => setRoom(e.nativeEvent.layout.height)}>
       <View
-        style={[styles.stage, { transform: [{ scale }] }]}
+        style={[[styles.stage, { borderColor: tc.border }], { transform: [{ scale }] }]}
         onLayout={(e) => setNatural(e.nativeEvent.layout.height)}
       >
         {children}
@@ -206,7 +207,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.raised,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.lg,
   },
   title: {

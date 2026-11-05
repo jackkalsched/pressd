@@ -1,6 +1,6 @@
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { fetchArtistDetail, fetchSimilarArtistComparisons } from '../api'
 import type { ArtistPopulation } from '../api'
 import { useUser } from '../context/UserContext'
@@ -15,6 +15,7 @@ import { CoverWash, GREEN, PILL, RevealRow, SECTION_LABEL } from '../components/
 import { ScoreKdeCompare, ScoreVersus, SimilarArtistComparisons, SongGapChart } from '../components/artistCompare'
 import { songScoreColor } from '../types'
 import { stagger } from '../lib/format'
+import VinylSpinner from '../components/VinylSpinner'
 
 const INK = 'var(--c-1c1917)'
 
@@ -206,7 +207,7 @@ export default function ArtistPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64 text-(--c-8a7f72) gap-2">
-        <Loader2 size={16} className="animate-spin" /> Loading…
+        <VinylSpinner size={44} /> Loading…
       </div>
     )
   }

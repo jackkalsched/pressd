@@ -9,9 +9,10 @@
 // "I can't choose" is a real answer: it leaves the pick unset and everything
 // falls back to the highest-score behaviour.
 import { useEffect } from 'react'
-import { Loader2, Star } from 'lucide-react'
+import { Star } from 'lucide-react'
 import type { Song } from '../types'
 import { songScoreColor } from '../types'
+import VinylSpinner from './VinylSpinner'
 
 /** "both these songs" reads wrong the moment a third track ties. */
 function countPhrase(n: number): string {
@@ -62,7 +63,7 @@ export default function TopSongTiebreak({
             >
               <span className="w-6 text-right text-[13px] text-(--c-a8998a) tabular-nums shrink-0">{s.trackNumber}</span>
               <span className="flex-1 min-w-0 text-[15px] font-semibold text-(--c-1c1917)">{s.title}</span>
-              {busy && <Loader2 size={14} className="animate-spin text-(--c-a8998a)" />}
+              {busy && <VinylSpinner size={16} />}
             </button>
           ))}
         </div>

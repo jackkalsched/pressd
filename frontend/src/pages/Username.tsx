@@ -8,10 +8,10 @@
 // accounts from before this step never see it.
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { Loader2 } from 'lucide-react'
 import { useUser } from '../context/UserContext'
 import { updateUser } from '../api'
 import { cleanUsername, USERNAME_RE } from '../types'
+import VinylSpinner from '../components/VinylSpinner'
 
 export default function Username() {
   const navigate = useNavigate()
@@ -76,7 +76,7 @@ export default function Username() {
           disabled={!valid || saving}
           className="w-full mt-6 h-[52px] rounded-xl text-[15px] font-semibold bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) active:bg-(--c-1e5238) text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--c-2d6a4f)"
         >
-          {saving ? <Loader2 size={18} className="animate-spin" /> : 'Continue'}
+          {saving ? <VinylSpinner size={20} /> : 'Continue'}
         </button>
       </form>
     </div>

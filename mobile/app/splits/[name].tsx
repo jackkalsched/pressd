@@ -7,7 +7,8 @@
 // listened to", and that ordering puts the well-attended tracks first, where a
 // disagreement means something.
 import { useMemo } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import VinylSpinner from '../../components/VinylSpinner'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
@@ -91,7 +92,7 @@ export default function ArtistSplits() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {isLoading ? (
-          <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
+          <VinylSpinner size={48} style={{ marginTop: spacing.xxl }} />
         ) : rows.length === 0 ? (
           <Text style={styles.empty}>Nobody else has rated {artist} yet.</Text>
         ) : (

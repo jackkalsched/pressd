@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Search, Loader2, Music, Play } from 'lucide-react'
+import { Search, Music, Play } from 'lucide-react'
 import { fetchArtStrip, fetchAlbums, importAlbum, resolveAlbum } from '../api'
 import type { AlbumSearchResult } from '../api'
 import { useAlbumSearch } from '../hooks/useAlbumSearch'
 import TracklistLoader from '../components/TracklistLoader'
 import { useUser } from '../context/UserContext'
 import CoverImg from '../components/CoverImg'
+import VinylSpinner from '../components/VinylSpinner'
 
 export const ONBOARDING_SKIP_KEY = 'pressd-onboarding-skipped'
 
@@ -141,7 +142,7 @@ export default function Onboarding() {
           <div ref={dropdownRef} className="relative mt-8">
             <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-(--c-bbb) pointer-events-none" />
             {searching && (
-              <Loader2 size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-(--c-bbb) animate-spin pointer-events-none" />
+              <VinylSpinner size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             )}
             <input
               autoFocus
@@ -179,7 +180,7 @@ export default function Onboarding() {
                 ))}
                 {mbPending && (
                   <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-(--c-a8998a) border-t border-(--c-f0ebe3) bg-(--c-fafafa)">
-                    <Loader2 size={11} className="animate-spin shrink-0" />
+                    <VinylSpinner size={13} className="shrink-0" />
                     Checking more sources…
                   </div>
                 )}
@@ -231,7 +232,7 @@ export default function Onboarding() {
             className="w-full mt-4 py-3 rounded-xl text-sm font-semibold bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) active:bg-(--c-1e5238) text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--c-2d6a4f)"
           >
             {importing
-              ? <><Loader2 size={14} className="animate-spin" /> Setting up…</>
+              ? <><VinylSpinner size={16} /> Setting up…</>
               : <><Play size={12} fill="currentColor" strokeWidth={0} /> Start rating</>}
           </button>
 

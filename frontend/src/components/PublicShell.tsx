@@ -8,10 +8,10 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useGoogleLogin } from '@react-oauth/google'
-import { Loader2 } from 'lucide-react'
 import { signInWithGoogle } from '../api'
 import { useUser } from '../context/UserContext'
 import PressdMark from './PressdMark'
+import VinylSpinner from './VinylSpinner'
 
 export const PUBLIC_SHELL_CSS = `
   .pub *, .pub *::before, .pub *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -138,7 +138,7 @@ export default function PublicShell({
           disabled={loading}
           onClick={() => { setLoading(true); login() }}
         >
-          {loading ? <Loader2 size={14} className="animate-spin" /> : null}
+          {loading ? <VinylSpinner size={16} /> : null}
           {loading ? 'Signing in…' : 'Log in / Sign up'}
         </button>
       </nav>

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { Loader2, Music } from 'lucide-react'
+import { Music } from 'lucide-react'
 import { useGoogleLogin } from '@react-oauth/google'
 import { fetchInvite, acceptInvite, signInWithGoogle } from '../api'
 import { useUser } from '../context/UserContext'
+import VinylSpinner from '../components/VinylSpinner'
 
 export default function Join() {
   const [searchParams] = useSearchParams()
@@ -98,7 +99,7 @@ export default function Join() {
 
         {loadingInvite ? (
           <div className="flex justify-center">
-            <Loader2 size={20} className="animate-spin text-(--c-aaa)" />
+            <VinylSpinner size={22} />
           </div>
         ) : inviteError ? (
           <div className="text-center">
@@ -120,7 +121,7 @@ export default function Join() {
               className="w-full flex items-center justify-center gap-3 bg-[#111] hover:bg-[#222] text-white text-sm font-semibold py-2.5 px-4 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {submitting ? (
-                <><Loader2 size={14} className="animate-spin" /> Signing in…</>
+                <><VinylSpinner size={16} /> Signing in…</>
               ) : (
                 <>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none">

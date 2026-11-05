@@ -6,7 +6,8 @@
 // The gate in (tabs)/_layout sends only an explicit usernameChosen === false
 // here, so accounts from before this step never see it.
 import { useState } from 'react'
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import VinylSpinner from '../components/VinylSpinner'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { cleanUsername, USERNAME_RE } from '@pressd/shared/types'
@@ -42,7 +43,7 @@ export default function UsernameScreen() {
           <Text style={styles.eyebrow}>WELCOME TO PRESSD</Text>
           <Text style={styles.title}>Pick a username.</Text>
 
-          <View style={[styles.field, error ? styles.fieldError : valid && styles.fieldActive]}>
+          <View style={[[styles.field, { borderColor: tc.border }], error ? [styles.fieldError, { borderColor: tc.danger }] : valid && [styles.fieldActive, { borderColor: tc.green }]]}>
             <Text style={styles.at}>@</Text>
             <TextInput
               style={styles.input}
@@ -77,7 +78,7 @@ export default function UsernameScreen() {
             pressed && valid && { backgroundColor: colors.greenPressed },
           ]}
         >
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>Continue</Text>}
+          {saving ? <VinylSpinner color="#fff" /> : <Text style={styles.ctaText}>Continue</Text>}
         </Pressable>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -114,10 +115,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.raised,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
   },
-  fieldActive: { borderColor: colors.green },
-  fieldError: { borderColor: colors.danger },
+  fieldActive: { },
+  fieldError: { },
   at: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.inkMuted },
   input: { flex: 1, fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink, paddingVertical: 0 },
   error: { fontFamily: fonts.body, fontSize: 12.5, color: colors.danger, textAlign: 'center', marginTop: spacing.sm },

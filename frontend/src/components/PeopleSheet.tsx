@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Clock, Loader2, MessageCircle, UserPlus, X } from 'lucide-react'
+import { Clock, MessageCircle, UserPlus, X } from 'lucide-react'
 import { addFriend, fetchPeopleSheet, logSheetEvent, resolveThread } from '../api'
 import { useUser } from '../context/UserContext'
 import type { PeopleSheetData, SheetAction, SheetPerson } from '../types'
@@ -20,6 +20,7 @@ import { stagger } from '../lib/format'
 import Avatar from './Avatar'
 import { Cover, COVER_LIFT } from './covers'
 import { GREEN } from './albumView'
+import VinylSpinner from './VinylSpinner'
 
 // Per page load, not per mount: Layout remounts between route trees (Charts has
 // its own), and one sheet must report "shown" once however often it does.
@@ -189,7 +190,7 @@ export default function PeopleSheet({ data, onClose }: { data: PeopleSheetData; 
                     isAdded ? 'bg-(--c-2d6a4f)/10 text-(--c-2d6a4f)' : 'bg-(--c-green-fill) text-white hover:bg-(--c-green-fill-hover)'
                   }`}
                 >
-                  {adding === p.user.id ? <Loader2 size={15} className="animate-spin" />
+                  {adding === p.user.id ? <VinylSpinner size={17} />
                     : isAdded ? <Clock size={15} className="pop" />
                     : <UserPlus size={15} />}
                   {isAdded ? 'Requested' : 'Add'}
@@ -211,7 +212,7 @@ export default function PeopleSheet({ data, onClose }: { data: PeopleSheetData; 
             disabled={opening}
             className="flex items-center gap-2 rounded-xl border border-(--c-e2dbd0) bg-(--c-fff) px-5 py-2.5 text-sm font-semibold text-(--c-2d6a4f) transition-colors hover:border-(--c-2d6a4f) disabled:opacity-60"
           >
-            {opening ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={16} />}
+            {opening ? <VinylSpinner size={17} /> : <MessageCircle size={16} />}
             Open the discussion
           </button>
         </div>

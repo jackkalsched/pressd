@@ -3,9 +3,10 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAlbums, fetchScatterData, fetchArtistStats } from '../api'
 import { useUser } from '../context/UserContext'
-import { Loader2, Music } from 'lucide-react'
+import { Music } from 'lucide-react'
 import { shortReleaseLabel } from '../types'
 import CoverImg from '../components/CoverImg'
+import VinylSpinner from '../components/VinylSpinner'
 
 // ── Album table ───────────────────────────────────────────────────────────────
 
@@ -387,7 +388,7 @@ export default function Ratings({ embedded = false }: { embedded?: boolean } = {
             </div>
             {loadingAlbums ? (
               <div className="flex items-center justify-center py-24 text-(--c-a8998a) gap-2">
-                <Loader2 size={16} className="animate-spin" /> Loading…
+                <VinylSpinner size={44} /> Loading…
               </div>
             ) : (
               <div className="overflow-x-auto rounded-2xl border border-(--c-e8e2d9)">
@@ -484,7 +485,7 @@ export default function Ratings({ embedded = false }: { embedded?: boolean } = {
         {tab === 'artists' && (
           !scatter ? (
             <div className="flex items-center justify-center py-24 text-(--c-a8998a) gap-2">
-              <Loader2 size={16} className="animate-spin" /> Loading…
+              <VinylSpinner size={44} /> Loading…
             </div>
           ) : (
             <ArtistRankingsTable

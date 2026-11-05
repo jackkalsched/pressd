@@ -5,13 +5,14 @@ import GenreBreakdown from '../components/GenreBreakdown'
 import { songScoreColor, BANG_THRESHOLD, SKIP_THRESHOLD } from '../types'
 import { ScoreHistogram } from '../components/histograms'
 import { useUser } from '../context/UserContext'
-import { Loader2, Disc3, ListMusic, Star, Trophy, Heart, CalendarDays, Flame, Music } from 'lucide-react'
+import { Disc3, ListMusic, Star, Trophy, Heart, CalendarDays, Flame, Music } from 'lucide-react'
 import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
   ScatterChart, Scatter, ZAxis, ReferenceLine,
   LineChart, Line, Legend,
 } from 'recharts'
 import { Link, useNavigate } from 'react-router-dom'
+import VinylSpinner from '../components/VinylSpinner'
 
 function gaussianKDE(scores: number[], h: number, xs: number[]): number[] {
   const n = scores.length
@@ -132,7 +133,7 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
     return (
       <div className={`${embedded ? 'py-16' : 'min-h-screen'} bg-(--c-f9f8f6) flex items-center justify-center`}>
         <div className="flex items-center gap-2 text-(--c-a8998a)">
-          <Loader2 size={16} className="animate-spin" />
+          <VinylSpinner size={44} />
           <span className="text-sm">Loading…</span>
         </div>
       </div>
@@ -455,7 +456,7 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
 
           {!scatter ? (
             <div className="flex items-center justify-center h-64 text-(--c-a8998a)">
-              <Loader2 size={14} className="animate-spin" />
+              <VinylSpinner size={16} />
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={480}>

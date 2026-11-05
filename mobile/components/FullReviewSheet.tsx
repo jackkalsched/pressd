@@ -6,7 +6,8 @@
 // Reached only from a thread, and only for the record the thread is about.
 // The server scopes it the same way (discussions.post_author_rating): a room
 // shows you how the people in it heard the record, never their libraries.
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import VinylSpinner from './VinylSpinner'
 import { useQuery } from '@tanstack/react-query'
 import { Triangle, X } from 'lucide-react-native'
 import { fetchPostAuthorRating } from '../lib/api'
@@ -61,7 +62,7 @@ export default function FullReviewSheet({ postId, onClose }: { postId: number | 
         </View>
 
         {isLoading ? (
-          <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
+          <VinylSpinner size={48} style={{ marginTop: spacing.xxl }} />
         ) : isError || !data ? (
           <Text style={styles.empty}>{(error as Error)?.message || 'Could not load that review.'}</Text>
         ) : (
@@ -99,7 +100,7 @@ export default function FullReviewSheet({ postId, onClose }: { postId: number | 
                 {FACTORS.map((f) => {
                   const v = data[f.key]
                   return (
-                    <View key={f.key} style={styles.factor}>
+                    <View key={f.key} style={[styles.factor, { borderColor: tc.border }]}>
                       <Text style={styles.factorLabel} numberOfLines={1}>{f.label}</Text>
                       <Text
                         style={[styles.factorValue, { color: v != null ? scoreColor(v) : colors.inkMuted }]}
@@ -185,7 +186,7 @@ const styles = StyleSheet.create({
   factors: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
   factor: {
     width: '48%', flexGrow: 1, backgroundColor: colors.raised, borderRadius: radii.md,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
+    borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
   },
   factorLabel: { fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.inkTertiary },

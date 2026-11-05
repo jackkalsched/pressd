@@ -84,10 +84,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
     marginTop: spacing.sm,
-    // Closes the block off from TRACKS below, the way the tracklist rows are
-    // separated from each other.
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   label: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.green },
   labelLocked: { color: colors.inkMuted },

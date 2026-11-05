@@ -9,7 +9,6 @@
 // is a different thing and reads like one.
 import { useMemo, useState } from 'react'
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -20,6 +19,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import VinylSpinner from './VinylSpinner'
 import { Image } from 'expo-image'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Star, X } from 'lucide-react-native'
@@ -133,7 +133,7 @@ export default function RecommendSheet({
             </Text>
 
             {sent ? (
-              <View style={styles.sentBox}>
+              <View style={[styles.sentBox, { borderColor: tc.greenTint }]}>
                 <Check size={16} color={tc.green} />
                 <Text style={styles.sentText}>{sent}</Text>
               </View>
@@ -147,7 +147,7 @@ export default function RecommendSheet({
                     return (
                       <Pressable
                         key={f.id}
-                        style={[styles.friendRow, on && styles.friendRowOn]}
+                        style={[[styles.friendRow, { borderColor: tc.border }], on && styles.friendRowOn]}
                         onPress={() => setSelected(on ? null : f.id)}
                       >
                         <View style={styles.avatar}>
@@ -176,7 +176,7 @@ export default function RecommendSheet({
                 {selected != null && (
                   <View style={styles.noteWrap}>
                     <TextInput
-                      style={styles.noteInput}
+                      style={[styles.noteInput, { borderColor: tc.border }]}
                       value={note}
                       onChangeText={setNote}
                       placeholder={`Tell ${friendName ?? 'them'} why you think they'd like this!`}
@@ -199,7 +199,7 @@ export default function RecommendSheet({
                   disabled={selected == null || sending}
                 >
                   {sending ? (
-                    <ActivityIndicator color="#ffffff" />
+                    <VinylSpinner color="#ffffff" />
                   ) : (
                     <>
                       <Star size={14} color="#ffffff" fill="#ffffff" />
@@ -247,7 +247,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.raised,
     marginBottom: spacing.sm,
   },
@@ -275,7 +274,6 @@ const styles = StyleSheet.create({
     color: colors.ink,
     backgroundColor: colors.raised,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
@@ -306,7 +304,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     backgroundColor: colors.greenSoft,
     borderWidth: 1,
-    borderColor: colors.greenTint,
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,

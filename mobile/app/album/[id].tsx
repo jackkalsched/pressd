@@ -3,7 +3,6 @@
 // the final or predicted score, factor breakdown, and per-track scores.
 import { useCallback, useRef, useState } from 'react'
 import {
-  ActivityIndicator,
   Animated,
   Dimensions,
   KeyboardAvoidingView,
@@ -16,6 +15,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import VinylSpinner from '../../components/VinylSpinner'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -299,7 +299,7 @@ export default function AlbumDetail() {
     if (communityLoading) {
       return (
         <SafeAreaView style={[styles.screen, styles.center]}>
-          <ActivityIndicator color={tc.green} />
+          <VinylSpinner size={64} />
         </SafeAreaView>
       )
     }
@@ -351,7 +351,7 @@ export default function AlbumDetail() {
   if (isLoading) {
     return (
       <SafeAreaView style={[styles.screen, styles.center]}>
-        <ActivityIndicator color={tc.green} />
+        <VinylSpinner size={64} />
       </SafeAreaView>
     )
   }
@@ -538,7 +538,7 @@ export default function AlbumDetail() {
             accessibilityLabel="Delete album from your library"
           >
             {deleting ? (
-              <ActivityIndicator size="small" color={DANGER} />
+              <VinylSpinner size="small" color={DANGER} />
             ) : (
               <Trash2 size={17} color={DANGER} />
             )}
@@ -737,7 +737,7 @@ export default function AlbumDetail() {
                 }}
               >
                 {copying === 'listening' ? (
-                  <ActivityIndicator color="#fff" />
+                  <VinylSpinner color="#fff" />
                 ) : (
                   <Text style={styles.ctaText} numberOfLines={1}>Rate it yourself</Text>
                 )}
@@ -760,7 +760,7 @@ export default function AlbumDetail() {
                 }}
               >
                 {copying === 'to_listen' ? (
-                  <ActivityIndicator color="#fff" />
+                  <VinylSpinner color="#fff" />
                 ) : (
                   <Text style={styles.ctaText} numberOfLines={1}>Add to Library</Text>
                 )}
@@ -923,7 +923,7 @@ function CommunityAlbum({
             accessibilityLabel={`Remove ${data.album_name} from your library`}
           >
             {deleting ? (
-              <ActivityIndicator size="small" color={DANGER} />
+              <VinylSpinner size="small" color={DANGER} />
             ) : (
               <Trash2 size={17} color={DANGER} />
             )}
@@ -1177,7 +1177,7 @@ function CommunityAlbum({
                   disabled={rating}
                 >
                   {rating ? (
-                    <ActivityIndicator color="#fff" />
+                    <VinylSpinner color="#fff" />
                   ) : (
                     <Text style={styles.ctaText} numberOfLines={1}>
                       {data.your_status === 'listening' ? 'Continue' : 'Rate now'}
@@ -1207,7 +1207,7 @@ function CommunityAlbum({
                   disabled={queuing || queued}
                 >
                   {queuing ? (
-                    <ActivityIndicator color="#fff" />
+                    <VinylSpinner color="#fff" />
                   ) : (
                     <Text style={styles.ctaText} numberOfLines={1}>
                       {queued ? 'Added' : 'Add to Library'}
@@ -1530,7 +1530,7 @@ function FriendCompare({
 function ForkBtn({ label, onPress }: { label: string; onPress: () => void }) {
   const tc = useColors()
   return (
-    <Pressable style={styles.cmpForkBtn} onPress={onPress} hitSlop={6}>
+    <Pressable style={[styles.cmpForkBtn, { borderColor: tc.border }]} onPress={onPress} hitSlop={6}>
       <Text style={styles.cmpForkText} numberOfLines={1}>{label}</Text>
       <ChevronRight size={15} color={tc.green} />
     </Pressable>
@@ -1616,14 +1616,14 @@ function ReviewSection({
           the bar and the keyboard, so what you write is always in view. */}
       <Modal visible={editing} animationType="slide" onRequestClose={cancel}>
         <View style={[styles.reviewSheet, { paddingTop: insets.top }]}>
-          <View style={styles.reviewSheetBar}>
+          <View style={[styles.reviewSheetBar, { borderColor: tc.border }]}>
             <Pressable onPress={cancel} hitSlop={10} disabled={busy}>
               <Text style={styles.reviewCancelText}>Cancel</Text>
             </Pressable>
             <Text style={styles.reviewSheetTitle} numberOfLines={1}>{album.albumName}</Text>
             <Pressable onPress={save} disabled={busy} hitSlop={10}>
               {busy ? (
-                <ActivityIndicator size="small" color={tc.green} />
+                <VinylSpinner size="small" color={tc.green} />
               ) : (
                 <Text style={styles.reviewSheetSave}>Save</Text>
               )}
@@ -1759,7 +1759,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   // Separators sit between tracks only — none against the header, none trailing.
-  cmpTrackDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  // No rule between songs: the row spacing sets them apart.
+  cmpTrackDivider: {},
   cmpTrackNum: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, width: 18 },
   cmpTrackTitle: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.ink },
   cmpTrackScore: { fontFamily: fonts.bodyBold, fontSize: 15, width: 40, textAlign: 'right' },
@@ -1773,7 +1774,6 @@ const styles = StyleSheet.create({
     gap: 2,
     backgroundColor: colors.raised,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radii.pill,
     paddingVertical: 11,
     paddingHorizontal: spacing.sm,
@@ -2004,8 +2004,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
   },
   trackMain: { flex: 1, minWidth: 0 },
   trackTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
@@ -2026,7 +2024,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderColor: colors.border,
   },
   reviewSheetTitle: {
     flex: 1,

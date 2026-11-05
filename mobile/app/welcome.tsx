@@ -142,7 +142,7 @@ export default function Welcome() {
         {/* Reads as the field it replaces, but opens the sheet instead of a
             keyboard. Once a record is chosen it shows that, so the bar doubles
             as the answer rather than going blank. */}
-        <View style={[styles.searchBar, selected && styles.searchBarActive]}>
+        <View style={[[styles.searchBar, { borderColor: tc.border }], selected && [styles.searchBarActive, { borderColor: tc.green }]]}>
           <Pressable
             style={styles.searchMain}
             onPress={openSearch}
@@ -257,9 +257,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.raised,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
   },
-  searchBarActive: { borderColor: colors.green },
+  searchBarActive: { },
   // Takes the bar's slack so the whole field is the tap target, not just the
   // words in it.
   searchMain: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

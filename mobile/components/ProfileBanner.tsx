@@ -144,7 +144,9 @@ export default function ProfileBanner({
             before they do, and with the viewer's control at the far end. */}
         <View style={styles.nameRow}>
           <View style={styles.nameCell}>
-            <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
+            {/* Full size, cut short with "…" when long. No adjustsFontSizeToFit:
+                in a row it shrinks the name well past what the room needs. */}
+            <Text style={styles.name} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
               {name}
             </Text>
             {stickers ? <View style={styles.stickers}>{stickers}</View> : null}
@@ -269,7 +271,7 @@ function ShelfRow({
                 ) : null}
               </View>
             ) : (
-              <View style={[styles.shelfCover, styles.shelfEmpty]}>
+              <View style={[styles.shelfCover, [styles.shelfEmpty, { borderColor: tc.border }]]}>
                 <Plus size={20} color={tc.inkMuted} strokeWidth={2} />
               </View>
             )}
@@ -424,10 +426,11 @@ const styles = StyleSheet.create({
   avatarImg: { width: '100%', height: '100%' },
   avatarInitial: { fontFamily: fonts.display, fontSize: 32, color: '#ffffff' },
   // Starts just below the banner's edge, so the figures sit on the page.
-  figures: { flex: 1, minWidth: 0, flexDirection: 'row', justifyContent: 'space-between', paddingTop: AVATAR_OVERLAP + 14, paddingLeft: spacing.xl, paddingRight: spacing.md },
+  // Four figures beside the avatar, so the side padding is tight.
+  figures: { flex: 1, minWidth: 0, flexDirection: 'row', justifyContent: 'space-between', paddingTop: AVATAR_OVERLAP + 14, paddingLeft: spacing.md, paddingRight: spacing.xs },
   figure: { alignItems: 'center', minWidth: 0, flexShrink: 1 },
-  statValue: { fontFamily: fonts.display, fontSize: 19, lineHeight: 24, color: colors.ink, fontVariant: ['tabular-nums'] },
-  statLabel: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
+  statValue: { fontFamily: fonts.display, fontSize: 18, lineHeight: 23, color: colors.ink, fontVariant: ['tabular-nums'] },
+  statLabel: { fontFamily: fonts.bodyMedium, fontSize: 11.5, color: colors.inkTertiary, marginTop: 1 },
 
   // The name and its stickers share a line; the slot is empty until stickers exist.
   // Text lines up with the picture's edge, not the ring around it.
@@ -491,7 +494,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: colors.border,
   },
   shelfInitial: { fontFamily: fonts.display, fontSize: 26, color: colors.inkMuted },
 })

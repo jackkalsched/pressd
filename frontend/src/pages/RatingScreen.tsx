@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ArrowRight, Check, ListMusic, Loader2, Lock, Trash2, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, ListMusic, Lock, Trash2, X } from 'lucide-react'
 import {
   fetchAlbum, fetchAlbums, batchRateSongs, updateAlbum, fetchFactorStats, fetchFactorWeights,
   publishThoughts, setTopSong, deleteAlbum,
@@ -34,6 +34,7 @@ import { useRecalibrationMessage } from '@pressd/shared/hooks/useRecalibration'
 import CoverImg from '../components/CoverImg'
 import { coverUrl } from '@pressd/shared/covers'
 import { seedDrafts, firstOpenIndex, canJumpTo, nextTrackIndex } from '@pressd/shared/rating'
+import VinylSpinner from '../components/VinylSpinner'
 
 const DANGER = 'var(--c-b91c1c)'
 
@@ -49,16 +50,12 @@ function RecalibratingOverlay() {
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col items-center justify-center px-8 fade-in"
-      style={{ background: 'rgba(249,248,246,.94)', backdropFilter: 'blur(3px)' }}
+      style={{ background: 'color-mix(in srgb, var(--c-f9f8f6) 94%, transparent)', backdropFilter: 'blur(3px)' }}
       role="status"
       aria-live="polite"
     >
-      <div className="relative flex items-center justify-center mb-7" style={{ width: 74, height: 74 }}>
-        <span className="absolute inset-0 rounded-full border-2 border-(--c-e3ebe6)" />
-        <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-(--c-2d6a4f) animate-spin" />
-        <Check size={26} className="text-(--c-2d6a4f)" strokeWidth={2.5} />
-      </div>
-      <p key={message} className="m-0 text-center text-[17px] font-bold text-(--c-1c1917) rise-in">
+      <VinylSpinner size={96} className="mb-8" label="Recalibrating your score" />
+      <p key={message} className="m-0 max-w-md text-center text-[17px] font-bold leading-snug text-(--c-1c1917) rise-in">
         {message}
       </p>
     </div>
@@ -500,7 +497,7 @@ export default function RatingScreen() {
   if (isLoading || !album) {
     return (
       <div className="min-h-screen bg-(--c-f9f8f6) flex items-center justify-center text-(--c-aaa) gap-2">
-        <Loader2 size={16} className="animate-spin" /> Loading album…
+        <VinylSpinner size={44} /> Loading album…
       </div>
     )
   }
@@ -664,7 +661,7 @@ export default function RatingScreen() {
             disabled={busy}
             className="text-[13.5px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) px-3 py-1.5 rounded-lg hover:bg-(--c-2d6a4f)/8 disabled:opacity-40 flex items-center gap-1.5"
           >
-            {saveDraft.isPending && <Loader2 size={13} className="animate-spin" />}
+            {saveDraft.isPending && <VinylSpinner size={15} />}
             {saveDraft.isPending ? 'Saving…' : 'Save draft'}
           </button>
         </div>
@@ -886,7 +883,7 @@ export default function RatingScreen() {
                     disabled={busy || !canSubmit}
                     className="mt-5 w-full h-12 rounded-xl bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white text-[15px] font-semibold flex items-center justify-center gap-2 disabled:bg-(--c-e8e2d9) disabled:text-(--c-a8998a)"
                   >
-                    {submit.isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                    {submit.isPending ? <VinylSpinner size={18} /> : <Check size={16} />}
                     {isEditing ? 'Update rating' : 'Submit rating'}
                   </button>
                   <button
@@ -908,7 +905,7 @@ export default function RatingScreen() {
                 className="mt-16 mx-auto flex items-center gap-1.5 text-[12.5px] font-medium hover:underline disabled:opacity-40"
                 style={{ color: DANGER }}
               >
-                {remove.isPending ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                {remove.isPending ? <VinylSpinner size={15} /> : <Trash2 size={13} />}
                 Delete album
               </button>
             </div>

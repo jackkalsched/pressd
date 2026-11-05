@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Music, Search, UserPlus, Check, Heart, X, Clock, MessageCircle, Star, BookOpen, Users, ChevronDown } from 'lucide-react'
+import { Music, Search, UserPlus, Check, Heart, X, Clock, MessageCircle, Star, BookOpen, Users, ChevronDown } from 'lucide-react'
 import {
   fetchFeed, searchUsers, addFriend, toggleLike,
   fetchFriendRequests, acceptFriendRequest, declineFriendRequest,
@@ -15,6 +15,7 @@ import CommentThread from '../components/CommentThread'
 import { threadPath } from '../lib/threads'
 import CoverImg from '../components/CoverImg'
 import CompareCard from '../components/CompareCard'
+import VinylSpinner from '../components/VinylSpinner'
 
 function timeAgo(dateStr?: string): string {
   if (!dateStr) return ''
@@ -417,7 +418,7 @@ function FindPeople() {
         placeholder="Find people…"
         className="w-full pl-8 pr-8 py-2.5 bg-(--c-f5f5f5) border border-(--c-e2e2e2) rounded-xl text-sm text-(--c-111) placeholder:text-(--c-bbb) focus:outline-none focus:border-(--c-2d6a4f) transition-colors"
       />
-      {searching && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-(--c-bbb) animate-spin" />}
+      {searching && <VinylSpinner size={15} className="absolute right-3 top-1/2 -translate-y-1/2" />}
 
       {results.length > 0 && (
         <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-(--c-fff) border border-(--c-e2e2e2) rounded-xl overflow-hidden divide-y divide-(--c-f0f0f0) shadow-lg z-20">
@@ -604,7 +605,7 @@ function ReviewsTab() {
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-(--c-aaa)">
-          <Loader2 size={16} className="animate-spin" /> Loading…
+          <VinylSpinner size={44} /> Loading…
         </div>
       ) : reviews.length === 0 ? (
         <div className="text-center py-16">
@@ -638,7 +639,7 @@ function DiscussionsTab() {
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 text-(--c-aaa)">
-        <Loader2 size={16} className="animate-spin" /> Loading…
+        <VinylSpinner size={44} /> Loading…
       </div>
     )
   }
@@ -672,7 +673,7 @@ function CompareTab() {
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 text-(--c-aaa)">
-        <Loader2 size={16} className="animate-spin" /> Loading…
+        <VinylSpinner size={44} /> Loading…
       </div>
     )
   }
@@ -808,7 +809,7 @@ export default function Social() {
         <DiscussionsTab />
       ) : isLoading ? (
         <div className="flex items-center gap-2 text-(--c-aaa)">
-          <Loader2 size={16} className="animate-spin" /> Loading…
+          <VinylSpinner size={44} /> Loading…
         </div>
       ) : feed.length === 0 ? (
         <div className="text-center py-16">

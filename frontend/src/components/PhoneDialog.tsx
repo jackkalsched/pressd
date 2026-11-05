@@ -10,10 +10,11 @@
 // The number goes to Firebase, never to Pressd (lib/phoneVerify.ts,
 // backend/phone.py).
 import { useRef, useState } from 'react'
-import { Loader2, Phone, X } from 'lucide-react'
+import { Phone, X } from 'lucide-react'
 import { toE164 } from '../api'
 import { useUser } from '../context/UserContext'
 import { sendPhoneCode } from '../lib/phoneVerify'
+import VinylSpinner from './VinylSpinner'
 
 const RECAPTCHA_ID = 'phone-recaptcha'
 
@@ -127,7 +128,7 @@ export default function PhoneDialog({ mode, onClose }: { mode: 'prompt' | 'setti
             />
             {error && <p className="m-0 mt-2 text-[13px] text-(--c-b91c1c)">{error}</p>}
             <button type="submit" className={`${PRIMARY} mt-5`} disabled={busy || !number.trim()}>
-              {busy ? <Loader2 size={16} className="animate-spin" /> : 'Text me a code'}
+              {busy ? <VinylSpinner size={18} /> : 'Text me a code'}
             </button>
             {prompt && (
               <button
@@ -161,7 +162,7 @@ export default function PhoneDialog({ mode, onClose }: { mode: 'prompt' | 'setti
             />
             {error && <p className="m-0 mt-2 text-[13px] text-(--c-b91c1c)">{error}</p>}
             <button type="submit" className={`${PRIMARY} mt-5`} disabled={busy || code.length < 6}>
-              {busy ? <Loader2 size={16} className="animate-spin" /> : 'Verify'}
+              {busy ? <VinylSpinner size={18} /> : 'Verify'}
             </button>
             <div className="mt-4 flex justify-between text-[14px] font-semibold text-(--c-2d6a4f)">
               <button type="button" onClick={() => { setStep('number'); setError(null) }} disabled={busy} className="hover:underline underline-offset-2">

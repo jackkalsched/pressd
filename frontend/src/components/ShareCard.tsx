@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, Download, Loader2, Star } from 'lucide-react'
+import { X, Download, Star } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import { fetchAlbums, fetchAlbumColor } from '../api'
 import { BANG_THRESHOLD, SKIP_THRESHOLD, pickTopSong } from '../types'
@@ -8,6 +8,7 @@ import { BANG_THRESHOLD, SKIP_THRESHOLD, pickTopSong } from '../types'
 import { songScoreColor } from '@pressd/shared/types'
 import type { Album } from '../types'
 import { useUser } from '../context/UserContext'
+import VinylSpinner from './VinylSpinner'
 
 // palette (mirrors the app's warm cream + forest-green system)
 const INK = '#1c1917'
@@ -315,7 +316,7 @@ export default function ShareCardModal({ album, onClose }: { album: Album; onClo
           disabled={downloading}
           className="mt-4 w-full py-2.5 rounded-xl text-sm font-semibold bg-[#2d6a4f] hover:bg-[#245c43] text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          {downloading ? <><Loader2 size={15} className="animate-spin" /> Rendering…</> : <><Download size={15} /> Download image</>}
+          {downloading ? <><VinylSpinner size={17} /> Rendering…</> : <><Download size={15} /> Download image</>}
         </button>
       </div>
     </div>

@@ -67,7 +67,7 @@ export default function TabBar({ state, navigation }: TabBarProps) {
       >
         <View>
           <meta.Icon size={22} color={color} strokeWidth={focused ? 2.4 : 2} />
-          {showDot && <View style={styles.dot} />}
+          {showDot && <View style={[styles.dot, { borderColor: tc.raised }]} />}
         </View>
         {/* Four labels in a floating pill of fixed height, each in a flex:1
             column beside a 72pt FAB gap — so there is no room to grow into and
@@ -139,7 +139,6 @@ const styles = StyleSheet.create({
     borderRadius: 4.5,
     backgroundColor: '#e0492b',
     borderWidth: 1.5,
-    borderColor: colors.raised,
   },
   fab: {
     position: 'absolute',

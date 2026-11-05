@@ -5,7 +5,6 @@
 // writes everything and surfaces the share card.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ActivityIndicator,
   Animated,
   Dimensions,
   Modal,
@@ -17,6 +16,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import VinylSpinner from '../../components/VinylSpinner'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -64,7 +64,6 @@ const DANGER = '#b91c1c'
  * is nothing useful to go back to until it lands.
  */
 function RecalibratingOverlay() {
-  const tc = useColors()
   const message = useRecalibrationMessage()
   // Held in state rather than a ref: reading `.current` during render to build
   // the style is exactly what the refs lint rule rejects, and a lazy useState
@@ -79,11 +78,8 @@ function RecalibratingOverlay() {
   return (
     <Modal visible transparent animationType="fade" onRequestClose={() => {}}>
       <View style={styles.recalRoot}>
-        <ActivityIndicator size="large" color={tc.green} />
+        <VinylSpinner size={96} accessibilityLabel="Recalibrating your score" />
         <Animated.Text style={[styles.recalMessage, { opacity: fade }]}>{message}</Animated.Text>
-        <Text style={styles.recalSub}>
-          Your score is being set against your library and the rest of Press&rsquo;d.
-        </Text>
       </View>
     </Modal>
   )
@@ -561,7 +557,7 @@ export default function RatingScreen() {
   if (isLoading || !album) {
     return (
       <SafeAreaView style={[styles.screen, styles.center]}>
-        <ActivityIndicator color={tc.green} />
+        <VinylSpinner size={64} />
       </SafeAreaView>
     )
   }
@@ -651,7 +647,7 @@ export default function RatingScreen() {
               ) : null}
 
               <View style={styles.actions}>
-                <Pressable style={styles.listBtn} onPress={() => setListOpen(true)} accessibilityLabel="Jump to a track">
+                <Pressable style={[styles.listBtn, { borderColor: tc.border }]} onPress={() => setListOpen(true)} accessibilityLabel="Jump to a track">
                   <ListMusic size={20} color={tc.inkSecondary} />
                 </Pressable>
                 <Pressable
@@ -668,7 +664,7 @@ export default function RatingScreen() {
                   </Text>
                   <ArrowRight size={16} color="#fff" />
                 </Pressable>
-                <Pressable style={styles.skipBtn} onPress={onSkip}>
+                <Pressable style={[styles.skipBtn, { borderColor: tc.border }]} onPress={onSkip}>
                   <Text style={styles.skipBtnText}>Skip</Text>
                 </Pressable>
               </View>
@@ -713,7 +709,7 @@ export default function RatingScreen() {
                         style={({ pressed }) => [
                           styles.chip,
                           { backgroundColor: v != null ? scoreColor(v) : colors.inset },
-                          i === idx && styles.chipCurrent,
+                          i === idx && [styles.chipCurrent, { borderColor: tc.ink }],
                           pressed && open && styles.chipPressed,
                         ]}
                       />
@@ -732,7 +728,7 @@ export default function RatingScreen() {
                 <>
                   <Text style={styles.sectionLabel}>UP NEXT</Text>
                   {sortedSongs.slice(idx + 1, idx + 4).map((s) => (
-                    <View key={s.id} style={styles.upRow}>
+                    <View key={s.id} style={[styles.upRow, { borderColor: tc.border }]}>
                       <Text style={styles.upNum}>{s.trackNumber}</Text>
                       <Text style={styles.upTitle} numberOfLines={1}>{s.title}</Text>
                       <Text style={styles.upLocked}>locked</Text>
@@ -759,13 +755,13 @@ export default function RatingScreen() {
                   gets the finish screen without them rather than four inputs
                   that change nothing. */}
               {!isEP && FACTORS.map(({ key, label, desc }) => (
-                <View key={key} style={styles.factorRow}>
+                <View key={key} style={[styles.factorRow, { borderColor: tc.border }]}>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={styles.factorLabel}>{label}</Text>
                     <Text style={styles.factorDesc}>{desc}</Text>
                   </View>
                   <TextInput
-                    style={styles.factorInput}
+                    style={[styles.factorInput, { borderColor: tc.border }]}
                     value={factorText[key]}
                     onChangeText={(t) => setFactorText((prev) => ({ ...prev, [key]: cleanScoreText(t) }))}
                     keyboardType="decimal-pad"
@@ -830,7 +826,7 @@ export default function RatingScreen() {
                 disabled={busy}
               >
                 {submit.isPending ? (
-                  <ActivityIndicator color="#fff" />
+                  <VinylSpinner color="#fff" />
                 ) : (
                   <>
                     <Check size={16} color="#fff" />
@@ -861,7 +857,7 @@ export default function RatingScreen() {
             accessibilityLabel="Delete album from your library"
           >
             {deleting ? (
-              <ActivityIndicator size="small" color={DANGER} />
+              <VinylSpinner size="small" color={DANGER} />
             ) : (
               <Trash2 size={14} color={DANGER} />
             )}
@@ -930,6 +926,7 @@ function ScoreField({
  *  those scores actually fall. A caption that lies about its own position is
  *  worse than no caption; the ramp's colour already says where the bands are. */
 function ScoreScale({ value }: { value: number | null }) {
+  const tc = useColors()
   const [trackW, setTrackW] = useState(0)
   const x = useRef(new Animated.Value(0)).current
   const opacity = useRef(new Animated.Value(0)).current
@@ -966,7 +963,7 @@ function ScoreScale({ value }: { value: number | null }) {
       </View>
       <Animated.View
         pointerEvents="none"
-        style={[styles.scaleMarker, { opacity, transform: [{ translateX: x }] }]}
+        style={[[styles.scaleMarker, { borderColor: tc.green }], { opacity, transform: [{ translateX: x }] }]}
       />
       <View style={styles.scaleLabels}>
         <Text style={styles.scaleLabel}>0</Text>
@@ -1014,7 +1011,7 @@ function TrackSheet({
               return (
                 <Pressable
                   key={s.id}
-                  style={[styles.sheetRow, i === current && styles.sheetRowCurrent]}
+                  style={[[styles.sheetRow, { borderColor: tc.border }], i === current && styles.sheetRowCurrent]}
                   onPress={() => open && onPick(i)}
                   disabled={!open}
                 >
@@ -1126,7 +1123,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#fff',
     borderWidth: 2.5,
-    borderColor: colors.green,
   },
   scaleLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   scaleLabel: { fontFamily: fonts.bodyMedium, fontSize: 10, color: colors.inkMuted },
@@ -1155,7 +1151,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.raised,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   skipBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.inkSecondary },
   listBtn: {
@@ -1165,7 +1160,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.raised,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
   },
 
   runCard: {
@@ -1181,7 +1175,7 @@ const styles = StyleSheet.create({
   runNote: { fontFamily: fonts.body, fontSize: 12.5, color: colors.inkSecondary },
   chipRow: { flexDirection: 'row', gap: 4, marginTop: spacing.md },
   chip: { flex: 1, height: 28, borderRadius: 5 },
-  chipCurrent: { borderWidth: 2, borderColor: colors.ink },
+  chipCurrent: { borderWidth: 2, },
   chipPressed: { opacity: 0.55 },
   carryRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
@@ -1205,7 +1199,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   upNum: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted, width: 18 },
   upTitle: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.inkTertiary },
@@ -1219,7 +1212,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   factorLabel: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.ink },
   factorDesc: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 2 },
@@ -1233,7 +1225,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.raised,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
   },
 
   previewBlock: { alignItems: 'center', marginTop: spacing.xl },
@@ -1254,15 +1245,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     color: colors.ink,
     textAlign: 'center',
-  },
-  recalSub: {
-    marginTop: spacing.sm,
-    fontFamily: fonts.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.inkMuted,
-    textAlign: 'center',
-    maxWidth: 300,
   },
   submit: {
     flexDirection: 'row',
@@ -1305,7 +1287,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   sheetRowCurrent: { backgroundColor: colors.greenSoft, borderRadius: radii.sm, paddingHorizontal: spacing.sm },
   sheetNum: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted, width: 20 },

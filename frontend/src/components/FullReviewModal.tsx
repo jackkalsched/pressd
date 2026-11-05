@@ -7,10 +7,11 @@
 // shows you how the people in it heard the record, never their libraries.
 import { useEffect, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Loader2, Triangle, X } from 'lucide-react'
+import { Triangle, X } from 'lucide-react'
 import { fetchPostAuthorRating } from '../api'
 import { songScoreColor } from '../types'
 import Avatar from './Avatar'
+import VinylSpinner from './VinylSpinner'
 
 const FACTORS = [
   { key: 'theme', label: 'Theme / Cohesion' },
@@ -62,7 +63,7 @@ export default function FullReviewModal({ postId, onClose }: { postId: number; o
 
         {isLoading ? (
           <div className="flex items-center gap-2 text-(--c-aaa) text-sm py-24 justify-center">
-            <Loader2 size={16} className="animate-spin" /> Loading review…
+            <VinylSpinner size={44} /> Loading review…
           </div>
         ) : isError || !data ? (
           <p className="text-center text-sm text-(--c-a8998a) py-24 px-6 m-0">

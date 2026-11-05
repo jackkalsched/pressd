@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Send, Trash2 } from 'lucide-react'
+import { Send, Trash2 } from 'lucide-react'
 import { fetchComments, postComment, deleteComment } from '../api'
 import { useUser } from '../context/UserContext'
 import { timeAgo } from '../lib/format'
 import Avatar from './Avatar'
+import VinylSpinner from './VinylSpinner'
 
 /**
  * Comment list + composer for an album. Friend-gated on the backend — the caller
@@ -49,7 +50,7 @@ export default function CommentThread({ albumId, autoLoad = true }: { albumId: n
     <div>
       {isLoading ? (
         <div className="flex items-center gap-1.5 text-(--c-bbb) text-xs py-1">
-          <Loader2 size={12} className="animate-spin" /> Loading comments…
+          <VinylSpinner size={32} /> Loading comments…
         </div>
       ) : (
         <div className="flex flex-col gap-2.5 mb-3">
@@ -92,7 +93,7 @@ export default function CommentThread({ albumId, autoLoad = true }: { albumId: n
           className="text-(--c-2d6a4f) hover:text-(--c-245c43) disabled:text-(--c-ccc) transition-colors shrink-0"
           aria-label="Post comment"
         >
-          {posting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+          {posting ? <VinylSpinner size={18} /> : <Send size={16} />}
         </button>
       </div>
     </div>

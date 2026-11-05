@@ -6,8 +6,9 @@
 //
 // Mobile does the same with the system picker's crop (`aspect: [24, 5]`).
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { BANNER_H, BANNER_W, renderBanner } from '../lib/banner'
+import VinylSpinner from './VinylSpinner'
 
 const ASPECT = BANNER_W / BANNER_H
 
@@ -135,7 +136,7 @@ export default function BannerCropper({ image, saving, onCancel, onSave }: {
             disabled={saving || !scale}
             className="flex h-11 items-center gap-2 rounded-full bg-(--c-green-fill) px-6 text-[14.5px] font-semibold text-white hover:bg-(--c-green-fill-hover) disabled:opacity-60"
           >
-            {saving && <Loader2 size={15} className="animate-spin" />}
+            {saving && <VinylSpinner size={17} />}
             Save banner
           </button>
         </div>

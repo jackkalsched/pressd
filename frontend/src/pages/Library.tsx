@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { X, Loader2, Search } from 'lucide-react'
+import { X, Search } from 'lucide-react'
 import { fetchAlbums, enrichCovers } from '../api'
 import AlbumCard from '../components/AlbumCard'
 import { useUser } from '../context/UserContext'
 import type { AlbumStatus } from '../types'
+import VinylSpinner from '../components/VinylSpinner'
 
 const TABS: { key: AlbumStatus; label: string }[] = [
   { key: 'rated', label: 'Rated' },
@@ -147,7 +148,7 @@ export default function Library({ embedded = false }: { embedded?: boolean } = {
 
       {isLoading ? (
         <div className="flex items-center justify-center py-24 text-(--c-aaa) gap-2">
-          <Loader2 size={16} className="animate-spin" /> Loading…
+          <VinylSpinner size={44} /> Loading…
         </div>
       ) : visibleAlbums.length === 0 ? (
         <div className="text-center py-24 text-(--c-aaa)">

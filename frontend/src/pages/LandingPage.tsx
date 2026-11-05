@@ -7,13 +7,14 @@
 // comes from PressdMark's highlight sweep rather than a rotating record.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Loader2, Star } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Star } from 'lucide-react'
 import { useGoogleLogin } from '@react-oauth/google'
 import { signInWithGoogle } from '../api'
 import { useUser } from '../context/UserContext'
 import PressdMark from '../components/PressdMark'
 import AppleLogo from '../components/AppleLogo'
 import { IOS_APP_LINK } from '../lib/iosApp'
+import VinylSpinner from '../components/VinylSpinner'
 
 // Real artwork, from the same iTunes artwork CDN the app already uses for
 // album covers. 200px renders crisply at the card's 44px on a 2x display.
@@ -689,7 +690,7 @@ export default function LandingPage() {
           </div>
 
           <button onClick={handleSignIn} disabled={authLoading} className="btn-signin">
-            {authLoading ? <Loader2 size={14} className="animate-spin" /> : <GoogleLogo />}
+            {authLoading ? <VinylSpinner size={16} /> : <GoogleLogo />}
             {authLoading ? 'Signing in…' : 'Log in / Sign up'}
           </button>
         </nav>
@@ -712,7 +713,7 @@ export default function LandingPage() {
               <div className="hero-actions">
                 <button onClick={handleSignIn} disabled={authLoading} className="btn-primary">
                   <span className="google-chip">
-                    {authLoading ? <Loader2 size={14} className="animate-spin" /> : <GoogleLogo />}
+                    {authLoading ? <VinylSpinner size={16} /> : <GoogleLogo />}
                   </span>
                   {authLoading ? 'Signing in…' : 'Get started with Google'}
                 </button>

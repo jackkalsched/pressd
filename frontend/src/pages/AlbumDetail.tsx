@@ -21,7 +21,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2, Pencil, Play, Plus, Share2, Star, Trash2 } from 'lucide-react'
+import { ArrowLeft, Pencil, Play, Plus, Share2, Star, Trash2 } from 'lucide-react'
 import { fetchAlbum, deleteAlbum, fetchFriendRatings, fetchFriends, importAlbum, saveReview, deleteReview } from '../api'
 import { useUser } from '../context/UserContext'
 import { songScoreColor, BANG_THRESHOLD, SKIP_THRESHOLD, EP_MAX_TRACKS } from '../types'
@@ -37,6 +37,7 @@ import {
   BangSkip, CoverWash, DANGER, GREEN, PILL, PILL_ACTIVE, RECOMMEND, RevealRow, SECTION_LABEL, StatFigure,
 } from '../components/albumView'
 import { stagger } from '../lib/format'
+import VinylSpinner from '../components/VinylSpinner'
 
 function possessive(name: string): string {
   return name.endsWith('s') ? `${name}’` : `${name}’s`
@@ -143,7 +144,7 @@ function ReviewSection({ album, editable, authorName, index, inRail = false }: {
               disabled={saving || !draft.trim()}
               className="flex items-center gap-1.5 rounded-full bg-(--c-green-fill) px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-(--c-green-fill-hover) disabled:opacity-50"
             >
-              {saving && <Loader2 size={13} className="animate-spin" />} Save
+              {saving && <VinylSpinner size={15} />} Save
             </button>
           </div>
         </div>
@@ -218,7 +219,7 @@ export default function AlbumDetail() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-(--c-f9f8f6) flex items-center justify-center gap-2 text-(--c-a8998a)">
-        <Loader2 size={16} className="animate-spin" /> Loading…
+        <VinylSpinner size={64} /> Loading…
       </div>
     )
   }
@@ -382,7 +383,7 @@ export default function AlbumDetail() {
                 className="ml-1 flex h-9 w-9 items-center justify-center rounded-full hover:bg-red-50 disabled:opacity-50"
                 style={{ color: DANGER }}
               >
-                {busy === 'delete' ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={16} />}
+                {busy === 'delete' ? <VinylSpinner size={17} /> : <Trash2 size={16} />}
               </button>
             )}
           </div>
@@ -437,7 +438,7 @@ export default function AlbumDetail() {
                 <AlbumCompare theirs={album} mine={yourAlbum} ownerName={ownerName} />
               ) : (
                 <div className="flex items-center gap-2 py-8 text-(--c-a8998a)">
-                  <Loader2 size={16} className="animate-spin" /> Loading…
+                  <VinylSpinner size={44} /> Loading…
                 </div>
               )
             ) : (
@@ -519,7 +520,7 @@ export default function AlbumDetail() {
                   disabled={busy === 'rate'}
                   className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-(--c-green-fill) text-[15px] font-semibold text-white hover:bg-(--c-green-fill-hover) disabled:opacity-70"
                 >
-                  {busy === 'rate' ? <Loader2 size={16} className="animate-spin" /> : <Play size={14} fill="currentColor" />}
+                  {busy === 'rate' ? <VinylSpinner size={18} /> : <Play size={14} fill="currentColor" />}
                   Rate it yourself
                 </button>
                 <button
@@ -527,7 +528,7 @@ export default function AlbumDetail() {
                   disabled={busy === 'queue'}
                   className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-(--c-d7cfc3) bg-(--c-fff) text-[15px] font-semibold text-(--c-1c1917) hover:border-(--c-2d6a4f)"
                 >
-                  {busy === 'queue' ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                  {busy === 'queue' ? <VinylSpinner size={18} /> : <Plus size={16} />}
                   Add to Library
                 </button>
               </div>

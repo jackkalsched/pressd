@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Loader2 } from 'lucide-react'
+import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play } from 'lucide-react'
 import { fetchAlbum, fetchAlbums, fetchFeed, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion } from '../api'
 import type { NewRelease, PredictedPick, RecommendSuggestion, TopReview } from '../api'
 import { MIN_RATED_ALBUMS, songScoreColor } from '../types'
@@ -13,6 +13,7 @@ import TrendingBoard from '../components/TrendingBoard'
 import RecommendModal from '../components/RecommendModal'
 import { markPassItOnEmpty, markPassItOnShown, passItOnRecent, usePassItOnDue, usePassItOnOpen } from '../lib/passItOn'
 import { useUser } from '../context/UserContext'
+import VinylSpinner from '../components/VinylSpinner'
 
 // ── small helpers ─────────────────────────────────────────────────────────────
 
@@ -693,7 +694,7 @@ function NewReleaseCard({
                 className="w-[130px] py-2 rounded-[10px] bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
-                {pending === 'rate' ? <Loader2 size={13} className="animate-spin" /> : <Play size={12} fill="currentColor" />} Rate now
+                {pending === 'rate' ? <VinylSpinner size={15} /> : <Play size={12} fill="currentColor" />} Rate now
               </button>
               <button
                 onClick={() => act('listen')}
@@ -701,7 +702,7 @@ function NewReleaseCard({
                 className="w-[130px] py-2 rounded-[10px] bg-(--c-fff)/90 hover:bg-(--c-fff) text-(--c-1c1917) text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
-                {pending === 'listen' ? <Loader2 size={13} className="animate-spin" /> : <Plus size={14} />} To listen
+                {pending === 'listen' ? <VinylSpinner size={15} /> : <Plus size={14} />} To listen
               </button>
             </>
           )}
@@ -776,7 +777,7 @@ function NextUpPick({
         className="mt-4 w-full py-2.5 rounded-[11px] border border-(--c-2d6a4f) bg-transparent text-(--c-2d6a4f) hover:bg-(--c-green-fill) hover:text-white text-[13px] font-bold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60"
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
-        {pending ? <Loader2 size={14} className="animate-spin" /> : null} Start rating <ArrowRight size={14} />
+        {pending ? <VinylSpinner size={16} /> : null} Start rating <ArrowRight size={14} />
       </button>
       {error && <p className="m-0 mt-2 text-[11px] text-(--c-c0392b)">Couldn&rsquo;t add — try again</p>}
     </div>
@@ -850,7 +851,7 @@ function PickCard({
                 className="w-[130px] py-2 rounded-[10px] bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
-                {pending === 'rate' ? <Loader2 size={13} className="animate-spin" /> : <Play size={12} fill="currentColor" />} Rate now
+                {pending === 'rate' ? <VinylSpinner size={15} /> : <Play size={12} fill="currentColor" />} Rate now
               </button>
               <button
                 onClick={() => act('listen')}
@@ -858,7 +859,7 @@ function PickCard({
                 className="w-[130px] py-2 rounded-[10px] bg-(--c-fff)/90 hover:bg-(--c-fff) text-(--c-1c1917) text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
-                {pending === 'listen' ? <Loader2 size={13} className="animate-spin" /> : <Plus size={14} />} To listen
+                {pending === 'listen' ? <VinylSpinner size={15} /> : <Plus size={14} />} To listen
               </button>
             </>
           )}

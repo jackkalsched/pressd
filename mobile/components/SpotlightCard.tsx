@@ -78,7 +78,7 @@ export default function SpotlightCard({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed, style]}
+      style={({ pressed }) => [styles.card, { borderColor: dark ? 'rgba(244,239,231,0.07)' : 'transparent' }, pressed && styles.cardPressed, style]}
     >
       <LinearGradient
         colors={t.wash}
@@ -104,7 +104,7 @@ export default function SpotlightCard({
               </View>
             )}
           </View>
-          {badge && <View style={styles.badge}>{badge}</View>}
+          {badge && <View style={[styles.badge, { borderColor: dark ? '#211f1d' : 'rgba(255,255,255,0.9)' }]}>{badge}</View>}
         </View>
 
         <View style={styles.text}>
@@ -156,7 +156,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: DynamicColorIOS({ light: '#f9f8f6', dark: '#211f1d' }),
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: DynamicColorIOS({ light: 'transparent', dark: 'rgba(244,239,231,0.07)' }),
   },
   cardPressed: { transform: [{ scale: 0.985 }] },
   glow: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.22, transform: [{ scale: 1.5 }] },
@@ -184,8 +183,7 @@ const styles = StyleSheet.create({
     bottom: -6,
     borderRadius: radii.pill,
     borderWidth: 3,
-    // Cut out of whatever surface the card is.
-    borderColor: DynamicColorIOS({ light: 'rgba(255,255,255,0.9)', dark: '#211f1d' }),
+    // Cut out of whatever surface the card is: its colour is set where it's drawn.
   },
 
   text: { flex: 1, minWidth: 0 },

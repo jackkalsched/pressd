@@ -5,7 +5,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { StyleProp, ViewStyle } from 'react-native'
 import {
-  ActivityIndicator,
   Animated,
   Dimensions,
   Pressable,
@@ -15,6 +14,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import VinylSpinner from '../../components/VinylSpinner'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
@@ -132,7 +132,7 @@ export default function Charts() {
       {/* Absolute children ignore the SafeAreaView's inset padding, so push the
           compact bar down below the status bar (clock) explicitly. */}
       <Animated.View
-        style={[styles.compactHeader, { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
+        style={[[styles.compactHeader, { borderColor: tc.border }], { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
         pointerEvents="none"
       >
         <Text style={styles.compactTitle}>Charts</Text>
@@ -256,7 +256,7 @@ export default function Charts() {
             </ScrollView>
 
             {isLoading && items.length === 0 ? (
-              <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
+              <VinylSpinner size={48} style={{ marginTop: spacing.xxl }} />
             ) : items.length === 0 ? (
               <Text style={styles.empty}>No rated albums match these filters yet.</Text>
             ) : (
@@ -423,8 +423,9 @@ function RevealCell({
 }
 
 function ChartRow({ item, onOpen }: { item: ChartItem; onOpen: (id: number) => void }) {
+  const tc = useColors()
   return (
-    <Pressable style={styles.row} onPress={() => onOpen(item.album_id)}>
+    <Pressable style={[styles.row, { borderColor: tc.border }]} onPress={() => onOpen(item.album_id)}>
       <Text
         style={styles.rowRank}
         numberOfLines={1}
@@ -466,7 +467,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: colors.ink, letterSpacing: 0.5 },
 
@@ -546,7 +546,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   // minWidth, not width: a fixed box is what forced "24" onto two lines. The
   // column still lines up row to row at normal type sizes, and grows instead of

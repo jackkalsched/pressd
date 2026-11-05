@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { Search as SearchIcon, Plus, Play, Loader2, Check, Image } from 'lucide-react'
+import { Search as SearchIcon, Plus, Play, Check, Image } from 'lucide-react'
 import { importAlbum, resolveAlbum, backfillCovers } from '../api'
 import { searchAlbumsRanked } from '@pressd/shared/albumSearch'
 import type { AlbumSearchResult } from '../api'
+import VinylSpinner from '../components/VinylSpinner'
 
 type ActionState = 'idle' | 'loading' | 'done'
 
@@ -95,7 +96,7 @@ export default function Search() {
           className="flex items-center gap-1.5 text-xs text-(--c-888) hover:text-(--c-e8e8e8) px-3 py-1.5 bg-(--c-1a1a1a) border border-(--c-2a2a2a) hover:border-(--c-444) rounded-lg transition-colors disabled:opacity-40"
         >
           {backfillState === 'loading'
-            ? <Loader2 size={12} className="animate-spin" />
+            ? <VinylSpinner size={14} />
             : <Image size={12} />}
           {backfillState === 'loading' ? 'Fetching covers…' : backfillState === 'done' ? `Done — ${backfillResult?.updated} updated` : 'Backfill covers'}
         </button>
@@ -125,7 +126,7 @@ export default function Search() {
       {searching && (
         <div className="flex flex-col items-center gap-1.5 text-(--c-888) text-sm py-8">
           <div className="flex items-center gap-2">
-            <Loader2 size={16} className="animate-spin" />
+            <VinylSpinner size={18} />
             Searching iTunes, Deezer & MusicBrainz…
           </div>
         </div>
@@ -173,7 +174,7 @@ export default function Search() {
                       className="flex items-center gap-1.5 text-xs text-(--c-888) hover:text-(--c-e8e8e8) px-3 py-1.5 bg-(--c-252525) hover:bg-(--c-2f2f2f) rounded-lg transition-colors disabled:opacity-40"
                     >
                       {state.add === 'loading'
-                        ? <Loader2 size={13} className="animate-spin" />
+                        ? <VinylSpinner size={15} />
                         : <Plus size={13} />}
                       Add to List
                     </button>
@@ -184,7 +185,7 @@ export default function Search() {
                     className="flex items-center gap-1.5 text-xs text-(--c-c8a84b) font-medium px-3 py-1.5 bg-(--c-c8a84b)/10 hover:bg-(--c-c8a84b)/20 rounded-lg transition-colors disabled:opacity-40"
                   >
                     {state.rate === 'loading'
-                      ? <Loader2 size={13} className="animate-spin" />
+                      ? <VinylSpinner size={15} />
                       : <Play size={13} />}
                     Rate
                   </button>

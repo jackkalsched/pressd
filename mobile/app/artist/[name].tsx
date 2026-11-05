@@ -2,7 +2,8 @@
 // the artist's own colors, headline ranks, the savant-style percentile bars,
 // the song-score histogram, and the artist's albums.
 import { useState } from 'react'
-import { ActivityIndicator, Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import VinylSpinner from '../../components/VinylSpinner'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
@@ -18,7 +19,7 @@ import ScoreHistogram from '../../components/ScoreHistogram'
 import SongGapChart from '../../components/SongGapChart'
 import ScoreKdeCompare from '../../components/ScoreKdeCompare'
 import SimilarArtistComparisons from '../../components/SimilarArtistComparisons'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, usePageRgb, useScoreColor, scoreColor } from '../../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, usePageRgb, useScoreColor, scoreColor, useColors } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 
 /** Which rating set the page is showing.
@@ -93,7 +94,6 @@ function ordinal(n: number): string {
 
 export default function ArtistPage() {
   const sc = useScoreColor()
-  const tc = useColors()
   const { name, mode: modeParam } = useLocalSearchParams<{ name: string; mode?: string }>()
   const artist = decodeURIComponent(name ?? '')
   const router = useRouter()
@@ -182,7 +182,7 @@ export default function ArtistPage() {
   if (isLoading || !data) {
     return (
       <View style={[styles.root, styles.center]}>
-        <ActivityIndicator color={tc.green} />
+        <VinylSpinner size={64} />
       </View>
     )
   }
@@ -689,6 +689,7 @@ function PercentileBar({
   invert?: boolean
   smallSample?: boolean
 }) {
+  const tc = useColors()
   const display = percentile != null ? (invert ? 100 - percentile : percentile) : null
   const gDisplay = globalPercentile != null ? (invert ? 100 - globalPercentile : globalPercentile) : null
   const color = display != null ? barColor(display) : '#ccc'
@@ -754,7 +755,7 @@ function PercentileBar({
             )}
 
             <View
-              style={[styles.pctBadge, { left: `${badgePct}%`, backgroundColor: color, opacity: smallSample ? 0.7 : 1 }]}
+              style={[[styles.pctBadge, { borderColor: tc.bg }], { left: `${badgePct}%`, backgroundColor: color, opacity: smallSample ? 0.7 : 1 }]}
             >
               <Text style={styles.pctBadgeText}>{Math.round(display)}</Text>
             </View>
@@ -1041,7 +1042,6 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: 13,
     borderWidth: 2.5,
-    borderColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,

@@ -10,10 +10,11 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Loader2, Triangle } from 'lucide-react'
+import { Triangle } from 'lucide-react'
 import { fetchCharts } from '../api'
 import type { ChartItem } from '../api'
 import { Cover, ScorePill, COVER_LIFT } from '../components/covers'
+import VinylSpinner from '../components/VinylSpinner'
 
 const UP = 'var(--c-2d6a4f)'
 const DOWN = 'var(--c-c0392b)'
@@ -219,7 +220,7 @@ export default function Charts() {
 
       {isLoading ? (
         <div className="py-16 flex justify-center text-(--c-aaa)">
-          <Loader2 size={20} className="animate-spin" />
+          <VinylSpinner size={48} />
         </div>
       ) : isError ? (
         <div className="py-16 text-center text-sm text-(--c-777)">

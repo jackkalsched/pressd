@@ -362,7 +362,7 @@ export default function ForYou() {
       {/* Absolute children ignore the SafeAreaView's inset padding, so push the
           compact bar down below the status bar (clock) explicitly. */}
       <Animated.View
-        style={[styles.compactHeader, { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
+        style={[[styles.compactHeader, { borderColor: tc.border }], { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
         pointerEvents="none"
       >
         <Text style={styles.compactTitle}>For You</Text>
@@ -635,7 +635,7 @@ function NewReleaseCard({ release, onOpen }: { release: NewRelease; onOpen: () =
 function ReviewCell({ review, first, onOpen, onOpenUser, onLike }: { review: TopReview; first: boolean; onOpen: () => void; onOpenUser: (id: number) => void; onLike: () => void }) {
   const tc = useColors()
   return (
-    <View style={[styles.review, !first && styles.hairline]}>
+    <View style={[styles.review, !first && [styles.hairline, { borderColor: tc.border }]]}>
       <Pressable onPress={onOpen}>
         {/* Reviewer identity leads, bigger than the album */}
         <View style={styles.reviewHead}>
@@ -715,13 +715,14 @@ function TrendRow({
   baseY: number
   onPress: () => void
 }) {
+  const tc = useColors()
   const [localY, setLocalY] = useState(0)
   const reveal = revealStyle(scrollY, baseY + localY, rank, WINDOW_H)
 
   return (
     <Animated.View onLayout={(e) => setLocalY(e.nativeEvent.layout.y)} style={reveal}>
       <Pressable
-        style={({ pressed }) => [styles.trendRow, rank > 1 && styles.hairline, pressed && styles.trendRowPressed]}
+        style={({ pressed }) => [styles.trendRow, rank > 1 && [styles.hairline, { borderColor: tc.border }], pressed && styles.trendRowPressed]}
         onPress={onPress}
       >
         <Text style={styles.rank}>{rank}</Text>
@@ -768,7 +769,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   compactTitle: { fontFamily: fonts.displayBlack, fontSize: 20, color: colors.ink, letterSpacing: 0.5 },
   // gap, not just space-between: with nothing between them the title and the
@@ -801,7 +801,7 @@ const styles = StyleSheet.create({
   sectionMetaBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 3, paddingHorizontal: 9, borderRadius: radii.pill, backgroundColor: colors.greenSoft },
   sectionMetaBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },
 
-  hairline: { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  hairline: { borderTopWidth: StyleSheet.hairlineWidth, },
 
   mediaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 2 },
   mediaText: { flex: 1, minWidth: 0 },
@@ -876,6 +876,6 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.4)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: colors.bg, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, paddingTop: spacing.lg, paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   sheetTitle: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink, marginBottom: spacing.sm },
-  optionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.md, borderBottomWidth: 1, borderColor: colors.border },
+  optionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.md, borderBottomWidth: 1, },
   optionText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.ink },
 })

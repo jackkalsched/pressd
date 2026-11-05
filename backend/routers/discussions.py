@@ -683,14 +683,19 @@ def discussion_feed(
     if not rows:
         return {"posts": [], "next_cursor": None}
 
-    # The author's score for the subject, resolved per thread rather than per
-    # post — ten posts across three records is three lookups, not ten.
-    scores: dict[tuple[int, int], float] = {}
-    for tid in {r[12] for r in rows}:
-        thread = session.get(Thread, tid)
-        authors = [r[1] for r in rows if r[12] == tid]
-        for uid, sc in _author_scores(session, thread, authors).items():
-            scores[(tid, uid)] = sc
+    # Each author's current score for the post's subject, every thread in one
+    # query: _author_scores's rule, matched on the subject key the main query
+    # already carries. It was two round trips a thread — the thread, then its
+    # scores — and at ~0.12s a trip a page of 23 threads took over six seconds.
+    score_rows = session.execute(_sql(
+        "SELECT user_id, subject_key, score FROM album"
+        " WHERE status = 'rated' AND score IS NOT NULL"
+        "   AND subject_key IN :keys AND user_id IN :ids"),
+        {"keys": tuple({r[14] for r in rows}), "ids": tuple({r[1] for r in rows})}).fetchall()
+    by_subject = {(r[1], r[0]): round(float(r[2]), 2) for r in score_rows}
+    scores: dict[tuple[int, int], float] = {
+        (r[12], r[1]): by_subject[(r[14], r[1])] for r in rows if (r[14], r[1]) in by_subject
+    }
 
     return {
         "posts": [{

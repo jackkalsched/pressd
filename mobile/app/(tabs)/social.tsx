@@ -5,7 +5,8 @@
 //   Reviews  — a feed of friends' written reviews.
 //   Friends  — your current friends.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DynamicColorIOS, ActivityIndicator, Animated, Dimensions, FlatList, Linking, Modal, Pressable, ScrollView, SectionList, StyleSheet, Text, TextInput, View } from 'react-native'
+import { DynamicColorIOS, Animated, Dimensions, FlatList, Linking, Modal, Pressable, ScrollView, SectionList, StyleSheet, Text, TextInput, View } from 'react-native'
+import VinylSpinner from '../../components/VinylSpinner'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
@@ -262,7 +263,7 @@ export default function Social() {
       {/* Absolute children ignore the SafeAreaView's inset padding, so push the
           compact bar down below the status bar (clock) explicitly. */}
       <Animated.View
-        style={[styles.compactHeader, { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
+        style={[[styles.compactHeader, { borderColor: tc.border }], { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
         pointerEvents="none"
       >
         <Text style={styles.compactTitle}>Social</Text>
@@ -299,7 +300,7 @@ export default function Social() {
 
       {tab === 'activity' ? (
         feedLoading && feed.length === 0 ? (
-          <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
+          <VinylSpinner size={48} style={{ marginTop: spacing.xxl }} />
         ) : groups.length === 0 ? (
           <Text style={styles.empty}>No friend activity yet. Add friends to see their ratings.</Text>
         ) : (
@@ -360,7 +361,7 @@ export default function Social() {
           )}
           ListEmptyComponent={
             compareLoading ? (
-              <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
+              <VinylSpinner size={48} style={{ marginTop: spacing.xxl }} />
             ) : (
               <Text style={styles.empty}>
                 Nothing to compare yet. When you and a friend both rate an album, it shows up here.
@@ -410,7 +411,7 @@ export default function Social() {
           onScroll={onScroll}
           scrollEventThrottle={16}
           renderItem={({ item, index }) => (
-            <Pressable style={[styles.friendRow, index > 0 && styles.divider]} onPress={() => openFriend(item.id)}>
+            <Pressable style={styles.friendRow} onPress={() => openFriend(item.id)}>
               <Avatar name={item.name} url={item.avatarUrl} size={44} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.friendName} numberOfLines={1}>{item.name}</Text>
@@ -420,7 +421,7 @@ export default function Social() {
           )}
           ListEmptyComponent={
             friendsLoading ? (
-              <ActivityIndicator color={tc.green} style={{ marginTop: spacing.xxl }} />
+              <VinylSpinner size={48} style={{ marginTop: spacing.xxl }} />
             ) : (
               <Text style={styles.empty}>No friends yet. Tap Find friends to add some.</Text>
             )
@@ -459,13 +460,14 @@ function ActivityRow({
   onAddQueue: () => void
   onOpenReplies: () => void
 }) {
+  const tc = useColors()
   const verb = item.type === 'review' ? 'reviewed' : item.type === 'recommendation' ? 'sent you' : 'rated'
   const time = relativeTime(timeOf(item))
   // Only compare when you've rated the same album — otherwise no subtext at all.
   const gap = item.score != null && myScore != null ? item.score - myScore : null
 
   return (
-    <Pressable style={[styles.row, !first && styles.divider]} onPress={() => onOpenAlbum(item.album_id)}>
+    <Pressable style={[styles.row, !first && [styles.divider, { borderColor: tc.border }]]} onPress={() => onOpenAlbum(item.album_id)}>
       <View style={styles.rowMain}>
         <Cluster item={item} onOpenUser={onOpenUser} />
         <View style={styles.rowText}>
@@ -530,9 +532,10 @@ function ActivityRow({
 /** One friend's post from any thread. Leads with the record, because a line of
  *  someone's opinion means little until you know what it is about. */
 function FeedPostRow({ item, onOpen, onOpenUser }: { item: FeedPost; onOpen: () => void; onOpenUser: (id: number) => void }) {
+  const tc = useColors()
   return (
     <Pressable
-      style={({ pressed }) => [styles.fpRow, item.toMe && styles.fpToMe, pressed && { opacity: 0.7 }]}
+      style={({ pressed }) => [styles.fpRow, item.toMe && [styles.fpToMe, { borderColor: tc.green }], pressed && { opacity: 0.7 }]}
       onPress={onOpen}
     >
       <View style={styles.fpHead}>
@@ -639,7 +642,7 @@ function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onC
           <Text style={styles.title}>Find friends</Text>
           <Pressable onPress={onClose} hitSlop={12}><X size={22} color={tc.inkTertiary} /></Pressable>
         </View>
-        <View style={styles.searchBar}>
+        <View style={[styles.searchBar, { borderColor: tc.border }]}>
           <Search size={16} color={tc.inkMuted} />
           <TextInput
             style={styles.searchInput}
@@ -688,7 +691,7 @@ function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onC
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.list}
           ListHeaderComponent={
-            isFetching ? <ActivityIndicator color={tc.green} style={{ marginVertical: spacing.md }} /> : null
+            isFetching ? <VinylSpinner size={32} style={{ marginVertical: spacing.md }} /> : null
           }
           renderItem={({ item }) => (
             <View style={styles.userRow}>
@@ -823,7 +826,7 @@ function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
     </Pressable>
   )
 
-  if (isLoading) return <View>{back}<ActivityIndicator color={tc.green} style={{ marginTop: spacing.xl }} /></View>
+  if (isLoading) return <View>{back}<VinylSpinner size={48} style={{ marginTop: spacing.xl }} /></View>
   if (error || !data) {
     return (
       <View>
@@ -877,7 +880,7 @@ function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
               <Avatar name={item.name} size={36} />
               <Text style={[styles.userName, { flex: 1 }]} numberOfLines={1}>{item.name}</Text>
             </View>
-            <Pressable style={styles.inviteBtn} onPress={() => sendInvite(item)} disabled={!invite} accessibilityLabel={`Invite ${item.name}`}>
+            <Pressable style={[styles.inviteBtn, { borderColor: tc.green }]} onPress={() => sendInvite(item)} disabled={!invite} accessibilityLabel={`Invite ${item.name}`}>
               <Text style={styles.inviteBtnText}>Invite</Text>
             </Pressable>
           </View>
@@ -913,9 +916,9 @@ function NumberLine({ raters }: { raters: CompareItem['raters'] }) {
               <View style={[styles.lineTick, { left: x - 1.5, backgroundColor: color }]} />
               <View style={[styles.youGlow, { left: clamp(x - 15, 0, CONTENT_W - 30) }]}>
                 {r.avatar_url ? (
-                  <Image source={{ uri: r.avatar_url }} style={styles.bubbleImg} contentFit="cover" />
+                  <Image source={{ uri: r.avatar_url }} style={[styles.bubbleImg, { borderColor: tc.bg }]} contentFit="cover" />
                 ) : (
-                  <View style={styles.youBubble}>
+                  <View style={[styles.youBubble, { borderColor: tc.bg }]}>
                     <Text style={styles.bubbleText}>{r.name[0]?.toUpperCase()}</Text>
                   </View>
                 )}
@@ -926,9 +929,9 @@ function NumberLine({ raters }: { raters: CompareItem['raters'] }) {
         return (
           <View key={i} pointerEvents="none">
             <View style={[styles.lineTick, { left: x - 1.5, backgroundColor: color }]} />
-            <View style={[styles.bubble, { left: clamp(x - 13, 0, CONTENT_W - 26), backgroundColor: color }]}>
+            <View style={[[styles.bubble, { borderColor: tc.bg }], { left: clamp(x - 13, 0, CONTENT_W - 26), backgroundColor: color }]}>
               {r.avatar_url ? (
-                <Image source={{ uri: r.avatar_url }} style={styles.bubbleImg} contentFit="cover" />
+                <Image source={{ uri: r.avatar_url }} style={[styles.bubbleImg, { borderColor: tc.bg }]} contentFit="cover" />
               ) : (
                 <Text style={styles.bubbleText}>{r.name[0]?.toUpperCase()}</Text>
               )}
@@ -1041,7 +1044,7 @@ const styles = StyleSheet.create({
   fpRow: { paddingVertical: spacing.lg },
   // A reply to you is the one row on this screen addressed to you rather than
   // merely visible to you, so it carries a rule the others do not.
-  fpToMe: { borderLeftWidth: 2, borderColor: colors.green, paddingLeft: spacing.md },
+  fpToMe: { borderLeftWidth: 2, paddingLeft: spacing.md },
   fpHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   fpArt: { width: 38, height: 38, borderRadius: radii.sm },
   fpTitle: { fontFamily: fonts.display, fontSize: 15, color: colors.ink },
@@ -1073,7 +1076,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: colors.ink, letterSpacing: 0.5 },
   title: { fontFamily: fonts.display, fontSize: 34, color: colors.ink, letterSpacing: 1 },
@@ -1095,7 +1097,7 @@ const styles = StyleSheet.create({
   tabUnderlineActive: { backgroundColor: colors.green },
 
   list: { paddingHorizontal: spacing.lg, paddingBottom: 130 },
-  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  divider: { borderTopWidth: StyleSheet.hairlineWidth, },
 
   dayHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xl, marginBottom: spacing.sm },
   dayLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.2, color: colors.inkMuted },
@@ -1148,7 +1150,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: colors.bg,
   },
   bubbleText: { fontFamily: fonts.bodyBold, fontSize: 11, color: '#fff' },
   lineTick: { position: 'absolute', top: 32, width: 3, height: 11, borderRadius: 1.5 },
@@ -1159,7 +1160,6 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: 13,
     borderWidth: 2,
-    borderColor: colors.bg,
   },
   youGlow: {
     position: 'absolute',
@@ -1177,7 +1177,6 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: YOU_FILL,
     borderWidth: 2,
-    borderColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: colors.green,
@@ -1212,7 +1211,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.raised,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   searchInput: { flex: 1, fontFamily: fonts.body, fontSize: 15, color: colors.ink },
   sectionLabel: {
@@ -1253,7 +1251,7 @@ const styles = StyleSheet.create({
   contactsBack: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: spacing.md, paddingTop: spacing.md, alignSelf: 'flex-start' },
   contactsBackText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.green },
   contactSub: { fontFamily: fonts.body, fontSize: 12.5, color: colors.inkTertiary, marginTop: 1 },
-  inviteBtn: { borderWidth: 1, borderColor: colors.green, paddingHorizontal: 14, paddingVertical: 7, borderRadius: radii.pill },
+  inviteBtn: { borderWidth: 1, paddingHorizontal: 14, paddingVertical: 7, borderRadius: radii.pill },
   inviteBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
   pendingTag: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkMuted },
 })

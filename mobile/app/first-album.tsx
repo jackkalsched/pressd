@@ -11,7 +11,6 @@
 // confirm step, so the onboarding flow reads the same as before: choose a
 // record, then Start rating.
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   StyleSheet,
@@ -19,6 +18,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import VinylSpinner from '../components/VinylSpinner'
 import { useState } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -61,7 +61,7 @@ export default function FirstAlbumSheet() {
         </Pressable>
       </View>
 
-      <View style={styles.searchBar}>
+      <View style={[styles.searchBar, { borderColor: tc.border }]}>
         <Search size={18} color={tc.inkMuted} />
         <TextInput
           style={styles.input}
@@ -73,7 +73,7 @@ export default function FirstAlbumSheet() {
           autoCorrect={false}
           returnKeyType="search"
         />
-        {searching && <ActivityIndicator size="small" color={tc.inkMuted} />}
+        {searching && <VinylSpinner size="small" color={tc.inkMuted} />}
         {query.length > 0 && !searching && (
           <Pressable onPress={() => setQuery('')} hitSlop={8}>
             <X size={16} color={tc.inkMuted} />
@@ -92,7 +92,7 @@ export default function FirstAlbumSheet() {
         ListHeaderComponent={
           searching && results.length === 0 ? (
             <View style={styles.centerNote}>
-              <ActivityIndicator color={tc.green} />
+              <VinylSpinner size={32} />
             </View>
           ) : mbPending && results.length > 0 ? (
             <Text style={styles.pending}>Checking more sources…</Text>
@@ -158,7 +158,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.raised,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   input: { flex: 1, fontFamily: fonts.body, fontSize: 15, color: colors.ink },
   list: { padding: spacing.lg, gap: spacing.xs },
