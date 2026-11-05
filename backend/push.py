@@ -88,6 +88,7 @@ NOTIFY_KINDS = {
     "recommendation": "notify_recommendations",
     "friend": "notify_friends",
     "reply": "notify_replies",
+    "review": "notify_reviews",
 }
 
 

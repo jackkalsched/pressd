@@ -64,6 +64,7 @@ const NOTIFY_ROWS: { key: keyof NotificationPrefs; label: string }[] = [
   { key: 'recommendations', label: 'Recommendations' },
   { key: 'friends', label: 'Friend requests' },
   { key: 'replies', label: 'Replies to your posts' },
+  { key: 'reviews', label: 'Friends reviewing records you’ve rated' },
 ]
 
 const APPEARANCES: { key: AppearancePref; label: string }[] = [

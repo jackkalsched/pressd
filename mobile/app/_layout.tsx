@@ -27,7 +27,9 @@ import {
   useWhatsNewHydrated, useWhatsNewSeen,
 } from '../lib/whatsNew'
 import { latestRelease, releaseFor } from '../lib/releaseNotes'
-import { attachPushListeners, syncPushToken } from '../lib/push'
+import { attachPushListeners, pushPermissionStatus, syncPushToken } from '../lib/push'
+import { usePrefs } from '../lib/prefs'
+import NotifyPromptSheet from '../components/NotifyPromptSheet'
 import { wireAppStateFocus } from '../lib/refresh'
 import { getMessaging, setBackgroundMessageHandler } from '@react-native-firebase/messaging'
 import WhatsNewSheet from '../components/WhatsNewSheet'
@@ -62,6 +64,14 @@ function RootNavigator() {
   // still be about to open.
   const whatsNewKnown = useWhatsNewHydrated()
   const router = useRouter()
+  // Whether iOS has yet to ask this device about notifications: the launch
+  // prompt is only worth showing before it has. null until iOS answers.
+  const [pushUnasked, setPushUnasked] = useState<boolean | null>(null)
+  const { pushPromptAnswered } = usePrefs()
+  useEffect(() => {
+    if (!user) return
+    pushPermissionStatus().then((s) => setPushUnasked(s === 'undetermined')).catch(() => setPushUnasked(false))
+  }, [user])
 
   const [fontsLoaded] = useFonts({
     PlayfairDisplay_400Regular,
@@ -99,6 +109,8 @@ function RootNavigator() {
     return attachPushListeners((data) => {
       switch (data?.kind) {
         case 'reply':
+        // A friend's review opens the record's room, as a reply does.
+        case 'review':
           if (!data.subject_type) return
           router.push({
             pathname: '/thread/[subject]',
@@ -124,6 +136,12 @@ function RootNavigator() {
   if (!fontsLoaded || !ready) return null // splash stays up
 
   const pastFirstRun = !!user && user.tutorialSeen !== false
+  // The notifications ask comes after the username, the tutorial, the release
+  // notes and the phone prompt, and before the people sheet. Owed while iOS
+  // hasn't answered whether it has asked, so the sheet can't slip in first.
+  const otherPromptsDone =
+    pastFirstRun && user.usernameChosen !== false && whatsNewKnown && !whatsNewOpen && user.phonePromptDone === true
+  const notifyOwed = !pushPromptAnswered && pushUnasked !== false
   return (
     <>
     {/* Held back while the first-run tutorial is owed: a new account has no
@@ -145,10 +163,11 @@ function RootNavigator() {
         Held until the phone answer is known to be in, so a session that
         learns from the launch refresh that the prompt is owed can't have
         the sheet already up underneath it. */}
+    <NotifyPromptSheet visible={otherPromptsDone && notifyOwed && pushUnasked === true} />
     <PeopleSheetHost
       held={
         !pastFirstRun || user.usernameChosen === false || !whatsNewKnown || whatsNewOpen ||
-        user.phonePromptDone !== true
+        user.phonePromptDone !== true || notifyOwed
       }
     />
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>

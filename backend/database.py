@@ -252,6 +252,7 @@ def init_db():
             "ALTER TABLE pressuser ADD COLUMN notify_recommendations BOOLEAN NOT NULL DEFAULT TRUE",
             "ALTER TABLE pressuser ADD COLUMN notify_friends BOOLEAN NOT NULL DEFAULT TRUE",
             "ALTER TABLE pressuser ADD COLUMN notify_replies BOOLEAN NOT NULL DEFAULT TRUE",
+            "ALTER TABLE pressuser ADD COLUMN IF NOT EXISTS notify_reviews BOOLEAN NOT NULL DEFAULT TRUE",
             # ── Phone numbers, for finding friends from contacts (backend/
             #    phone.py). Null for every existing account on purpose: a null
             #    phone_prompt is what shows them the one-time prompt. One

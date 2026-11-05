@@ -1221,6 +1221,8 @@ export interface NotificationPrefs {
   recommendations: boolean
   friends: boolean
   replies: boolean
+  /** A friend's first review of a record you've rated. */
+  reviews: boolean
 }
 
 export async function fetchNotificationPrefs(): Promise<NotificationPrefs> {

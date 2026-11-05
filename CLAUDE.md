@@ -1658,7 +1658,14 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
 - **Every push names its kind, and the recipient can switch each kind off.**
   `push.tokens_for_user(session, user_id, kind)` returns no tokens when the
   recipient's `PressUser.notify_<kind>` column is off (`NOTIFY_KINDS`: recommendation,
-  friend, reply; all default on). The switches are `GET`/`PUT /users/me/notifications`,
+  friend, reply, review; all default on). `review` (November 2026) goes to the author's
+  accepted friends who have rated the record, when a review is first published — never
+  an edit (`threads.sync_review_post` returns True only then; `albums._notify_review`).
+  Since then the app also asks at launch (`mobile/components/NotifyPromptSheet.tsx`):
+  "Want to receive notifications?", after the username, tutorial, What's New and phone
+  prompts and before the people sheet, only while iOS hasn't asked this device yet, once
+  per device (`prefs.pushPromptAnswered`). Before it, the only way in was Settings →
+  Notifications, and 2 of 110 accounts had a device registered. The switches are `GET`/`PUT /users/me/notifications`,
   shown in mobile Settings once iOS permission is granted. A new kind of push adds a
   column, a `NOTIFY_KINDS` entry and a Settings row — never a bare token lookup.
 - **An Expo module's version must match the app's `expo-modules-core`, not just the

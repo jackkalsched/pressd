@@ -1239,10 +1239,43 @@ def copy_album(
 MAX_REVIEW_LEN = 20000
 
 
+def _notify_review(session: Session, background: BackgroundTasks, album: Album, author: PressUser) -> None:
+    """Tell the author's friends who have rated this record that a review of it
+    is up — on its first publishing, never an edit.
+
+    Narrower than "activity in a thread you read", which the reply push rules
+    out (discussions.create_reply): a friend, a record you've finished, and
+    their first word on it. Jack's call, November 2026. Tokens are read here,
+    while the session is open; the sends run after the response.
+    """
+    if not album.subject_key or not album.review:
+        return
+    friends = session.execute(_sql("""
+        SELECT DISTINCT a.user_id FROM album a
+        JOIN friendship f ON f.status = 'accepted'
+          AND ((f.user_id_a = :me AND f.user_id_b = a.user_id) OR (f.user_id_b = :me AND f.user_id_a = a.user_id))
+        WHERE a.subject_key = :k AND a.status = 'rated' AND a.user_id <> :me"""),
+        {"me": author.id, "k": album.subject_key}).scalars().all()
+    preview = album.review.strip()
+    for friend_id in friends:
+        tokens = tokens_for_user(session, friend_id, "review")
+        if tokens:
+            background.add_task(
+                send_push, tokens,
+                f"{author.name} reviewed {album.album_name}",
+                preview[:120] + ("…" if len(preview) > 120 else ""),
+                # What the app needs to open the record's room, as the reply
+                # push carries it.
+                {"kind": "review", "subject_type": "album", "artist": album.artist,
+                 "album": album.album_name, "title": album.album_name},
+            )
+
+
 @router.put("/{album_id}/review")
 def save_review(
     album_id: int,
     data: dict,
+    background: BackgroundTasks,
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
@@ -1270,7 +1303,8 @@ def save_review(
     session.commit()
     # A review is the record's discussion starting, so it belongs in the thread
     # rather than only on this copy of the album. See backend/threads.py.
-    sync_review_post(session, album)
+    if sync_review_post(session, album):
+        _notify_review(session, background, album, user)
     return {
         "review": album.review,
         "review_at": album.review_at.isoformat() if album.review_at else None,
@@ -1281,6 +1315,7 @@ def save_review(
 def publish_thoughts(
     album_id: int,
     data: dict,
+    background: BackgroundTasks,
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
@@ -1313,7 +1348,8 @@ def publish_thoughts(
             album.review, album.review_at = None, None
         session.add(album)
         session.commit()
-        sync_review_post(session, album)
+        if sync_review_post(session, album):
+            _notify_review(session, background, album, user)
         review_posted = bool(review)
 
     return {"review_posted": review_posted}

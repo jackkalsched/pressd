@@ -149,17 +149,21 @@ def _recount(session: Session, thread_id: int) -> None:
         session.commit()
 
 
-def sync_review_post(session: Session, album) -> None:
+def sync_review_post(session: Session, album) -> bool:
     """Mirror this album copy's review into the record's thread.
 
     Called after any write that could touch `album.review`. Idempotent, and
     quiet on failure — a thread is a consequence of a review, and losing the
     mirror must never cost someone the review itself.
+
+    True only when this call published the review — a new post, not an edit,
+    a clear or a review brought back — which is what the review notification
+    goes out on (albums._notify_review).
     """
     try:
         key = album.subject_key
         if not key:
-            return
+            return False
         body = (album.review or "").strip()
 
         existing = session.execute(_sql("""
@@ -178,7 +182,7 @@ def sync_review_post(session: Session, album) -> None:
                     session.add(post)
                     session.commit()
                     _recount(session, existing[1])
-            return
+            return False
 
         if existing:
             post = session.get(Post, existing[0])
@@ -192,7 +196,7 @@ def sync_review_post(session: Session, album) -> None:
                 session.add(post)
                 session.commit()
                 _recount(session, existing[1])
-            return
+            return False
 
         thread = get_or_create_thread(session, "album", key)
         post = Post(thread_id=thread.id, user_id=album.user_id, kind="review", body=body)
@@ -203,9 +207,11 @@ def sync_review_post(session: Session, album) -> None:
         session.add(post)
         session.commit()
         _recount(session, thread.id)
+        return True
     except Exception as e:  # pragma: no cover
         session.rollback()
         print(f"[sync_review_post] album {getattr(album, 'id', '?')} failed: {e}")
+    return False
 
 
 def sync_comment_post(session: Session, comment, album) -> None:

@@ -20,9 +20,12 @@ export interface DevicePrefs {
   haptics: boolean
   libraryStart: AlbumStatus
   appearance: AppearancePref
+  /** The launch prompt for notifications (NotifyPromptSheet) has been answered
+   *  on this device, either way. */
+  pushPromptAnswered: boolean
 }
 
-const DEFAULTS: DevicePrefs = { haptics: true, libraryStart: 'rated', appearance: 'system' }
+const DEFAULTS: DevicePrefs = { haptics: true, libraryStart: 'rated', appearance: 'system', pushPromptAnswered: false }
 
 /** Every colour in theme/tokens resolves against the app's appearance, so
  *  overriding it here is the whole switch: views change at once, and
