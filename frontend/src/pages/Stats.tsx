@@ -24,27 +24,27 @@ function gaussianKDE(scores: number[], h: number, xs: number[]): number[] {
 }
 
 const GENRE_COLORS: Record<string, string> = {
-  'Hip-Hop':            '#e07b39',
-  'Pop':                '#9b59b6',
-  'Rock':               '#e74c3c',
-  'R&B':                '#e91e8c',
-  'Electronic':         '#3498db',
-  'Country':            '#f39c12',
-  'Folk':               '#27ae60',
-  'Jazz':               '#1abc9c',
-  'Latin':              '#e67e22',
-  'Classical':          '#7f8c8d',
-  'Afrobeats':          '#2ecc71',
-  'Funk':               '#d35400',
-  'Disco':              '#8e44ad',
-  'Singer-Songwriter':  '#16a085',
-  'Blues':              '#2980b9',
-  'Gospel':             '#c0392b',
+  'Hip-Hop':            'var(--c-e07b39)',
+  'Pop':                'var(--c-9b59b6)',
+  'Rock':               'var(--c-e74c3c)',
+  'R&B':                'var(--c-e91e8c)',
+  'Electronic':         'var(--c-3498db)',
+  'Country':            'var(--c-f39c12)',
+  'Folk':               'var(--c-27ae60)',
+  'Jazz':               'var(--c-1abc9c)',
+  'Latin':              'var(--c-e67e22)',
+  'Classical':          'var(--c-7f8c8d)',
+  'Afrobeats':          'var(--c-2ecc71)',
+  'Funk':               'var(--c-d35400)',
+  'Disco':              'var(--c-8e44ad)',
+  'Singer-Songwriter':  'var(--c-16a085)',
+  'Blues':              'var(--c-2980b9)',
+  'Gospel':             'var(--c-c0392b)',
 }
 
 function genreColor(genre: string | null | undefined): string {
-  if (!genre) return '#bbb'
-  return GENRE_COLORS[genre] ?? '#bbb'
+  if (!genre) return 'var(--c-bbb)'
+  return GENRE_COLORS[genre] ?? 'var(--c-bbb)'
 }
 
 export default function Stats({ embedded = false }: { embedded?: boolean } = {}) {
@@ -130,8 +130,8 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
 
   if (loadingSummary) {
     return (
-      <div className={`${embedded ? 'py-16' : 'min-h-screen'} bg-[#f9f8f6] flex items-center justify-center`}>
-        <div className="flex items-center gap-2 text-[#a8998a]">
+      <div className={`${embedded ? 'py-16' : 'min-h-screen'} bg-(--c-f9f8f6) flex items-center justify-center`}>
+        <div className="flex items-center gap-2 text-(--c-a8998a)">
           <Loader2 size={16} className="animate-spin" />
           <span className="text-sm">Loading…</span>
         </div>
@@ -141,8 +141,8 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
 
   if (!summary) {
     return (
-      <div className={`${embedded ? 'py-16' : 'min-h-screen'} bg-[#f9f8f6] flex items-center justify-center`}>
-        <p className="text-[#a8998a] text-sm">Failed to load stats — check that the backend is running.</p>
+      <div className={`${embedded ? 'py-16' : 'min-h-screen'} bg-(--c-f9f8f6) flex items-center justify-center`}>
+        <p className="text-(--c-a8998a) text-sm">Failed to load stats — check that the backend is running.</p>
       </div>
     )
   }
@@ -165,16 +165,16 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
     ? scatterPoints.reduce((s, p) => s + (p.avg_external ?? 0), 0) / scatterPoints.length
     : scatter?.mean_external ?? null
 
-  const panelCls = 'border border-[#e8e2d9] rounded-2xl p-6'
-  const cardCls = 'border border-[#e8e2d9] rounded-2xl p-5'
-  const labelCls = 'text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.12em] mb-2'
-  const tooltipStyle = { background: '#faf8f5', border: '1px solid #e8e2d9', borderRadius: 12, color: '#1c1917', fontSize: 12 }
+  const panelCls = 'border border-(--c-e8e2d9) rounded-2xl p-6'
+  const cardCls = 'border border-(--c-e8e2d9) rounded-2xl p-5'
+  const labelCls = 'text-[10px] font-semibold text-(--c-a8998a) uppercase tracking-[0.12em] mb-2'
+  const tooltipStyle = { background: 'var(--c-faf8f5)', border: '1px solid #e8e2d9', borderRadius: 12, color: 'var(--c-1c1917)', fontSize: 12 }
 
   return (
-    <div className={embedded ? '' : 'min-h-screen bg-[#f9f8f6]'}>
+    <div className={embedded ? '' : 'min-h-screen bg-(--c-f9f8f6)'}>
       <div className={embedded ? '' : 'p-4 md:p-8'}>
         {!embedded && (
-          <h1 className="font-display text-4xl font-bold text-[#1c1917] mb-8 tracking-tight">
+          <h1 className="font-display text-4xl font-bold text-(--c-1c1917) mb-8 tracking-tight">
             {isViewingFriend ? `${viewingUser?.name}'s Stats` : 'Stats'}
           </h1>
         )}
@@ -183,7 +183,7 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
 
           {/* Albums Rated — dark green hero card */}
-          <div className="rounded-2xl p-5 bg-[#2d6a4f]">
+          <div className="rounded-2xl p-5 bg-(--c-green-fill)">
             <div className="flex items-start justify-between mb-3">
               <p className="text-[10px] font-semibold text-white/60 uppercase tracking-[0.12em]">Albums Rated</p>
               <Disc3 size={15} className="text-white/30 shrink-0 mt-0.5" strokeWidth={1.5} />
@@ -199,38 +199,38 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
           <div className={cardCls}>
             <div className="flex items-start justify-between mb-3">
               <p className={labelCls}>Songs Rated</p>
-              <ListMusic size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
+              <ListMusic size={15} className="text-(--c-c2b8ad) shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="font-metric text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
+            <p className="font-metric text-(--c-1c1917) font-bold text-5xl tabular-nums leading-none">
               {summary?.total_songs_rated != null ? summary.total_songs_rated.toLocaleString() : '—'}
             </p>
             {summary?.total_10s != null && (
-              <p className="text-[#a8998a] text-xs mt-2">{summary.total_10s} perfect 10s</p>
+              <p className="text-(--c-a8998a) text-xs mt-2">{summary.total_10s} perfect 10s</p>
             )}
           </div>
 
           <div className={cardCls}>
             <div className="flex items-start justify-between mb-3">
               <p className={labelCls}>Avg Album Score</p>
-              <Star size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
+              <Star size={15} className="text-(--c-c2b8ad) shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="font-metric text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
+            <p className="font-metric text-(--c-1c1917) font-bold text-5xl tabular-nums leading-none">
               {summary?.avg_album_score?.toFixed(2) ?? '—'}
             </p>
             {summary?.avg_song_score != null && (
-              <p className="text-[#a8998a] text-xs mt-2">{summary.avg_song_score.toFixed(2)} avg song</p>
+              <p className="text-(--c-a8998a) text-xs mt-2">{summary.avg_song_score.toFixed(2)} avg song</p>
             )}
           </div>
 
           <div className={cardCls}>
             <div className="flex items-start justify-between mb-3">
               <p className={labelCls}>Rating Streak</p>
-              <Flame size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
+              <Flame size={15} className="text-(--c-c2b8ad) shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="font-metric text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
+            <p className="font-metric text-(--c-1c1917) font-bold text-5xl tabular-nums leading-none">
               {summary?.longest_streak ?? '—'}
             </p>
-            <p className="text-[#a8998a] text-xs mt-2">consecutive days</p>
+            <p className="text-(--c-a8998a) text-xs mt-2">consecutive days</p>
           </div>
         </div>
 
@@ -240,14 +240,14 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
           <div className={cardCls}>
             <div className="flex items-start justify-between mb-3">
               <p className={labelCls}>Top Album</p>
-              <Trophy size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
+              <Trophy size={15} className="text-(--c-c2b8ad) shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="font-metric text-[#1c1917] font-bold text-xl leading-snug line-clamp-2">
+            <p className="font-metric text-(--c-1c1917) font-bold text-xl leading-snug line-clamp-2">
               {summary?.top_album?.name ?? '—'}
             </p>
             {summary?.top_album && (
-              <p className="text-[#a8998a] text-sm mt-2 truncate">
-                {summary.top_album.artist} · <span className="text-[#2d6a4f] font-semibold">{summary.top_album.score?.toFixed(2)}</span>
+              <p className="text-(--c-a8998a) text-sm mt-2 truncate">
+                {summary.top_album.artist} · <span className="text-(--c-2d6a4f) font-semibold">{summary.top_album.score?.toFixed(2)}</span>
               </p>
             )}
           </div>
@@ -255,14 +255,14 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
           <div className={cardCls}>
             <div className="flex items-start justify-between mb-3">
               <p className={labelCls}>Top Song</p>
-              <Music size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
+              <Music size={15} className="text-(--c-c2b8ad) shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="font-metric text-[#1c1917] font-bold text-xl leading-snug line-clamp-2">
+            <p className="font-metric text-(--c-1c1917) font-bold text-xl leading-snug line-clamp-2">
               {summary?.top_song?.title ?? '—'}
             </p>
             {summary?.top_song && (
-              <p className="text-[#a8998a] text-sm mt-2 truncate">
-                {summary.top_song.artist} · <span className="text-[#2d6a4f] font-semibold">{summary.top_song.score.toFixed(1)}</span>
+              <p className="text-(--c-a8998a) text-sm mt-2 truncate">
+                {summary.top_song.artist} · <span className="text-(--c-2d6a4f) font-semibold">{summary.top_song.score.toFixed(1)}</span>
               </p>
             )}
           </div>
@@ -270,25 +270,25 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
           <div className={cardCls}>
             <div className="flex items-start justify-between mb-3">
               <p className={labelCls}>Most Loyal Artist</p>
-              <Heart size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
+              <Heart size={15} className="text-(--c-c2b8ad) shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="font-metric text-[#1c1917] font-bold text-xl leading-snug line-clamp-2">
+            <p className="font-metric text-(--c-1c1917) font-bold text-xl leading-snug line-clamp-2">
               {summary?.most_rated_artist?.name ?? '—'}
             </p>
             {summary?.most_rated_artist && (
-              <p className="text-[#a8998a] text-sm mt-2">{summary.most_rated_artist.count} albums rated</p>
+              <p className="text-(--c-a8998a) text-sm mt-2">{summary.most_rated_artist.count} albums rated</p>
             )}
           </div>
 
           <div className={cardCls}>
             <div className="flex items-start justify-between mb-3">
               <p className={labelCls}>Center of Your Taste</p>
-              <CalendarDays size={15} className="text-[#c2b8ad] shrink-0 mt-0.5" strokeWidth={1.5} />
+              <CalendarDays size={15} className="text-(--c-c2b8ad) shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="font-metric text-[#1c1917] font-bold text-5xl tabular-nums leading-none">
+            <p className="font-metric text-(--c-1c1917) font-bold text-5xl tabular-nums leading-none">
               {summary?.avg_release_year ?? '—'}
             </p>
-            <p className="text-[#a8998a] text-xs mt-2">avg release year</p>
+            <p className="text-(--c-a8998a) text-xs mt-2">avg release year</p>
           </div>
         </div>
 
@@ -303,38 +303,38 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
           {/* One joined distribution with the middle greyed, as mobile and the
               share card draw it. */}
           <div className={panelCls}>
-            <h2 className="text-sm font-semibold text-[#78716c] mb-5">Bangs vs skips</h2>
+            <h2 className="text-sm font-semibold text-(--c-78716c) mb-5">Bangs vs skips</h2>
             <div className="flex items-end justify-between gap-4">
               <div>
-                <p className="font-display text-5xl font-bold tabular-nums leading-none text-[#2d6a4f] m-0">
+                <p className="font-display text-5xl font-bold tabular-nums leading-none text-(--c-2d6a4f) m-0">
                   {bangPct != null ? bangPct.toFixed(1) : '—'}%
                 </p>
-                <p className="text-[10px] font-bold tracking-[0.14em] text-[#a8998a] mt-2 m-0">BANGS</p>
-                <p className="text-xs text-[#a8998a] m-0 mt-0.5">
+                <p className="text-[10px] font-bold tracking-[0.14em] text-(--c-a8998a) mt-2 m-0">BANGS</p>
+                <p className="text-xs text-(--c-a8998a) m-0 mt-0.5">
                   {bangs.toLocaleString()} songs · {BANG_THRESHOLD.toFixed(1)}+
                 </p>
               </div>
-              <span className="font-display italic text-[#c2b8ad] text-lg pb-6">vs</span>
+              <span className="font-display italic text-(--c-c2b8ad) text-lg pb-6">vs</span>
               <div className="text-right">
-                <p className="font-display text-5xl font-bold tabular-nums leading-none text-[#c0392b] m-0">
+                <p className="font-display text-5xl font-bold tabular-nums leading-none text-(--c-c0392b) m-0">
                   {skipPct != null ? skipPct.toFixed(1) : '—'}%
                 </p>
-                <p className="text-[10px] font-bold tracking-[0.14em] text-[#a8998a] mt-2 m-0">SKIPS</p>
-                <p className="text-xs text-[#a8998a] m-0 mt-0.5">
+                <p className="text-[10px] font-bold tracking-[0.14em] text-(--c-a8998a) mt-2 m-0">SKIPS</p>
+                <p className="text-xs text-(--c-a8998a) m-0 mt-0.5">
                   {skips.toLocaleString()} songs · under {SKIP_THRESHOLD.toFixed(1)}
                 </p>
               </div>
             </div>
             <div className="flex gap-1 h-2.5 mt-6">
-              <div className="rounded-full bg-[#2d6a4f]" style={{ flex: Math.max(bangs, 0.0001) }} />
-              <div className="rounded-full bg-[#78645033]" style={{ flex: Math.max(songScores.length - bangs - skips, 0.0001) }} />
-              <div className="rounded-full bg-[#c0392b]" style={{ flex: Math.max(skips, 0.0001) }} />
+              <div className="rounded-full bg-(--c-green-fill)" style={{ flex: Math.max(bangs, 0.0001) }} />
+              <div className="rounded-full bg-(--c-78645033)" style={{ flex: Math.max(songScores.length - bangs - skips, 0.0001) }} />
+              <div className="rounded-full bg-(--c-c0392b)" style={{ flex: Math.max(skips, 0.0001) }} />
             </div>
           </div>
 
           {/* Factor averages with progress bars */}
           <div className={panelCls}>
-            <h2 className="text-sm font-semibold text-[#78716c] mb-5">Factor averages</h2>
+            <h2 className="text-sm font-semibold text-(--c-78716c) mb-5">Factor averages</h2>
             <div className="flex flex-col gap-5">
               {[
                 { label: 'Theme',        value: summary?.avg_theme },
@@ -344,14 +344,14 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
               ].map(({ label, value }) => (
                 <div key={label}>
                   <div className="flex justify-between items-baseline mb-1.5">
-                    <span className="text-xs font-medium text-[#78716c]">{label}</span>
-                    <span className="font-display text-[#1c1917] font-semibold text-xl tabular-nums leading-none">
+                    <span className="text-xs font-medium text-(--c-78716c)">{label}</span>
+                    <span className="font-display text-(--c-1c1917) font-semibold text-xl tabular-nums leading-none">
                       {value?.toFixed(1) ?? '—'}
                     </span>
                   </div>
-                  <div className="h-1.5 bg-[#e8e2d9] rounded-full overflow-hidden">
+                  <div className="h-1.5 bg-(--c-e8e2d9) rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-[#2d6a4f] rounded-full transition-all duration-700"
+                      className="h-full bg-(--c-green-fill) rounded-full transition-all duration-700"
                       style={{ width: value != null ? `${(value / 10) * 100}%` : '0%' }}
                     />
                   </div>
@@ -364,7 +364,7 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
         {/* Song score distribution — the same board the app's Stats tab shows */}
         {songScores.length > 0 && (
           <div className={`mt-6 ${panelCls}`}>
-            <h2 className="text-sm font-semibold text-[#78716c] mb-5">Song Score Distribution</h2>
+            <h2 className="text-sm font-semibold text-(--c-78716c) mb-5">Song Score Distribution</h2>
             <ScoreHistogram scores={songScores} height={150} />
           </div>
         )}
@@ -372,20 +372,20 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
         {/* Most rated artists — the list mobile's Stats ends on */}
         {topArtists.length > 0 && (
           <div className={`mt-6 ${panelCls}`}>
-            <h2 className="text-sm font-semibold text-[#78716c] mb-4">Most rated artists</h2>
+            <h2 className="text-sm font-semibold text-(--c-78716c) mb-4">Most rated artists</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-8">
               {topArtists.map((a, i) => (
                 <Link
                   key={a.artist}
                   to={`/artist/${encodeURIComponent(a.artist)}`}
-                  className="group grid grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-3 py-2.5 border-b border-[#f0ebe3] hover:bg-[#f2f0ec] -mx-1.5 px-1.5 rounded-lg transition-colors"
+                  className="group grid grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-3 py-2.5 border-b border-(--c-f0ebe3) hover:bg-(--c-f2f0ec) -mx-1.5 px-1.5 rounded-lg transition-colors"
                 >
-                  <span className="text-[11.5px] text-[#b5aa9c] tabular-nums text-right">{i + 1}</span>
+                  <span className="text-[11.5px] text-(--c-b5aa9c) tabular-nums text-right">{i + 1}</span>
                   <span className="min-w-0">
-                    <span className="block text-[13.5px] font-medium text-[#1c1917] truncate group-hover:text-[#2d6a4f] transition-colors">
+                    <span className="block text-[13.5px] font-medium text-(--c-1c1917) truncate group-hover:text-(--c-2d6a4f) transition-colors">
                       {a.artist}
                     </span>
-                    <span className="block text-[11.5px] text-[#a8998a]">
+                    <span className="block text-[11.5px] text-(--c-a8998a)">
                       {a.count} song{a.count === 1 ? '' : 's'} · {(a.bangPct * 100).toFixed(0)}% bangs
                     </span>
                   </span>
@@ -401,7 +401,7 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
         {/* Genre KDE */}
         {kdeData.length > 0 && (
           <div className={`mt-6 ${panelCls}`}>
-            <h2 className="text-sm font-semibold text-[#78716c] mb-5">Score Distribution by Genre</h2>
+            <h2 className="text-sm font-semibold text-(--c-78716c) mb-5">Score Distribution by Genre</h2>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={kdeData} margin={{ left: -20, right: 16, top: 8, bottom: 8 }}>
                 <XAxis
@@ -409,10 +409,10 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
                   type="number"
                   domain={[1, 10]}
                   tickCount={10}
-                  tick={{ fill: '#c2b8ad', fontSize: 11 }}
+                  tick={{ fill: 'var(--c-c2b8ad)', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
-                  label={{ value: 'Avg Song Score', fill: '#c2b8ad', fontSize: 10, position: 'insideBottom', offset: -4 }}
+                  label={{ value: 'Avg Song Score', fill: 'var(--c-c2b8ad)', fontSize: 10, position: 'insideBottom', offset: -4 }}
                 />
                 <YAxis hide />
                 <Tooltip
@@ -440,11 +440,11 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
         {/* Scatter */}
         <div className={`mt-6 ${panelCls}`}>
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-sm font-semibold text-[#78716c]">Song Score vs External Factors — All Artists</h2>
+            <h2 className="text-sm font-semibold text-(--c-78716c)">Song Score vs External Factors — All Artists</h2>
             <select
               value={genreFilter}
               onChange={(e) => setGenreFilter(e.target.value)}
-              className="text-xs border border-[#e8e2d9] rounded-xl px-2.5 py-1.5 bg-[#f9f8f6] text-[#78716c] focus:outline-none focus:border-[#2d6a4f] transition-colors"
+              className="text-xs border border-(--c-e8e2d9) rounded-xl px-2.5 py-1.5 bg-(--c-f9f8f6) text-(--c-78716c) focus:outline-none focus:border-(--c-2d6a4f) transition-colors"
             >
               <option value="all">All Genres</option>
               {allGenres.map((g) => (
@@ -454,7 +454,7 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
           </div>
 
           {!scatter ? (
-            <div className="flex items-center justify-center h-64 text-[#a8998a]">
+            <div className="flex items-center justify-center h-64 text-(--c-a8998a)">
               <Loader2 size={14} className="animate-spin" />
             </div>
           ) : (
@@ -465,50 +465,50 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
                   dataKey="avg_song_score"
                   name="Avg Song Score"
                   domain={[1, 10]}
-                  tick={{ fill: '#c2b8ad', fontSize: 11 }}
+                  tick={{ fill: 'var(--c-c2b8ad)', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
-                  label={{ value: 'Avg Song Score', fill: '#c2b8ad', fontSize: 10, position: 'insideBottom', offset: -12 }}
+                  label={{ value: 'Avg Song Score', fill: 'var(--c-c2b8ad)', fontSize: 10, position: 'insideBottom', offset: -12 }}
                 />
                 <YAxis
                   type="number"
                   dataKey="avg_external"
                   name="Avg External"
                   domain={[1, 10]}
-                  tick={{ fill: '#c2b8ad', fontSize: 11 }}
+                  tick={{ fill: 'var(--c-c2b8ad)', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
-                  label={{ value: 'Avg External', fill: '#c2b8ad', fontSize: 10, angle: -90, position: 'insideLeft', offset: 14 }}
+                  label={{ value: 'Avg External', fill: 'var(--c-c2b8ad)', fontSize: 10, angle: -90, position: 'insideLeft', offset: 14 }}
                 />
                 <ZAxis range={[28, 28]} />
                 {meanSong !== null && (
                   <ReferenceLine
                     x={meanSong}
-                    stroke="#e8e2d9"
+                    stroke="var(--c-e8e2d9)"
                     strokeDasharray="4 3"
-                    label={{ value: `avg ${meanSong.toFixed(2)}`, fill: '#c2b8ad', fontSize: 9, position: 'top' }}
+                    label={{ value: `avg ${meanSong.toFixed(2)}`, fill: 'var(--c-c2b8ad)', fontSize: 9, position: 'top' }}
                   />
                 )}
                 {meanExt !== null && (
                   <ReferenceLine
                     y={meanExt}
-                    stroke="#e8e2d9"
+                    stroke="var(--c-e8e2d9)"
                     strokeDasharray="4 3"
-                    label={{ value: `avg ${meanExt.toFixed(2)}`, fill: '#c2b8ad', fontSize: 9, position: 'right' }}
+                    label={{ value: `avg ${meanExt.toFixed(2)}`, fill: 'var(--c-c2b8ad)', fontSize: 9, position: 'right' }}
                   />
                 )}
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  cursor={{ strokeDasharray: '3 3', stroke: '#e8e2d9' }}
+                  cursor={{ strokeDasharray: '3 3', stroke: 'var(--c-e8e2d9)' }}
                   content={({ payload }) => {
                     if (!payload?.length) return null
                     const d = payload[0].payload as { artist: string; avg_song_score: number; avg_external: number; genre: string | null }
                     return (
-                      <div className="text-xs p-3 space-y-0.5 bg-[#f9f8f6] border border-[#e8e2d9] rounded-xl shadow-sm">
-                        <p className="font-semibold text-[#1c1917]">{d.artist}</p>
-                        {d.genre && <p className="text-[#a8998a]">{d.genre}</p>}
-                        <p className="text-[#78716c]">Song: {d.avg_song_score?.toFixed(2)}</p>
-                        <p className="text-[#78716c]">Ext: {d.avg_external?.toFixed(2)}</p>
+                      <div className="text-xs p-3 space-y-0.5 bg-(--c-f9f8f6) border border-(--c-e8e2d9) rounded-xl shadow-sm">
+                        <p className="font-semibold text-(--c-1c1917)">{d.artist}</p>
+                        {d.genre && <p className="text-(--c-a8998a)">{d.genre}</p>}
+                        <p className="text-(--c-78716c)">Song: {d.avg_song_score?.toFixed(2)}</p>
+                        <p className="text-(--c-78716c)">Ext: {d.avg_external?.toFixed(2)}</p>
                       </div>
                     )
                   }}
@@ -536,12 +536,12 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
           )}
 
           {scatter && genreFilter === 'all' && allGenres.length > 0 && (
-            <div className="flex flex-wrap gap-x-4 gap-y-2 mt-4 pt-4 border-t border-[#e8e2d9]">
+            <div className="flex flex-wrap gap-x-4 gap-y-2 mt-4 pt-4 border-t border-(--c-e8e2d9)">
               {allGenres.map((g) => (
                 <button
                   key={g}
                   onClick={() => setGenreFilter(g)}
-                  className="flex items-center gap-1.5 text-xs text-[#78716c] hover:text-[#1c1917] transition-colors"
+                  className="flex items-center gap-1.5 text-xs text-(--c-78716c) hover:text-(--c-1c1917) transition-colors"
                 >
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ background: genreColor(g) }} />
                   {g}

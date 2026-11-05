@@ -671,7 +671,7 @@ const styles = StyleSheet.create({
   summaryWrap: {
     paddingTop: spacing.sm, paddingBottom: spacing.lg, marginBottom: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderColor: colors.border,
   },
   summary: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
   everyToggle: { marginTop: spacing.md, alignSelf: 'flex-start' },
@@ -690,7 +690,7 @@ const styles = StyleSheet.create({
   summaryTrack: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   summaryTrackTitle: { flex: 1, minWidth: 0, fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.ink },
   summaryTrackScore: { fontFamily: fonts.display, fontSize: 15 },
-  post: { paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  post: { paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   postSystem: {
     backgroundColor: colors.greenSoft, borderRadius: radii.md, borderBottomWidth: 0,
     paddingHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: spacing.sm,
@@ -717,7 +717,7 @@ const styles = StyleSheet.create({
   // above it rather than as another post in the thread.
   replies: {
     marginTop: spacing.sm, marginLeft: spacing.md, paddingLeft: spacing.md,
-    borderLeftWidth: 2, borderLeftColor: colors.border,
+    borderLeftWidth: 2, borderColor: colors.border,
   },
   reply: { paddingVertical: spacing.sm },
   preview: { paddingVertical: spacing.sm },
@@ -730,10 +730,10 @@ const styles = StyleSheet.create({
   replyActions: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   tombstone: {
     fontFamily: fonts.body, fontSize: 13, color: colors.inkMuted, fontStyle: 'italic',
-    paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border,
+    paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
   },
 
-  composer: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, padding: spacing.md, gap: spacing.sm },
+  composer: { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: spacing.md, gap: spacing.sm },
   replyBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   replyBannerText: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, flexShrink: 1 },
   replyCancel: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },

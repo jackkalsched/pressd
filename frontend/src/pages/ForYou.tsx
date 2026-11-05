@@ -61,7 +61,7 @@ function dayLabel(iso: string | null): string {
 
 // ── shared bits ───────────────────────────────────────────────────────────────
 
-const SECTION_LABEL = 'text-[11px] font-semibold uppercase tracking-[0.16em] text-[#a8998a] m-0'
+const SECTION_LABEL = 'text-[11px] font-semibold uppercase tracking-[0.16em] text-(--c-a8998a) m-0'
 
 // ── page ──────────────────────────────────────────────────────────────────────
 
@@ -292,7 +292,7 @@ export default function ForYou() {
   // expression position, not JSX children position, so `{/* … */}` parses as a
   // block rather than a comment and the build fails on the element after it.
   return (
-    <div className="min-h-screen bg-[#f9f8f6] text-[#1c1917]">
+    <div className="min-h-screen bg-(--c-f9f8f6) text-(--c-1c1917)">
       <div className="mx-auto w-full max-w-[1600px] px-6 md:px-12 py-8 pb-24 flex flex-col lg:flex-row gap-8">
 
         {/* ─────────── FEED COLUMN ─────────── */}
@@ -300,23 +300,23 @@ export default function ForYou() {
 
           {/* header */}
           <header className="mb-7">
-            <p className="m-0 mb-1.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-[#a8998a]">{dateStr}</p>
+            <p className="m-0 mb-1.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-(--c-a8998a)">{dateStr}</p>
             <h1 className="m-0 text-[40px] leading-none font-black tracking-[0.01em]" style={{ fontFamily: "'Playfair Display', serif" }}>For You</h1>
-            <p className="mt-2.5 text-[15px] text-[#8a7f72]">
+            <p className="mt-2.5 text-[15px] text-(--c-8a7f72)">
               {greeting}{firstName ? `${greetingJoin}${firstName}` : ''}. Here&rsquo;s what&rsquo;s moving on Pressd this week.
             </p>
           </header>
 
           {/* first-run CTA when the account is empty */}
           {nothingYet && (
-            <div className="flex items-center gap-4 rounded-[18px] border border-[#d7e6dd] p-5 mb-7" style={{ background: 'linear-gradient(100deg,#eef5f0,#faf8f5 55%)' }}>
+            <div className="flex items-center gap-4 rounded-[18px] border border-(--c-d7e6dd) p-5 mb-7" style={{ background: 'linear-gradient(100deg,var(--c-eef5f0),var(--c-faf8f5) 55%)' }}>
               <div className="flex-1">
                 <p className="m-0 font-bold text-[16px]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Rate your first album</p>
-                <p className="m-0 mt-1 text-[13px] text-[#8a7f72]">Add an album to start building your library and streak.</p>
+                <p className="m-0 mt-1 text-[13px] text-(--c-8a7f72)">Add an album to start building your library and streak.</p>
               </div>
               <button
                 onClick={() => navigate('/library')}
-                className="shrink-0 rounded-[11px] bg-[#2d6a4f] hover:bg-[#245c43] text-white px-5 py-2.5 text-[13px] font-bold transition-colors flex items-center gap-1.5"
+                className="shrink-0 rounded-[11px] bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white px-5 py-2.5 text-[13px] font-bold transition-colors flex items-center gap-1.5"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 <Plus size={15} /> Add an album
@@ -348,12 +348,12 @@ export default function ForYou() {
                   action="Continue"
                   progress={resume.pct}
                 >
-                  <p className="m-0 mt-1 text-[13px] text-[#78716c] truncate">
+                  <p className="m-0 mt-1 text-[13px] text-(--c-78716c) truncate">
                     {resume.album.artist}{resume.album.year ? ` · ${resume.album.year}` : ''}
                   </p>
-                  <p className="m-0 mt-1 text-[14px] text-[#57534e] tabular-nums">
+                  <p className="m-0 mt-1 text-[14px] text-(--c-57534e) tabular-nums">
                     {resume.done != null ? (
-                      <><span className="font-bold text-[#1c1917]">{resume.done}</span> of {resume.total} tracks</>
+                      <><span className="font-bold text-(--c-1c1917)">{resume.done}</span> of {resume.total} tracks</>
                     ) : (
                       <>{resume.total} tracks</>
                     )}
@@ -369,12 +369,12 @@ export default function ForYou() {
                   <span
                     key={i}
                     className="h-2 w-6 rounded-full"
-                    style={{ background: i < rated.length ? '#2d6a4f' : '#e7e0d6' }}
+                    style={{ background: i < rated.length ? 'var(--c-2d6a4f)' : 'var(--c-e7e0d6)' }}
                   />
                 ))}
               </div>
-              <p className="m-0 text-[14px] text-[#57534e]">
-                <span className="font-bold text-[#1c1917] tabular-nums">{unlockLeft}</span>{' '}
+              <p className="m-0 text-[14px] text-(--c-57534e)">
+                <span className="font-bold text-(--c-1c1917) tabular-nums">{unlockLeft}</span>{' '}
                 more {unlockLeft === 1 ? 'album' : 'albums'} until picks unlock
               </p>
             </div>
@@ -410,7 +410,7 @@ export default function ForYou() {
             <section className="mb-9">
               <div className="flex items-baseline justify-between mb-4">
                 <h2 className={SECTION_LABEL}>Ready to rate</h2>
-                <button onClick={() => navigate('/library')} className="text-[12px] font-semibold text-[#2d6a4f] hover:text-[#245c43] flex items-center gap-1">Browse all <ArrowRight size={12} /></button>
+                <button onClick={() => navigate('/library')} className="text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) flex items-center gap-1">Browse all <ArrowRight size={12} /></button>
               </div>
               <div className="flex gap-4 overflow-x-auto pb-3.5 pt-1" style={{ scrollSnapType: 'x mandatory' }}>
                 {toListen.slice(0, 12).map((a) => (
@@ -427,15 +427,15 @@ export default function ForYou() {
                       </span>
                     </div>
                     <p className="mt-2.5 mb-0 font-bold text-[14px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{a.albumName}</p>
-                    <p className="m-0 mt-0.5 text-[12px] text-[#8a7f72] truncate">{a.artist} · {a.year}</p>
+                    <p className="m-0 mt-0.5 text-[12px] text-(--c-8a7f72) truncate">{a.artist} · {a.year}</p>
                     <div className="mt-2 flex items-center gap-2">
                       {a.predictedScore != null ? (
                         <>
                           <span className="text-[11px] px-2 py-0.5 rounded-md tabular-nums" style={{ background: scoreTint(a.predictedScore), color: songScoreColor(a.predictedScore) }}>~{a.predictedScore.toFixed(2)}</span>
-                          <span className="text-[11px] text-[#b3a99c]">predicted</span>
+                          <span className="text-[11px] text-(--c-b3a99c)">predicted</span>
                         </>
                       ) : (
-                        <span className="text-[11px] text-[#b3a99c]">Not rated yet</span>
+                        <span className="text-[11px] text-(--c-b3a99c)">Not rated yet</span>
                       )}
                     </div>
                   </button>
@@ -461,7 +461,7 @@ export default function ForYou() {
             <section className="mb-9">
               <div className="flex items-baseline justify-between mb-4 gap-3.5">
                 <h2 className={SECTION_LABEL}>Trending on Pressd</h2>
-                <span className="text-[11px] text-[#b3a99c]">This week</span>
+                <span className="text-[11px] text-(--c-b3a99c)">This week</span>
               </div>
               {/* Trending isn't tied to a person: open the userbase's averaged view, not
                   whichever copy happened to rank (friends-only, so it failed). */}
@@ -480,7 +480,7 @@ export default function ForYou() {
             <section>
               <div className="flex items-baseline justify-between mb-4 gap-3.5">
                 <h2 className={SECTION_LABEL}>What are pressers talking about</h2>
-                <span className="text-[11px] text-[#b3a99c]">{dayLabel(topReviews?.day ?? null)}</span>
+                <span className="text-[11px] text-(--c-b3a99c)">{dayLabel(topReviews?.day ?? null)}</span>
               </div>
               <div className="flex flex-col gap-3.5">
                 {topReviews!.reviews.slice(0, 4).map((rv) => (
@@ -550,23 +550,23 @@ export default function ForYou() {
 
           {/* friends leaderboard */}
           {leaders.length > 0 && (
-            <div className="rounded-[20px] border border-[#e6ded2] bg-[#faf8f5] p-5">
+            <div className="rounded-[20px] border border-(--c-e6ded2) bg-(--c-faf8f5) p-5">
               <div className="flex items-baseline justify-between mb-3.5">
-                <span className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-[#a8998a]">Friends this week</span>
-                <span className="text-[11px] text-[#b3a99c]">most rated</span>
+                <span className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-(--c-a8998a)">Friends this week</span>
+                <span className="text-[11px] text-(--c-b3a99c)">most rated</span>
               </div>
               <div className="flex flex-col gap-1">
                 {leaders.map((l, i) => (
-                  <div key={l.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-[10px]" style={{ background: l.you ? '#eef5f0' : 'transparent' }}>
-                    <span className="w-4 text-[12px] font-bold text-[#c2b8ad]">{i + 1}</span>
-                    <div style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0, background: coverGradient(hueFromString(l.name)), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 11 }}>
+                  <div key={l.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-[10px]" style={{ background: l.you ? 'var(--c-eef5f0)' : 'transparent' }}>
+                    <span className="w-4 text-[12px] font-bold text-(--c-c2b8ad)">{i + 1}</span>
+                    <div style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0, background: coverGradient(hueFromString(l.name)), color: 'var(--c-fff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 11 }}>
                       {l.name[0].toUpperCase()}
                     </div>
-                    <span className="w-[62px] text-[12.5px] font-semibold truncate" style={{ color: l.you ? '#2d6a4f' : '#4a423a' }}>{l.name}</span>
-                    <div className="flex-1 h-1.5 rounded-full overflow-hidden mx-1 bg-[#ece5da]">
-                      <div className="h-full rounded-full" style={{ width: `${(l.count / maxLeader) * 100}%`, background: l.you ? '#2d6a4f' : '#cdbfae' }} />
+                    <span className="w-[62px] text-[12.5px] font-semibold truncate" style={{ color: l.you ? 'var(--c-2d6a4f)' : 'var(--c-4a423a)' }}>{l.name}</span>
+                    <div className="flex-1 h-1.5 rounded-full overflow-hidden mx-1 bg-(--c-ece5da)">
+                      <div className="h-full rounded-full" style={{ width: `${(l.count / maxLeader) * 100}%`, background: l.you ? 'var(--c-2d6a4f)' : 'var(--c-cdbfae)' }} />
                     </div>
-                    <span className="w-4 text-right text-[13px] font-bold text-[#4a423a]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{l.count}</span>
+                    <span className="w-4 text-right text-[13px] font-bold text-(--c-4a423a)" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{l.count}</span>
                   </div>
                 ))}
               </div>
@@ -575,14 +575,14 @@ export default function ForYou() {
 
           {/* rate this next */}
           {suggestion && (
-            <div className="rounded-[20px] border border-dashed border-[#cdbfae] bg-[#f6f2ec] p-5">
-              <span className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-[#a8998a]">Rate this next</span>
+            <div className="rounded-[20px] border border-dashed border-(--c-cdbfae) bg-(--c-f6f2ec) p-5">
+              <span className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-(--c-a8998a)">Rate this next</span>
               <div className="flex gap-3 mt-3.5">
                 <Cover artUrl={suggestion.albumArtUrl} seed={suggestion.artist} size={60} radius={12} fontSize={23} />
                 <div className="flex-1 min-w-0">
                   <p className="m-0 font-bold text-[14.5px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{suggestion.albumName}</p>
-                  <p className="m-0 mt-0.5 text-[12px] text-[#8a7f72] truncate">{suggestion.artist}</p>
-                  <p className="m-0 mt-2 text-[11.5px] leading-snug italic text-[#a08c76]">
+                  <p className="m-0 mt-0.5 text-[12px] text-(--c-8a7f72) truncate">{suggestion.artist}</p>
+                  <p className="m-0 mt-2 text-[11.5px] leading-snug italic text-(--c-a08c76)">
                     {suggestion.recommendedByName
                       ? `Recommended by ${suggestion.recommendedByName}`
                       : suggestion.predictedScore != null
@@ -599,7 +599,7 @@ export default function ForYou() {
                   // queued themselves keep the fast path.
                   suggestion.recommendedByName ? `/album/${suggestion.id}/community` : `/rate/${suggestion.id}`,
                 )}
-                className="mt-4 w-full py-2.5 rounded-[11px] border border-[#2d6a4f] bg-transparent text-[#2d6a4f] hover:bg-[#2d6a4f] hover:text-white text-[13px] font-bold transition-colors flex items-center justify-center gap-1.5"
+                className="mt-4 w-full py-2.5 rounded-[11px] border border-(--c-2d6a4f) bg-transparent text-(--c-2d6a4f) hover:bg-(--c-green-fill) hover:text-white text-[13px] font-bold transition-colors flex items-center justify-center gap-1.5"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 {suggestion.recommendedByName ? 'Take a look' : 'Start rating'} <ArrowRight size={14} />
@@ -690,7 +690,7 @@ function NewReleaseCard({
               <button
                 onClick={() => act('rate')}
                 disabled={!!pending}
-                className="w-[130px] py-2 rounded-[10px] bg-[#2d6a4f] hover:bg-[#245c43] text-white text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
+                className="w-[130px] py-2 rounded-[10px] bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 {pending === 'rate' ? <Loader2 size={13} className="animate-spin" /> : <Play size={12} fill="currentColor" />} Rate now
@@ -698,7 +698,7 @@ function NewReleaseCard({
               <button
                 onClick={() => act('listen')}
                 disabled={!!pending}
-                className="w-[130px] py-2 rounded-[10px] bg-white/90 hover:bg-white text-[#1c1917] text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
+                className="w-[130px] py-2 rounded-[10px] bg-(--c-fff)/90 hover:bg-(--c-fff) text-(--c-1c1917) text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 {pending === 'listen' ? <Loader2 size={13} className="animate-spin" /> : <Plus size={14} />} To listen
@@ -716,12 +716,12 @@ function NewReleaseCard({
           artist: release.artist,
           ...(release.deezerId != null ? { deezer: String(release.deezerId) } : {}),
         }).toString()}`}
-        className="mt-2.5 mb-0 block font-bold text-[14px] truncate text-[#1c1917] hover:text-[#2d6a4f] hover:underline underline-offset-2"
+        className="mt-2.5 mb-0 block font-bold text-[14px] truncate text-(--c-1c1917) hover:text-(--c-2d6a4f) hover:underline underline-offset-2"
       >
         {release.albumName}
       </Link>
-      <p className="m-0 mt-0.5 text-[12px] text-[#8a7f72] truncate">{release.artist}{release.year ? ` · ${release.year}` : ''}</p>
-      {error && <p className="m-0 mt-1 text-[11px] text-[#c0392b]">Couldn&rsquo;t add — try again</p>}
+      <p className="m-0 mt-0.5 text-[12px] text-(--c-8a7f72) truncate">{release.artist}{release.year ? ` · ${release.year}` : ''}</p>
+      {error && <p className="m-0 mt-1 text-[11px] text-(--c-c0392b)">Couldn&rsquo;t add — try again</p>}
     </div>
   )
 }
@@ -758,14 +758,14 @@ function NextUpPick({
   }
 
   return (
-    <div className="rounded-[20px] border border-dashed border-[#cdbfae] bg-[#f6f2ec] p-5">
-      <span className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-[#a8998a]">Rate this next</span>
+    <div className="rounded-[20px] border border-dashed border-(--c-cdbfae) bg-(--c-f6f2ec) p-5">
+      <span className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-(--c-a8998a)">Rate this next</span>
       <div className="flex gap-3 mt-3.5">
         <Cover artUrl={pick.coverUrl} seed={pick.artist} size={60} radius={12} fontSize={23} />
         <div className="flex-1 min-w-0">
           <p className="m-0 font-bold text-[14.5px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{pick.albumName}</p>
-          <p className="m-0 mt-0.5 text-[12px] text-[#8a7f72] truncate">{pick.artist}{pick.year ? ` · ${pick.year}` : ''}</p>
-          <p className="m-0 mt-2 text-[11.5px] leading-snug italic text-[#a08c76]">
+          <p className="m-0 mt-0.5 text-[12px] text-(--c-8a7f72) truncate">{pick.artist}{pick.year ? ` · ${pick.year}` : ''}</p>
+          <p className="m-0 mt-2 text-[11.5px] leading-snug italic text-(--c-a08c76)">
             We think you&rsquo;ll rate this ~{pick.predictedScore.toFixed(2)}
           </p>
         </div>
@@ -773,12 +773,12 @@ function NextUpPick({
       <button
         onClick={start}
         disabled={pending}
-        className="mt-4 w-full py-2.5 rounded-[11px] border border-[#2d6a4f] bg-transparent text-[#2d6a4f] hover:bg-[#2d6a4f] hover:text-white text-[13px] font-bold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60"
+        className="mt-4 w-full py-2.5 rounded-[11px] border border-(--c-2d6a4f) bg-transparent text-(--c-2d6a4f) hover:bg-(--c-green-fill) hover:text-white text-[13px] font-bold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60"
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
         {pending ? <Loader2 size={14} className="animate-spin" /> : null} Start rating <ArrowRight size={14} />
       </button>
-      {error && <p className="m-0 mt-2 text-[11px] text-[#c0392b]">Couldn&rsquo;t add — try again</p>}
+      {error && <p className="m-0 mt-2 text-[11px] text-(--c-c0392b)">Couldn&rsquo;t add — try again</p>}
     </div>
   )
 }
@@ -847,7 +847,7 @@ function PickCard({
               <button
                 onClick={() => act('rate')}
                 disabled={!!pending}
-                className="w-[130px] py-2 rounded-[10px] bg-[#2d6a4f] hover:bg-[#245c43] text-white text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
+                className="w-[130px] py-2 rounded-[10px] bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 {pending === 'rate' ? <Loader2 size={13} className="animate-spin" /> : <Play size={12} fill="currentColor" />} Rate now
@@ -855,7 +855,7 @@ function PickCard({
               <button
                 onClick={() => act('listen')}
                 disabled={!!pending}
-                className="w-[130px] py-2 rounded-[10px] bg-white/90 hover:bg-white text-[#1c1917] text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
+                className="w-[130px] py-2 rounded-[10px] bg-(--c-fff)/90 hover:bg-(--c-fff) text-(--c-1c1917) text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 {pending === 'listen' ? <Loader2 size={13} className="animate-spin" /> : <Plus size={14} />} To listen
@@ -865,12 +865,12 @@ function PickCard({
         </div>
       </div>
       <p className="mt-2.5 mb-0 font-bold text-[14px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{pick.albumName}</p>
-      <p className="m-0 mt-0.5 text-[12px] text-[#8a7f72] truncate">{pick.artist}{pick.year ? ` · ${pick.year}` : ''}</p>
+      <p className="m-0 mt-0.5 text-[12px] text-(--c-8a7f72) truncate">{pick.artist}{pick.year ? ` · ${pick.year}` : ''}</p>
       <div className="mt-2 flex items-center gap-2">
         <span className="text-[11px] px-2 py-0.5 rounded-md tabular-nums" style={{ background: scoreTint(pick.predictedScore), color: songScoreColor(pick.predictedScore) }}>~{pick.predictedScore.toFixed(2)}</span>
-        <span className="text-[11px] text-[#b3a99c]">predicted</span>
+        <span className="text-[11px] text-(--c-b3a99c)">predicted</span>
       </div>
-      {error && <p className="m-0 mt-1 text-[11px] text-[#c0392b]">Couldn&rsquo;t add — try again</p>}
+      {error && <p className="m-0 mt-1 text-[11px] text-(--c-c0392b)">Couldn&rsquo;t add — try again</p>}
     </div>
   )
 }
@@ -889,22 +889,22 @@ function TopReviewCard({ rv, onOpen, onOpenComments, onOpenAuthor, onLike }: {
 }) {
   const liked = rv.liked_by_me
   return (
-    <article className="rounded-[18px] border border-[#e6ded2] bg-[#faf8f5] p-[18px]" style={{ boxShadow: '0 12px 34px -24px rgba(60,45,30,.4)' }}>
+    <article className="rounded-[18px] border border-(--c-e6ded2) bg-(--c-faf8f5) p-[18px]" style={{ boxShadow: '0 12px 34px -24px rgba(60,45,30,.4)' }}>
       <div className="flex items-center gap-2.5 mb-3">
         <button onClick={onOpenAuthor} aria-label={`Open ${rv.author.name}'s profile`} className="shrink-0 rounded-full border-none bg-transparent p-0 cursor-pointer transition-transform hover:scale-[1.04]">
           {rv.author.avatar_url ? (
             <img src={rv.author.avatar_url} alt="" style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }} />
           ) : (
-            <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: coverGradient(hueFromString(rv.author.name)), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 15 }}>
+            <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: coverGradient(hueFromString(rv.author.name)), color: 'var(--c-fff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 15 }}>
               {rv.author.name[0].toUpperCase()}
             </div>
           )}
         </button>
         <div className="flex-1 min-w-0">
-          <p className="m-0 text-[13px] text-[#4a423a]">
-            <button onClick={onOpenAuthor} className="bg-transparent border-none p-0 cursor-pointer font-semibold text-[#1c1917] hover:underline" style={{ font: 'inherit', fontWeight: 600 }}>{rv.author.name}</button> reviewed an album
+          <p className="m-0 text-[13px] text-(--c-4a423a)">
+            <button onClick={onOpenAuthor} className="bg-transparent border-none p-0 cursor-pointer font-semibold text-(--c-1c1917) hover:underline" style={{ font: 'inherit', fontWeight: 600 }}>{rv.author.name}</button> reviewed an album
           </p>
-          <p className="m-0 mt-px text-[11.5px] text-[#b3a99c]">{timeAgo(rv.review_at)}</p>
+          <p className="m-0 mt-px text-[11.5px] text-(--c-b3a99c)">{timeAgo(rv.review_at)}</p>
         </div>
         {rv.score != null && <ScorePill score={rv.score} big />}
       </div>
@@ -913,33 +913,33 @@ function TopReviewCard({ rv, onOpen, onOpenComments, onOpenAuthor, onLike }: {
           <Cover artUrl={rv.album_art_url} seed={rv.artist} size={64} radius={12} fontSize={24} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="m-0 font-bold text-[15px] group-hover/album:text-[#2d6a4f] group-hover/album:underline underline-offset-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{rv.album_name}</p>
-          <p className="m-0 mt-0.5 mb-2 text-[12.5px] text-[#8a7f72]">{rv.artist}</p>
-          <p className="m-0 text-[13.5px] leading-relaxed text-[#4a423a]" style={{ textWrap: 'pretty' } as React.CSSProperties}>&ldquo;{rv.review}&rdquo;</p>
+          <p className="m-0 font-bold text-[15px] group-hover/album:text-(--c-2d6a4f) group-hover/album:underline underline-offset-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{rv.album_name}</p>
+          <p className="m-0 mt-0.5 mb-2 text-[12.5px] text-(--c-8a7f72)">{rv.artist}</p>
+          <p className="m-0 text-[13.5px] leading-relaxed text-(--c-4a423a)" style={{ textWrap: 'pretty' } as React.CSSProperties}>&ldquo;{rv.review}&rdquo;</p>
           {(rv.top_song || rv.bottom_song) && (
-            <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-[#8a7f72]">
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-(--c-8a7f72)">
               {rv.top_song && (
                 <span className="truncate">
-                  <span className="font-semibold text-[#2d6a4f]">Best</span> {rv.top_song.title}
-                  <span className="tabular-nums text-[#b3a99c]"> · {rv.top_song.score.toFixed(1)}</span>
+                  <span className="font-semibold text-(--c-2d6a4f)">Best</span> {rv.top_song.title}
+                  <span className="tabular-nums text-(--c-b3a99c)"> · {rv.top_song.score.toFixed(1)}</span>
                 </span>
               )}
               {rv.bottom_song && (
                 <span className="truncate">
-                  <span className="font-semibold text-[#b1542f]">Worst</span> {rv.bottom_song.title}
-                  <span className="tabular-nums text-[#b3a99c]"> · {rv.bottom_song.score.toFixed(1)}</span>
+                  <span className="font-semibold text-(--c-b1542f)">Worst</span> {rv.bottom_song.title}
+                  <span className="tabular-nums text-(--c-b3a99c)"> · {rv.bottom_song.score.toFixed(1)}</span>
                 </span>
               )}
             </div>
           )}
         </div>
       </div>
-      <div className="flex items-center mt-4 pt-3.5 border-t border-[#ece5da]" style={{ gap: 18 }}>
-        <button onClick={onLike} className="flex items-center gap-1.5 bg-transparent border-none cursor-pointer p-0 text-[12.5px] font-semibold" style={{ color: liked ? '#c0392b' : '#8a7f72' }}>
+      <div className="flex items-center mt-4 pt-3.5 border-t border-(--c-ece5da)" style={{ gap: 18 }}>
+        <button onClick={onLike} className="flex items-center gap-1.5 bg-transparent border-none cursor-pointer p-0 text-[12.5px] font-semibold" style={{ color: liked ? 'var(--c-c0392b)' : 'var(--c-8a7f72)' }}>
           <Heart size={14} fill={liked ? 'currentColor' : 'none'} strokeWidth={liked ? 0 : 1.75} className="transition-transform active:scale-125" />
           {rv.like_count}
         </button>
-        <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#8a7f72] cursor-pointer hover:text-[#1c1917]" onClick={onOpenComments}>
+        <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-(--c-8a7f72) cursor-pointer hover:text-(--c-1c1917)" onClick={onOpenComments}>
           <MessageCircle size={14} strokeWidth={1.75} />
           {rv.comment_count}
         </span>

@@ -1180,7 +1180,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     marginTop: 1,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderColor: colors.border,
   },
   avatarRow: {
     flexDirection: 'row',

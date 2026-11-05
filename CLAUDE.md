@@ -1605,7 +1605,19 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   all of them stop under `prefers-reduced-motion`. A horizontal scroller clips
   vertically, so a rail of `COVER_LIFT` covers needs room inside it
   (`HeatedDiscussions` pads `py-5` and gives it back with `-my-5`).
-- **Mobile has a dark mode (November 2026); web doesn't yet.** `theme/tokens.ts` holds
+- **Web has a dark mode too (November 2026).** Every colour class reads a variable named
+  for its light value — `text-(--c-1c1917)`, never `text-[#1c1917]` — and every JS colour
+  string is `'var(--c-…)'`; `index.css` defines each twice, the light value as written and
+  under `:root.dark` a dark one computed by role (neutrals inverted keeping their warmth,
+  pale tints sunk, deep brand colours lifted), with the page, cards, ink and green matching
+  mobile's values. A new colour adds its pair there. Solid green fills use
+  `--c-green-fill` (darker and softer in dark than green text). Score colours come from
+  `types.ts`'s `songScoreColor` (hsl over `--score-s`/`--score-l`), and score cells lose
+  their pale fill in dark (`--score-tint-a`), as on iPhone. `lib/appearance.ts` holds
+  System / Light / Dark per browser (Settings → Appearance); `index.html` sets the class
+  before first paint. Kept literal on purpose: the share card, the Google logo, dimmed
+  backdrops and the black Google buttons. The landing and other public pages follow it too.
+- **Mobile has a dark mode (November 2026).** `theme/tokens.ts` holds
   two palettes — the cream page and a very dark warm gray (`#171615`) that keeps the
   cream as its ink. It follows the phone, including iOS's automatic sunset switch,
   unless Settings → Preferences → Appearance holds Light or Dark (`lib/prefs.ts`

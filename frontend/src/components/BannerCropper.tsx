@@ -68,10 +68,10 @@ export default function BannerCropper({ image, saving, onCancel, onSave }: {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm fade-in" onClick={saving ? undefined : onCancel} />
-      <div role="dialog" aria-modal="true" aria-labelledby="crop-title" className="relative w-full max-w-2xl rounded-3xl bg-[#f9f8f6] p-6 shadow-xl pop-in">
+      <div role="dialog" aria-modal="true" aria-labelledby="crop-title" className="relative w-full max-w-2xl rounded-3xl bg-(--c-f9f8f6) p-6 shadow-xl pop-in">
         <div className="mb-4 flex items-center justify-between">
-          <h2 id="crop-title" className="font-display m-0 text-[24px] font-bold text-[#1c1917]">Frame your banner</h2>
-          <button onClick={onCancel} disabled={saving} aria-label="Cancel" className="text-[#a8998a] hover:text-[#57534e]">
+          <h2 id="crop-title" className="font-display m-0 text-[24px] font-bold text-(--c-1c1917)">Frame your banner</h2>
+          <button onClick={onCancel} disabled={saving} aria-label="Cancel" className="text-(--c-a8998a) hover:text-(--c-57534e)">
             <X size={18} />
           </button>
         </div>
@@ -104,12 +104,12 @@ export default function BannerCropper({ image, saving, onCancel, onSave }: {
           )}
           {/* Thirds, to frame against. */}
           <div className="pointer-events-none absolute inset-0 grid grid-cols-3 grid-rows-3">
-            {Array.from({ length: 9 }, (_, i) => <div key={i} className="border border-white/15" />)}
+            {Array.from({ length: 9 }, (_, i) => <div key={i} className="border border-(--c-fff)/15" />)}
           </div>
         </div>
 
         <div className="mt-5 flex items-center gap-3">
-          <span className="text-[12px] font-medium text-[#8a7f72]">Zoom</span>
+          <span className="text-[12px] font-medium text-(--c-8a7f72)">Zoom</span>
           <input
             type="range"
             min={1}
@@ -117,7 +117,7 @@ export default function BannerCropper({ image, saving, onCancel, onSave }: {
             step={0.01}
             value={zoom}
             onChange={(e) => zoomTo(Number(e.target.value))}
-            className="flex-1 accent-[#2d6a4f]"
+            className="flex-1 accent-(--c-2d6a4f)"
             aria-label="Zoom"
           />
         </div>
@@ -126,14 +126,14 @@ export default function BannerCropper({ image, saving, onCancel, onSave }: {
           <button
             onClick={onCancel}
             disabled={saving}
-            className="h-11 rounded-full px-5 text-[14.5px] font-semibold text-[#78716c] hover:bg-[#efebe5]"
+            className="h-11 rounded-full px-5 text-[14.5px] font-semibold text-(--c-78716c) hover:bg-(--c-efebe5)"
           >
             Cancel
           </button>
           <button
             onClick={save}
             disabled={saving || !scale}
-            className="flex h-11 items-center gap-2 rounded-full bg-[#2d6a4f] px-6 text-[14.5px] font-semibold text-white hover:bg-[#245c43] disabled:opacity-60"
+            className="flex h-11 items-center gap-2 rounded-full bg-(--c-green-fill) px-6 text-[14.5px] font-semibold text-white hover:bg-(--c-green-fill-hover) disabled:opacity-60"
           >
             {saving && <Loader2 size={15} className="animate-spin" />}
             Save banner

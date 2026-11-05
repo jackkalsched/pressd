@@ -40,12 +40,12 @@ export default function PassItOnCell({
       action="Recommend"
       badge={<Avatar name={friend.name} avatarUrl={friend.avatarUrl} size={34} />}
     >
-      <p className="m-0 mt-1 text-[13px] text-[#78716c] truncate">
+      <p className="m-0 mt-1 text-[13px] text-(--c-78716c) truncate">
         {album.artist} · you rated it{' '}
         <span className="font-bold tabular-nums" style={{ color: songScoreColor(album.score) }}>{album.score.toFixed(2)}</span>
       </p>
-      <p className="m-0 mt-1 text-[14px] text-[#57534e] truncate">
-        <span className="font-bold text-[#1c1917]">{firstName}</span> would probably love it
+      <p className="m-0 mt-1 text-[14px] text-(--c-57534e) truncate">
+        <span className="font-bold text-(--c-1c1917)">{firstName}</span> would probably love it
       </p>
     </SpotlightCard>
   )

@@ -35,7 +35,7 @@ import CoverImg from '../components/CoverImg'
 import { coverUrl } from '@pressd/shared/covers'
 import { seedDrafts, firstOpenIndex, canJumpTo, nextTrackIndex } from '@pressd/shared/rating'
 
-const DANGER = '#b91c1c'
+const DANGER = 'var(--c-b91c1c)'
 
 /**
  * Covers the screen while a submitted rating settles.
@@ -54,11 +54,11 @@ function RecalibratingOverlay() {
       aria-live="polite"
     >
       <div className="relative flex items-center justify-center mb-7" style={{ width: 74, height: 74 }}>
-        <span className="absolute inset-0 rounded-full border-2 border-[#e3ebe6]" />
-        <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#2d6a4f] animate-spin" />
-        <Check size={26} className="text-[#2d6a4f]" strokeWidth={2.5} />
+        <span className="absolute inset-0 rounded-full border-2 border-(--c-e3ebe6)" />
+        <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-(--c-2d6a4f) animate-spin" />
+        <Check size={26} className="text-(--c-2d6a4f)" strokeWidth={2.5} />
       </div>
-      <p key={message} className="m-0 text-center text-[17px] font-bold text-[#1c1917] rise-in">
+      <p key={message} className="m-0 text-center text-[17px] font-bold text-(--c-1c1917) rise-in">
         {message}
       </p>
     </div>
@@ -473,7 +473,7 @@ export default function RatingScreen() {
   if (tiebreak) {
     const tied = tiedTopSongs(tiebreak)
     return (
-      <div className="min-h-screen bg-[#f9f8f6]">
+      <div className="min-h-screen bg-(--c-f9f8f6)">
         <TopSongTiebreak
           songs={tied}
           score={tied[0]?.score ?? 0}
@@ -499,7 +499,7 @@ export default function RatingScreen() {
 
   if (isLoading || !album) {
     return (
-      <div className="min-h-screen bg-[#f9f8f6] flex items-center justify-center text-[#aaa] gap-2">
+      <div className="min-h-screen bg-(--c-f9f8f6) flex items-center justify-center text-(--c-aaa) gap-2">
         <Loader2 size={16} className="animate-spin" /> Loading album…
       </div>
     )
@@ -509,14 +509,14 @@ export default function RatingScreen() {
   // anyway, so fail at the door rather than after a whole album of scoring.
   if (album.userId !== userId) {
     return (
-      <div className="min-h-screen bg-[#f9f8f6] flex flex-col items-center justify-center text-center px-6">
-        <p className="font-display text-2xl font-bold text-[#1c1917] m-0">This isn&rsquo;t your rating</p>
-        <p className="text-sm text-[#78716c] mt-2 max-w-sm leading-relaxed">
+      <div className="min-h-screen bg-(--c-f9f8f6) flex flex-col items-center justify-center text-center px-6">
+        <p className="font-display text-2xl font-bold text-(--c-1c1917) m-0">This isn&rsquo;t your rating</p>
+        <p className="text-sm text-(--c-78716c) mt-2 max-w-sm leading-relaxed">
           You can read {album.albumName} on its album page, but only its owner can score it.
         </p>
         <button
           onClick={() => navigate(-1)}
-          className="mt-5 px-5 py-2 rounded-full bg-[#2d6a4f]/10 text-[#2d6a4f] text-sm font-semibold hover:bg-[#2d6a4f]/15"
+          className="mt-5 px-5 py-2 rounded-full bg-(--c-2d6a4f)/10 text-(--c-2d6a4f) text-sm font-semibold hover:bg-(--c-2d6a4f)/15"
         >
           Go back
         </button>
@@ -548,7 +548,7 @@ export default function RatingScreen() {
             }
             className={`flex-1 h-2.5 rounded-full transition-[background-color,box-shadow,transform] duration-300 ${open ? 'cursor-pointer hover:scale-y-150' : 'cursor-default'}`}
             style={{
-              background: v != null ? songScoreColor(v) : '#ece6dc',
+              background: v != null ? songScoreColor(v) : 'var(--c-ece6dc)',
               boxShadow: i === idx && phase === 'tracks' ? '0 0 0 2px #f9f8f6, 0 0 0 3.5px #2d6a4f' : undefined,
             }}
           />
@@ -558,20 +558,20 @@ export default function RatingScreen() {
   )
 
   const runCard = (
-    <div className="rounded-2xl border border-[#e8e2d9] bg-white/70 p-5">
+    <div className="rounded-2xl border border-(--c-e8e2d9) bg-(--c-fff)/70 p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="m-0 text-[10px] font-bold tracking-[0.14em] text-[#2d6a4f]">
+          <p className="m-0 text-[10px] font-bold tracking-[0.14em] text-(--c-2d6a4f)">
             {previewScore != null ? 'PROJECTED FINAL' : 'RUNNING AVG'}
           </p>
           <p
             className="m-0 mt-1 font-display text-[44px] font-bold leading-none tabular-nums"
-            style={{ color: headline != null ? songScoreColor(headline) : '#c8c0b4' }}
+            style={{ color: headline != null ? songScoreColor(headline) : 'var(--c-c8c0b4)' }}
           >
             {headline != null ? shownHeadline.toFixed(2) : '—'}
           </p>
         </div>
-        <div className="text-right text-[12px] text-[#8a7f72] leading-[1.7] pt-1">
+        <div className="text-right text-[12px] text-(--c-8a7f72) leading-[1.7] pt-1">
           <p className="m-0">{bangs} bang{bangs === 1 ? '' : 's'} · {skips} skip{skips === 1 ? '' : 's'}</p>
           {album.predictedScore != null && <p className="m-0">predicted {album.predictedScore.toFixed(2)}</p>}
           {pace != null && <p className="m-0">on pace for {pace}</p>}
@@ -594,11 +594,11 @@ export default function RatingScreen() {
               onClick={() => open && goTo(i)}
               disabled={!open}
               className={`w-full grid grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-3 px-2.5 py-2 rounded-lg text-left transition-colors ${
-                current ? 'bg-[#2d6a4f]/10' : open ? 'hover:bg-[#f2f0ec]' : ''
+                current ? 'bg-(--c-2d6a4f)/10' : open ? 'hover:bg-(--c-f2f0ec)' : ''
               }`}
             >
-              <span className="text-[11.5px] text-[#b5aa9c] tabular-nums text-right">{s.trackNumber ?? i + 1}</span>
-              <span className={`text-[13.5px] truncate ${current ? 'font-semibold text-[#1c1917]' : v != null ? 'text-[#44403c]' : 'text-[#b5aa9c]'}`}>
+              <span className="text-[11.5px] text-(--c-b5aa9c) tabular-nums text-right">{s.trackNumber ?? i + 1}</span>
+              <span className={`text-[13.5px] truncate ${current ? 'font-semibold text-(--c-1c1917)' : v != null ? 'text-(--c-44403c)' : 'text-(--c-b5aa9c)'}`}>
                 {s.title}
               </span>
               {v != null ? (
@@ -606,11 +606,11 @@ export default function RatingScreen() {
                   {v.toFixed(1)}
                 </span>
               ) : isSkipped ? (
-                <span className="text-[11px] text-[#b5aa9c]">skipped</span>
+                <span className="text-[11px] text-(--c-b5aa9c)">skipped</span>
               ) : current ? (
-                <span className="text-[11px] font-semibold text-[#2d6a4f]">now</span>
+                <span className="text-[11px] font-semibold text-(--c-2d6a4f)">now</span>
               ) : (
-                <Lock size={11} className="text-[#cfc6b8]" />
+                <Lock size={11} className="text-(--c-cfc6b8)" />
               )}
             </button>
           </li>
@@ -620,7 +620,7 @@ export default function RatingScreen() {
   )
 
   return (
-    <div className="relative min-h-screen bg-[#f9f8f6] overflow-x-hidden">
+    <div className="relative min-h-screen bg-(--c-f9f8f6) overflow-x-hidden">
       {submit.isPending && <RecalibratingOverlay />}
 
       {/* The record's colour, faintly, behind the top of the page — the web
@@ -647,7 +647,7 @@ export default function RatingScreen() {
           <button
             onClick={() => navigate(-1)}
             aria-label="Back"
-            className="w-9 h-9 rounded-full flex items-center justify-center text-[#57534e] hover:bg-black/5"
+            className="w-9 h-9 rounded-full flex items-center justify-center text-(--c-57534e) hover:bg-black/5"
           >
             <ArrowLeft size={18} />
           </button>
@@ -655,14 +655,14 @@ export default function RatingScreen() {
             <CoverImg url={album.albumArtUrl} displayPx={40} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0 lg:hidden" />
           ) : null}
           <div className="min-w-0 flex-1 lg:hidden">
-            <p className="m-0 text-[14.5px] font-semibold text-[#1c1917] truncate">{album.albumName}</p>
-            <p className="m-0 text-[12.5px] text-[#8a7f72] truncate">{album.artist}</p>
+            <p className="m-0 text-[14.5px] font-semibold text-(--c-1c1917) truncate">{album.albumName}</p>
+            <p className="m-0 text-[12.5px] text-(--c-8a7f72) truncate">{album.artist}</p>
           </div>
           <div className="flex-1 hidden lg:block" />
           <button
             onClick={() => { setError(null); saveDraft.mutate() }}
             disabled={busy}
-            className="text-[13.5px] font-semibold text-[#2d6a4f] hover:text-[#245c43] px-3 py-1.5 rounded-lg hover:bg-[#2d6a4f]/8 disabled:opacity-40 flex items-center gap-1.5"
+            className="text-[13.5px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) px-3 py-1.5 rounded-lg hover:bg-(--c-2d6a4f)/8 disabled:opacity-40 flex items-center gap-1.5"
           >
             {saveDraft.isPending && <Loader2 size={13} className="animate-spin" />}
             {saveDraft.isPending ? 'Saving…' : 'Save draft'}
@@ -671,13 +671,13 @@ export default function RatingScreen() {
 
         {/* ── Progress ──────────────────────────────────────────────── */}
         <div className="flex items-center gap-3 mb-8">
-          <div className="flex-1 h-1.5 rounded-full bg-[#e8e2d9] overflow-hidden">
+          <div className="flex-1 h-1.5 rounded-full bg-(--c-e8e2d9) overflow-hidden">
             <div
-              className="h-full rounded-full bg-[#2d6a4f] transition-[width] duration-500 ease-out"
+              className="h-full rounded-full bg-(--c-green-fill) transition-[width] duration-500 ease-out"
               style={{ width: `${(done / Math.max(1, sortedSongs.length)) * 100}%` }}
             />
           </div>
-          <span className="text-[12px] font-medium text-[#8a7f72] tabular-nums">{done} / {sortedSongs.length}</span>
+          <span className="text-[12px] font-medium text-(--c-8a7f72) tabular-nums">{done} / {sortedSongs.length}</span>
         </div>
 
         <div className="grid lg:grid-cols-[minmax(0,1fr)_380px] gap-10 xl:gap-16">
@@ -686,14 +686,14 @@ export default function RatingScreen() {
             <div className="max-w-[640px] mx-auto lg:pt-6">
               {phase === 'tracks' && song ? (
                 <div key={`t${idx}`} className={dir === 'next' ? 'slide-next' : 'slide-prev'}>
-                  <p className="m-0 text-center text-[11px] font-bold tracking-[0.16em] text-[#a8998a]">
+                  <p className="m-0 text-center text-[11px] font-bold tracking-[0.16em] text-(--c-a8998a)">
                     TRACK {song.trackNumber ?? idx + 1}
                   </p>
-                  <h1 className="m-0 mt-2 text-center font-display text-[34px] md:text-[44px] leading-tight font-bold text-[#1c1917] break-words">
+                  <h1 className="m-0 mt-2 text-center font-display text-[34px] md:text-[44px] leading-tight font-bold text-(--c-1c1917) break-words">
                     {song.title}
                   </h1>
                   {runtime(song.durationMs) && (
-                    <p className="m-0 mt-1.5 text-center text-[13px] font-medium text-[#a8998a] tabular-nums">
+                    <p className="m-0 mt-1.5 text-center text-[13px] font-medium text-(--c-a8998a) tabular-nums">
                       {runtime(song.durationMs)}
                     </p>
                   )}
@@ -709,12 +709,12 @@ export default function RatingScreen() {
                   {/* Where a prefilled score came from. Gone once edited. */}
                   {carried.has(idx) && song.carriedFromAlbumName && (
                     <div className="mt-5 flex justify-center">
-                      <div className="inline-flex max-w-full items-center gap-3 rounded-full border border-[#e2dbd0] bg-white/80 py-1.5 pl-1.5 pr-5 pop-in">
+                      <div className="inline-flex max-w-full items-center gap-3 rounded-full border border-(--c-e2dbd0) bg-(--c-fff)/80 py-1.5 pl-1.5 pr-5 pop-in">
                         {song.carriedFromAlbumArtUrl && (
                           <CoverImg url={song.carriedFromAlbumArtUrl} displayPx={32} alt="" className="w-8 h-8 shrink-0 rounded-full object-cover" />
                         )}
-                        <span className="truncate text-[14.5px] text-[#57534e]">
-                          From <span className="font-semibold text-[#1c1917]">{song.carriedFromAlbumName}</span>
+                        <span className="truncate text-[14.5px] text-(--c-57534e)">
+                          From <span className="font-semibold text-(--c-1c1917)">{song.carriedFromAlbumName}</span>
                         </span>
                       </div>
                     </div>
@@ -724,7 +724,7 @@ export default function RatingScreen() {
                     <button
                       onClick={() => setListOpen(true)}
                       aria-label="Jump to a track"
-                      className="lg:hidden w-12 h-12 shrink-0 rounded-xl border border-[#e2dbd0] bg-white text-[#57534e] flex items-center justify-center hover:bg-[#f5f1ea]"
+                      className="lg:hidden w-12 h-12 shrink-0 rounded-xl border border-(--c-e2dbd0) bg-(--c-fff) text-(--c-57534e) flex items-center justify-center hover:bg-(--c-f5f1ea)"
                     >
                       <ListMusic size={19} />
                     </button>
@@ -732,7 +732,7 @@ export default function RatingScreen() {
                       <button
                         onClick={() => goTo(idx - 1)}
                         aria-label="Previous track"
-                        className="w-12 h-12 shrink-0 rounded-xl border border-[#e2dbd0] bg-white text-[#57534e] flex items-center justify-center hover:bg-[#f5f1ea]"
+                        className="w-12 h-12 shrink-0 rounded-xl border border-(--c-e2dbd0) bg-(--c-fff) text-(--c-57534e) flex items-center justify-center hover:bg-(--c-f5f1ea)"
                       >
                         <ArrowLeft size={18} />
                       </button>
@@ -740,13 +740,13 @@ export default function RatingScreen() {
                     <button
                       onClick={onNext}
                       disabled={currentScore === null}
-                      className="flex-1 h-12 rounded-xl bg-[#2d6a4f] hover:bg-[#245c43] text-white text-[15px] font-semibold flex items-center justify-center gap-2 disabled:bg-[#e8e2d9] disabled:text-[#a8998a]"
+                      className="flex-1 h-12 rounded-xl bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white text-[15px] font-semibold flex items-center justify-center gap-2 disabled:bg-(--c-e8e2d9) disabled:text-(--c-a8998a)"
                     >
                       {!isLast ? 'Next track' : isEP ? 'Finish' : 'Rate the album'} <ArrowRight size={16} />
                     </button>
                     <button
                       onClick={onSkip}
-                      className="h-12 px-5 shrink-0 rounded-xl text-[14px] font-semibold text-[#8a7f72] hover:bg-black/5"
+                      className="h-12 px-5 shrink-0 rounded-xl text-[14px] font-semibold text-(--c-8a7f72) hover:bg-black/5"
                     >
                       Skip
                     </button>
@@ -758,12 +758,12 @@ export default function RatingScreen() {
                     {runCard}
                     {!isLast && (
                       <div className="mt-6">
-                        <p className="m-0 mb-2 text-[10.5px] font-bold tracking-[0.16em] text-[#a8998a]">UP NEXT</p>
+                        <p className="m-0 mb-2 text-[10.5px] font-bold tracking-[0.16em] text-(--c-a8998a)">UP NEXT</p>
                         {sortedSongs.slice(idx + 1, idx + 4).map((s) => (
-                          <div key={s.id} className="flex items-center gap-3 py-2 border-b border-[#f0ebe3]">
-                            <span className="w-5 text-right text-[12px] text-[#b5aa9c]">{s.trackNumber}</span>
-                            <span className="flex-1 truncate text-[13.5px] text-[#a8998a]">{s.title}</span>
-                            <Lock size={11} className="text-[#cfc6b8]" />
+                          <div key={s.id} className="flex items-center gap-3 py-2 border-b border-(--c-f0ebe3)">
+                            <span className="w-5 text-right text-[12px] text-(--c-b5aa9c)">{s.trackNumber}</span>
+                            <span className="flex-1 truncate text-[13.5px] text-(--c-a8998a)">{s.title}</span>
+                            <Lock size={11} className="text-(--c-cfc6b8)" />
                           </div>
                         ))}
                       </div>
@@ -772,17 +772,17 @@ export default function RatingScreen() {
                 </div>
               ) : phase === 'factors' ? (
                 <div key="factors" className="slide-next">
-                  <p className="m-0 text-center text-[11px] font-bold tracking-[0.16em] text-[#a8998a]">{isEP ? 'FINISH' : 'THE ALBUM'}</p>
-                  <h1 className="m-0 mt-2 text-center font-display text-[34px] md:text-[44px] leading-tight font-bold text-[#1c1917]">
+                  <p className="m-0 text-center text-[11px] font-bold tracking-[0.16em] text-(--c-a8998a)">{isEP ? 'FINISH' : 'THE ALBUM'}</p>
+                  <h1 className="m-0 mt-2 text-center font-display text-[34px] md:text-[44px] leading-tight font-bold text-(--c-1c1917)">
                     {album.albumName}
                   </h1>
-                  <p className="m-0 mt-1.5 text-center text-[13px] font-medium text-[#a8998a]">
+                  <p className="m-0 mt-1.5 text-center text-[13px] font-medium text-(--c-a8998a)">
                     {withScores.length} track{withScores.length === 1 ? '' : 's'} scored · avg{' '}
                     {runningAvg != null ? runningAvg.toFixed(2) : '—'}
                   </p>
 
                   {!songsComplete && (
-                    <p className="mt-5 mb-0 rounded-xl bg-[#fdf3e7] text-[#9a5b13] text-[13px] px-4 py-2.5 text-center">
+                    <p className="mt-5 mb-0 rounded-xl bg-(--c-fdf3e7) text-(--c-9a5b13) text-[13px] px-4 py-2.5 text-center">
                       Every track needs a score or a skip before you can submit.
                     </p>
                   )}
@@ -790,18 +790,18 @@ export default function RatingScreen() {
                   {/* An EP scores as its song mean and never reads these, so it
                       gets the finish step without four inputs that change nothing. */}
                   {!isEP && (
-                  <div className="mt-7 rounded-2xl border border-[#e8e2d9] bg-white/70 overflow-hidden">
+                  <div className="mt-7 rounded-2xl border border-(--c-e8e2d9) bg-(--c-fff)/70 overflow-hidden">
                     {FACTORS.map(({ key, label, desc }, i) => {
                       const v = factorVals[key]
                       return (
                         <label
                           key={key}
-                          className={`rise-in flex items-center gap-4 px-5 py-4 cursor-text ${i < FACTORS.length - 1 ? 'border-b border-[#f0ebe3]' : ''}`}
+                          className={`rise-in flex items-center gap-4 px-5 py-4 cursor-text ${i < FACTORS.length - 1 ? 'border-b border-(--c-f0ebe3)' : ''}`}
                           style={stagger(i)}
                         >
                           <span className="flex-1 min-w-0">
-                            <span className="block text-[15px] font-semibold text-[#1c1917]">{label}</span>
-                            <span className="block text-[12.5px] text-[#8a7f72] mt-0.5">{desc}</span>
+                            <span className="block text-[15px] font-semibold text-(--c-1c1917)">{label}</span>
+                            <span className="block text-[12.5px] text-(--c-8a7f72) mt-0.5">{desc}</span>
                           </span>
                           <input
                             data-factor={i}
@@ -820,7 +820,7 @@ export default function RatingScreen() {
                             inputMode="decimal"
                             placeholder="—"
                             maxLength={4}
-                            className="w-20 h-12 text-center rounded-xl border border-[#e2dbd0] bg-[#faf8f5] font-display text-[22px] font-bold tabular-nums focus:outline-none focus:border-[#2d6a4f] focus:bg-white transition-colors"
+                            className="w-20 h-12 text-center rounded-xl border border-(--c-e2dbd0) bg-(--c-faf8f5) font-display text-[22px] font-bold tabular-nums focus:outline-none focus:border-(--c-2d6a4f) focus:bg-(--c-fff) transition-colors"
                             style={{ color: v != null ? songScoreColor(v) : undefined }}
                           />
                         </label>
@@ -833,18 +833,18 @@ export default function RatingScreen() {
                     {previewScore !== null && <Projected score={previewScore} />}
                   </div>
 
-                  {error && <p className="text-[#c0392b] text-[13px] text-center mt-4 mb-0">{error}</p>}
+                  {error && <p className="text-(--c-c0392b) text-[13px] text-center mt-4 mb-0">{error}</p>}
 
                   <button
                     onClick={() => { setDir('next'); setPhase('review') }}
                     disabled={!canSubmit || busy}
-                    className="mt-7 w-full h-12 rounded-xl bg-[#2d6a4f] hover:bg-[#245c43] text-white text-[15px] font-semibold flex items-center justify-center gap-2 disabled:bg-[#e8e2d9] disabled:text-[#a8998a]"
+                    className="mt-7 w-full h-12 rounded-xl bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white text-[15px] font-semibold flex items-center justify-center gap-2 disabled:bg-(--c-e8e2d9) disabled:text-(--c-a8998a)"
                   >
                     Next: your review <ArrowRight size={16} />
                   </button>
                   <button
                     onClick={() => goTo(sortedSongs.length - 1)}
-                    className="mt-2 w-full py-2.5 text-[13.5px] font-semibold text-[#8a7f72] hover:text-[#1c1917]"
+                    className="mt-2 w-full py-2.5 text-[13.5px] font-semibold text-(--c-8a7f72) hover:text-(--c-1c1917)"
                   >
                     Back to tracks
                   </button>
@@ -854,8 +854,8 @@ export default function RatingScreen() {
                    just finished the record and this is when you have something
                    to say. An empty box submits the rating and posts nothing. */
                 <div key="review" className="slide-next">
-                  <p className="m-0 text-center text-[11px] font-bold tracking-[0.16em] text-[#a8998a]">YOUR REVIEW</p>
-                  <h1 className="m-0 mt-2 text-center font-display text-[34px] md:text-[44px] leading-tight font-bold text-[#1c1917]">
+                  <p className="m-0 text-center text-[11px] font-bold tracking-[0.16em] text-(--c-a8998a)">YOUR REVIEW</p>
+                  <h1 className="m-0 mt-2 text-center font-display text-[34px] md:text-[44px] leading-tight font-bold text-(--c-1c1917)">
                     {album.albumName}
                   </h1>
                   {previewScore != null && (
@@ -876,22 +876,22 @@ export default function RatingScreen() {
                     autoFocus
                     rows={8}
                     placeholder="What did you make of it?"
-                    className="mt-7 w-full resize-none rounded-2xl border border-[#e2dbd0] bg-white/80 px-5 py-4 font-display text-[16px] leading-relaxed text-[#1c1917] placeholder:text-[#c2b8ad] focus:outline-none focus:border-[#2d6a4f]"
+                    className="mt-7 w-full resize-none rounded-2xl border border-(--c-e2dbd0) bg-(--c-fff)/80 px-5 py-4 font-display text-[16px] leading-relaxed text-(--c-1c1917) placeholder:text-(--c-c2b8ad) focus:outline-none focus:border-(--c-2d6a4f)"
                   />
 
-                  {error && <p className="text-[#c0392b] text-[13px] text-center mt-4 mb-0">{error}</p>}
+                  {error && <p className="text-(--c-c0392b) text-[13px] text-center mt-4 mb-0">{error}</p>}
 
                   <button
                     onClick={() => { setError(null); submit.mutate() }}
                     disabled={busy || !canSubmit}
-                    className="mt-5 w-full h-12 rounded-xl bg-[#2d6a4f] hover:bg-[#245c43] text-white text-[15px] font-semibold flex items-center justify-center gap-2 disabled:bg-[#e8e2d9] disabled:text-[#a8998a]"
+                    className="mt-5 w-full h-12 rounded-xl bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white text-[15px] font-semibold flex items-center justify-center gap-2 disabled:bg-(--c-e8e2d9) disabled:text-(--c-a8998a)"
                   >
                     {submit.isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
                     {isEditing ? 'Update rating' : 'Submit rating'}
                   </button>
                   <button
                     onClick={() => { setDir('prev'); setPhase('factors') }}
-                    className="mt-2 w-full py-2.5 text-[13.5px] font-semibold text-[#8a7f72] hover:text-[#1c1917]"
+                    className="mt-2 w-full py-2.5 text-[13.5px] font-semibold text-(--c-8a7f72) hover:text-(--c-1c1917)"
                   >
                     Back
                   </button>
@@ -926,11 +926,11 @@ export default function RatingScreen() {
                     className="w-24 h-24 rounded-2xl object-cover shrink-0 shadow-[0_16px_34px_-16px_rgba(50,30,10,0.5)]"
                   />
                 ) : (
-                  <div className="w-24 h-24 rounded-2xl bg-[#ece6dc] shrink-0" />
+                  <div className="w-24 h-24 rounded-2xl bg-(--c-ece6dc) shrink-0" />
                 )}
                 <div className="min-w-0">
-                  <p className="m-0 font-display text-[22px] leading-tight font-bold text-[#1c1917] line-clamp-2">{album.albumName}</p>
-                  <p className="m-0 mt-1 text-[13.5px] text-[#8a7f72] truncate">
+                  <p className="m-0 font-display text-[22px] leading-tight font-bold text-(--c-1c1917) line-clamp-2">{album.albumName}</p>
+                  <p className="m-0 mt-1 text-[13.5px] text-(--c-8a7f72) truncate">
                     {[album.artist, ...album.extraArtists].join(', ')}{album.year ? ` · ${album.year}` : ''}
                   </p>
                 </div>
@@ -938,7 +938,7 @@ export default function RatingScreen() {
 
               {runCard}
 
-              <div className="rounded-2xl border border-[#e8e2d9] bg-white/70 p-2 max-h-[calc(100vh-420px)] min-h-[160px] overflow-y-auto">
+              <div className="rounded-2xl border border-(--c-e8e2d9) bg-(--c-fff)/70 p-2 max-h-[calc(100vh-420px)] min-h-[160px] overflow-y-auto">
                 {trackList}
               </div>
             </div>
@@ -950,10 +950,10 @@ export default function RatingScreen() {
       {listOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-black/30 fade-in" onClick={() => setListOpen(false)} />
-          <div className="relative w-full sm:max-w-md bg-[#faf8f5] rounded-t-3xl sm:rounded-3xl p-4 pb-6 max-h-[75vh] overflow-y-auto pop-in">
+          <div className="relative w-full sm:max-w-md bg-(--c-faf8f5) rounded-t-3xl sm:rounded-3xl p-4 pb-6 max-h-[75vh] overflow-y-auto pop-in">
             <div className="flex items-center justify-between px-2 mb-2">
-              <p className="m-0 font-display text-[20px] font-bold text-[#1c1917]">Tracks</p>
-              <button onClick={() => setListOpen(false)} aria-label="Close" className="text-[#a8998a] hover:text-[#57534e]">
+              <p className="m-0 font-display text-[20px] font-bold text-(--c-1c1917)">Tracks</p>
+              <button onClick={() => setListOpen(false)} aria-label="Close" className="text-(--c-a8998a) hover:text-(--c-57534e)">
                 <X size={19} />
               </button>
             </div>
@@ -987,10 +987,10 @@ function ScoreField({
         placeholder="—"
         maxLength={4}
         aria-label="Score"
-        className="w-[260px] bg-transparent text-center font-display font-bold leading-none tabular-nums focus:outline-none placeholder:text-[#d6cec2] transition-colors"
-        style={{ fontSize: 104, color: n != null ? songScoreColor(n) : '#c8c0b4', outline: 'none' }}
+        className="w-[260px] bg-transparent text-center font-display font-bold leading-none tabular-nums focus:outline-none placeholder:text-(--c-d6cec2) transition-colors"
+        style={{ fontSize: 104, color: n != null ? songScoreColor(n) : 'var(--c-c8c0b4)', outline: 'none' }}
       />
-      <p className="m-0 mt-2 text-[10.5px] font-bold tracking-[0.16em] text-[#a8998a]">{label}</p>
+      <p className="m-0 mt-2 text-[10.5px] font-bold tracking-[0.16em] text-(--c-a8998a)">{label}</p>
     </div>
   )
 }
@@ -1008,11 +1008,11 @@ function ScoreScale({ value }: { value: number | null }) {
           ))}
         </div>
         <div
-          className="absolute top-1/2 w-5 h-5 -ml-2.5 -mt-2.5 rounded-full bg-white border-[3px] border-[#1c1917] shadow-md transition-[left,opacity] duration-300 ease-[cubic-bezier(0.34,1.4,0.64,1)]"
+          className="absolute top-1/2 w-5 h-5 -ml-2.5 -mt-2.5 rounded-full bg-(--c-fff) border-[3px] border-(--c-1c1917) shadow-md transition-[left,opacity] duration-300 ease-[cubic-bezier(0.34,1.4,0.64,1)]"
           style={{ left: `${((value ?? 0) / 10) * 100}%`, opacity: value == null ? 0 : 1 }}
         />
       </div>
-      <div className="flex justify-between mt-1.5 text-[11px] text-[#b5aa9c] tabular-nums">
+      <div className="flex justify-between mt-1.5 text-[11px] text-(--c-b5aa9c) tabular-nums">
         <span>0</span>
         <span>10</span>
       </div>
@@ -1023,10 +1023,10 @@ function ScoreScale({ value }: { value: number | null }) {
 function Projected({ score }: { score: number }) {
   return (
     <div className="mt-7 text-center pop-in">
-      <p className="m-0 font-display text-[52px] font-bold leading-none tabular-nums" style={{ color: '#2d6a4f' }}>
+      <p className="m-0 font-display text-[52px] font-bold leading-none tabular-nums" style={{ color: 'var(--c-2d6a4f)' }}>
         {score.toFixed(2)}
       </p>
-      <p className="m-0 mt-1.5 text-[10.5px] font-bold tracking-[0.16em] text-[#2d6a4f]">PROJECTED FINAL</p>
+      <p className="m-0 mt-1.5 text-[10.5px] font-bold tracking-[0.16em] text-(--c-2d6a4f)">PROJECTED FINAL</p>
     </div>
   )
 }

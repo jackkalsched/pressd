@@ -26,7 +26,7 @@ export default function Avatar({
       style={{
         width: size, height: size, borderRadius: '50%', background: avatarColor(name || '?'),
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: '#fff', fontSize: size * 0.42, fontWeight: 700, flexShrink: 0,
+        color: 'var(--c-fff)', fontSize: size * 0.42, fontWeight: 700, flexShrink: 0,
       }}
     >
       {(name || '?')[0].toUpperCase()}

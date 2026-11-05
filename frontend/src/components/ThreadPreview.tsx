@@ -45,7 +45,7 @@ export default function ThreadPreview({ album, artist, index = 0 }: {
     return (
       <section className="mt-8 rise-in" style={stagger(index)}>
         <p className={`${SECTION_LABEL} mb-2.5`}>DISCUSSION</p>
-        <p className="m-0 flex items-center gap-2 text-[14px] font-semibold text-[#b5aa9c]">
+        <p className="m-0 flex items-center gap-2 text-[14px] font-semibold text-(--c-b5aa9c)">
           <Lock size={14} className="shrink-0" /> Finish rating to read the discussion
         </p>
       </section>
@@ -62,7 +62,7 @@ export default function ThreadPreview({ album, artist, index = 0 }: {
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <p className={SECTION_LABEL}>DISCUSSION</p>
         {people > 0 && (
-          <span className="text-[12px] text-[#8a7f72] tabular-nums">
+          <span className="text-[12px] text-(--c-8a7f72) tabular-nums">
             {people} {people === 1 ? 'presser' : 'pressers'}
           </span>
         )}
@@ -74,11 +74,11 @@ export default function ThreadPreview({ album, artist, index = 0 }: {
             <li key={p.id} className="rise-in" style={stagger(index + 1 + i)}>
               <Link
                 to={path}
-                className="group block rounded-2xl px-3 py-3 no-underline transition-colors hover:bg-[#f2eee7]"
+                className="group block rounded-2xl px-3 py-3 no-underline transition-colors hover:bg-(--c-f2eee7)"
               >
                 <div className="flex items-center gap-2">
                   <Avatar name={p.author!.name} avatarUrl={p.author!.avatarUrl} size={22} />
-                  <span className="min-w-0 truncate text-[13px] font-semibold text-[#1c1917]">{p.author!.name}</span>
+                  <span className="min-w-0 truncate text-[13px] font-semibold text-(--c-1c1917)">{p.author!.name}</span>
                   {p.author!.score != null && (
                     <span
                       className="font-display ml-auto shrink-0 text-[14px] font-bold tabular-nums"
@@ -88,11 +88,11 @@ export default function ThreadPreview({ album, artist, index = 0 }: {
                     </span>
                   )}
                 </div>
-                <p className={`m-0 mt-1.5 line-clamp-3 break-words text-[13.5px] leading-snug ${p.isSpoiler ? 'italic text-[#a8998a]' : 'text-[#44403c]'}`}>
+                <p className={`m-0 mt-1.5 line-clamp-3 break-words text-[13.5px] leading-snug ${p.isSpoiler ? 'italic text-(--c-a8998a)' : 'text-(--c-44403c)'}`}>
                   {p.isSpoiler ? 'Marked as a spoiler' : p.body}
                 </p>
                 {(p.likeCount > 0 || p.replyCount > 0) && (
-                  <div className="mt-1.5 flex items-center gap-3.5 text-[11.5px] font-semibold text-[#a8998a] tabular-nums">
+                  <div className="mt-1.5 flex items-center gap-3.5 text-[11.5px] font-semibold text-(--c-a8998a) tabular-nums">
                     {p.likeCount > 0 && (
                       <span className="flex items-center gap-1"><ThumbsUp size={11} strokeWidth={2} /> {p.likeCount}</span>
                     )}
@@ -109,7 +109,7 @@ export default function ThreadPreview({ album, artist, index = 0 }: {
 
       <Link
         to={path}
-        className="group mt-1.5 inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-[#2d6a4f] no-underline hover:text-[#245c43]"
+        className="group mt-1.5 inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-(--c-2d6a4f) no-underline hover:text-(--c-245c43)"
       >
         {posts.length > 0 ? 'Open the discussion' : 'Be the first to weigh in'}
         <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />

@@ -54,7 +54,7 @@ export default function AlbumCompare({ theirs, mine, ownerName }: {
   const diff = theirScore - myScore
   const youLeft = myScore <= theirScore
 
-  const youSide: CompareSide = { label: 'YOU', score: myScore, color: '#44403c', tick: '#1c1917' }
+  const youSide: CompareSide = { label: 'YOU', score: myScore, color: 'var(--c-44403c)', tick: 'var(--c-1c1917)' }
   const themSide: CompareSide = { label: ownerName.toUpperCase(), score: theirScore, color: GREEN, tick: GREEN }
   const [left, right] = youLeft ? [youSide, themSide] : [themSide, youSide]
   const inOrder = (yours: number | null, other: number | null) => (youLeft ? [yours, other] : [other, yours])
@@ -80,7 +80,7 @@ export default function AlbumCompare({ theirs, mine, ownerName }: {
   const legend = (
     <p className="m-0 truncate text-[11px] font-bold tracking-[0.12em]">
       <span style={{ color: left.color }}>{left.label}</span>
-      <span className="text-[#c2b8ad]"> / </span>
+      <span className="text-(--c-c2b8ad)"> / </span>
       <span style={{ color: right.color }}>{right.label}</span>
     </p>
   )
@@ -90,16 +90,16 @@ export default function AlbumCompare({ theirs, mine, ownerName }: {
       <div className="rise-in" style={stagger(0)}>
         <CompareScores left={left} right={right} />
         {Math.abs(diff) < 0.005 ? (
-          <p className="m-0 mt-5 text-[15px] text-[#1c1917]">You and {ownerName} landed on exactly the same score.</p>
+          <p className="m-0 mt-5 text-[15px] text-(--c-1c1917)">You and {ownerName} landed on exactly the same score.</p>
         ) : (
-          <p className="m-0 mt-5 text-[15px] text-[#1c1917]">
+          <p className="m-0 mt-5 text-[15px] text-(--c-1c1917)">
             {ownerName} rated this{' '}
-            <span className="font-bold tabular-nums" style={{ color: diff > 0 ? GREEN : '#c0392b' }}>{Math.abs(diff).toFixed(2)}</span>
+            <span className="font-bold tabular-nums" style={{ color: diff > 0 ? GREEN : 'var(--c-c0392b)' }}>{Math.abs(diff).toFixed(2)}</span>
             {` ${diff > 0 ? 'higher' : 'lower'} than you`}
           </p>
         )}
         {widest && (
-          <p className="m-0 mt-1 text-[13.5px] text-[#57534e]">
+          <p className="m-0 mt-1 text-[13.5px] text-(--c-57534e)">
             Biggest difference on &ldquo;{widest.title}&rdquo;: you {score1(widest.yours)}, {ownerName} {score1(widest.theirs)}
           </p>
         )}
@@ -117,11 +117,11 @@ export default function AlbumCompare({ theirs, mine, ownerName }: {
               return (
                 <div key={f.label} className="rise-in" style={stagger(1 + i)}>
                   <p className="font-display m-0 text-[26px] font-bold leading-none tabular-nums">
-                    <span style={{ color: a != null ? songScoreColor(a) : '#c8c0b4' }}>{score1(a)}</span>
-                    <span className="mx-1.5 text-[18px] font-normal text-[#c2b8ad]">/</span>
-                    <span style={{ color: b != null ? songScoreColor(b) : '#c8c0b4' }}>{score1(b)}</span>
+                    <span style={{ color: a != null ? songScoreColor(a) : 'var(--c-c8c0b4)' }}>{score1(a)}</span>
+                    <span className="mx-1.5 text-[18px] font-normal text-(--c-c2b8ad)">/</span>
+                    <span style={{ color: b != null ? songScoreColor(b) : 'var(--c-c8c0b4)' }}>{score1(b)}</span>
                   </p>
-                  <p className="m-0 mt-1.5 text-[12px] font-medium text-[#8a7f72]">{f.label}</p>
+                  <p className="m-0 mt-1.5 text-[12px] font-medium text-(--c-8a7f72)">{f.label}</p>
                 </div>
               )
             })}
@@ -139,11 +139,11 @@ export default function AlbumCompare({ theirs, mine, ownerName }: {
           const isWidest = widest != null && r.key === widest.key
           return (
             <RevealRow key={r.key} index={i}>
-              <div className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-[#f2eee7] ${isWidest ? 'bg-[#2d6a4f]/[0.07]' : ''}`}>
-                <span className="w-6 shrink-0 text-right text-[12.5px] text-[#b5aa9c] tabular-nums">{r.trackNumber}</span>
-                <span className={`min-w-0 flex-1 truncate text-[14.5px] text-[#1c1917] ${isWidest ? 'font-semibold' : ''}`}>{r.title}</span>
-                <span className="font-display w-12 text-right text-[16px] font-bold tabular-nums" style={{ color: a != null ? songScoreColor(a) : '#c8c0b4' }}>{score1(a)}</span>
-                <span className="font-display w-12 text-right text-[16px] font-bold tabular-nums" style={{ color: b != null ? songScoreColor(b) : '#c8c0b4' }}>{score1(b)}</span>
+              <div className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-(--c-f2eee7) ${isWidest ? 'bg-(--c-2d6a4f)/[0.07]' : ''}`}>
+                <span className="w-6 shrink-0 text-right text-[12.5px] text-(--c-b5aa9c) tabular-nums">{r.trackNumber}</span>
+                <span className={`min-w-0 flex-1 truncate text-[14.5px] text-(--c-1c1917) ${isWidest ? 'font-semibold' : ''}`}>{r.title}</span>
+                <span className="font-display w-12 text-right text-[16px] font-bold tabular-nums" style={{ color: a != null ? songScoreColor(a) : 'var(--c-c8c0b4)' }}>{score1(a)}</span>
+                <span className="font-display w-12 text-right text-[16px] font-bold tabular-nums" style={{ color: b != null ? songScoreColor(b) : 'var(--c-c8c0b4)' }}>{score1(b)}</span>
               </div>
             </RevealRow>
           )

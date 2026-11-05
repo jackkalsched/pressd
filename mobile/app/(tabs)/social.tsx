@@ -353,7 +353,8 @@ export default function Social() {
           onScroll={onScroll}
           scrollEventThrottle={16}
           renderItem={({ item, index }) => (
-            <View style={index > 0 ? styles.divider : undefined}>
+            // No rule between records: each card's own spacing sets them apart.
+            <View style={index > 0 ? styles.compareGap : undefined}>
               <CompareCard item={item} onOpen={openAlbum} onOpenUser={openFriend} />
             </View>
           )}
@@ -1036,11 +1037,11 @@ function FriendAction({ u, onRequest, onAccept }: { u: UserSearchResult; onReque
 }
 
 const styles = StyleSheet.create({
-  fpRow: { paddingVertical: spacing.lg, borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border },
+  // No rule between posts: their own spacing sets them apart.
+  fpRow: { paddingVertical: spacing.lg },
   // A reply to you is the one row on this screen addressed to you rather than
   // merely visible to you, so it carries a rule the others do not.
-  fpToMe: { borderLeftWidth: 2, borderLeftColor: colors.green, paddingLeft: spacing.md },
+  fpToMe: { borderLeftWidth: 2, borderColor: colors.green, paddingLeft: spacing.md },
   fpHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   fpArt: { width: 38, height: 38, borderRadius: radii.sm },
   fpTitle: { fontFamily: fonts.display, fontSize: 15, color: colors.ink },
@@ -1072,7 +1073,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderColor: colors.border,
   },
   compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: colors.ink, letterSpacing: 0.5 },
   title: { fontFamily: fonts.display, fontSize: 34, color: colors.ink, letterSpacing: 1 },
@@ -1094,7 +1095,7 @@ const styles = StyleSheet.create({
   tabUnderlineActive: { backgroundColor: colors.green },
 
   list: { paddingHorizontal: spacing.lg, paddingBottom: 130 },
-  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
 
   dayHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xl, marginBottom: spacing.sm },
   dayLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.2, color: colors.inkMuted },
@@ -1129,6 +1130,7 @@ const styles = StyleSheet.create({
 
   // Compare
   compareCard: { paddingVertical: spacing.lg },
+  compareGap: { marginTop: spacing.sm },
   compareHead: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
   compareHeadText: { flex: 1, minWidth: 0, paddingTop: 2 },
   compareName: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.ink },

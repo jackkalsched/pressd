@@ -36,20 +36,20 @@ export default function AlbumThoughts({ album, artist }: { album: string; artist
   const body = (
     <>
       {locked ? (
-        <Lock size={16} className="text-[#c2b8ad] shrink-0" />
+        <Lock size={16} className="text-(--c-c2b8ad) shrink-0" />
       ) : (
-        <MessageCircle size={17} className="text-[#2d6a4f] shrink-0" />
+        <MessageCircle size={17} className="text-(--c-2d6a4f) shrink-0" />
       )}
-      <span className={`text-[15px] font-semibold truncate ${locked ? 'text-[#c2b8ad]' : 'text-[#2d6a4f]'}`}>
+      <span className={`text-[15px] font-semibold truncate ${locked ? 'text-(--c-c2b8ad)' : 'text-(--c-2d6a4f)'}`}>
         {label}
       </span>
       <span className="flex-1" />
-      {!locked && <ChevronRight size={18} className="text-[#2d6a4f] shrink-0" />}
+      {!locked && <ChevronRight size={18} className="text-(--c-2d6a4f) shrink-0" />}
     </>
   )
 
   // Closes the block off the way the track rows are separated from each other.
-  const row = 'flex items-center gap-3 py-3.5 border-b border-[#f0ebe3] mt-2 max-w-2xl'
+  const row = 'flex items-center gap-3 py-3.5 border-b border-(--c-f0ebe3) mt-2 max-w-2xl'
 
   if (locked) return <div className={row}>{body}</div>
 

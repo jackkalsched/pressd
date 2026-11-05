@@ -59,17 +59,17 @@ function SongNotes({ person }: { person: SheetPerson }) {
   if (!topSong && !bottomSong) return null
   // Drawn exactly as For You's review previews draw them.
   return (
-    <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-[#8a7f72]">
+    <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-(--c-8a7f72)">
       {topSong && (
         <span className="truncate">
-          <span className="font-semibold text-[#2d6a4f]">Best</span> {topSong.title}
-          <span className="tabular-nums text-[#b3a99c]"> · {topSong.score.toFixed(1)}</span>
+          <span className="font-semibold text-(--c-2d6a4f)">Best</span> {topSong.title}
+          <span className="tabular-nums text-(--c-b3a99c)"> · {topSong.score.toFixed(1)}</span>
         </span>
       )}
       {bottomSong && (
         <span className="truncate">
-          <span className="font-semibold text-[#b1542f]">Worst</span> {bottomSong.title}
-          <span className="tabular-nums text-[#b3a99c]"> · {bottomSong.score.toFixed(1)}</span>
+          <span className="font-semibold text-(--c-b1542f)">Worst</span> {bottomSong.title}
+          <span className="tabular-nums text-(--c-b3a99c)"> · {bottomSong.score.toFixed(1)}</span>
         </span>
       )}
       {fromAlbum && <span className="w-full truncate">from <i>{fromAlbum}</i></span>}
@@ -140,21 +140,21 @@ export default function PeopleSheet({ data, onClose }: { data: PeopleSheetData; 
         role="dialog"
         aria-modal="true"
         aria-label={data.fallback ? 'People who like what you like' : `People who rated ${album.name} too`}
-        className="relative max-h-[calc(100vh-2rem)] w-full max-w-4xl overflow-y-auto rounded-[24px] border border-[#e8e2d9] bg-[#f9f8f6] p-6 shadow-xl pop-in md:p-8"
+        className="relative max-h-[calc(100vh-2rem)] w-full max-w-4xl overflow-y-auto rounded-[24px] border border-(--c-e8e2d9) bg-(--c-f9f8f6) p-6 shadow-xl pop-in md:p-8"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-4">
           <Cover artUrl={album.artUrl} seed={album.artist} size={64} radius={12} />
           {/* One face for the whole line, a title's: the album stands out by
               italics, not by switching family mid-sentence. */}
-          <h2 className="font-display m-0 min-w-0 flex-1 text-[22px] font-bold leading-snug text-[#1c1917] md:text-[26px]">
+          <h2 className="font-display m-0 min-w-0 flex-1 text-[22px] font-bold leading-snug text-(--c-1c1917) md:text-[26px]">
             {data.fallback || data.raters == null ? 'People who like what you like' : (
               <>
                 {data.raters} {data.raters === 1 ? 'person' : 'people'} rated <i>{album.name}</i> too
               </>
             )}
           </h2>
-          <button onClick={dismiss} aria-label="Close" className="self-start text-[#a8998a] transition-colors hover:text-[#57534e]">
+          <button onClick={dismiss} aria-label="Close" className="self-start text-(--c-a8998a) transition-colors hover:text-(--c-57534e)">
             <X size={20} />
           </button>
         </div>
@@ -163,7 +163,7 @@ export default function PeopleSheet({ data, onClose }: { data: PeopleSheetData; 
           {people.map((p, i) => {
             const isAdded = added.has(p.user.id)
             return (
-              <li key={p.user.id} className="rise-in min-w-0 rounded-2xl border border-[#ece5da] bg-white p-4" style={stagger(i)}>
+              <li key={p.user.id} className="rise-in min-w-0 rounded-2xl border border-(--c-ece5da) bg-(--c-fff) p-4" style={stagger(i)}>
                 <div className="flex items-center gap-3">
                   <button onClick={() => openProfile(p)} className="group shrink-0 cursor-pointer border-none bg-transparent p-0" aria-label={`Open ${p.user.name}'s profile`}>
                     <div className={COVER_LIFT}>
@@ -172,7 +172,7 @@ export default function PeopleSheet({ data, onClose }: { data: PeopleSheetData; 
                   </button>
                   <button
                     onClick={() => openProfile(p)}
-                    className="min-w-0 flex-1 cursor-pointer truncate border-none bg-transparent p-0 text-left text-[15px] font-semibold text-[#1c1917] hover:underline"
+                    className="min-w-0 flex-1 cursor-pointer truncate border-none bg-transparent p-0 text-left text-[15px] font-semibold text-(--c-1c1917) hover:underline"
                   >
                     {p.user.name}
                   </button>
@@ -186,7 +186,7 @@ export default function PeopleSheet({ data, onClose }: { data: PeopleSheetData; 
                   onClick={() => add(p)}
                   disabled={isAdded || adding === p.user.id}
                   className={`mt-3.5 flex w-full items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold transition-colors disabled:cursor-default ${
-                    isAdded ? 'bg-[#2d6a4f]/10 text-[#2d6a4f]' : 'bg-[#2d6a4f] text-white hover:bg-[#245c43]'
+                    isAdded ? 'bg-(--c-2d6a4f)/10 text-(--c-2d6a4f)' : 'bg-(--c-green-fill) text-white hover:bg-(--c-green-fill-hover)'
                   }`}
                 >
                   {adding === p.user.id ? <Loader2 size={15} className="animate-spin" />
@@ -202,14 +202,14 @@ export default function PeopleSheet({ data, onClose }: { data: PeopleSheetData; 
         <div className="mt-6 flex flex-wrap items-center justify-end gap-2.5">
           <button
             onClick={dismiss}
-            className="rounded-xl px-5 py-2.5 text-sm font-semibold text-[#57534e] transition-colors hover:bg-[#efe9e0]"
+            className="rounded-xl px-5 py-2.5 text-sm font-semibold text-(--c-57534e) transition-colors hover:bg-(--c-efe9e0)"
           >
             Not now
           </button>
           <button
             onClick={openDiscussion}
             disabled={opening}
-            className="flex items-center gap-2 rounded-xl border border-[#e2dbd0] bg-white px-5 py-2.5 text-sm font-semibold text-[#2d6a4f] transition-colors hover:border-[#2d6a4f] disabled:opacity-60"
+            className="flex items-center gap-2 rounded-xl border border-(--c-e2dbd0) bg-(--c-fff) px-5 py-2.5 text-sm font-semibold text-(--c-2d6a4f) transition-colors hover:border-(--c-2d6a4f) disabled:opacity-60"
           >
             {opening ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={16} />}
             Open the discussion

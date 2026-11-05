@@ -102,13 +102,13 @@ export default function Tutorial() {
   // the copy sit side by side across a 1200px stage, so a desktop window isn't
   // a narrow strip down the middle of an empty page.
   return (
-    <div className="min-h-screen bg-[#faf8f5] flex flex-col">
+    <div className="min-h-screen bg-(--c-faf8f5) flex flex-col">
       <div className="mx-auto w-full max-w-[1200px] flex-1 flex flex-col px-4 md:px-12 py-6 md:py-10">
         <div className="flex items-center justify-between h-11">
-          <p className="m-0 text-[11px] font-bold tracking-[0.18em] text-[#2d6a4f]">HOW PRESSD WORKS</p>
+          <p className="m-0 text-[11px] font-bold tracking-[0.18em] text-(--c-2d6a4f)">HOW PRESSD WORKS</p>
           {/* The last card's button already does what Skip would. */}
           {!last && (
-            <button onClick={finish} className="text-[14px] font-semibold text-[#a8a29e] hover:text-[#57534e] transition-colors">
+            <button onClick={finish} className="text-[14px] font-semibold text-(--c-a8a29e) hover:text-(--c-57534e) transition-colors">
               {isReplay ? 'Close' : 'Skip'}
             </button>
           )}
@@ -131,19 +131,19 @@ export default function Tutorial() {
             key={page}
             className="tut-slide-in w-full max-w-[440px] lg:max-w-none mx-auto grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-6 lg:gap-20"
           >
-            <div className="flex items-center justify-center min-h-[340px] lg:min-h-[520px] rounded-[28px] lg:bg-[#f2ede5] lg:p-10">
-              <div className="w-full max-w-[440px] bg-white rounded-[20px] border border-[#ece6dc] p-5 lg:p-6 shadow-[0_8px_24px_-12px_rgba(50,30,10,0.18)]">
+            <div className="flex items-center justify-center min-h-[340px] lg:min-h-[520px] rounded-[28px] lg:bg-(--c-f2ede5) lg:p-10">
+              <div className="w-full max-w-[440px] bg-(--c-fff) rounded-[20px] border border-(--c-ece6dc) p-5 lg:p-6 shadow-[0_8px_24px_-12px_rgba(50,30,10,0.18)]">
                 <Scene />
               </div>
             </div>
 
             <div>
-              <p className="hidden lg:block m-0 mb-3 text-[13px] font-semibold text-[#a8a29e] tabular-nums">
+              <p className="hidden lg:block m-0 mb-3 text-[13px] font-semibold text-(--c-a8a29e) tabular-nums">
                 {page + 1} / {CARDS.length}
               </p>
-              <h1 className="font-display m-0 text-[34px] leading-[40px] lg:text-[52px] lg:leading-[58px] font-bold tracking-[-0.01em] text-[#1c1917]">{title}</h1>
+              <h1 className="font-display m-0 text-[34px] leading-[40px] lg:text-[52px] lg:leading-[58px] font-bold tracking-[-0.01em] text-(--c-1c1917)">{title}</h1>
               {/* Four lines' height, so the title holds still between cards. */}
-              <p className="m-0 mt-2 lg:mt-4 text-[15.5px] leading-[23px] lg:text-[18px] lg:leading-[28px] text-[#78716c] min-h-[92px] lg:min-h-[112px] lg:max-w-[460px]">{body}</p>
+              <p className="m-0 mt-2 lg:mt-4 text-[15.5px] leading-[23px] lg:text-[18px] lg:leading-[28px] text-(--c-78716c) min-h-[92px] lg:min-h-[112px] lg:max-w-[460px]">{body}</p>
               <div className="hidden lg:block mt-8 max-w-[460px]">{controls()}</div>
             </div>
           </div>
@@ -164,7 +164,7 @@ export default function Tutorial() {
               onClick={() => go(i)}
               aria-label={`Card ${i + 1}`}
               aria-current={i === page ? 'step' : undefined}
-              className="w-[7px] h-[7px] rounded-full bg-[#2d6a4f] transition-[opacity,transform] duration-200"
+              className="w-[7px] h-[7px] rounded-full bg-(--c-green-fill) transition-[opacity,transform] duration-200"
               style={{ opacity: i === page ? 1 : 0.3, transform: i === page ? 'scale(1.35)' : undefined }}
             />
           ))}
@@ -175,14 +175,14 @@ export default function Tutorial() {
             <button
               onClick={() => go(page - 1)}
               aria-label="Previous card"
-              className="h-[52px] w-[52px] shrink-0 rounded-xl border border-[#e2dbd0] bg-white hover:bg-[#f5f1ea] text-[#57534e] flex items-center justify-center transition-colors"
+              className="h-[52px] w-[52px] shrink-0 rounded-xl border border-(--c-e2dbd0) bg-(--c-fff) hover:bg-(--c-f5f1ea) text-(--c-57534e) flex items-center justify-center transition-colors"
             >
               <ArrowLeft size={18} />
             </button>
           )}
           <button
             onClick={next}
-            className="flex-1 h-[52px] rounded-xl bg-[#2d6a4f] hover:bg-[#245c43] text-white text-[15.5px] font-semibold transition-colors"
+            className="flex-1 h-[52px] rounded-xl bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white text-[15.5px] font-semibold transition-colors"
           >
             {!last ? 'Next' : isReplay ? 'Done' : 'Pick your first album'}
           </button>

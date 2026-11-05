@@ -40,19 +40,19 @@ export default function Username() {
   }
 
   return (
-    <div className="min-h-screen bg-[#faf8f5] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-(--c-faf8f5) flex items-center justify-center px-4">
       <form onSubmit={save} className="page-enter w-full max-w-[420px] flex flex-col items-center">
-        <p className="m-0 text-[11px] font-bold tracking-[0.18em] text-[#2d6a4f]">WELCOME TO PRESSD</p>
-        <h1 className="font-display m-0 mt-2 text-[34px] leading-[40px] md:text-[44px] md:leading-[50px] font-bold tracking-[-0.01em] text-[#1c1917] text-center">
+        <p className="m-0 text-[11px] font-bold tracking-[0.18em] text-(--c-2d6a4f)">WELCOME TO PRESSD</p>
+        <h1 className="font-display m-0 mt-2 text-[34px] leading-[40px] md:text-[44px] md:leading-[50px] font-bold tracking-[-0.01em] text-(--c-1c1917) text-center">
           Pick a username.
         </h1>
 
         <label
-          className={`mt-8 w-full flex items-center gap-0.5 h-[52px] px-4 rounded-xl bg-white border transition-colors focus-within:border-[#2d6a4f] ${
-            error ? 'border-[#c0392b]' : valid ? 'border-[#2d6a4f]' : 'border-[#e7e1d8]'
+          className={`mt-8 w-full flex items-center gap-0.5 h-[52px] px-4 rounded-xl bg-(--c-fff) border transition-colors focus-within:border-(--c-2d6a4f) ${
+            error ? 'border-(--c-c0392b)' : valid ? 'border-(--c-2d6a4f)' : 'border-(--c-e7e1d8)'
           }`}
         >
-          <span className="text-[16px] font-semibold text-[#a8998a]">@</span>
+          <span className="text-[16px] font-semibold text-(--c-a8998a)">@</span>
           <input
             value={value}
             onChange={(e) => {
@@ -66,15 +66,15 @@ export default function Username() {
             maxLength={20}
             placeholder="username"
             aria-label="Username"
-            className="flex-1 min-w-0 bg-transparent text-[16px] font-semibold text-[#1c1917] placeholder:text-[#a8998a] focus:outline-none"
+            className="flex-1 min-w-0 bg-transparent text-[16px] font-semibold text-(--c-1c1917) placeholder:text-(--c-a8998a) focus:outline-none"
           />
         </label>
-        {error && <p className="m-0 mt-2 text-[12.5px] text-[#c0392b] text-center">{error}</p>}
+        {error && <p className="m-0 mt-2 text-[12.5px] text-(--c-c0392b) text-center">{error}</p>}
 
         <button
           type="submit"
           disabled={!valid || saving}
-          className="w-full mt-6 h-[52px] rounded-xl text-[15px] font-semibold bg-[#2d6a4f] hover:bg-[#245c43] active:bg-[#1e5238] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2d6a4f]"
+          className="w-full mt-6 h-[52px] rounded-xl text-[15px] font-semibold bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) active:bg-(--c-1e5238) text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--c-2d6a4f)"
         >
           {saving ? <Loader2 size={18} className="animate-spin" /> : 'Continue'}
         </button>

@@ -14,8 +14,8 @@ import { fetchPublicCharts } from '../api'
 import type { ChartItem } from '../api'
 import PublicShell from '../components/PublicShell'
 
-const DOWN = '#e07a6a'
-const UP = '#9fd6b0'
+const DOWN = 'var(--c-e07a6a)'
+const UP = 'var(--c-9fd6b0)'
 
 /** ISO week, to date the board like a print chart ("WK 30 · 2026"). */
 function weekLabel(): string {

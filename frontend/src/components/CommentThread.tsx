@@ -48,7 +48,7 @@ export default function CommentThread({ albumId, autoLoad = true }: { albumId: n
   return (
     <div>
       {isLoading ? (
-        <div className="flex items-center gap-1.5 text-[#bbb] text-xs py-1">
+        <div className="flex items-center gap-1.5 text-(--c-bbb) text-xs py-1">
           <Loader2 size={12} className="animate-spin" /> Loading comments…
         </div>
       ) : (
@@ -58,19 +58,19 @@ export default function CommentThread({ albumId, autoLoad = true }: { albumId: n
               <Avatar name={c.author.name} avatarUrl={c.author.avatar_url} size={22} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-xs font-semibold text-[#111]">{c.author.name}</span>
-                  {c.created_at && <span className="text-[10px] text-[#bbb]">{timeAgo(c.created_at)}</span>}
+                  <span className="text-xs font-semibold text-(--c-111)">{c.author.name}</span>
+                  {c.created_at && <span className="text-[10px] text-(--c-bbb)">{timeAgo(c.created_at)}</span>}
                   {c.can_delete && (
                     <button
                       onClick={() => handleDelete(c.id)}
-                      className="ml-auto text-[#ccc] hover:text-[#c0392b] opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="ml-auto text-(--c-ccc) hover:text-(--c-c0392b) opacity-0 group-hover:opacity-100 transition-opacity"
                       aria-label="Delete comment"
                     >
                       <Trash2 size={12} />
                     </button>
                   )}
                 </div>
-                <p className="text-[13px] text-[#444] leading-snug whitespace-pre-wrap break-words">{c.body}</p>
+                <p className="text-[13px] text-(--c-444) leading-snug whitespace-pre-wrap break-words">{c.body}</p>
               </div>
             </div>
           ))}
@@ -84,12 +84,12 @@ export default function CommentThread({ albumId, autoLoad = true }: { albumId: n
           onChange={e => setDraft(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePost() } }}
           placeholder="Add a comment…"
-          className="flex-1 min-w-0 px-3 py-1.5 bg-[#f5f5f5] border border-[#e2e2e2] rounded-full text-[13px] text-[#111] placeholder:text-[#bbb] focus:outline-none focus:border-[#2d6a4f] transition-colors"
+          className="flex-1 min-w-0 px-3 py-1.5 bg-(--c-f5f5f5) border border-(--c-e2e2e2) rounded-full text-[13px] text-(--c-111) placeholder:text-(--c-bbb) focus:outline-none focus:border-(--c-2d6a4f) transition-colors"
         />
         <button
           onClick={handlePost}
           disabled={!draft.trim() || posting}
-          className="text-[#2d6a4f] hover:text-[#245c43] disabled:text-[#ccc] transition-colors shrink-0"
+          className="text-(--c-2d6a4f) hover:text-(--c-245c43) disabled:text-(--c-ccc) transition-colors shrink-0"
           aria-label="Post comment"
         >
           {posting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}

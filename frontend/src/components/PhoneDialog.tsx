@@ -24,9 +24,9 @@ function pretty(e164: string): string {
 }
 
 const INPUT =
-  'w-full rounded-xl border border-[#e2dbd0] bg-white px-4 py-3 text-[16px] text-[#1c1917] placeholder:text-[#b5aa9c] focus:border-[#2d6a4f] focus:outline-none transition-colors'
+  'w-full rounded-xl border border-(--c-e2dbd0) bg-(--c-fff) px-4 py-3 text-[16px] text-(--c-1c1917) placeholder:text-(--c-b5aa9c) focus:border-(--c-2d6a4f) focus:outline-none transition-colors'
 const PRIMARY =
-  'flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#2d6a4f] text-[15px] font-semibold text-white hover:bg-[#245c43] disabled:opacity-50'
+  'flex h-12 w-full items-center justify-center gap-2 rounded-full bg-(--c-green-fill) text-[15px] font-semibold text-white hover:bg-(--c-green-fill-hover) disabled:opacity-50'
 
 export default function PhoneDialog({ mode, onClose }: { mode: 'prompt' | 'settings'; onClose: () => void }) {
   const { addPhoneNumber, skipPhoneNumber } = useUser()
@@ -92,14 +92,14 @@ export default function PhoneDialog({ mode, onClose }: { mode: 'prompt' | 'setti
         role="dialog"
         aria-modal="true"
         aria-labelledby="phone-title"
-        className="relative w-full max-w-sm rounded-3xl bg-[#f9f8f6] p-7 shadow-xl pop-in"
+        className="relative w-full max-w-sm rounded-3xl bg-(--c-f9f8f6) p-7 shadow-xl pop-in"
       >
         <div className="flex items-center justify-between">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2d6a4f]/10">
-            <Phone size={18} color="#2d6a4f" />
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-(--c-2d6a4f)/10">
+            <Phone size={18} color="var(--c-2d6a4f)" />
           </span>
           {!prompt && (
-            <button onClick={onClose} aria-label="Close" className="text-[#a8998a] hover:text-[#57534e]">
+            <button onClick={onClose} aria-label="Close" className="text-(--c-a8998a) hover:text-(--c-57534e)">
               <X size={18} />
             </button>
           )}
@@ -107,10 +107,10 @@ export default function PhoneDialog({ mode, onClose }: { mode: 'prompt' | 'setti
 
         {step === 'number' ? (
           <form onSubmit={submitNumber}>
-            <h2 id="phone-title" className="font-display m-0 mt-4 text-[28px] font-bold leading-tight text-[#1c1917]">
+            <h2 id="phone-title" className="font-display m-0 mt-4 text-[28px] font-bold leading-tight text-(--c-1c1917)">
               {prompt ? 'Add your phone number' : 'Phone number'}
             </h2>
-            <p className="m-0 mt-2 text-[14.5px] leading-relaxed text-[#57534e]">
+            <p className="m-0 mt-2 text-[14.5px] leading-relaxed text-(--c-57534e)">
               Pressd uses it to help your friends find you, and to make sharing records with them easier.
               It’s never shown on your profile.
             </p>
@@ -125,7 +125,7 @@ export default function PhoneDialog({ mode, onClose }: { mode: 'prompt' | 'setti
               disabled={busy}
               aria-label="Phone number"
             />
-            {error && <p className="m-0 mt-2 text-[13px] text-[#b91c1c]">{error}</p>}
+            {error && <p className="m-0 mt-2 text-[13px] text-(--c-b91c1c)">{error}</p>}
             <button type="submit" className={`${PRIMARY} mt-5`} disabled={busy || !number.trim()}>
               {busy ? <Loader2 size={16} className="animate-spin" /> : 'Text me a code'}
             </button>
@@ -134,7 +134,7 @@ export default function PhoneDialog({ mode, onClose }: { mode: 'prompt' | 'setti
                 type="button"
                 onClick={notNow}
                 disabled={busy}
-                className="mt-2 h-11 w-full rounded-full text-[14.5px] font-semibold text-[#78716c] hover:bg-[#efebe5]"
+                className="mt-2 h-11 w-full rounded-full text-[14.5px] font-semibold text-(--c-78716c) hover:bg-(--c-efebe5)"
               >
                 Not now
               </button>
@@ -142,10 +142,10 @@ export default function PhoneDialog({ mode, onClose }: { mode: 'prompt' | 'setti
           </form>
         ) : (
           <form onSubmit={submitCode}>
-            <h2 id="phone-title" className="font-display m-0 mt-4 text-[28px] font-bold leading-tight text-[#1c1917]">
+            <h2 id="phone-title" className="font-display m-0 mt-4 text-[28px] font-bold leading-tight text-(--c-1c1917)">
               Enter the code
             </h2>
-            <p className="m-0 mt-2 text-[14.5px] leading-relaxed text-[#57534e]">
+            <p className="m-0 mt-2 text-[14.5px] leading-relaxed text-(--c-57534e)">
               We texted a 6-digit code to {sentTo ? pretty(sentTo) : 'your phone'}.
             </p>
             <input
@@ -159,11 +159,11 @@ export default function PhoneDialog({ mode, onClose }: { mode: 'prompt' | 'setti
               disabled={busy}
               aria-label="Verification code"
             />
-            {error && <p className="m-0 mt-2 text-[13px] text-[#b91c1c]">{error}</p>}
+            {error && <p className="m-0 mt-2 text-[13px] text-(--c-b91c1c)">{error}</p>}
             <button type="submit" className={`${PRIMARY} mt-5`} disabled={busy || code.length < 6}>
               {busy ? <Loader2 size={16} className="animate-spin" /> : 'Verify'}
             </button>
-            <div className="mt-4 flex justify-between text-[14px] font-semibold text-[#2d6a4f]">
+            <div className="mt-4 flex justify-between text-[14px] font-semibold text-(--c-2d6a4f)">
               <button type="button" onClick={() => { setStep('number'); setError(null) }} disabled={busy} className="hover:underline underline-offset-2">
                 Change number
               </button>

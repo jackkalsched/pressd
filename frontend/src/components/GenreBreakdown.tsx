@@ -104,16 +104,16 @@ export default function GenreBreakdown({
   }
 
   return (
-    <div className="border border-[#e8e2d9] rounded-2xl p-6">
+    <div className="border border-(--c-e8e2d9) rounded-2xl p-6">
       <div className="flex items-center justify-between gap-3 mb-4">
-        <h2 className="text-sm font-semibold text-[#78716c] m-0">{title}</h2>
-        <div className="flex items-center rounded-lg bg-[#efebe5] p-0.5 shrink-0">
+        <h2 className="text-sm font-semibold text-(--c-78716c) m-0">{title}</h2>
+        <div className="flex items-center rounded-lg bg-(--c-efebe5) p-0.5 shrink-0">
           {([['count', 'Most rated'], ['avg', 'Highest rated']] as const).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setSort(key)}
               className={`text-[11.5px] font-medium px-2.5 py-1 rounded-md transition-colors ${
-                sort === key ? 'bg-white text-[#1c1917] shadow-sm' : 'text-[#8a7f72] hover:text-[#1c1917]'
+                sort === key ? 'bg-(--c-fff) text-(--c-1c1917) shadow-sm' : 'text-(--c-8a7f72) hover:text-(--c-1c1917)'
               }`}
             >
               {label}
@@ -136,26 +136,26 @@ export default function GenreBreakdown({
             >
               <Link
                 to={href(g.genre)}
-                className="group grid grid-cols-[22px_minmax(0,1fr)_40px_44px] items-center gap-3 px-1.5 -mx-1.5 py-2 rounded-lg hover:bg-[#f2f0ec] transition-colors"
+                className="group grid grid-cols-[22px_minmax(0,1fr)_40px_44px] items-center gap-3 px-1.5 -mx-1.5 py-2 rounded-lg hover:bg-(--c-f2f0ec) transition-colors"
               >
-                <span className="text-[11.5px] text-[#b5aa9c] tabular-nums text-right">{i + 1}</span>
+                <span className="text-[11.5px] text-(--c-b5aa9c) tabular-nums text-right">{i + 1}</span>
                 <div className="min-w-0">
-                  <p className={`m-0 text-[13.5px] truncate group-hover:text-[#2d6a4f] transition-colors ${thin ? 'text-[#a8998a]' : 'text-[#1c1917] font-medium'}`}>
+                  <p className={`m-0 text-[13.5px] truncate group-hover:text-(--c-2d6a4f) transition-colors ${thin ? 'text-(--c-a8998a)' : 'text-(--c-1c1917) font-medium'}`}>
                     {g.genre}
                   </p>
-                  <div className="mt-1 h-[5px] rounded-full bg-[#ece6dc] overflow-hidden">
+                  <div className="mt-1 h-[5px] rounded-full bg-(--c-ece6dc) overflow-hidden">
                     <div
                       className="grow-x h-full rounded-full transition-[width,background-color] duration-500"
                       style={{
                         ...stagger(i),
                         ...(sort === 'count'
-                          ? { width: `${(g.count / maxCount) * 100}%`, background: '#2d6a4f', opacity: 0.8 }
+                          ? { width: `${(g.count / maxCount) * 100}%`, background: 'var(--c-2d6a4f)', opacity: 0.8 }
                           : { width: `${g.avg_score * 10}%`, background: songScoreColor(g.avg_score) }),
                       }}
                     />
                   </div>
                 </div>
-                <span className="text-[12px] text-[#8a7f72] tabular-nums text-right" title={`${g.count} rated`}>
+                <span className="text-[12px] text-(--c-8a7f72) tabular-nums text-right" title={`${g.count} rated`}>
                   {g.count}
                 </span>
                 <span
@@ -172,10 +172,10 @@ export default function GenreBreakdown({
       </ol>
 
       {ranked.length > PREVIEW && (
-        <div className="flex justify-end mt-3 pt-3 border-t border-[#f0ebe3]">
+        <div className="flex justify-end mt-3 pt-3 border-t border-(--c-f0ebe3)">
           <button
             onClick={() => setOpen((v) => !v)}
-            className="flex items-center gap-1 text-[12px] font-semibold text-[#2d6a4f] hover:text-[#245c43] transition-colors"
+            className="flex items-center gap-1 text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) transition-colors"
           >
             {open ? 'Show less' : `See all ${ranked.length}`}
             {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}

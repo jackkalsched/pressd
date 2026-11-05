@@ -12,8 +12,8 @@ import { stagger } from '../lib/format'
 import { GREEN, RECOMMEND, SECTION_LABEL } from './albumView'
 
 const UP = GREEN       // you rate it higher
-const DOWN = '#b5432f' // you rate it lower
-const EVEN = '#8a8079' // neither of you is higher
+const DOWN = 'var(--c-b5432f)' // you rate it lower
+const EVEN = 'var(--c-8a8079)' // neither of you is higher
 // Anything under this rounds to 0.0 at one decimal, so it is drawn as agreement.
 const ZERO_EPS = 0.05
 // Below this a bar can't hold its own label, so the pill sets the floor.
@@ -36,10 +36,10 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
  *  doesn't exist yet, and the way to summon one is to send someone the record. */
 export function NoComparisonYet({ title, body }: { title: string; body?: string }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-2xl border border-[#f97316]/25 bg-[#f97316]/[0.07] px-6 py-6 text-center">
+    <div className="flex flex-col items-center gap-2 rounded-2xl border border-(--c-f97316)/25 bg-(--c-f97316)/[0.07] px-6 py-6 text-center">
       <Star size={20} color={RECOMMEND} fill={RECOMMEND} />
-      <p className="m-0 max-w-md text-[14.5px] font-semibold text-[#1c1917]">{title}</p>
-      {body && <p className="m-0 max-w-md text-[13px] text-[#8a7f72]">{body}</p>}
+      <p className="m-0 max-w-md text-[14.5px] font-semibold text-(--c-1c1917)">{title}</p>
+      {body && <p className="m-0 max-w-md text-[13px] text-(--c-8a7f72)">{body}</p>}
     </div>
   )
 }
@@ -49,7 +49,7 @@ export function NoComparisonYet({ title, body }: { title: string; body?: string 
 export function ScoreVersus({ mine, theirs, mineLabel }: { mine: number | null; theirs: number | null; mineLabel: string }) {
   const diff = mine != null && theirs != null ? mine - theirs : null
   const figure = (v: number | null) => (
-    <p className="font-display m-0 text-[52px] font-bold leading-none tabular-nums" style={{ color: v != null ? songScoreColor(v) : '#c8c0b4' }}>
+    <p className="font-display m-0 text-[52px] font-bold leading-none tabular-nums" style={{ color: v != null ? songScoreColor(v) : 'var(--c-c8c0b4)' }}>
       {v != null ? v.toFixed(2) : '—'}
     </p>
   )
@@ -57,19 +57,19 @@ export function ScoreVersus({ mine, theirs, mineLabel }: { mine: number | null; 
     <div className="mb-12 flex flex-wrap items-end gap-x-10 gap-y-4 rise-in" style={stagger(1)}>
       <div>
         {figure(mine)}
-        <p className="m-0 mt-2 text-[11px] font-bold tracking-[0.16em] text-[#44403c]">{mineLabel}</p>
+        <p className="m-0 mt-2 text-[11px] font-bold tracking-[0.16em] text-(--c-44403c)">{mineLabel}</p>
       </div>
       <div className="pb-6 text-center">
-        <p className="font-display m-0 text-[18px] text-[#a8998a]">vs.</p>
+        <p className="font-display m-0 text-[18px] text-(--c-a8998a)">vs.</p>
         {diff != null && (
-          <p className="m-0 text-[13px] font-bold tabular-nums" style={{ color: diff >= 0 ? UP : '#c0392b' }}>
+          <p className="m-0 text-[13px] font-bold tabular-nums" style={{ color: diff >= 0 ? UP : 'var(--c-c0392b)' }}>
             {diff >= 0 ? '+' : ''}{diff.toFixed(2)}
           </p>
         )}
       </div>
       <div>
         {figure(theirs)}
-        <p className="m-0 mt-2 text-[11px] font-bold tracking-[0.16em] text-[#44403c]">PRESSD AVG SONG</p>
+        <p className="m-0 mt-2 text-[11px] font-bold tracking-[0.16em] text-(--c-44403c)">PRESSD AVG SONG</p>
       </div>
     </div>
   )
@@ -104,10 +104,10 @@ function GapRows({ rows }: { rows: SongGap[] }) {
         const left = zero ? half - width / 2 : up ? half : half - width
         return (
           <li key={`${r.title}-${i}`} className="rise-in" style={stagger(i)}>
-            <div className="flex items-center gap-4 rounded-2xl px-4 py-2 transition-colors hover:bg-[#f2eee7]">
-              <span className="w-[38%] min-w-0 shrink-0 truncate text-[14px] text-[#1c1917]" title={r.title}>{r.title}</span>
+            <div className="flex items-center gap-4 rounded-2xl px-4 py-2 transition-colors hover:bg-(--c-f2eee7)">
+              <span className="w-[38%] min-w-0 shrink-0 truncate text-[14px] text-(--c-1c1917)" title={r.title}>{r.title}</span>
               <div ref={i === 0 ? ref : undefined} className="relative h-7 flex-1">
-                <span className="absolute inset-y-[-8px] left-1/2 w-px bg-[#e6ded2]" />
+                <span className="absolute inset-y-[-8px] left-1/2 w-px bg-(--c-e6ded2)" />
                 {plotW > 0 && (
                   <span
                     className={`grow-x absolute top-0.5 flex h-6 items-center rounded-full px-2.5 text-[12px] font-bold tabular-nums text-white ${zero ? 'justify-center' : up ? 'justify-end' : 'justify-start'}`}
@@ -123,7 +123,7 @@ function GapRows({ rows }: { rows: SongGap[] }) {
                   </span>
                 )}
               </div>
-              <span className="hidden w-24 shrink-0 text-right text-[12px] tabular-nums text-[#8a7f72] sm:block">
+              <span className="hidden w-24 shrink-0 text-right text-[12px] tabular-nums text-(--c-8a7f72) sm:block">
                 {r.mine.toFixed(1)} · {r.theirs.toFixed(1)}
               </span>
             </div>
@@ -161,13 +161,13 @@ export function SongGapChart({ gaps, artist }: { gaps: SongGap[]; artist: string
           <p className="font-display m-0 text-[30px] font-bold leading-none tabular-nums" style={{ color: summary.mean >= 0 ? UP : DOWN }}>
             {summary.mean >= 0 ? '+' : ''}{summary.mean.toFixed(2)}
           </p>
-          <p className="m-0 mt-1.5 text-[12px] font-medium text-[#8a7f72]">Average gap vs Pressd</p>
+          <p className="m-0 mt-1.5 text-[12px] font-medium text-(--c-8a7f72)">Average gap vs Pressd</p>
         </div>
         <div className="max-w-[60%] text-right rise-in" style={stagger(1)}>
           <p className="font-display m-0 text-[30px] font-bold leading-tight" style={{ color: summary.hottest.diff >= 0 ? UP : DOWN }}>
             {summary.hottest.title}
           </p>
-          <p className="m-0 mt-1.5 text-[12px] font-medium text-[#8a7f72]">Hottest take</p>
+          <p className="m-0 mt-1.5 text-[12px] font-medium text-(--c-8a7f72)">Hottest take</p>
         </div>
       </div>
 
@@ -185,7 +185,7 @@ export function SongGapChart({ gaps, artist }: { gaps: SongGap[]; artist: string
       {gaps.length > preview.length && (
         <button
           onClick={() => setShowAll((v) => !v)}
-          className="mt-2 flex items-center gap-1 text-[13.5px] font-semibold text-[#2d6a4f] hover:underline underline-offset-2"
+          className="mt-2 flex items-center gap-1 text-[13.5px] font-semibold text-(--c-2d6a4f) hover:underline underline-offset-2"
         >
           {showAll ? 'Show the extremes' : `See all ${gaps.length} shared tracks`}
           <ChevronDown size={15} className={`transition-transform ${showAll ? 'rotate-180' : ''}`} />
@@ -197,7 +197,7 @@ export function SongGapChart({ gaps, artist }: { gaps: SongGap[]; artist: string
 
 // ── Your distribution over everyone else's ────────────────────────────────────
 
-const YOU = '#f97316'
+const YOU = 'var(--c-f97316)'
 const THEM = GREEN
 const LO = 1
 const HI = 10
@@ -249,7 +249,7 @@ export function ScoreKdeCompare({ mine, theirs, mineLabel }: { mine: number[]; t
 
   return (
     <div>
-      <div className="mb-3 flex gap-5 text-[12px] text-[#8a7f72]">
+      <div className="mb-3 flex gap-5 text-[12px] text-(--c-8a7f72)">
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: YOU }} />{mineLabel}</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: THEM }} />Everyone else</span>
       </div>
@@ -263,7 +263,7 @@ export function ScoreKdeCompare({ mine, theirs, mineLabel }: { mine: number[]; t
           </svg>
         )}
       </div>
-      <div className="mt-1.5 flex justify-between text-[11px] text-[#a8998a]">
+      <div className="mt-1.5 flex justify-between text-[11px] text-(--c-a8998a)">
         {[1, 4, 7, 10].map((t) => <span key={t}>{t}</span>)}
       </div>
     </div>
@@ -284,13 +284,13 @@ export function SimilarArtistComparisons({ rows }: { rows: SimilarArtistComparis
           return (
             <li key={r.artist} className="w-40 shrink-0 rise-in" style={stagger(i)}>
               <Link to={`/artist/${encodeURIComponent(r.artist)}?mode=compare`} className="group block">
-                <div className="relative aspect-square overflow-hidden rounded-2xl bg-[#ebe5dc] shadow-[0_14px_30px_-20px_rgba(40,25,10,0.55)] transition-transform duration-[250ms] ease-out group-hover:scale-[1.04] group-hover:-rotate-1">
-                  <span className="font-display absolute inset-0 flex items-center justify-center text-[44px] text-[#a8998a]">{r.artist[0]?.toUpperCase()}</span>
+                <div className="relative aspect-square overflow-hidden rounded-2xl bg-(--c-ebe5dc) shadow-[0_14px_30px_-20px_rgba(40,25,10,0.55)] transition-transform duration-[250ms] ease-out group-hover:scale-[1.04] group-hover:-rotate-1">
+                  <span className="font-display absolute inset-0 flex items-center justify-center text-[44px] text-(--c-a8998a)">{r.artist[0]?.toUpperCase()}</span>
                   {r.image_url && <img src={r.image_url} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />}
                 </div>
-                <p className="m-0 mt-2.5 truncate text-[14px] font-semibold text-[#1c1917]">{r.artist}</p>
-                <p className="m-0 mt-0.5 text-[12px] leading-snug text-[#8a7f72]">
-                  You rate <span className="font-medium text-[#57534e]">{r.top_gap.title}</span>{' '}
+                <p className="m-0 mt-2.5 truncate text-[14px] font-semibold text-(--c-1c1917)">{r.artist}</p>
+                <p className="m-0 mt-0.5 text-[12px] leading-snug text-(--c-8a7f72)">
+                  You rate <span className="font-medium text-(--c-57534e)">{r.top_gap.title}</span>{' '}
                   <span className="font-bold" style={{ color: higher ? UP : DOWN }}>
                     {Math.abs(r.top_gap.diff).toFixed(1)} {higher ? 'higher' : 'lower'}
                   </span>{' '}

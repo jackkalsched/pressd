@@ -35,7 +35,7 @@ function Faces({ me, them }: { me: Face; them: Face }) {
   return (
     <span className="flex shrink-0">
       {[me, them].map((f, i) => (
-        <span key={i} className={`rounded-full bg-[#dfe9e2] p-[2px] ${i ? '-ml-3' : ''}`} style={{ zIndex: 2 - i }}>
+        <span key={i} className={`rounded-full bg-(--c-dfe9e2) p-[2px] ${i ? '-ml-3' : ''}`} style={{ zIndex: 2 - i }}>
           <Avatar name={f.name} avatarUrl={f.avatarUrl} size={34} />
         </span>
       ))}
@@ -63,7 +63,7 @@ export function OverlapPill({ overlap, me, them, onOpenLibrary }: {
   )
   return (
     <div
-      className="mt-4 inline-flex max-w-full items-center gap-3 rounded-full bg-[#dfe9e2] py-1.5 pl-1.5 pr-4 rise-in"
+      className="mt-4 inline-flex max-w-full items-center gap-3 rounded-full bg-(--c-dfe9e2) py-1.5 pl-1.5 pr-4 rise-in"
       style={{ color: GREEN }}
       title={overlap.reason ? reasonPlain(overlap.reason) : undefined}
     >
@@ -79,14 +79,14 @@ export function OverlapPill({ overlap, me, them, onOpenLibrary }: {
 
       {covers.length > 0 && (
         <>
-          <span aria-hidden className="h-7 w-px shrink-0 bg-[#2d6a4f]/25" />
+          <span aria-hidden className="h-7 w-px shrink-0 bg-(--c-2d6a4f)/25" />
           <span className="flex shrink-0 items-center">
             {covers.map((c, i) => (
               <Link
                 key={c.id}
                 to={`/album/${c.id}?view=compare`}
                 title={c.name}
-                className={`group block rounded-[9px] bg-[#dfe9e2] p-[2px] ${i ? '-ml-2.5' : ''}`}
+                className={`group block rounded-[9px] bg-(--c-dfe9e2) p-[2px] ${i ? '-ml-2.5' : ''}`}
                 style={{ zIndex: covers.length - i }}
               >
                 <div className={COVER_LIFT}>

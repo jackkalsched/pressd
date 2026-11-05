@@ -104,7 +104,7 @@ function ReviewSection({ album, editable, authorName, index, inRail = false }: {
         {editable && album.review && !editing && (
           <button
             onClick={() => { setDraft(album.review ?? ''); setEditing(true) }}
-            className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#2d6a4f] hover:text-[#245c43]"
+            className="flex items-center gap-1.5 text-[12.5px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43)"
           >
             <Pencil size={12} /> Edit
           </button>
@@ -112,21 +112,21 @@ function ReviewSection({ album, editable, authorName, index, inRail = false }: {
       </div>
 
       {editing ? (
-        <div className="rounded-2xl border border-[#e2dbd0] bg-white/80 p-4 pop-in">
+        <div className="rounded-2xl border border-(--c-e2dbd0) bg-(--c-fff)/80 p-4 pop-in">
           <textarea
             value={draft}
             onChange={e => setDraft(e.target.value)}
             autoFocus
             rows={8}
             placeholder="What worked, what didn't, the tracks that stayed with you…"
-            className="w-full resize-y bg-transparent text-[15px] leading-relaxed text-[#1c1917] placeholder:text-[#b8ada0] focus:outline-none"
+            className="w-full resize-y bg-transparent text-[15px] leading-relaxed text-(--c-1c1917) placeholder:text-(--c-b8ada0) focus:outline-none"
           />
-          <div className="mt-3 flex items-center justify-end gap-2 border-t border-[#ece5da] pt-3">
+          <div className="mt-3 flex items-center justify-end gap-2 border-t border-(--c-ece5da) pt-3">
             {album.review && (
               <button
                 onClick={handleDelete}
                 disabled={saving}
-                className="mr-auto flex items-center gap-1.5 text-[13px] font-medium text-[#a8998a] hover:text-[#c0392b] disabled:opacity-50"
+                className="mr-auto flex items-center gap-1.5 text-[13px] font-medium text-(--c-a8998a) hover:text-(--c-c0392b) disabled:opacity-50"
               >
                 <Trash2 size={13} /> Delete
               </button>
@@ -134,27 +134,27 @@ function ReviewSection({ album, editable, authorName, index, inRail = false }: {
             <button
               onClick={() => { setDraft(album.review ?? ''); setEditing(false) }}
               disabled={saving}
-              className="px-3 py-1.5 text-[13px] font-medium text-[#78716c] hover:text-[#1c1917] disabled:opacity-50"
+              className="px-3 py-1.5 text-[13px] font-medium text-(--c-78716c) hover:text-(--c-1c1917) disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={saving || !draft.trim()}
-              className="flex items-center gap-1.5 rounded-full bg-[#2d6a4f] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#245c43] disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-full bg-(--c-green-fill) px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-(--c-green-fill-hover) disabled:opacity-50"
             >
               {saving && <Loader2 size={13} className="animate-spin" />} Save
             </button>
           </div>
         </div>
       ) : album.review ? (
-        <p className={`font-display m-0 max-w-2xl whitespace-pre-wrap break-words border-l-2 border-[#2d6a4f]/30 leading-relaxed text-[#1c1917] ${inRail ? 'pl-4 text-[15.5px]' : 'pl-5 text-[17px]'}`}>
+        <p className={`font-display m-0 max-w-2xl whitespace-pre-wrap break-words border-l-2 border-(--c-2d6a4f)/30 leading-relaxed text-(--c-1c1917) ${inRail ? 'pl-4 text-[15.5px]' : 'pl-5 text-[17px]'}`}>
           {album.review}
         </p>
       ) : (
         <button
           onClick={() => { setDraft(''); setEditing(true) }}
-          className="inline-flex items-center gap-2 rounded-full border border-dashed border-[#cfc6b9] px-4 py-2 text-[13.5px] font-semibold text-[#8a7f72] hover:border-[#2d6a4f] hover:text-[#2d6a4f]"
+          className="inline-flex items-center gap-2 rounded-full border border-dashed border-(--c-cfc6b9) px-4 py-2 text-[13.5px] font-semibold text-(--c-8a7f72) hover:border-(--c-2d6a4f) hover:text-(--c-2d6a4f)"
         >
           <Pencil size={13} /> Write a review
         </button>
@@ -217,16 +217,16 @@ export default function AlbumDetail() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#f9f8f6] flex items-center justify-center gap-2 text-[#a8998a]">
+      <div className="min-h-screen bg-(--c-f9f8f6) flex items-center justify-center gap-2 text-(--c-a8998a)">
         <Loader2 size={16} className="animate-spin" /> Loading…
       </div>
     )
   }
   if (error || !album) {
     return (
-      <div className="min-h-screen bg-[#f9f8f6] flex flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="font-display m-0 text-2xl font-bold text-[#1c1917]">Couldn&rsquo;t load this album</p>
-        <button onClick={leave} className="text-sm font-semibold text-[#2d6a4f] hover:text-[#245c43]">Go back</button>
+      <div className="min-h-screen bg-(--c-f9f8f6) flex flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="font-display m-0 text-2xl font-bold text-(--c-1c1917)">Couldn&rsquo;t load this album</p>
+        <button onClick={leave} className="text-sm font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43)">Go back</button>
       </div>
     )
   }
@@ -329,13 +329,13 @@ export default function AlbumDetail() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#f9f8f6]">
+    <div className="relative min-h-screen overflow-x-hidden bg-(--c-f9f8f6)">
       <CoverWash url={album.albumArtUrl} />
 
       <div className="relative mx-auto w-full max-w-[1400px] px-4 pb-24 md:px-12">
         {/* ── Top bar ──────────────────────────────────────────────── */}
         <div className="flex flex-wrap items-center justify-between gap-3 py-6">
-          <button onClick={leave} className="flex items-center gap-1.5 text-[13px] font-medium text-[#57534e] hover:text-[#111]">
+          <button onClick={leave} className="flex items-center gap-1.5 text-[13px] font-medium text-(--c-57534e) hover:text-(--c-111)">
             <ArrowLeft size={16} /> Back
           </button>
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -402,11 +402,11 @@ export default function AlbumDetail() {
                   <Cover artUrl={null} seed={album.artist} size={380} radius={0} fontSize={120} />
                 )}
               </div>
-              <h1 className="font-display m-0 mt-6 text-[34px] font-bold leading-tight text-[#1c1917]">{album.albumName}</h1>
-              <p className="m-0 mt-1.5 text-[15px] text-[#57534e]">
+              <h1 className="font-display m-0 mt-6 text-[34px] font-bold leading-tight text-(--c-1c1917)">{album.albumName}</h1>
+              <p className="m-0 mt-1.5 text-[15px] text-(--c-57534e)">
                 {artists.map((name, i, arr) => (
                   <span key={name}>
-                    <Link to={`/artist/${encodeURIComponent(name)}`} className="font-semibold text-[#1c1917] hover:text-[#2d6a4f] hover:underline underline-offset-2">
+                    <Link to={`/artist/${encodeURIComponent(name)}`} className="font-semibold text-(--c-1c1917) hover:text-(--c-2d6a4f) hover:underline underline-offset-2">
                       {name}
                     </Link>
                     {i < arr.length - 1 ? ', ' : ''}
@@ -417,10 +417,10 @@ export default function AlbumDetail() {
               {(album.genre || subs.length > 0) && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {album.genre && (
-                    <span className="rounded-full bg-[#2d6a4f]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[#2d6a4f]">{album.genre}</span>
+                    <span className="rounded-full bg-(--c-2d6a4f)/10 px-2.5 py-1 text-[11.5px] font-semibold text-(--c-2d6a4f)">{album.genre}</span>
                   )}
                   {subs.map((s) => (
-                    <span key={s} className="rounded-full bg-[#efebe5] px-2.5 py-1 text-[11.5px] font-medium text-[#78716c]">{s}</span>
+                    <span key={s} className="rounded-full bg-(--c-efebe5) px-2.5 py-1 text-[11.5px] font-medium text-(--c-78716c)">{s}</span>
                   ))}
                 </div>
               )}
@@ -436,7 +436,7 @@ export default function AlbumDetail() {
               yourAlbum ? (
                 <AlbumCompare theirs={album} mine={yourAlbum} ownerName={ownerName} />
               ) : (
-                <div className="flex items-center gap-2 py-8 text-[#a8998a]">
+                <div className="flex items-center gap-2 py-8 text-(--c-a8998a)">
                   <Loader2 size={16} className="animate-spin" /> Loading…
                 </div>
               )
@@ -448,10 +448,10 @@ export default function AlbumDetail() {
                   <p className="font-display m-0 text-[64px] font-bold leading-none tabular-nums" style={{ color: songScoreColor(album.score) }}>
                     {album.score.toFixed(2)}
                   </p>
-                  <p className="m-0 mt-2 text-[11px] font-bold tracking-[0.16em] text-[#44403c]">
+                  <p className="m-0 mt-2 text-[11px] font-bold tracking-[0.16em] text-(--c-44403c)">
                     {own ? 'YOUR SCORE' : `${possessive(ownerName).toUpperCase()} SCORE`}
                   </p>
-                  {ratedOn && <p className="m-0 mt-0.5 text-[13px] text-[#8a7f72]">Rated {ratedOn}</p>}
+                  {ratedOn && <p className="m-0 mt-0.5 text-[13px] text-(--c-8a7f72)">Rated {ratedOn}</p>}
                 </>
               ) : album.predictedScore != null ? (
                 <>
@@ -459,15 +459,15 @@ export default function AlbumDetail() {
                   <p className="font-display m-0 text-[64px] font-bold leading-none tabular-nums text-transparent [-webkit-text-stroke:2px_#2d6a4f]">
                     {album.predictedScore.toFixed(2)}
                   </p>
-                  <p className="m-0 mt-2 flex items-center gap-1 text-[11px] font-bold tracking-[0.16em] text-[#2d6a4f]">
+                  <p className="m-0 mt-2 flex items-center gap-1 text-[11px] font-bold tracking-[0.16em] text-(--c-2d6a4f)">
                     <Star size={11} fill={GREEN} strokeWidth={0} /> {own ? 'FOR YOU' : `FOR ${ownerName.toUpperCase()}`}
                   </p>
-                  <p className="m-0 mt-0.5 text-[13px] text-[#8a7f72]">predicted</p>
+                  <p className="m-0 mt-0.5 text-[13px] text-(--c-8a7f72)">predicted</p>
                 </>
               ) : (
                 <>
-                  <p className="font-display m-0 text-[64px] font-bold leading-none text-[#c8c0b4]">—</p>
-                  <p className="m-0 mt-2 text-[11px] font-bold tracking-[0.16em] text-[#a8998a]">NOT RATED YET</p>
+                  <p className="font-display m-0 text-[64px] font-bold leading-none text-(--c-c8c0b4)">—</p>
+                  <p className="m-0 mt-2 text-[11px] font-bold tracking-[0.16em] text-(--c-a8998a)">NOT RATED YET</p>
                 </>
               )}
             </div>
@@ -475,12 +475,12 @@ export default function AlbumDetail() {
             {/* Why it's on your shelf. The note is blanked by the server for
                 anyone but you, so only the sender's name shows on a friend's. */}
             {album.recommendedByName && (
-              <div className="mt-6 border-l-2 border-[#f3b98a] pl-4 rise-in" style={stagger(1)}>
+              <div className="mt-6 border-l-2 border-(--c-f3b98a) pl-4 rise-in" style={stagger(1)}>
                 <p className="m-0 flex items-center gap-1.5 text-[13.5px] font-semibold" style={{ color: RECOMMEND }}>
                   <Star size={13} fill={RECOMMEND} strokeWidth={0} /> Recommended by {album.recommendedByName}
                 </p>
                 {album.recommendationNote && (
-                  <p className="font-display m-0 mt-1.5 text-[15px] leading-relaxed text-[#1c1917]">&ldquo;{album.recommendationNote}&rdquo;</p>
+                  <p className="font-display m-0 mt-1.5 text-[15px] leading-relaxed text-(--c-1c1917)">&ldquo;{album.recommendationNote}&rdquo;</p>
                 )}
               </div>
             )}
@@ -496,7 +496,7 @@ export default function AlbumDetail() {
               <div className="mt-6 grid grid-cols-2 gap-y-5 sm:grid-cols-4">
                 <StatFigure label="Song average" value={songMean} digits={2} index={6} />
                 <StatFigure label="Bang rate" value={bangPct} digits={0} suffix="%" color={GREEN} index={7} />
-                <StatFigure label="Skip rate" value={skipPct} digits={0} suffix="%" color="#c0392b" index={8} />
+                <StatFigure label="Skip rate" value={skipPct} digits={0} suffix="%" color="var(--c-c0392b)" index={8} />
               </div>
             )}
 
@@ -505,7 +505,7 @@ export default function AlbumDetail() {
             {!own && yourCopy && yourCopy.status !== 'rated' && (
               <button
                 onClick={() => { setViewingUser(activeUser); navigate(`/rate/${yourCopy.id}`) }}
-                className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#2d6a4f] text-[15px] font-semibold text-white hover:bg-[#245c43] rise-in"
+                className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-(--c-green-fill) text-[15px] font-semibold text-white hover:bg-(--c-green-fill-hover) rise-in"
                 style={stagger(9)}
               >
                 <Play size={14} fill="currentColor" /> {yourCopy.status === 'listening' ? 'Continue rating' : 'Rate it yourself'}
@@ -517,7 +517,7 @@ export default function AlbumDetail() {
                 <button
                   onClick={rateYourself}
                   disabled={busy === 'rate'}
-                  className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[#2d6a4f] text-[15px] font-semibold text-white hover:bg-[#245c43] disabled:opacity-70"
+                  className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-(--c-green-fill) text-[15px] font-semibold text-white hover:bg-(--c-green-fill-hover) disabled:opacity-70"
                 >
                   {busy === 'rate' ? <Loader2 size={16} className="animate-spin" /> : <Play size={14} fill="currentColor" />}
                   Rate it yourself
@@ -525,7 +525,7 @@ export default function AlbumDetail() {
                 <button
                   onClick={addToLibrary}
                   disabled={busy === 'queue'}
-                  className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-[#d7cfc3] bg-white text-[15px] font-semibold text-[#1c1917] hover:border-[#2d6a4f]"
+                  className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-(--c-d7cfc3) bg-(--c-fff) text-[15px] font-semibold text-(--c-1c1917) hover:border-(--c-2d6a4f)"
                 >
                   {busy === 'queue' ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
                   Add to Library
@@ -535,7 +535,7 @@ export default function AlbumDetail() {
             {own && album.status === 'listening' && (
               <button
                 onClick={() => navigate(`/rate/${album.id}`)}
-                className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#2d6a4f] text-[15px] font-semibold text-white hover:bg-[#245c43] rise-in"
+                className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-(--c-green-fill) text-[15px] font-semibold text-white hover:bg-(--c-green-fill-hover) rise-in"
                 style={stagger(9)}
               >
                 <Play size={14} fill="currentColor" /> Continue rating
@@ -549,16 +549,16 @@ export default function AlbumDetail() {
                 const top = topSong != null && song.id === topSong.id && song.score != null
                 return (
                   <RevealRow key={song.id} index={i}>
-                    <div className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-[#f2eee7] ${top ? 'bg-[#2d6a4f]/[0.07]' : ''}`}>
-                      <span className="w-6 shrink-0 text-right text-[12.5px] text-[#b5aa9c] tabular-nums">{song.trackNumber}</span>
-                      <span className={`min-w-0 flex-1 truncate text-[14.5px] text-[#1c1917] ${top ? 'font-semibold' : ''}`}>
+                    <div className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-(--c-f2eee7) ${top ? 'bg-(--c-2d6a4f)/[0.07]' : ''}`}>
+                      <span className="w-6 shrink-0 text-right text-[12.5px] text-(--c-b5aa9c) tabular-nums">{song.trackNumber}</span>
+                      <span className={`min-w-0 flex-1 truncate text-[14.5px] text-(--c-1c1917) ${top ? 'font-semibold' : ''}`}>
                         {song.title}
-                        {top && <Star size={11} fill="#c8a84b" strokeWidth={0} className="ml-1.5 inline -translate-y-px" aria-label="Top track" />}
+                        {top && <Star size={11} fill="var(--c-c8a84b)" strokeWidth={0} className="ml-1.5 inline -translate-y-px" aria-label="Top track" />}
                       </span>
                       <BangSkip score={song.score} />
                       <span
                         className="font-display w-10 text-right text-[16px] font-bold tabular-nums"
-                        style={{ color: song.score != null ? songScoreColor(song.score) : '#c8c0b4' }}
+                        style={{ color: song.score != null ? songScoreColor(song.score) : 'var(--c-c8c0b4)' }}
                       >
                         {song.score != null ? song.score.toFixed(1) : '—'}
                       </span>
@@ -585,20 +585,20 @@ export default function AlbumDetail() {
                             navigate(`/album/${fa.id}`)
                           }}
                           aria-label={`See ${possessive(friend.name)} rating`}
-                          className="flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-[#f2eee7]"
+                          className="flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-(--c-f2eee7)"
                         >
                           {friend.avatarUrl ? (
                             <img src={friend.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
                           ) : (
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2d6a4f] text-[13px] font-bold text-white">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-(--c-green-fill) text-[13px] font-bold text-white">
                               {friend.name[0].toUpperCase()}
                             </span>
                           )}
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[14.5px] font-semibold text-[#1c1917]">{friend.name}</span>
+                            <span className="block truncate text-[14.5px] font-semibold text-(--c-1c1917)">{friend.name}</span>
                             {fav && (
-                              <span className="mt-0.5 flex items-center gap-1 truncate text-[12.5px] text-[#8a7f72]">
-                                <Star size={10} fill="#c8a84b" strokeWidth={0} className="shrink-0" />
+                              <span className="mt-0.5 flex items-center gap-1 truncate text-[12.5px] text-(--c-8a7f72)">
+                                <Star size={10} fill="var(--c-c8a84b)" strokeWidth={0} className="shrink-0" />
                                 <span className="truncate">{fav.title}</span>
                                 <span className="shrink-0 tabular-nums">· {fav.score!.toFixed(1)}</span>
                               </span>

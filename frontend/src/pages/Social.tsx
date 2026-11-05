@@ -29,7 +29,7 @@ function timeAgo(dateStr?: string): string {
 }
 
 function avatarColor(name: string): string {
-  const colors = ['#2d6a4f', '#1d4ed8', '#7c3aed', '#b45309', '#0f766e', '#be185d', '#c2410c']
+  const colors = ['var(--c-2d6a4f)', 'var(--c-1d4ed8)', 'var(--c-7c3aed)', 'var(--c-b45309)', 'var(--c-0f766e)', 'var(--c-be185d)', 'var(--c-c2410c)']
   let h = 0
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % colors.length
   return colors[h]
@@ -49,7 +49,7 @@ function FriendAvatar({ name, avatarUrl, size = 32 }: { name: string; avatarUrl?
     <div style={{
       width: size, height: size, borderRadius: '50%', background: avatarColor(name),
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: '#fff', fontSize: size * 0.42, fontWeight: 700, flexShrink: 0,
+      color: 'var(--c-fff)', fontSize: size * 0.42, fontWeight: 700, flexShrink: 0,
     }}>
       {name[0].toUpperCase()}
     </div>
@@ -57,10 +57,10 @@ function FriendAvatar({ name, avatarUrl, size = 32 }: { name: string; avatarUrl?
 }
 
 function scoreColor(score: number): string {
-  if (score >= 8.5) return '#1a7a3c'
-  if (score >= 7) return '#2d6a4f'
-  if (score >= 5.5) return '#b45309'
-  return '#c0392b'
+  if (score >= 8.5) return 'var(--c-1a7a3c)'
+  if (score >= 7) return 'var(--c-2d6a4f)'
+  if (score >= 5.5) return 'var(--c-b45309)'
+  return 'var(--c-c0392b)'
 }
 
 function FeedCard({ item }: { item: FeedItem }) {
@@ -107,10 +107,10 @@ function FeedCard({ item }: { item: FeedItem }) {
   const timestamp = isRec ? item.recommended_at : isReview ? item.review_at : item.date_rated
 
   return (
-    <div className="bg-white border border-[#e2e2e2] rounded-2xl p-5 hover:border-[#c8c8c8] transition-colors self-start">
+    <div className="bg-(--c-fff) border border-(--c-e2e2e2) rounded-2xl p-5 hover:border-(--c-c8c8c8) transition-colors self-start">
       <div className="flex gap-5">
         {/* Album art */}
-        <div className="w-24 h-24 shrink-0 rounded-xl overflow-hidden bg-[#e8e8e8] flex items-center justify-center text-[#aaa]">
+        <div className="w-24 h-24 shrink-0 rounded-xl overflow-hidden bg-(--c-e8e8e8) flex items-center justify-center text-(--c-aaa)">
           {item.album_art_url
             ? <CoverImg url={item.album_art_url} displayPx={96} alt={item.album_name} className="w-full h-full object-cover" />
             : <Music size={30} />}
@@ -127,33 +127,33 @@ function FeedCard({ item }: { item: FeedItem }) {
               className="flex items-center gap-2 min-w-0 group/friend"
             >
               <FriendAvatar name={item.friend.name} avatarUrl={item.friend.avatar_url} size={22} />
-              <span className="text-sm font-semibold text-[#111] truncate group-hover/friend:underline underline-offset-2">{item.friend.name}</span>
+              <span className="text-sm font-semibold text-(--c-111) truncate group-hover/friend:underline underline-offset-2">{item.friend.name}</span>
             </button>
             {timestamp && (
-              <span className="text-xs text-[#aaa] shrink-0">{timeAgo(timestamp)}</span>
+              <span className="text-xs text-(--c-aaa) shrink-0">{timeAgo(timestamp)}</span>
             )}
           </div>
 
           {isRec ? (
-            <p className="text-sm text-[#444] leading-snug mb-3 flex items-start gap-1.5">
-              <Star size={13} className="text-[#ea7a2a] shrink-0 mt-0.5" fill="#ea7a2a" strokeWidth={0} />
+            <p className="text-sm text-(--c-444) leading-snug mb-3 flex items-start gap-1.5">
+              <Star size={13} className="text-(--c-ea7a2a) shrink-0 mt-0.5" fill="var(--c-ea7a2a)" strokeWidth={0} />
               <span>
                 recommended{' '}
-                <span className="font-medium text-[#111]">{item.album_name}</span>
+                <span className="font-medium text-(--c-111)">{item.album_name}</span>
                 {' '}by{' '}
-                <span className="font-medium text-[#111]">{item.artist}</span>
+                <span className="font-medium text-(--c-111)">{item.artist}</span>
                 {' '}to you
               </span>
             </p>
           ) : isReview ? (
             <>
-              <p className="text-sm text-[#444] leading-snug mb-2 flex items-start gap-1.5">
-                <BookOpen size={13} className="text-[#2d6a4f] shrink-0 mt-0.5" strokeWidth={2} />
+              <p className="text-sm text-(--c-444) leading-snug mb-2 flex items-start gap-1.5">
+                <BookOpen size={13} className="text-(--c-2d6a4f) shrink-0 mt-0.5" strokeWidth={2} />
                 <span>
                   reviewed{' '}
-                  <span className="font-medium text-[#111]">{item.album_name}</span>
+                  <span className="font-medium text-(--c-111)">{item.album_name}</span>
                   {' '}by{' '}
-                  <span className="font-medium text-[#111]">{item.artist}</span>
+                  <span className="font-medium text-(--c-111)">{item.artist}</span>
                   {item.score != null && (
                     <>
                       {' · '}
@@ -165,17 +165,17 @@ function FeedCard({ item }: { item: FeedItem }) {
                 </span>
               </p>
               {item.review_excerpt && (
-                <p className="text-[13px] text-[#555] leading-relaxed mb-3 italic border-l-2 border-[#e2e2e2] pl-3">
+                <p className="text-[13px] text-(--c-555) leading-relaxed mb-3 italic border-l-2 border-(--c-e2e2e2) pl-3">
                   {item.review_excerpt}
                 </p>
               )}
             </>
           ) : (
-            <p className="text-sm text-[#444] leading-snug mb-3">
+            <p className="text-sm text-(--c-444) leading-snug mb-3">
               rated{' '}
-              <span className="font-medium text-[#111]">{item.album_name}</span>
+              <span className="font-medium text-(--c-111)">{item.album_name}</span>
               {' '}by{' '}
-              <span className="font-medium text-[#111]">{item.artist}</span>
+              <span className="font-medium text-(--c-111)">{item.artist}</span>
               {' '}a{' '}
               <span className="font-bold tabular-nums" style={{ color: scoreColor(item.score ?? 0) }}>
                 {(item.score ?? 0).toFixed(2)}
@@ -186,7 +186,7 @@ function FeedCard({ item }: { item: FeedItem }) {
           <div className="flex items-center justify-between">
             <button
               onClick={handleView}
-              className="text-xs font-medium text-[#2d6a4f] hover:text-[#245c43] transition-colors"
+              className="text-xs font-medium text-(--c-2d6a4f) hover:text-(--c-245c43) transition-colors"
             >
               {isRec ? 'View album →' : isReview ? 'Read full review →' : 'View full rating →'}
             </button>
@@ -196,7 +196,7 @@ function FeedCard({ item }: { item: FeedItem }) {
                 <button
                   onClick={() => setShowComments(s => !s)}
                   className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
-                    showComments ? 'text-[#2d6a4f]' : 'text-[#bbb] hover:text-[#2d6a4f]'
+                    showComments ? 'text-(--c-2d6a4f)' : 'text-(--c-bbb) hover:text-(--c-2d6a4f)'
                   }`}
                   aria-label="Comments"
                 >
@@ -208,7 +208,7 @@ function FeedCard({ item }: { item: FeedItem }) {
                   onClick={handleLike}
                   disabled={liking}
                   className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
-                    liked ? 'text-[#e05555]' : 'text-[#bbb] hover:text-[#e05555]'
+                    liked ? 'text-(--c-e05555)' : 'text-(--c-bbb) hover:text-(--c-e05555)'
                   }`}
                   aria-label={liked ? 'Unlike' : 'Like'}
                 >
@@ -227,7 +227,7 @@ function FeedCard({ item }: { item: FeedItem }) {
       </div>
 
       {!isRec && showComments && (
-        <div className="mt-3 pt-3 border-t border-[#f0f0f0]">
+        <div className="mt-3 pt-3 border-t border-(--c-f0f0f0)">
           <CommentThread albumId={item.album_id} />
         </div>
       )}
@@ -290,42 +290,42 @@ function FriendsMenu() {
     <div ref={menuRef} className="relative shrink-0">
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 px-3 py-2.5 bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl text-sm font-medium text-[#111] hover:border-[#2d6a4f] transition-colors"
+        className="flex items-center gap-2 px-3 py-2.5 bg-(--c-f5f5f5) border border-(--c-e2e2e2) rounded-xl text-sm font-medium text-(--c-111) hover:border-(--c-2d6a4f) transition-colors"
       >
-        <Users size={14} className="text-[#777]" />
+        <Users size={14} className="text-(--c-777)" />
         <span>Friends</span>
-        <span className="text-[#999]">{accepted.length}</span>
+        <span className="text-(--c-999)">{accepted.length}</span>
         {incoming.length > 0 && (
-          <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#2d6a4f] text-white text-[10px] font-bold flex items-center justify-center">
+          <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-(--c-green-fill) text-white text-[10px] font-bold flex items-center justify-center">
             {incoming.length}
           </span>
         )}
-        <ChevronDown size={14} className={`text-[#aaa] transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={14} className={`text-(--c-aaa) transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] max-h-[70vh] overflow-y-auto bg-white border border-[#e2e2e2] rounded-xl shadow-lg z-20">
+        <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] max-h-[70vh] overflow-y-auto bg-(--c-fff) border border-(--c-e2e2e2) rounded-xl shadow-lg z-20">
           {incoming.length > 0 && (
-            <div className="border-b border-[#f0f0f0]">
-              <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#aaa]">Requests</p>
+            <div className="border-b border-(--c-f0f0f0)">
+              <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-(--c-aaa)">Requests</p>
               {incoming.map(u => (
                 <div key={`in-${u.id}`} className="flex items-center gap-3 px-4 py-2.5">
                   <FriendAvatar name={u.name} avatarUrl={u.avatarUrl} size={28} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[#111] truncate">{u.name}</p>
-                    <p className="text-[11px] text-[#aaa]">wants to be friends</p>
+                    <p className="text-sm font-medium text-(--c-111) truncate">{u.name}</p>
+                    <p className="text-[11px] text-(--c-aaa)">wants to be friends</p>
                   </div>
                   <button
                     onClick={() => act(u.id, acceptFriendRequest)}
                     disabled={busy.has(u.id)}
-                    className="flex items-center gap-1 text-xs font-semibold text-white bg-[#2d6a4f] hover:bg-[#245c43] px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1 text-xs font-semibold text-white bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                   >
                     <Check size={12} /> Accept
                   </button>
                   <button
                     onClick={() => act(u.id, declineFriendRequest)}
                     disabled={busy.has(u.id)}
-                    className="text-[#999] hover:text-[#c0392b] px-1 py-1.5 transition-colors disabled:opacity-50"
+                    className="text-(--c-999) hover:text-(--c-c0392b) px-1 py-1.5 transition-colors disabled:opacity-50"
                     aria-label="Decline"
                   >
                     <X size={14} />
@@ -339,25 +339,25 @@ function FriendsMenu() {
             <button
               key={`fr-${u.id}`}
               onClick={() => { setOpen(false); navigate(`/u/${u.id}`) }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[#fafafa] transition-colors"
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-(--c-fafafa) transition-colors"
             >
               <FriendAvatar name={u.name} avatarUrl={u.avatarUrl} size={28} />
-              <span className="flex-1 min-w-0 text-sm font-medium text-[#111] truncate">{u.name}</span>
-              <Check size={14} className="text-[#2d6a4f] shrink-0" />
+              <span className="flex-1 min-w-0 text-sm font-medium text-(--c-111) truncate">{u.name}</span>
+              <Check size={14} className="text-(--c-2d6a4f) shrink-0" />
             </button>
           ))}
 
           {outgoing.map(u => (
             <div key={`out-${u.id}`} className="flex items-center gap-3 px-4 py-2.5">
               <FriendAvatar name={u.name} avatarUrl={u.avatarUrl} size={28} />
-              <span className="flex-1 min-w-0 text-sm font-medium text-[#111] truncate">{u.name}</span>
-              <span className="flex items-center gap-1 text-[11px] text-[#aaa] font-medium shrink-0">
+              <span className="flex-1 min-w-0 text-sm font-medium text-(--c-111) truncate">{u.name}</span>
+              <span className="flex items-center gap-1 text-[11px] text-(--c-aaa) font-medium shrink-0">
                 <Clock size={11} /> Pending
               </span>
               <button
                 onClick={() => act(u.id, declineFriendRequest)}
                 disabled={busy.has(u.id)}
-                className="text-[#bbb] hover:text-[#c0392b] px-1 transition-colors disabled:opacity-50"
+                className="text-(--c-bbb) hover:text-(--c-c0392b) px-1 transition-colors disabled:opacity-50"
                 aria-label="Cancel request"
               >
                 <X size={13} />
@@ -366,7 +366,7 @@ function FriendsMenu() {
           ))}
 
           {incoming.length === 0 && accepted.length === 0 && outgoing.length === 0 && (
-            <p className="px-4 py-4 text-xs text-[#bbb]">No friends yet — search for people above.</p>
+            <p className="px-4 py-4 text-xs text-(--c-bbb)">No friends yet — search for people above.</p>
           )}
         </div>
       )}
@@ -410,42 +410,42 @@ function FindPeople() {
 
   return (
     <div className="relative w-44 sm:w-64 md:w-72 shrink-0">
-      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#bbb] pointer-events-none" />
+      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--c-bbb) pointer-events-none" />
       <input
         value={query}
         onChange={e => setQuery(e.target.value)}
         placeholder="Find people…"
-        className="w-full pl-8 pr-8 py-2.5 bg-[#f5f5f5] border border-[#e2e2e2] rounded-xl text-sm text-[#111] placeholder:text-[#bbb] focus:outline-none focus:border-[#2d6a4f] transition-colors"
+        className="w-full pl-8 pr-8 py-2.5 bg-(--c-f5f5f5) border border-(--c-e2e2e2) rounded-xl text-sm text-(--c-111) placeholder:text-(--c-bbb) focus:outline-none focus:border-(--c-2d6a4f) transition-colors"
       />
-      {searching && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#bbb] animate-spin" />}
+      {searching && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-(--c-bbb) animate-spin" />}
 
       {results.length > 0 && (
-        <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white border border-[#e2e2e2] rounded-xl overflow-hidden divide-y divide-[#f0f0f0] shadow-lg z-20">
+        <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-(--c-fff) border border-(--c-e2e2e2) rounded-xl overflow-hidden divide-y divide-(--c-f0f0f0) shadow-lg z-20">
           {results.map(u => {
             const isFriend = u.already_friends || becameFriends.has(u.id)
             const requested = !isFriend && (u.request_sent || sent.has(u.id))
             const theyAsked = !isFriend && !requested && u.request_received
             return (
-              <div key={u.id} className="flex items-center gap-3 px-4 py-3 bg-white">
+              <div key={u.id} className="flex items-center gap-3 px-4 py-3 bg-(--c-fff)">
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                  style={{ background: '#2d6a4f' }}
+                  style={{ background: 'var(--c-2d6a4f)' }}
                 >
                   {u.name[0].toUpperCase()}
                 </div>
-                <span className="flex-1 text-sm font-medium text-[#111]">{u.name}</span>
+                <span className="flex-1 text-sm font-medium text-(--c-111)">{u.name}</span>
                 {isFriend ? (
-                  <span className="flex items-center gap-1 text-xs text-[#2d6a4f] font-medium">
+                  <span className="flex items-center gap-1 text-xs text-(--c-2d6a4f) font-medium">
                     <Check size={13} /> Friends
                   </span>
                 ) : requested ? (
-                  <span className="flex items-center gap-1 text-xs text-[#aaa] font-medium">
+                  <span className="flex items-center gap-1 text-xs text-(--c-aaa) font-medium">
                     <Clock size={12} /> Requested
                   </span>
                 ) : (
                   <button
                     onClick={() => handleAdd(u)}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#2d6a4f] hover:bg-[#245c43] px-3 py-1.5 rounded-lg transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-white bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) px-3 py-1.5 rounded-lg transition-colors"
                   >
                     {theyAsked ? <><Check size={12} /> Accept</> : <><UserPlus size={12} /> Add</>}
                   </button>
@@ -457,8 +457,8 @@ function FindPeople() {
       )}
 
       {query.trim() && !searching && results.length === 0 && (
-        <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white border border-[#e2e2e2] rounded-xl px-4 py-3 shadow-lg z-20">
-          <p className="text-xs text-[#bbb]">No users found.</p>
+        <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-(--c-fff) border border-(--c-e2e2e2) rounded-xl px-4 py-3 shadow-lg z-20">
+          <p className="text-xs text-(--c-bbb)">No users found.</p>
         </div>
       )}
     </div>
@@ -501,9 +501,9 @@ function ReviewCard({ review }: { review: FriendReview }) {
   }
 
   return (
-    <div className="bg-white border border-[#e2e2e2] rounded-2xl p-5 hover:border-[#c8c8c8] transition-colors self-start">
+    <div className="bg-(--c-fff) border border-(--c-e2e2e2) rounded-2xl p-5 hover:border-(--c-c8c8c8) transition-colors self-start">
       <div className="flex gap-4 mb-3">
-        <div className="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-[#e8e8e8] flex items-center justify-center text-[#aaa]">
+        <div className="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-(--c-e8e8e8) flex items-center justify-center text-(--c-aaa)">
           {review.album_art_url
             ? <CoverImg url={review.album_art_url} displayPx={64} alt={review.album_name} className="w-full h-full object-cover" />
             : <Music size={22} />}
@@ -518,12 +518,12 @@ function ReviewCard({ review }: { review: FriendReview }) {
               className="flex items-center gap-2 min-w-0 group/friend"
             >
               <FriendAvatar name={review.friend.name} avatarUrl={review.friend.avatar_url} size={20} />
-              <span className="text-sm font-semibold text-[#111] truncate group-hover/friend:underline underline-offset-2">{review.friend.name}</span>
+              <span className="text-sm font-semibold text-(--c-111) truncate group-hover/friend:underline underline-offset-2">{review.friend.name}</span>
             </button>
-            {review.review_at && <span className="text-xs text-[#aaa] shrink-0 ml-auto">{timeAgo(review.review_at)}</span>}
+            {review.review_at && <span className="text-xs text-(--c-aaa) shrink-0 ml-auto">{timeAgo(review.review_at)}</span>}
           </div>
-          <p className="text-xs text-[#666] mt-1 truncate">
-            <span className="font-medium text-[#111]">{review.album_name}</span>
+          <p className="text-xs text-(--c-666) mt-1 truncate">
+            <span className="font-medium text-(--c-111)">{review.album_name}</span>
             {' · '}{review.artist}
             {review.score != null && (
               <>{' · '}<span className="font-bold tabular-nums" style={{ color: scoreColor(review.score) }}>{review.score.toFixed(2)}</span></>
@@ -532,21 +532,21 @@ function ReviewCard({ review }: { review: FriendReview }) {
         </div>
       </div>
 
-      <p className="text-[13px] text-[#3c3530] leading-relaxed whitespace-pre-wrap break-words mb-1">{shown}</p>
+      <p className="text-[13px] text-(--c-3c3530) leading-relaxed whitespace-pre-wrap break-words mb-1">{shown}</p>
       {isLong && (
-        <button onClick={() => setExpanded(e => !e)} className="text-xs font-medium text-[#2d6a4f] hover:text-[#245c43] mb-2">
+        <button onClick={() => setExpanded(e => !e)} className="text-xs font-medium text-(--c-2d6a4f) hover:text-(--c-245c43) mb-2">
           {expanded ? 'Show less' : 'Read more'}
         </button>
       )}
 
       <div className="flex items-center justify-between mt-2">
-        <button onClick={handleView} className="text-xs font-medium text-[#2d6a4f] hover:text-[#245c43] transition-colors">
+        <button onClick={handleView} className="text-xs font-medium text-(--c-2d6a4f) hover:text-(--c-245c43) transition-colors">
           View album →
         </button>
         <div className="flex items-center gap-4">
           <button
             onClick={() => setShowComments(s => !s)}
-            className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${showComments ? 'text-[#2d6a4f]' : 'text-[#bbb] hover:text-[#2d6a4f]'}`}
+            className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${showComments ? 'text-(--c-2d6a4f)' : 'text-(--c-bbb) hover:text-(--c-2d6a4f)'}`}
             aria-label="Comments"
           >
             <MessageCircle size={14} strokeWidth={1.75} />
@@ -555,7 +555,7 @@ function ReviewCard({ review }: { review: FriendReview }) {
           <button
             onClick={handleLike}
             disabled={liking}
-            className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${liked ? 'text-[#e05555]' : 'text-[#bbb] hover:text-[#e05555]'}`}
+            className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${liked ? 'text-(--c-e05555)' : 'text-(--c-bbb) hover:text-(--c-e05555)'}`}
             aria-label={liked ? 'Unlike' : 'Like'}
           >
             <Heart size={14} className="transition-transform active:scale-125" fill={liked ? 'currentColor' : 'none'} strokeWidth={liked ? 0 : 1.75} />
@@ -565,7 +565,7 @@ function ReviewCard({ review }: { review: FriendReview }) {
       </div>
 
       {showComments && (
-        <div className="mt-3 pt-3 border-t border-[#f0f0f0]">
+        <div className="mt-3 pt-3 border-t border-(--c-f0f0f0)">
           <CommentThread albumId={review.album_id} />
         </div>
       )}
@@ -588,7 +588,7 @@ function ReviewsTab() {
     <button
       onClick={() => setSort(key)}
       className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-        sort === key ? 'bg-[#2d6a4f] text-white' : 'bg-[#f0f0f0] text-[#777] hover:bg-[#e8e8e8]'
+        sort === key ? 'bg-(--c-green-fill) text-white' : 'bg-(--c-f0f0f0) text-(--c-777) hover:bg-(--c-e8e8e8)'
       }`}
     >
       {label}
@@ -603,13 +603,13 @@ function ReviewsTab() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 text-[#aaa]">
+        <div className="flex items-center gap-2 text-(--c-aaa)">
           <Loader2 size={16} className="animate-spin" /> Loading…
         </div>
       ) : reviews.length === 0 ? (
         <div className="text-center py-16">
-          <p className="text-[#bbb] text-sm">No reviews yet.</p>
-          <p className="text-[#ccc] text-xs mt-1">When your friends write reviews, they'll show up here.</p>
+          <p className="text-(--c-bbb) text-sm">No reviews yet.</p>
+          <p className="text-(--c-ccc) text-xs mt-1">When your friends write reviews, they'll show up here.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
@@ -637,7 +637,7 @@ function DiscussionsTab() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-[#aaa]">
+      <div className="flex items-center gap-2 text-(--c-aaa)">
         <Loader2 size={16} className="animate-spin" /> Loading…
       </div>
     )
@@ -645,8 +645,8 @@ function DiscussionsTab() {
   if (posts.length === 0) {
     return (
       <div className="text-center py-16">
-        <p className="text-[#bbb] text-sm">Nothing from your friends yet.</p>
-        <p className="text-[#ccc] text-xs mt-1">When they weigh in on a record, it lands here.</p>
+        <p className="text-(--c-bbb) text-sm">Nothing from your friends yet.</p>
+        <p className="text-(--c-ccc) text-xs mt-1">When they weigh in on a record, it lands here.</p>
       </div>
     )
   }
@@ -671,7 +671,7 @@ function CompareTab() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-[#aaa]">
+      <div className="flex items-center gap-2 text-(--c-aaa)">
         <Loader2 size={16} className="animate-spin" /> Loading…
       </div>
     )
@@ -679,8 +679,8 @@ function CompareTab() {
   if (items.length === 0) {
     return (
       <div className="text-center py-16">
-        <p className="text-[#bbb] text-sm">Nothing to compare yet.</p>
-        <p className="text-[#ccc] text-xs mt-1">When you and a friend both rate an album, it shows up here.</p>
+        <p className="text-(--c-bbb) text-sm">Nothing to compare yet.</p>
+        <p className="text-(--c-ccc) text-xs mt-1">When you and a friend both rate an album, it shows up here.</p>
       </div>
     )
   }
@@ -705,20 +705,20 @@ function FeedPostCard({ post }: { post: FeedPost }) {
   return (
     <Link
       to={threadPath(post.thread.subjectType, post.thread.subtitle, post.thread.title)}
-      className={`block no-underline rounded-2xl border p-4 transition-colors hover:border-[#2d6a4f]/50 hover:bg-[#f7faf8] ${
-        post.toMe ? 'border-[#cfe0d6] bg-[#f7faf8]' : 'border-[#e8e2d9] bg-white/70'
+      className={`block no-underline rounded-2xl border p-4 transition-colors hover:border-(--c-2d6a4f)/50 hover:bg-(--c-f7faf8) ${
+        post.toMe ? 'border-(--c-cfe0d6) bg-(--c-f7faf8)' : 'border-(--c-e8e2d9) bg-(--c-fff)/70'
       }`}
     >
       <div className="flex items-center gap-2.5 mb-2.5">
         {post.thread.artUrl ? (
-          <CoverImg url={post.thread.artUrl} displayPx={36} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0 bg-[#f0ebe3]" />
+          <CoverImg url={post.thread.artUrl} displayPx={36} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0 bg-(--c-f0ebe3)" />
         ) : (
-          <div className="w-9 h-9 rounded-lg bg-[#f0ebe3] shrink-0" />
+          <div className="w-9 h-9 rounded-lg bg-(--c-f0ebe3) shrink-0" />
         )}
         <div className="min-w-0">
-          <p className="m-0 text-[13.5px] font-bold text-[#1c1917] truncate">{post.thread.title}</p>
+          <p className="m-0 text-[13.5px] font-bold text-(--c-1c1917) truncate">{post.thread.title}</p>
           {!!post.thread.subtitle && (
-            <p className="m-0 text-[11.5px] text-[#8a7f72] truncate">{post.thread.subtitle}</p>
+            <p className="m-0 text-[11.5px] text-(--c-8a7f72) truncate">{post.thread.subtitle}</p>
           )}
         </div>
       </div>
@@ -733,7 +733,7 @@ function FeedPostCard({ post }: { post: FeedPost }) {
           </span>
         )}
         <div className="min-w-0 flex-1">
-          <p className="m-0 text-[12.5px] text-[#111]">
+          <p className="m-0 text-[12.5px] text-(--c-111)">
             {/* The card is a link to the thread; the name is a link inside it
                 to the author's profile, so it stops the card's own click. */}
             <span
@@ -747,10 +747,10 @@ function FeedPostCard({ post }: { post: FeedPost }) {
             >
               {post.author.name}
             </span>
-            <span className="text-[#8a7f72]">{what}</span>
-            {post.createdAt && <span className="text-[#c2b8ad]"> · {timeAgo(post.createdAt)}</span>}
+            <span className="text-(--c-8a7f72)">{what}</span>
+            {post.createdAt && <span className="text-(--c-c2b8ad)"> · {timeAgo(post.createdAt)}</span>}
           </p>
-          <p className="m-0 mt-1 text-[13px] text-[#444] leading-snug line-clamp-3 break-words">
+          <p className="m-0 mt-1 text-[13px] text-(--c-444) leading-snug line-clamp-3 break-words">
             {post.isSpoiler ? 'Marked as a spoiler — open the thread to read it' : post.body}
           </p>
         </div>
@@ -776,7 +776,7 @@ export default function Social() {
     <button
       onClick={() => setTab(key)}
       className={`text-sm font-semibold px-1 py-2 border-b-2 transition-colors ${
-        tab === key ? 'border-[#2d6a4f] text-[#111]' : 'border-transparent text-[#999] hover:text-[#555]'
+        tab === key ? 'border-(--c-2d6a4f) text-(--c-111)' : 'border-transparent text-(--c-999) hover:text-(--c-555)'
       }`}
     >
       {label}
@@ -786,14 +786,14 @@ export default function Social() {
   return (
     <div className="p-4 md:p-8">
       <div className="flex items-center justify-between gap-3 mb-6">
-        <h1 className="font-display text-3xl font-bold text-[#111]">Friends</h1>
+        <h1 className="font-display text-3xl font-bold text-(--c-111)">Friends</h1>
         <div className="flex items-center gap-2">
           <FindPeople />
           <FriendsMenu />
         </div>
       </div>
 
-      <div className="flex items-center gap-5 border-b border-[#eee] mb-6">
+      <div className="flex items-center gap-5 border-b border-(--c-eee) mb-6">
         {tabBtn('activity', 'Activity')}
         {tabBtn('reviews', 'Reviews')}
         {tabBtn('compare', 'Compare')}
@@ -807,13 +807,13 @@ export default function Social() {
       ) : tab === 'discussions' ? (
         <DiscussionsTab />
       ) : isLoading ? (
-        <div className="flex items-center gap-2 text-[#aaa]">
+        <div className="flex items-center gap-2 text-(--c-aaa)">
           <Loader2 size={16} className="animate-spin" /> Loading…
         </div>
       ) : feed.length === 0 ? (
         <div className="text-center py-16">
-          <p className="text-[#bbb] text-sm">No activity yet.</p>
-          <p className="text-[#ccc] text-xs mt-1">Ratings, reviews, and recommendations from your friends will show up here.</p>
+          <p className="text-(--c-bbb) text-sm">No activity yet.</p>
+          <p className="text-(--c-ccc) text-xs mt-1">Ratings, reviews, and recommendations from your friends will show up here.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">

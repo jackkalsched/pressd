@@ -27,7 +27,7 @@ export function timeAgo(dateStr?: string | null): string {
 /** Stable colour per name, so someone without a photo keeps the same one
  *  wherever they appear. */
 export function avatarColor(name: string): string {
-  const colors = ['#2d6a4f', '#1d4ed8', '#7c3aed', '#b45309', '#0f766e', '#be185d', '#c2410c']
+  const colors = ['var(--c-2d6a4f)', 'var(--c-1d4ed8)', 'var(--c-7c3aed)', 'var(--c-b45309)', 'var(--c-0f766e)', 'var(--c-be185d)', 'var(--c-c2410c)']
   let h = 0
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % colors.length
   return colors[h]

@@ -66,32 +66,32 @@ export default function RecommendModal({ album, onClose, initialFriendId, onSent
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm fade-in" />
       <div
-        className="relative bg-white border border-[#e2e2e2] rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl pop-in"
+        className="relative bg-(--c-fff) border border-(--c-e2e2e2) rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl pop-in"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <Star size={16} fill="#f97316" color="#f97316" />
-            <h2 className="text-[#111] font-semibold">Recommend</h2>
+            <Star size={16} fill="var(--c-f97316)" color="var(--c-f97316)" />
+            <h2 className="text-(--c-111) font-semibold">Recommend</h2>
           </div>
-          <button onClick={onClose} className="text-[#aaa] hover:text-[#555] transition-colors">
+          <button onClick={onClose} className="text-(--c-aaa) hover:text-(--c-555) transition-colors">
             <X size={18} />
           </button>
         </div>
 
-        <p className="text-sm text-[#777] mb-4">
-          Send <span className="font-medium text-[#111]">{album.albumName}</span> by{' '}
-          <span className="font-medium text-[#111]">{album.artist}</span> to a friend's To Listen list.
+        <p className="text-sm text-(--c-777) mb-4">
+          Send <span className="font-medium text-(--c-111)">{album.albumName}</span> by{' '}
+          <span className="font-medium text-(--c-111)">{album.artist}</span> to a friend's To Listen list.
         </p>
 
         {sent ? (
-          <div className="pop-in flex items-center gap-2 text-sm text-[#2d6a4f] bg-[#f0faf5] border border-[#c3e6d8] rounded-xl px-4 py-3">
+          <div className="pop-in flex items-center gap-2 text-sm text-(--c-2d6a4f) bg-(--c-f0faf5) border border-(--c-c3e6d8) rounded-xl px-4 py-3">
             <Check size={16} className="pop shrink-0" /> {sent}
           </div>
         ) : (
           <>
             {friends.length === 0 ? (
-              <p className="text-sm text-[#aaa] text-center py-4">You don't have any friends yet.</p>
+              <p className="text-sm text-(--c-aaa) text-center py-4">You don't have any friends yet.</p>
             ) : (
               <div className="flex flex-col gap-1.5 mb-4 max-h-48 overflow-y-auto">
                 {friends.map(f => (
@@ -100,13 +100,13 @@ export default function RecommendModal({ album, onClose, initialFriendId, onSent
                     onClick={() => setSelected(selected === f.id ? null : f.id)}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm text-left transition-colors ${
                       selected === f.id
-                        ? 'bg-[#fff7ed] border-[#f97316] text-[#c2410c]'
-                        : 'bg-[#f5f5f5] border-[#e2e2e2] text-[#444] hover:border-[#c8c8c8]'
+                        ? 'bg-(--c-fff7ed) border-(--c-f97316) text-(--c-c2410c)'
+                        : 'bg-(--c-f5f5f5) border-(--c-e2e2e2) text-(--c-444) hover:border-(--c-c8c8c8)'
                     }`}
                   >
                     <Avatar name={f.name} avatarUrl={f.avatarUrl} size={28} />
                     {f.name}
-                    {selected === f.id && <Check size={14} className="pop ml-auto text-[#f97316]" />}
+                    {selected === f.id && <Check size={14} className="pop ml-auto text-(--c-f97316)" />}
                   </button>
                 ))}
               </div>
@@ -122,22 +122,22 @@ export default function RecommendModal({ album, onClose, initialFriendId, onSent
                   placeholder={`Tell ${friendName ?? 'them'} why you think they'd like this!`}
                   maxLength={RECOMMENDATION_NOTE_MAX}
                   rows={3}
-                  className="w-full resize-none bg-[#f5f5f5] border border-[#e2e2e2] text-[#111] text-sm px-3 py-2.5 rounded-xl focus:outline-none focus:border-[#f97316] transition-colors"
+                  className="w-full resize-none bg-(--c-f5f5f5) border border-(--c-e2e2e2) text-(--c-111) text-sm px-3 py-2.5 rounded-xl focus:outline-none focus:border-(--c-f97316) transition-colors"
                 />
                 {/* Only near the ceiling — a counter on an empty optional
                     field reads as a requirement. */}
                 {remaining <= 60 && (
-                  <span className="absolute right-3 bottom-2.5 text-[11px] text-[#aaa]">{remaining}</span>
+                  <span className="absolute right-3 bottom-2.5 text-[11px] text-(--c-aaa)">{remaining}</span>
                 )}
               </div>
             )}
 
-            {error && <p className="text-[#c0392b] text-xs mb-3">{error}</p>}
+            {error && <p className="text-(--c-c0392b) text-xs mb-3">{error}</p>}
 
             <button
               onClick={handleSend}
               disabled={!selected || loading}
-              className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#f97316] hover:bg-[#ea6c0a] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-xl text-sm font-semibold bg-(--c-f97316) hover:bg-(--c-ea6c0a) text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? <><Loader2 size={14} className="animate-spin" /> Sending…</> : <>
                 <Star size={14} fill="white" /> Recommend

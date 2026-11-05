@@ -17,6 +17,8 @@ type ArtistSortKey = 'song_score' | 'external' | 'w_song_plus' | 'consistency_pl
 
 interface RankingRow {
   artist: string
+  /** The artist's main genre in this library, for the filter. */
+  genre: string | null
   songs: number
   songScore: number | null
   external: number | null
@@ -42,6 +44,8 @@ function ArtistRankingsTable({
   navigate: (path: string) => void
 }) {
   const [sortKey, setSortKey] = useState<ArtistSortKey>('song_score')
+  const [query, setQuery] = useState('')
+  const [genre, setGenre] = useState('')
 
   const buildRows = (sc: typeof scatter, stats: typeof artistStats): RankingRow[] => {
     const artistMap = new Map(stats.map(a => [a.artist, a]))
@@ -51,6 +55,7 @@ function ArtistRankingsTable({
         const a = artistMap.get(p.artist)
         return {
           artist: p.artist,
+          genre: p.genre ?? null,
           songs: p.song_count,
           songScore: p.avg_song_score,
           external: p.avg_external ?? null,
@@ -99,7 +104,7 @@ function ArtistRankingsTable({
   }, [rows, rowsPrev])
 
   if (sorted.length === 0) return (
-    <div className="flex items-center justify-center py-24 text-[#a8998a] text-sm">
+    <div className="flex items-center justify-center py-24 text-(--c-a8998a) text-sm">
       No artists with {QUALIFIED}+ rated songs yet.
     </div>
   )
@@ -113,40 +118,70 @@ function ArtistRankingsTable({
     { key: 'skip_pct',         label: 'Skip%',      fmt: r => r.skipPct != null ? `${Math.round(r.skipPct * 100)}%` : '—' },
   ]
 
+  // Searching narrows the rows but keeps each artist's rank in the whole list,
+  // so a found artist still says where they stand.
+  const q = query.trim().toLowerCase()
+  const shown = sorted
+    .map((row, i) => ({ row, rank: i + 1 }))
+    .filter(({ row }) => (!q || row.artist.toLowerCase().includes(q)) && (!genre || row.genre === genre))
+  const genres = [...new Set(rows.map((r) => r.genre).filter((g): g is string => !!g))].sort()
+
   return (
-    <div className="overflow-x-auto rounded-2xl border border-[#e8e2d9]">
+    <>
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <input
+        type="text"
+        placeholder="Search artists…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        className="w-56 rounded-xl border border-(--c-e8e2d9) bg-(--c-f0ebe3) px-4 py-2 text-sm text-(--c-1c1917) transition-colors placeholder:text-(--c-c2b8ad) focus:border-(--c-2d6a4f) focus:outline-none"
+      />
+      {/* Ranks stay the whole board's: filtering narrows who's shown. */}
+      <select
+        value={genre}
+        onChange={(e) => setGenre(e.target.value)}
+        className="cursor-pointer rounded-xl border border-(--c-e8e2d9) bg-(--c-f0ebe3) px-3 py-2 text-sm text-(--c-1c1917) transition-colors focus:border-(--c-2d6a4f) focus:outline-none"
+      >
+        <option value="">All Genres</option>
+        {genres.map((g) => <option key={g} value={g}>{g}</option>)}
+      </select>
+    </div>
+    {shown.length === 0 ? (
+      <p className="py-16 text-center text-sm text-(--c-a8998a)">No artists match.</p>
+    ) : (
+    <div className="overflow-x-auto rounded-2xl border border-(--c-e8e2d9)">
       <table className="w-full text-sm border-collapse">
         <thead>
-          <tr className="border-b border-[#e8e2d9] bg-[#f7f3ee]">
-            <th className="text-left text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] px-4 py-3 w-10">Rk.</th>
-            <th className="text-left text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] px-4 py-3">Artist</th>
-            <th className="text-right text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] px-4 py-3 w-14">Songs</th>
+          <tr className="border-b border-(--c-e8e2d9) bg-(--c-f7f3ee)">
+            <th className="text-left text-[10px] font-semibold text-(--c-a8998a) uppercase tracking-[0.1em] px-4 py-3 w-10">Rk.</th>
+            <th className="text-left text-[10px] font-semibold text-(--c-a8998a) uppercase tracking-[0.1em] px-4 py-3">Artist</th>
+            <th className="text-right text-[10px] font-semibold text-(--c-a8998a) uppercase tracking-[0.1em] px-4 py-3 w-14">Songs</th>
             {cols.map(c => (
               <th
                 key={c.key}
                 onClick={() => setSortKey(c.key)}
                 className={`text-right text-[10px] font-semibold uppercase tracking-[0.1em] px-4 py-3 w-24 cursor-pointer select-none transition-colors ${
-                  sortKey === c.key ? 'text-[#1c1917]' : 'text-[#a8998a] hover:text-[#78716c]'
+                  sortKey === c.key ? 'text-(--c-1c1917)' : 'text-(--c-a8998a) hover:text-(--c-78716c)'
                 }`}
               >
                 {c.label}
-                {sortKey === c.key && <span className="ml-1 text-[#2d6a4f]">↓</span>}
+                {sortKey === c.key && <span className="ml-1 text-(--c-2d6a4f)">↓</span>}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {sorted.map((row, i) => (
-            <tr key={row.artist} className="border-b border-[#f0ebe3] last:border-0 hover:bg-[#f7f3ee] transition-colors">
-              <td className="text-[#c2b8ad] text-xs tabular-nums px-4 py-2.5">
+          {shown.map(({ row, rank }) => (
+            <tr key={row.artist} className="border-b border-(--c-f0ebe3) last:border-0 hover:bg-(--c-f7f3ee) transition-colors">
+              <td className="text-(--c-c2b8ad) text-xs tabular-nums px-4 py-2.5">
                 <div className="flex items-center gap-1.5">
-                  <span>{i + 1}</span>
+                  <span>{rank}</span>
                   {(() => {
                     const prev = prevRankMap.get(row.artist)
                     if (!recentlyActive.has(row.artist)) return null
-                    if (prev === undefined) return <span className="text-[10px] font-bold text-[#3b82f6] bg-blue-50 px-1 py-0.5 rounded">NEW</span>
-                    const delta = prev - (i + 1)
-                    if (delta > 0) return <span className="text-[10px] font-bold text-[#2d6a4f]">+{delta}</span>
+                    if (prev === undefined) return <span className="text-[10px] font-bold text-(--c-3b82f6) bg-blue-50 px-1 py-0.5 rounded">NEW</span>
+                    const delta = prev - rank
+                    if (delta > 0) return <span className="text-[10px] font-bold text-(--c-2d6a4f)">+{delta}</span>
                     if (delta < 0) return <span className="text-[10px] font-bold text-red-400">{delta}</span>
                     return null
                   })()}
@@ -155,17 +190,17 @@ function ArtistRankingsTable({
               <td className="px-4 py-2.5">
                 <button
                   onClick={() => navigate(`/artist/${encodeURIComponent(row.artist)}`)}
-                  className="text-[#1c1917] font-medium hover:text-[#2d6a4f] transition-colors text-left"
+                  className="text-(--c-1c1917) font-medium hover:text-(--c-2d6a4f) transition-colors text-left"
                 >
                   {row.artist}
                 </button>
               </td>
-              <td className="text-right text-[#a8998a] tabular-nums px-4 py-2.5 text-xs">{row.songs}</td>
+              <td className="text-right text-(--c-a8998a) tabular-nums px-4 py-2.5 text-xs">{row.songs}</td>
               {cols.map(c => (
                 <td
                   key={c.key}
                   className={`text-right tabular-nums px-4 py-2.5 text-xs font-semibold ${
-                    sortKey === c.key ? 'text-[#2d6a4f]' : 'text-[#57534e]'
+                    sortKey === c.key ? 'text-(--c-2d6a4f)' : 'text-(--c-57534e)'
                   }`}
                 >
                   {c.fmt(row)}
@@ -176,6 +211,8 @@ function ArtistRankingsTable({
         </tbody>
       </table>
     </div>
+    )}
+    </>
   )
 }
 
@@ -267,36 +304,36 @@ export default function Ratings({ embedded = false }: { embedded?: boolean } = {
   }
   const thCls = (key: AlbumSortKey) =>
     `text-left text-[10px] font-semibold uppercase tracking-[0.1em] py-3 px-4 cursor-pointer select-none transition-colors ${
-      sortKey === key ? 'text-[#1c1917]' : 'text-[#a8998a] hover:text-[#78716c]'
+      sortKey === key ? 'text-(--c-1c1917)' : 'text-(--c-a8998a) hover:text-(--c-78716c)'
     }`
 
   return (
-    <div className={embedded ? '' : 'min-h-screen bg-[#f9f8f6]'}>
+    <div className={embedded ? '' : 'min-h-screen bg-(--c-f9f8f6)'}>
       <div className={embedded ? '' : 'p-4 md:p-8'}>
 
         {/* Header */}
         {!embedded && (
           <div className="flex items-center justify-between mb-5">
-            <h1 className="font-display text-3xl font-bold text-[#1c1917]">Rankings</h1>
+            <h1 className="font-display text-3xl font-bold text-(--c-1c1917)">Rankings</h1>
             {tab === 'albums' && (
-              <span className="text-[#a8998a] text-sm">{sorted.length} albums</span>
+              <span className="text-(--c-a8998a) text-sm">{sorted.length} albums</span>
             )}
             {tab === 'artists' && (
-              <span className="text-[#a8998a] text-sm">≥{QUALIFIED} songs</span>
+              <span className="text-(--c-a8998a) text-sm">≥{QUALIFIED} songs</span>
             )}
           </div>
         )}
 
         {/* Tab bar */}
-        <div className="flex border-b border-[#e8e2d9] mb-6">
+        <div className="flex border-b border-(--c-e8e2d9) mb-6">
           {(['albums', 'artists'] as Tab[]).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
                 tab === t
-                  ? 'border-[#2d6a4f] text-[#1c1917]'
-                  : 'border-transparent text-[#a8998a] hover:text-[#78716c]'
+                  ? 'border-(--c-2d6a4f) text-(--c-1c1917)'
+                  : 'border-transparent text-(--c-a8998a) hover:text-(--c-78716c)'
               }`}
             >
               {t === 'albums' ? 'Albums' : 'Artists'}
@@ -313,12 +350,12 @@ export default function Ratings({ embedded = false }: { embedded?: boolean } = {
                 placeholder="Search albums or artists…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="bg-[#f0ebe3] border border-[#e8e2d9] text-[#1c1917] text-sm px-4 py-2 rounded-xl focus:outline-none focus:border-[#2d6a4f] transition-colors placeholder:text-[#c2b8ad] w-56"
+                className="bg-(--c-f0ebe3) border border-(--c-e8e2d9) text-(--c-1c1917) text-sm px-4 py-2 rounded-xl focus:outline-none focus:border-(--c-2d6a4f) transition-colors placeholder:text-(--c-c2b8ad) w-56"
               />
               <select
                 value={filterArtist}
                 onChange={e => setFilterArtist(e.target.value)}
-                className="bg-[#f0ebe3] border border-[#e8e2d9] text-sm px-3 py-2 rounded-xl focus:outline-none focus:border-[#2d6a4f] transition-colors cursor-pointer text-[#1c1917]"
+                className="bg-(--c-f0ebe3) border border-(--c-e8e2d9) text-sm px-3 py-2 rounded-xl focus:outline-none focus:border-(--c-2d6a4f) transition-colors cursor-pointer text-(--c-1c1917)"
               >
                 <option value="">All Artists</option>
                 {artistOptions.map(a => <option key={a} value={a}>{a}</option>)}
@@ -326,7 +363,7 @@ export default function Ratings({ embedded = false }: { embedded?: boolean } = {
               <select
                 value={filterGenre}
                 onChange={e => setFilterGenre(e.target.value)}
-                className="bg-[#f0ebe3] border border-[#e8e2d9] text-sm px-3 py-2 rounded-xl focus:outline-none focus:border-[#2d6a4f] transition-colors cursor-pointer text-[#1c1917]"
+                className="bg-(--c-f0ebe3) border border-(--c-e8e2d9) text-sm px-3 py-2 rounded-xl focus:outline-none focus:border-(--c-2d6a4f) transition-colors cursor-pointer text-(--c-1c1917)"
               >
                 <option value="">All Genres</option>
                 {genreOptions.map(g => <option key={g} value={g}>{g}</option>)}
@@ -334,7 +371,7 @@ export default function Ratings({ embedded = false }: { embedded?: boolean } = {
               <select
                 value={filterYear}
                 onChange={e => setFilterYear(e.target.value)}
-                className="bg-[#f0ebe3] border border-[#e8e2d9] text-sm px-3 py-2 rounded-xl focus:outline-none focus:border-[#2d6a4f] transition-colors cursor-pointer text-[#1c1917]"
+                className="bg-(--c-f0ebe3) border border-(--c-e8e2d9) text-sm px-3 py-2 rounded-xl focus:outline-none focus:border-(--c-2d6a4f) transition-colors cursor-pointer text-(--c-1c1917)"
               >
                 <option value="">All Years</option>
                 {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
@@ -342,70 +379,70 @@ export default function Ratings({ embedded = false }: { embedded?: boolean } = {
               {hasFilters && (
                 <button
                   onClick={() => { setSearch(''); setFilterArtist(''); setFilterGenre(''); setFilterYear('') }}
-                  className="text-xs text-[#a8998a] hover:text-[#1c1917] transition-colors px-2 py-2"
+                  className="text-xs text-(--c-a8998a) hover:text-(--c-1c1917) transition-colors px-2 py-2"
                 >
                   Clear
                 </button>
               )}
             </div>
             {loadingAlbums ? (
-              <div className="flex items-center justify-center py-24 text-[#a8998a] gap-2">
+              <div className="flex items-center justify-center py-24 text-(--c-a8998a) gap-2">
                 <Loader2 size={16} className="animate-spin" /> Loading…
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-2xl border border-[#e8e2d9]">
+              <div className="overflow-x-auto rounded-2xl border border-(--c-e8e2d9)">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-[#e8e2d9] bg-[#f7f3ee]">
-                      <th className="text-left text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] py-3 px-4 w-8">#</th>
+                    <tr className="border-b border-(--c-e8e2d9) bg-(--c-f7f3ee)">
+                      <th className="text-left text-[10px] font-semibold text-(--c-a8998a) uppercase tracking-[0.1em] py-3 px-4 w-8">#</th>
                       <th className={thCls('albumName')} onClick={() => toggleSort('albumName')}>
-                        Album {sortKey === 'albumName' && <span className="text-[#2d6a4f]">{sortDir === 'desc' ? '↓' : '↑'}</span>}
+                        Album {sortKey === 'albumName' && <span className="text-(--c-2d6a4f)">{sortDir === 'desc' ? '↓' : '↑'}</span>}
                       </th>
                       <th className={thCls('artist')} onClick={() => toggleSort('artist')}>
-                        Artist {sortKey === 'artist' && <span className="text-[#2d6a4f]">{sortDir === 'desc' ? '↓' : '↑'}</span>}
+                        Artist {sortKey === 'artist' && <span className="text-(--c-2d6a4f)">{sortDir === 'desc' ? '↓' : '↑'}</span>}
                       </th>
                       <th className={`${thCls('year')} w-16`} onClick={() => toggleSort('year')}>
-                        Year {sortKey === 'year' && <span className="text-[#2d6a4f]">{sortDir === 'desc' ? '↓' : '↑'}</span>}
+                        Year {sortKey === 'year' && <span className="text-(--c-2d6a4f)">{sortDir === 'desc' ? '↓' : '↑'}</span>}
                       </th>
                       <th
-                        className={`text-right text-[10px] font-semibold uppercase tracking-[0.1em] py-3 px-4 w-20 cursor-pointer select-none transition-colors ${sortKey === 'score' ? 'text-[#1c1917]' : 'text-[#a8998a] hover:text-[#78716c]'}`}
+                        className={`text-right text-[10px] font-semibold uppercase tracking-[0.1em] py-3 px-4 w-20 cursor-pointer select-none transition-colors ${sortKey === 'score' ? 'text-(--c-1c1917)' : 'text-(--c-a8998a) hover:text-(--c-78716c)'}`}
                         onClick={() => toggleSort('score')}
                       >
-                        Score {sortKey === 'score' && <span className="text-[#2d6a4f]">{sortDir === 'desc' ? '↓' : '↑'}</span>}
+                        Score {sortKey === 'score' && <span className="text-(--c-2d6a4f)">{sortDir === 'desc' ? '↓' : '↑'}</span>}
                       </th>
                       {(['theme', 'replayValue', 'production', 'distinctness'] as AlbumSortKey[]).map((key, i) => (
                         <th
                           key={key}
                           onClick={() => toggleSort(key)}
                           className={`text-right text-[10px] font-semibold uppercase tracking-[0.1em] py-3 px-4 w-20 cursor-pointer select-none transition-colors ${
-                            sortKey === key ? 'text-[#1c1917]' : 'text-[#a8998a] hover:text-[#78716c]'
+                            sortKey === key ? 'text-(--c-1c1917)' : 'text-(--c-a8998a) hover:text-(--c-78716c)'
                           }`}
                         >
                           {['Theme', 'Replay', 'Prod.', 'Dist.'][i]}
-                          {sortKey === key && <span className="ml-1 text-[#2d6a4f]">{sortDir === 'desc' ? '↓' : '↑'}</span>}
+                          {sortKey === key && <span className="ml-1 text-(--c-2d6a4f)">{sortDir === 'desc' ? '↓' : '↑'}</span>}
                         </th>
                       ))}
-                      <th className="text-left text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] py-3 px-4">Genre</th>
+                      <th className="text-left text-[10px] font-semibold text-(--c-a8998a) uppercase tracking-[0.1em] py-3 px-4">Genre</th>
                     </tr>
                   </thead>
                   <tbody>
                     {sorted.map((album, i) => (
                       <tr
                         key={album.id}
-                        className="border-b border-[#f0ebe3] last:border-0 hover:bg-[#f7f3ee] cursor-pointer transition-colors"
+                        className="border-b border-(--c-f0ebe3) last:border-0 hover:bg-(--c-f7f3ee) cursor-pointer transition-colors"
                         onClick={() => navigate(`/album/${album.id}`)}
                       >
-                        <td className="py-3 px-4 text-[#c2b8ad] text-sm tabular-nums">{i + 1}</td>
+                        <td className="py-3 px-4 text-(--c-c2b8ad) text-sm tabular-nums">{i + 1}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-[#e8dfd2] to-[#cfc3b0] flex items-center justify-center">
+                            <div className="w-9 h-9 shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-(--c-e8dfd2) to-(--c-cfc3b0) flex items-center justify-center">
                               {album.albumArtUrl
                                 ? <CoverImg url={album.albumArtUrl} displayPx={36} alt="" className="w-full h-full object-cover" />
-                                : <Music size={14} className="text-[#b0a090]" strokeWidth={1.5} />}
+                                : <Music size={14} className="text-(--c-b0a090)" strokeWidth={1.5} />}
                             </div>
-                            <span className="text-[#1c1917] text-sm font-medium">{album.albumName}</span>
+                            <span className="text-(--c-1c1917) text-sm font-medium">{album.albumName}</span>
                             {shortReleaseLabel(album) && (
-                              <span className="shrink-0 text-[#a8a29e] text-[9px] font-bold uppercase tracking-[0.08em] border border-[#ddd5c8] rounded px-1.5 py-0.5">
+                              <span className="shrink-0 text-(--c-a8a29e) text-[9px] font-bold uppercase tracking-[0.08em] border border-(--c-ddd5c8) rounded px-1.5 py-0.5">
                                 {shortReleaseLabel(album)}
                               </span>
                             )}
@@ -417,7 +454,7 @@ export default function Ratings({ embedded = false }: { embedded?: boolean } = {
                               <Link
                                 to={`/artist/${encodeURIComponent(name)}`}
                                 onClick={(e) => e.stopPropagation()}
-                                className="text-[#78716c] hover:text-[#2d6a4f] transition-colors"
+                                className="text-(--c-78716c) hover:text-(--c-2d6a4f) transition-colors"
                               >
                                 {name}
                               </Link>
@@ -425,15 +462,15 @@ export default function Ratings({ embedded = false }: { embedded?: boolean } = {
                             </span>
                           ))}
                         </td>
-                        <td className="py-3 px-4 text-[#78716c] text-sm tabular-nums">{album.year}</td>
+                        <td className="py-3 px-4 text-(--c-78716c) text-sm tabular-nums">{album.year}</td>
                         <td className="py-3 px-4 text-right">
-                          <span className="text-[#2d6a4f] font-semibold text-sm tabular-nums">{album.score?.toFixed(2)}</span>
+                          <span className="text-(--c-2d6a4f) font-semibold text-sm tabular-nums">{album.score?.toFixed(2)}</span>
                         </td>
-                        <td className="py-3 px-4 text-right text-[#78716c] text-sm tabular-nums">{album.theme ?? '—'}</td>
-                        <td className="py-3 px-4 text-right text-[#78716c] text-sm tabular-nums">{album.replayValue ?? '—'}</td>
-                        <td className="py-3 px-4 text-right text-[#78716c] text-sm tabular-nums">{album.production ?? '—'}</td>
-                        <td className="py-3 px-4 text-right text-[#78716c] text-sm tabular-nums">{album.distinctness ?? '—'}</td>
-                        <td className="py-3 px-4 text-[#a8998a] text-xs">{album.genre ?? '—'}</td>
+                        <td className="py-3 px-4 text-right text-(--c-78716c) text-sm tabular-nums">{album.theme ?? '—'}</td>
+                        <td className="py-3 px-4 text-right text-(--c-78716c) text-sm tabular-nums">{album.replayValue ?? '—'}</td>
+                        <td className="py-3 px-4 text-right text-(--c-78716c) text-sm tabular-nums">{album.production ?? '—'}</td>
+                        <td className="py-3 px-4 text-right text-(--c-78716c) text-sm tabular-nums">{album.distinctness ?? '—'}</td>
+                        <td className="py-3 px-4 text-(--c-a8998a) text-xs">{album.genre ?? '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -446,7 +483,7 @@ export default function Ratings({ embedded = false }: { embedded?: boolean } = {
         {/* Artists tab */}
         {tab === 'artists' && (
           !scatter ? (
-            <div className="flex items-center justify-center py-24 text-[#a8998a] gap-2">
+            <div className="flex items-center justify-center py-24 text-(--c-a8998a) gap-2">
               <Loader2 size={16} className="animate-spin" /> Loading…
             </div>
           ) : (

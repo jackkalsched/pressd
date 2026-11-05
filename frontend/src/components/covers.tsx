@@ -25,8 +25,11 @@ export function scoreHue(s: number): number {
   return Math.round(((s - 1) / 9) * 130)
 }
 
+/** The pale fill behind a score. On the dark page it's gone (--score-tint-a
+ *  is 0 there), as on iPhone: a pale chip read as a white box, so the score's
+ *  own colour carries the cell alone. */
 export function scoreTint(s: number): string {
-  return `hsl(${scoreHue(s)}, 46%, 94%)`
+  return `hsl(${scoreHue(s)} 46% 94% / var(--score-tint-a))`
 }
 
 /** Cover feedback: a slight lift and lean on hover, settling on press.

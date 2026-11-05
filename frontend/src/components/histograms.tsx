@@ -12,8 +12,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { songScoreColor } from '../types'
 
-const MUTED = '#a8998a'
-const RULE = '#e6ded2'
+const MUTED = 'var(--c-a8998a)'
+const RULE = 'var(--c-e6ded2)'
 
 /** Bar colours run off the 1–10 ramp, so anything outside it (an empty
  *  low bin, a rounded-up 10) has to be pulled back in or the hue goes
@@ -177,7 +177,7 @@ export function ScoreDistribution({
             ) : null,
           )}
           {showKde && kdePath && (
-            <path d={kdePath.trim()} stroke="#57534e" strokeWidth={2} strokeOpacity={0.75} fill="none" />
+            <path d={kdePath.trim()} stroke="var(--c-57534e)" strokeWidth={2} strokeOpacity={0.75} fill="none" />
           )}
           <line x1={0} y1={padTop + plotH} x2={width} y2={padTop + plotH} stroke={RULE} strokeWidth={1} />
           {/* On the bin edges, so a bar's range is read off the two numbers

@@ -8,8 +8,8 @@ import { useState } from 'react'
 import { ThumbsDown, ThumbsUp } from 'lucide-react'
 import { votePost } from '../api'
 
-const UP = '#2d6a4f'
-const DOWN = '#c0392b'
+const UP = 'var(--c-2d6a4f)'
+const DOWN = 'var(--c-c0392b)'
 
 export default function VoteButtons({
   postId, likes, dislikes, myVote, compact = false, onVoted,
@@ -63,12 +63,12 @@ export default function VoteButtons({
         aria-label={`Thumbs up, ${up}`}
         aria-pressed={vote === 1}
         className={`flex items-center gap-1.5 rounded-full transition-colors ${pad} ${
-          vote === 1 ? 'bg-[#2d6a4f]/12' : 'bg-[#f5f5f5] hover:bg-[#ececec]'
+          vote === 1 ? 'bg-(--c-2d6a4f)/12' : 'bg-(--c-f5f5f5) hover:bg-(--c-ececec)'
         }`}
       >
         {/* Keyed on the state so turning it on replays the pop. */}
-        <ThumbsUp key={`u${vote === 1}`} className={vote === 1 ? 'pop' : undefined} size={size} color={vote === 1 ? UP : '#a8998a'} fill={vote === 1 ? UP : 'transparent'} />
-        <span className={`${countSize} font-medium tabular-nums`} style={{ color: vote === 1 ? UP : '#666' }}>{up}</span>
+        <ThumbsUp key={`u${vote === 1}`} className={vote === 1 ? 'pop' : undefined} size={size} color={vote === 1 ? UP : 'var(--c-a8998a)'} fill={vote === 1 ? UP : 'transparent'} />
+        <span className={`${countSize} font-medium tabular-nums`} style={{ color: vote === 1 ? UP : 'var(--c-666)' }}>{up}</span>
       </button>
 
       <button
@@ -77,11 +77,11 @@ export default function VoteButtons({
         aria-label={`Thumbs down, ${down}`}
         aria-pressed={vote === -1}
         className={`flex items-center gap-1.5 rounded-full transition-colors ${pad} ${
-          vote === -1 ? 'bg-[#c0392b]/10' : 'bg-[#f5f5f5] hover:bg-[#ececec]'
+          vote === -1 ? 'bg-(--c-c0392b)/10' : 'bg-(--c-f5f5f5) hover:bg-(--c-ececec)'
         }`}
       >
-        <ThumbsDown key={`d${vote === -1}`} className={vote === -1 ? 'pop' : undefined} size={size} color={vote === -1 ? DOWN : '#a8998a'} fill={vote === -1 ? DOWN : 'transparent'} />
-        <span className={`${countSize} font-medium tabular-nums`} style={{ color: vote === -1 ? DOWN : '#666' }}>{down}</span>
+        <ThumbsDown key={`d${vote === -1}`} className={vote === -1 ? 'pop' : undefined} size={size} color={vote === -1 ? DOWN : 'var(--c-a8998a)'} fill={vote === -1 ? DOWN : 'transparent'} />
+        <span className={`${countSize} font-medium tabular-nums`} style={{ color: vote === -1 ? DOWN : 'var(--c-666)' }}>{down}</span>
       </button>
     </div>
   )

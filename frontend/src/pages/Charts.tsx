@@ -15,8 +15,8 @@ import { fetchCharts } from '../api'
 import type { ChartItem } from '../api'
 import { Cover, ScorePill, COVER_LIFT } from '../components/covers'
 
-const UP = '#2d6a4f'
-const DOWN = '#c0392b'
+const UP = 'var(--c-2d6a4f)'
+const DOWN = 'var(--c-c0392b)'
 
 /** ISO week, to date the board like a print chart ("WK 30 · 2026"). */
 function weekLabel(): string {
@@ -32,9 +32,9 @@ function weekLabel(): string {
 
 function Movement({ value }: { value: number | null }) {
   if (value === null) {
-    return <span className="text-[11px] font-bold tracking-wide text-[#2d6a4f]">NEW</span>
+    return <span className="text-[11px] font-bold tracking-wide text-(--c-2d6a4f)">NEW</span>
   }
-  if (value === 0) return <span className="text-[11px] font-bold text-[#ccc]">–</span>
+  if (value === 0) return <span className="text-[11px] font-bold text-(--c-ccc)">–</span>
   const up = value > 0
   return (
     <span className="inline-flex items-center gap-[3px] text-[11.5px] font-bold" style={{ color: up ? UP : DOWN }}>
@@ -54,13 +54,13 @@ function Movement({ value }: { value: number | null }) {
 const BEST_OF_YEAR = 2026
 
 const FIELD =
-  'text-[13px] font-medium h-9 px-3 rounded-lg border bg-white transition-colors ' +
-  'focus:outline-none focus:border-[#2d6a4f]'
+  'text-[13px] font-medium h-9 px-3 rounded-lg border bg-(--c-fff) transition-colors ' +
+  'focus:outline-none focus:border-(--c-2d6a4f)'
 
 /** A filter that's set reads back in green, so which ones are narrowing the
  *  board is obvious without having to open each one. */
 function fieldCls(active: boolean) {
-  return `${FIELD} ${active ? 'border-[#2d6a4f] text-[#2d6a4f]' : 'border-[#e2e2e2] text-[#111] hover:border-[#c8c8c8]'}`
+  return `${FIELD} ${active ? 'border-(--c-2d6a4f) text-(--c-2d6a4f)' : 'border-(--c-e2e2e2) text-(--c-111) hover:border-(--c-c8c8c8)'}`
 }
 
 function Select({
@@ -145,8 +145,8 @@ export default function Charts() {
   return (
     <div className="p-4 md:p-8">
       <div className="flex items-end justify-between gap-5 flex-wrap mb-6">
-        <h1 className="font-display text-3xl font-bold text-[#111]">Charts</h1>
-        <span className="text-[11px] font-bold tracking-[0.14em] uppercase text-[#aaa]">
+        <h1 className="font-display text-3xl font-bold text-(--c-111)">Charts</h1>
+        <span className="text-[11px] font-bold tracking-[0.14em] uppercase text-(--c-aaa)">
           {period === 'week' ? weekLabel() : 'All time'}
         </span>
       </div>
@@ -156,14 +156,14 @@ export default function Charts() {
           onClick={toggleBestOf}
           className={`text-[13px] font-semibold h-9 px-4 rounded-lg border transition-colors ${
             bestOfOn
-              ? 'bg-[#2d6a4f] border-[#2d6a4f] text-white'
-              : 'bg-white border-[#e2e2e2] text-[#777] hover:text-[#111] hover:border-[#c8c8c8]'
+              ? 'bg-(--c-green-fill) border-(--c-2d6a4f) text-white'
+              : 'bg-(--c-fff) border-(--c-e2e2e2) text-(--c-777) hover:text-(--c-111) hover:border-(--c-c8c8c8)'
           }`}
         >
           Best of {BEST_OF_YEAR}
         </button>
 
-        <span className="w-px h-6 bg-[#e2e2e2] mx-1" />
+        <span className="w-px h-6 bg-(--c-e2e2e2) mx-1" />
 
         <Select
           label="Period"
@@ -205,7 +205,7 @@ export default function Charts() {
           placeholder="Year"
           inputMode="numeric"
           aria-label="Year"
-          className={`w-[86px] ${fieldCls(year !== null)} placeholder:text-[#bbb]`}
+          className={`w-[86px] ${fieldCls(year !== null)} placeholder:text-(--c-bbb)`}
         />
 
         <input
@@ -213,20 +213,20 @@ export default function Charts() {
           onChange={(e) => setArtist(e.target.value)}
           placeholder="Artist"
           aria-label="Artist"
-          className={`w-[150px] ${fieldCls(artistQuery.length > 0)} placeholder:text-[#bbb]`}
+          className={`w-[150px] ${fieldCls(artistQuery.length > 0)} placeholder:text-(--c-bbb)`}
         />
       </div>
 
       {isLoading ? (
-        <div className="py-16 flex justify-center text-[#aaa]">
+        <div className="py-16 flex justify-center text-(--c-aaa)">
           <Loader2 size={20} className="animate-spin" />
         </div>
       ) : isError ? (
-        <div className="py-16 text-center text-sm text-[#777]">
+        <div className="py-16 text-center text-sm text-(--c-777)">
           Couldn't load the charts just now. Please try again.
         </div>
       ) : items.length === 0 ? (
-        <div className="py-16 text-center text-sm text-[#777]">No albums match this filter yet.</div>
+        <div className="py-16 text-center text-sm text-(--c-777)">No albums match this filter yet.</div>
       ) : (
         <>
           {/* Podium */}
@@ -240,7 +240,7 @@ export default function Charts() {
                 >
                   <div
                     className={`font-display font-bold leading-none mb-2.5 ${
-                      i === 1 ? 'text-[44px] text-[#111]' : 'text-[34px] text-[#bbb]'
+                      i === 1 ? 'text-[44px] text-(--c-111)' : 'text-[34px] text-(--c-bbb)'
                     }`}
                   >
                     {it.rank}
@@ -258,10 +258,10 @@ export default function Charts() {
                       />
                     </div>
                   </div>
-                  <p className="text-[14.5px] font-bold text-[#111] mt-3 leading-tight group-hover:text-[#2d6a4f] transition-colors">
+                  <p className="text-[14.5px] font-bold text-(--c-111) mt-3 leading-tight group-hover:text-(--c-2d6a4f) transition-colors">
                     {it.album_name}
                   </p>
-                  <p className="text-[12.5px] text-[#777] mt-0.5">{it.artist}</p>
+                  <p className="text-[12.5px] text-(--c-777) mt-0.5">{it.artist}</p>
                   {it.avg_score != null && (
                     <span className="inline-block mt-2">
                       <ScorePill score={it.avg_score} big />
@@ -275,24 +275,24 @@ export default function Charts() {
           </div>
 
           {/* Board */}
-          <div className="border-t border-[#e2e2e2]">
+          <div className="border-t border-(--c-e2e2e2)">
             {rest.map((it) => (
               <Link
                 key={it.album_id}
                 to={`/album/${it.album_id}/community`}
-                className="group grid grid-cols-[32px_44px_1fr_38px_auto] md:grid-cols-[44px_56px_1fr_auto_42px_auto] items-center gap-3 md:gap-4 px-1.5 py-3 border-b border-[#ededed] hover:bg-[#f2f0ec] transition-colors"
+                className="group grid grid-cols-[32px_44px_1fr_38px_auto] md:grid-cols-[44px_56px_1fr_auto_42px_auto] items-center gap-3 md:gap-4 px-1.5 py-3 border-b border-(--c-ededed) hover:bg-(--c-f2f0ec) transition-colors"
               >
-                <span className="font-display text-[19px] text-[#aaa] tabular-nums text-center">{it.rank}</span>
+                <span className="font-display text-[19px] text-(--c-aaa) tabular-nums text-center">{it.rank}</span>
                 <div className={`flex justify-center ${COVER_LIFT}`} style={{ willChange: 'transform' }}>
                   <Cover artUrl={it.album_art_url} seed={it.artist} size={44} radius={8} fontSize={18} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[14.5px] font-semibold text-[#111] leading-tight truncate group-hover:text-[#2d6a4f] transition-colors">{it.album_name}</p>
-                  <p className="text-[12.5px] text-[#777] mt-0.5 truncate">
+                  <p className="text-[14.5px] font-semibold text-(--c-111) leading-tight truncate group-hover:text-(--c-2d6a4f) transition-colors">{it.album_name}</p>
+                  <p className="text-[12.5px] text-(--c-777) mt-0.5 truncate">
                     {it.artist}{it.year ? ` · ${it.year}` : ''}
                   </p>
                 </div>
-                <span className="hidden md:block text-xs text-[#aaa] whitespace-nowrap">
+                <span className="hidden md:block text-xs text-(--c-aaa) whitespace-nowrap">
                   {it.rater_count} {it.rater_count === 1 ? 'rating' : 'ratings'}
                 </span>
                 <span className="w-[38px] md:w-[42px] text-right">

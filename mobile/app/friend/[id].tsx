@@ -14,12 +14,13 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, ChevronDown, Clock, UserPlus } from 'lucide-react-native'
+import { ArrowLeft, Check, ChevronDown, Clock, Search, UserPlus, X } from 'lucide-react-native'
 import {
   fetchFriends,
   fetchFriendRequests,
@@ -86,6 +87,9 @@ export default function FriendProfile() {
   // Same board your own Ratings tab offers: album or artist, any metric,
   // either direction. It used to be a fixed score-descending album list.
   const [rankMode, setRankMode] = useState<RankMode>('albums')
+  // The same search your own Rankings tab has.
+  const [rankSearch, setRankSearch] = useState('')
+  const rq = rankSearch.trim().toLowerCase()
   const [rankMetric, setRankMetric] = useState(defaultMetricFor('albums'))
   const [rankDir, setRankDir] = useState<RankDir>('desc')
   const [metricOpen, setMetricOpen] = useState(false)
@@ -229,15 +233,17 @@ export default function FriendProfile() {
   const rankedAlbums = useMemo(() => {
     if (tab !== 'ratings' || rankMode !== 'albums') return []
     const metric = ALBUM_METRICS.find((m) => m.key === rankMetric) ?? ALBUM_METRICS[0]
-    return [...rated].sort((a, b) => cmpVals(metric.get(a), metric.get(b), rankDir))
-  }, [tab, rankMode, rated, rankMetric, rankDir])
+    return [...rated]
+      .filter((a) => !rq || a.albumName.toLowerCase().includes(rq) || a.artist.toLowerCase().includes(rq))
+      .sort((a, b) => cmpVals(metric.get(a), metric.get(b), rankDir))
+  }, [tab, rankMode, rated, rankMetric, rankDir, rq])
 
   const rankedArtists = useMemo<ArtistRank[]>(() => {
     if (tab !== 'ratings' || rankMode !== 'artists') return []
     const metric = ARTIST_METRICS.find((m) => m.key === rankMetric) ?? ARTIST_METRICS[0]
     const statBy = new Map(artistStats.map((s2) => [s2.artist, s2]))
     return (scatter?.points ?? [])
-      .filter((pt) => pt.song_count >= QUALIFIED)
+      .filter((pt) => pt.song_count >= QUALIFIED && (!rq || pt.artist.toLowerCase().includes(rq)))
       .map((pt): ArtistRank => {
         const st = statBy.get(pt.artist)
         return {
@@ -252,7 +258,7 @@ export default function FriendProfile() {
         }
       })
       .sort((a, b) => cmpVals(metric.get(a), metric.get(b), rankDir))
-  }, [tab, rankMode, scatter, artistStats, rankMetric, rankDir])
+  }, [tab, rankMode, scatter, artistStats, rankMetric, rankDir, rq])
 
   const currentMetric =
     (rankMode === 'albums' ? ALBUM_METRICS : ARTIST_METRICS).find((m) => m.key === rankMetric)
@@ -400,6 +406,25 @@ export default function FriendProfile() {
                 </Pressable>
               </View>
             )}
+            {tab === 'ratings' && (
+              <View style={styles.searchBar}>
+                <Search size={15} color={tc.inkTertiary} />
+                <TextInput
+                  style={styles.searchBarInput}
+                  value={rankSearch}
+                  onChangeText={setRankSearch}
+                  placeholder={rankMode === 'artists' ? 'Search their artists' : 'Search their albums'}
+                  placeholderTextColor={tc.inkTertiary}
+                  autoCorrect={false}
+                  returnKeyType="search"
+                />
+                {rankSearch.length > 0 && (
+                  <Pressable onPress={() => setRankSearch('')} hitSlop={8} accessibilityLabel="Clear search">
+                    <X size={14} color={tc.inkMuted} />
+                  </Pressable>
+                )}
+              </View>
+            )}
           </View>
         }
         renderItem={({ item, index }: { item: Album | ArtistRank; index: number }) => {
@@ -420,7 +445,11 @@ export default function FriendProfile() {
           return <RatingRow album={album} rank={index + 1} onPress={() => openAlbum(album)} />
         }}
         ListEmptyComponent={
-          tab === 'stats' ? null : <Text style={styles.empty}>No rated albums yet.</Text>
+          tab === 'stats' ? null : (
+            <Text style={styles.empty}>
+              {tab === 'ratings' && rq ? 'Nothing matches your search.' : 'No rated albums yet.'}
+            </Text>
+          )
         }
       />
 
@@ -476,6 +505,19 @@ function AlbumCell({ album, mu, sd, onPress }: { album: Album; mu: number; sd: n
 const styles = StyleSheet.create({
   // Mirrors Profile's Rankings filter bar, so the two boards read as one
   // control in two places.
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    height: 42,
+    backgroundColor: colors.raised,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchBarInput: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: colors.ink },
   rankFilters: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg },
   rankPills: { flexDirection: 'row', gap: spacing.sm },
   rankPill: { paddingVertical: 7, paddingHorizontal: 16, borderRadius: radii.pill, backgroundColor: colors.inset },
@@ -505,7 +547,7 @@ const styles = StyleSheet.create({
     zIndex: 20,
     backgroundColor: colors.bg,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderColor: colors.border,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
   },

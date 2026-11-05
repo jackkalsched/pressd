@@ -12,7 +12,7 @@ import { PeopleSheetHost } from './PeopleSheet'
 import { phoneVerifyConfigured } from '../lib/phoneVerify'
 
 function avatarColor(name: string): string {
-  const colors = ['#2d6a4f', '#1d4ed8', '#7c3aed', '#b45309', '#0f766e', '#be185d', '#c2410c']
+  const colors = ['var(--c-2d6a4f)', 'var(--c-1d4ed8)', 'var(--c-7c3aed)', 'var(--c-b45309)', 'var(--c-0f766e)', 'var(--c-be185d)', 'var(--c-c2410c)']
   let h = 0
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % colors.length
   return colors[h]
@@ -33,7 +33,7 @@ function Avatar({ user, size = 28 }: { user: Pick<UserInfo, 'name' | 'avatarUrl'
     <div style={{
       width: size, height: size, borderRadius: '50%', background: avatarColor(name),
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: '#fff', fontSize: size * 0.4, fontWeight: 700, flexShrink: 0,
+      color: 'var(--c-fff)', fontSize: size * 0.4, fontWeight: 700, flexShrink: 0,
     }}>
       {name[0].toUpperCase()}
     </div>
@@ -90,38 +90,38 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm fade-in" onClick={onClose} />
-      <div className="relative bg-white border border-[#e2e2e2] rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl pop-in">
+      <div className="relative bg-(--c-fff) border border-(--c-e2e2e2) rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl pop-in">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-[#111] font-semibold">Invite Someone</h2>
-          <button onClick={onClose} className="text-[#aaa] hover:text-[#555] transition-colors">
+          <h2 className="text-(--c-111) font-semibold">Invite Someone</h2>
+          <button onClick={onClose} className="text-(--c-aaa) hover:text-(--c-555) transition-colors">
             <X size={18} />
           </button>
         </div>
 
-        <p className="text-sm text-[#777] mb-4">
+        <p className="text-sm text-(--c-777) mb-4">
           Share your invite link — anyone who signs up becomes your friend.
         </p>
 
         {loading ? (
-          <div className="flex items-center justify-center py-6 text-[#aaa] gap-2">
+          <div className="flex items-center justify-center py-6 text-(--c-aaa) gap-2">
             <Loader2 size={14} className="animate-spin" /> Generating…
           </div>
         ) : error ? (
-          <p className="text-[#c0392b] text-xs">{error}</p>
+          <p className="text-(--c-c0392b) text-xs">{error}</p>
         ) : link ? (
           <div className="flex flex-col gap-3">
-            <div className="bg-[#f5f5f5] rounded-lg px-3 py-2 text-xs text-[#555] break-all font-mono border border-[#e2e2e2]">
+            <div className="bg-(--c-f5f5f5) rounded-lg px-3 py-2 text-xs text-(--c-555) break-all font-mono border border-(--c-e2e2e2)">
               {link}
             </div>
             <button
               onClick={handleCopy}
-              className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#2d6a4f] hover:bg-[#245c43] text-white transition-colors"
+              className="w-full py-2.5 rounded-xl text-sm font-semibold bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white transition-colors"
             >
               {copied ? '✓ Copied!' : 'Copy Link'}
             </button>
             <button
               onClick={handleiMessage}
-              className="w-full py-2 rounded-xl text-sm font-medium bg-[#f5f5f5] border border-[#e2e2e2] hover:bg-[#ececec] text-[#333] transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2 rounded-xl text-sm font-medium bg-(--c-f5f5f5) border border-(--c-e2e2e2) hover:bg-(--c-ececec) text-(--c-333) transition-colors flex items-center justify-center gap-2"
             >
               <MessageCircle size={14} /> Share via iMessage
             </button>
@@ -178,12 +178,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#f9f8f6]">
+    <div className="flex min-h-screen bg-(--c-f9f8f6)">
       {/* Sidebar — desktop only */}
-      <aside className="hidden md:flex w-56 shrink-0 border-r border-[#e2e2e2] flex-col py-6 px-4 sticky top-0 h-screen bg-[#f9f8f6] overflow-y-auto">
+      <aside className="hidden md:flex w-56 shrink-0 border-r border-(--c-e2e2e2) flex-col py-6 px-4 sticky top-0 h-screen bg-(--c-f9f8f6) overflow-y-auto">
         <div className="flex items-center gap-2.5 mb-8 px-2">
           <img src="/logo.png" alt="Pressd logo" className="h-8 w-auto shrink-0" />
-          <span className="font-wordmark text-[#111] text-xl">Pressd</span>
+          <span className="font-wordmark text-(--c-111) text-xl">Pressd</span>
         </div>
 
         <nav className="flex flex-col gap-1">
@@ -196,8 +196,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 clsx(
                   'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
                   isActive
-                    ? 'bg-[#2d6a4f]/10 text-[#2d6a4f]'
-                    : 'text-[#777] hover:text-[#111] hover:bg-[#f0f0f0]',
+                    ? 'bg-(--c-2d6a4f)/10 text-(--c-2d6a4f)'
+                    : 'text-(--c-777) hover:text-(--c-111) hover:bg-(--c-f0f0f0)',
                 )
               }
             >
@@ -208,7 +208,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {!isViewingFriend && (
             <button
               onClick={() => setShowAddAlbum(true)}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors bg-[#2d6a4f] hover:bg-[#245c43] text-white w-full text-left mt-1"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white w-full text-left mt-1"
             >
               <Plus size={16} />
               Rate an Album
@@ -217,30 +217,30 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* Friends section */}
-        <div className="mt-6 pt-5 border-t border-[#e2e2e2]">
+        <div className="mt-6 pt-5 border-t border-(--c-e2e2e2)">
           <div className="flex items-center justify-between px-2 mb-2">
             <button
               onClick={toggleFriends}
               aria-expanded={friendsOpen}
-              className="flex items-center gap-1 text-[10px] font-semibold text-[#aaa] uppercase tracking-wider hover:text-[#555] transition-colors"
+              className="flex items-center gap-1 text-[10px] font-semibold text-(--c-aaa) uppercase tracking-wider hover:text-(--c-555) transition-colors"
             >
               <ChevronDown size={12} className={clsx('transition-transform', !friendsOpen && '-rotate-90')} />
               Friends
               {!friendsOpen && friends.length > 0 && (
-                <span className="ml-1 normal-case tracking-normal font-medium text-[#bbb]">{friends.length}</span>
+                <span className="ml-1 normal-case tracking-normal font-medium text-(--c-bbb)">{friends.length}</span>
               )}
             </button>
             <button
               onClick={() => setShowInvite(true)}
               title="Invite someone"
-              className="text-[#aaa] hover:text-[#2d6a4f] transition-colors"
+              className="text-(--c-aaa) hover:text-(--c-2d6a4f) transition-colors"
             >
               <Mail size={13} />
             </button>
           </div>
 
           {!friendsOpen ? null : friends.length === 0 ? (
-            <p className="text-[11px] text-[#bbb] px-2">No friends yet — invite someone!</p>
+            <p className="text-[11px] text-(--c-bbb) px-2">No friends yet — invite someone!</p>
           ) : (
             <div className="flex flex-col gap-0.5">
               {friends.map((f) => (
@@ -250,8 +250,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     className={clsx(
                       'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors flex-1 text-left min-w-0',
                       viewingUser?.id === f.id
-                        ? 'bg-[#2d6a4f]/10 text-[#2d6a4f]'
-                        : 'text-[#777] hover:text-[#111] hover:bg-[#f0f0f0]',
+                        ? 'bg-(--c-2d6a4f)/10 text-(--c-2d6a4f)'
+                        : 'text-(--c-777) hover:text-(--c-111) hover:bg-(--c-f0f0f0)',
                     )}
                   >
                     <Avatar user={f} size={18} />
@@ -265,7 +265,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       queryClient.invalidateQueries({ queryKey: ['friends'] })
                       queryClient.invalidateQueries({ queryKey: ['feed'] })
                     }}
-                    className="absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-[#bbb] hover:text-[#c0392b] hover:bg-[#fdf0ee]"
+                    className="absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-(--c-bbb) hover:text-(--c-c0392b) hover:bg-(--c-fdf0ee)"
                     title={`Remove ${f.name}`}
                   >
                     <X size={12} />
@@ -277,17 +277,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Active user at bottom — always your own profile */}
-        <div className="mt-auto pt-4 border-t border-[#e2e2e2]">
+        <div className="mt-auto pt-4 border-t border-(--c-e2e2e2)">
           <button
             onClick={openOwnProfile}
             aria-label="Your profile"
             className={clsx(
               'flex items-center gap-2 px-2 w-full group rounded-lg py-1.5 transition-colors',
-              location.pathname === `/u/${activeUser?.id}` ? 'bg-[#2d6a4f]/10' : 'hover:bg-[#f5f5f5]',
+              location.pathname === `/u/${activeUser?.id}` ? 'bg-(--c-2d6a4f)/10' : 'hover:bg-(--c-f5f5f5)',
             )}
           >
             <Avatar user={activeUser} size={26} />
-            <span className="text-sm text-[#777] group-hover:text-[#111] transition-colors flex-1 text-left truncate">{activeUser?.name}</span>
+            <span className="text-sm text-(--c-777) group-hover:text-(--c-111) transition-colors flex-1 text-left truncate">{activeUser?.name}</span>
           </button>
         </div>
       </aside>
@@ -303,7 +303,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Bottom tab bar — mobile only */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-[#e2e2e2] flex items-stretch z-40"
+      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-(--c-fff) border-t border-(--c-e2e2e2) flex items-stretch z-40"
            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {nav.map(({ to, label, icon: Icon }) => (
           <NavLink
@@ -313,7 +313,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             className={({ isActive }) =>
               clsx(
                 'flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors',
-                isActive ? 'text-[#2d6a4f]' : 'text-[#aaa]',
+                isActive ? 'text-(--c-2d6a4f)' : 'text-(--c-aaa)',
               )
             }
           >
@@ -324,7 +324,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {/* Profile button */}
         <button
           onClick={openOwnProfile}
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium text-[#aaa] transition-colors"
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium text-(--c-aaa) transition-colors"
         >
           <Avatar user={activeUser} size={22} />
           <span>Profile</span>
@@ -335,7 +335,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {!isViewingFriend && (
         <button
           onClick={() => setShowAddAlbum(true)}
-          className="md:hidden fixed bottom-20 right-4 z-30 w-12 h-12 rounded-full bg-[#2d6a4f] hover:bg-[#245c43] text-white shadow-lg flex items-center justify-center transition-colors"
+          className="md:hidden fixed bottom-20 right-4 z-30 w-12 h-12 rounded-full bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white shadow-lg flex items-center justify-center transition-colors"
           style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
           aria-label="Rate an Album"
         >

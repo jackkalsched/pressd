@@ -1,5 +1,352 @@
 @import "tailwindcss";
 
+/* ── Theme ────────────────────────────────────────────────────────────────
+   Every colour the app sets is a variable named for its light value
+   (--c-2d6a4f is #2d6a4f), so the cream page renders exactly as written, and
+   html.dark swaps each for its dark counterpart — computed by role: neutrals
+   inverted by lightness keeping a trace of their warmth, pale tints sunk to
+   deep tints of their hue, deep brand colours lifted, bright accents kept. The
+   page, cards, ink and greens match the iPhone app's dark palette value for
+   value (mobile/theme/tokens.ts). lib/appearance.ts decides the class; a script
+   in index.html sets it before the first paint. The share card stays light: it
+   is a picture people post, and keeps its literal colours. */
+:root {
+  color-scheme: light;
+  /* A score's colour (types.ts songScoreColor): the hue is the score's, the
+     saturation and lightness the page's. */
+  --score-s: 65%;
+  --score-l: 32%;
+  /* A score cell's pale fill (covers.tsx scoreTint): none on the dark page. */
+  --score-tint-a: 1;
+  /* The brand green as a solid fill behind white (buttons, the stat hero). */
+  --c-green-fill: #2d6a4f;
+  --c-green-fill-hover: #245c43;
+  /* The lightness of a score badge's colour on a cover (AlbumCard). */
+  --badge-l: 30%;
+  --c-0f766e: #0f766e;
+  --c-111: #111;
+  --c-16a085: #16a085;
+  --c-1a1a1a: #1a1a1a;
+  --c-1a7a3c: #1a7a3c;
+  --c-1abc9c: #1abc9c;
+  --c-1c1917: #1c1917;
+  --c-1d4ed8: #1d4ed8;
+  --c-1e5238: #1e5238;
+  --c-212220: #212220;
+  --c-222: #222;
+  --c-245c43: #245c43;
+  --c-252525: #252525;
+  --c-27ae60: #27ae60;
+  --c-2980b9: #2980b9;
+  --c-2a2a2a: #2a2a2a;
+  --c-2d6a4f: #2d6a4f;
+  --c-2ecc71: #2ecc71;
+  --c-2f2f2f: #2f2f2f;
+  --c-333: #333;
+  --c-3498db: #3498db;
+  --c-3b82f6: #3b82f6;
+  --c-3c3530: #3c3530;
+  --c-3e6b54: #3e6b54;
+  --c-444: #444;
+  --c-44403c: #44403c;
+  --c-4a423a: #4a423a;
+  --c-4caf6e: #4caf6e;
+  --c-4f7f3a: #4f7f3a;
+  --c-555: #555;
+  --c-57534e: #57534e;
+  --c-5f8f42: #5f8f42;
+  --c-666: #666;
+  --c-6ee7b7: #6ee7b7;
+  --c-777: #777;
+  --c-78645033: #78645033;
+  --c-78716c: #78716c;
+  --c-7c3aed: #7c3aed;
+  --c-7f8c8d: #7f8c8d;
+  --c-888: #888;
+  --c-8a7f72: #8a7f72;
+  --c-8a8079: #8a8079;
+  --c-8e44ad: #8e44ad;
+  --c-8fbfa6: #8fbfa6;
+  --c-999: #999;
+  --c-9a4727: #9a4727;
+  --c-9a5b13: #9a5b13;
+  --c-9a7b2f: #9a7b2f;
+  --c-9b59b6: #9b59b6;
+  --c-9fd6b0: #9fd6b0;
+  --c-a08c76: #a08c76;
+  --c-a8482f: #a8482f;
+  --c-a8998a: #a8998a;
+  --c-a8a29e: #a8a29e;
+  --c-a9d3bf: #a9d3bf;
+  --c-aaa: #aaa;
+  --c-b08a2e: #b08a2e;
+  --c-b0a090: #b0a090;
+  --c-b1542f: #b1542f;
+  --c-b3a99c: #b3a99c;
+  --c-b45309: #b45309;
+  --c-b5432f: #b5432f;
+  --c-b5aa9c: #b5aa9c;
+  --c-b8ada0: #b8ada0;
+  --c-b91c1c: #b91c1c;
+  --c-bbb: #bbb;
+  --c-be185d: #be185d;
+  --c-c0392b: #c0392b;
+  --c-c2410c: #c2410c;
+  --c-c2b8ad: #c2b8ad;
+  --c-c3e6d8: #c3e6d8;
+  --c-c8a84b: #c8a84b;
+  --c-c8c0b4: #c8c0b4;
+  --c-c8c8c8: #c8c8c8;
+  --c-ccc: #ccc;
+  --c-cdbfae: #cdbfae;
+  --c-cfc3b0: #cfc3b0;
+  --c-cfc6b8: #cfc6b8;
+  --c-cfc6b9: #cfc6b9;
+  --c-cfe0d6: #cfe0d6;
+  --c-cfe6da: #cfe6da;
+  --c-d35400: #d35400;
+  --c-d4b45e: #d4b45e;
+  --c-d6cdc0: #d6cdc0;
+  --c-d6cec2: #d6cec2;
+  --c-d7cfc3: #d7cfc3;
+  --c-d7e6dd: #d7e6dd;
+  --c-d9d0c4: #d9d0c4;
+  --c-ddd5c8: #ddd5c8;
+  --c-dfe9e2: #dfe9e2;
+  --c-e0492b: #e0492b;
+  --c-e05555: #e05555;
+  --c-e07a6a: #e07a6a;
+  --c-e07b39: #e07b39;
+  --c-e2dbd0: #e2dbd0;
+  --c-e2e2e2: #e2e2e2;
+  --c-e3ebe6: #e3ebe6;
+  --c-e5ddd2: #e5ddd2;
+  --c-e67e22: #e67e22;
+  --c-e6ded2: #e6ded2;
+  --c-e6e0d7: #e6e0d7;
+  --c-e74c3c: #e74c3c;
+  --c-e7e0d6: #e7e0d6;
+  --c-e7e1d8: #e7e1d8;
+  --c-e8dfd2: #e8dfd2;
+  --c-e8e1d6: #e8e1d6;
+  --c-e8e2d9: #e8e2d9;
+  --c-e8e8e8: #e8e8e8;
+  --c-e91e8c: #e91e8c;
+  --c-ea6c0a: #ea6c0a;
+  --c-ea7a2a: #ea7a2a;
+  --c-eaf5ef: #eaf5ef;
+  --c-ebe5db: #ebe5db;
+  --c-ebe5dc: #ebe5dc;
+  --c-ebe7e0: #ebe7e0;
+  --c-ece5da: #ece5da;
+  --c-ece6dc: #ece6dc;
+  --c-ececec: #ececec;
+  --c-ededed: #ededed;
+  --c-eee: #eee;
+  --c-eef5f0: #eef5f0;
+  --c-efe9e0: #efe9e0;
+  --c-efebe5: #efebe5;
+  --c-efefef: #efefef;
+  --c-f0ebe3: #f0ebe3;
+  --c-f0f0f0: #f0f0f0;
+  --c-f0faf5: #f0faf5;
+  --c-f1ece4: #f1ece4;
+  --c-f2ede5: #f2ede5;
+  --c-f2eee7: #f2eee7;
+  --c-f2f0ec: #f2f0ec;
+  --c-f39c12: #f39c12;
+  --c-f3b98a: #f3b98a;
+  --c-f3f3f3: #f3f3f3;
+  --c-f4f2ec: #f4f2ec;
+  --c-f5f0e8: #f5f0e8;
+  --c-f5f1ea: #f5f1ea;
+  --c-f5f5f5: #f5f5f5;
+  --c-f6f2ec: #f6f2ec;
+  --c-f7f3ee: #f7f3ee;
+  --c-f7f5f2: #f7f5f2;
+  --c-f7faf8: #f7faf8;
+  --c-f97316: #f97316;
+  --c-f9f8f6: #f9f8f6;
+  --c-faf8f5: #faf8f5;
+  --c-fafafa: #fafafa;
+  --c-fbd5b5: #fbd5b5;
+  --c-fcd9a8: #fcd9a8;
+  --c-fdf0ee: #fdf0ee;
+  --c-fdf3e7: #fdf3e7;
+  --c-fed7aa: #fed7aa;
+  --c-ffd9a0: #ffd9a0;
+  --c-ffedd5: #ffedd5;
+  --c-fff: #fff;
+  --c-fff7ed: #fff7ed;
+}
+
+:root.dark {
+  color-scheme: dark;
+  --score-s: 55%;
+  --score-l: 62%;
+  --score-tint-a: 0;
+  /* Darker and softer than the green as text, which is lifted to read on the
+     dark page: as a fill that lift made it loud. */
+  --c-green-fill: #3c6e57;
+  --c-green-fill-hover: #335e4a;
+  --badge-l: 62%;
+  --c-0f766e: #64d8cf;
+  --c-111: #f4efe7;
+  --c-16a085: #64d8c1;
+  --c-1a1a1a: #f4efe7;
+  --c-1a7a3c: #64d88d;
+  --c-1abc9c: #64d8c1;
+  --c-1c1917: #f4efe7;
+  --c-1d4ed8: #6482d8;
+  --c-1e5238: #3d8262;
+  --c-212220: #f4efe7;
+  --c-222: #f4efe7;
+  --c-245c43: #438a69;
+  --c-252525: #d8d8d8;
+  --c-27ae60: #64d895;
+  --c-2980b9: #64aad8;
+  --c-2a2a2a: #d5d5d5;
+  --c-2d6a4f: #4f9a77;
+  --c-2ecc71: #64d895;
+  --c-2f2f2f: #d2d2d2;
+  --c-333: #d0d0d0;
+  --c-3498db: #3498db;
+  --c-3b82f6: #3b82f6;
+  --c-3c3530: #d3cdc9;
+  --c-3e6b54: #84b89e;
+  --c-444: #c6c6c6;
+  --c-44403c: #ccc8c5;
+  --c-4a423a: #cdc7c2;
+  --c-4caf6e: #78c492;
+  --c-4f7f3a: #90c27a;
+  --c-555: #bcbcbc;
+  --c-57534e: #d2cabe;
+  --c-5f8f42: #95c27a;
+  --c-666: #b3b3b3;
+  --c-6ee7b7: #6ee7b7;
+  --c-777: #a9a9a9;
+  --c-78645033: #78645033;
+  --c-78716c: #a69e92;
+  --c-7c3aed: #7c3aed;
+  --c-7f8c8d: #9ba5a6;
+  --c-888: #9f9f9f;
+  --c-8a7f72: #ada69c;
+  --c-8a8079: #a9a29d;
+  --c-8e44ad: #af74c8;
+  --c-8fbfa6: #8fbfa6;
+  --c-999: #959595;
+  --c-9a4727: #d88464;
+  --c-9a5b13: #d8a264;
+  --c-9a7b2f: #d2b46b;
+  --c-9b59b6: #9b59b6;
+  --c-9fd6b0: #9fd6b0;
+  --c-a08c76: #a08c76;
+  --c-a8482f: #d57e68;
+  --c-a8998a: #857c72;
+  --c-a8a29e: #968e8a;
+  --c-a9d3bf: #a9d3bf;
+  --c-aaa: #8c8c8c;
+  --c-b08a2e: #d7b665;
+  --c-b0a090: #9c9186;
+  --c-b1542f: #d68666;
+  --c-b3a99c: #998f82;
+  --c-b45309: #d89664;
+  --c-b5432f: #d77665;
+  --c-b5aa9c: #988e81;
+  --c-b8ada0: #968c7f;
+  --c-b91c1c: #f2867a;
+  --c-bbb: #828282;
+  --c-be185d: #d86494;
+  --c-c0392b: #e5675a;
+  --c-c2410c: #d88664;
+  --c-c2b8ad: #908578;
+  --c-c3e6d8: #1e382e;
+  --c-c8a84b: #c8a84b;
+  --c-c8c0b4: #8d8374;
+  --c-c8c8c8: #5b5b5b;
+  --c-ccc: #555555;
+  --c-cdbfae: #8d8274;
+  --c-cfc3b0: #70685c;
+  --c-cfc6b8: #6a6357;
+  --c-cfc6b9: #696256;
+  --c-cfe0d6: #3f4e45;
+  --c-cfe6da: #3c4942;
+  --c-d35400: #d89264;
+  --c-d4b45e: #d4b45e;
+  --c-d6cdc0: #5f584e;
+  --c-d6cec2: #5e574d;
+  --c-d7cfc3: #5d564c;
+  --c-d7e6dd: #38443d;
+  --c-d9d0c4: #5a534a;
+  --c-ddd5c8: #554f45;
+  --c-dfe9e2: #1f2c26;
+  --c-e0492b: #e0492b;
+  --c-e05555: #e05555;
+  --c-e07a6a: #e07a6a;
+  --c-e07b39: #e07b39;
+  --c-e2dbd0: #4b463e;
+  --c-e2e2e2: #3a3a3a;
+  --c-e3ebe6: #2e3932;
+  --c-e5ddd2: #48433b;
+  --c-e67e22: #e67e22;
+  --c-e6ded2: #47423a;
+  --c-e6e0d7: #443f38;
+  --c-e74c3c: #e74c3c;
+  --c-e7e0d6: #443f38;
+  --c-e7e1d8: #433e37;
+  --c-e8dfd2: #464139;
+  --c-e8e1d6: #433f37;
+  --c-e8e2d9: #34312e;
+  --c-e8e8e8: #323232;
+  --c-e91e8c: #e91e8c;
+  --c-ea6c0a: #d89764;
+  --c-ea7a2a: #ea7a2a;
+  --c-eaf5ef: #242c28;
+  --c-ebe5db: #3e3a33;
+  --c-ebe5dc: #3e3932;
+  --c-ebe7e0: #3b3730;
+  --c-ece5da: #3e3a33;
+  --c-ece6dc: #2a2826;
+  --c-ececec: #2d2d2d;
+  --c-ededed: #2c2c2c;
+  --c-eee: #2a2a2a;
+  --c-eef5f0: #222a24;
+  --c-efe9e0: #2a2826;
+  --c-efebe5: #34312b;
+  --c-efefef: #292929;
+  --c-f0ebe3: #35312b;
+  --c-f0f0f0: #282828;
+  --c-f0faf5: #1e2522;
+  --c-f1ece4: #34302a;
+  --c-f2ede5: #322f29;
+  --c-f2eee7: #312d28;
+  --c-f2f0ec: #2d2a25;
+  --c-f39c12: #f39c12;
+  --c-f3b98a: #f3b98a;
+  --c-f3f3f3: #242424;
+  --c-f4f2ec: #2c2a24;
+  --c-f5f0e8: #2e2b25;
+  --c-f5f1ea: #2c2a24;
+  --c-f5f5f5: #222222;
+  --c-f6f2ec: #2a2723;
+  --c-f7f3ee: #282521;
+  --c-f7f5f2: #26231f;
+  --c-f7faf8: #1c221e;
+  --c-f97316: #f97316;
+  --c-f9f8f6: #171615;
+  --c-faf8f5: #171615;
+  --c-fafafa: #171615;
+  --c-fbd5b5: #382a1e;
+  --c-fcd9a8: #382e1e;
+  --c-fdf0ee: #241e1e;
+  --c-fdf3e7: #292622;
+  --c-fed7aa: #382c1e;
+  --c-ffd9a0: #382e1e;
+  --c-ffedd5: #382d1e;
+  --c-fff: #211f1d;
+  --c-fff7ed: #2d2119;
+}
+
 @keyframes card-pop {
   0%   { opacity: 0; transform: scale(0.84) translateY(18px); }
   60%  { opacity: 1; transform: scale(1.03) translateY(-3px); }
@@ -77,15 +424,15 @@
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(90deg, #e8e0d4 25%, #f3ede4 50%, #e8e0d4 75%);
+  background: linear-gradient(90deg, var(--c-e8e2d9) 25%, var(--c-f2eee7) 50%, var(--c-e8e2d9) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.6s ease-in-out infinite;
 }
 
 body {
   margin: 0;
-  background-color: #ffffff;
-  color: #111111;
+  background-color: var(--c-fff);
+  color: var(--c-111);
   /* Mobile's body face (theme/tokens.ts fonts.body*). Web used DM Sans until
      September 2026; the two apps now set text in the same two families. */
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
@@ -146,7 +493,7 @@ button:not(:disabled):active {
    Not on text fields: they match focus-visible on a click too, and already
    mark focus with their own border. */
 :where(button, a, [role="button"]):focus-visible {
-  outline: 2px solid #2d6a4f;
+  outline: 2px solid var(--c-2d6a4f);
   outline-offset: 2px;
   border-radius: 8px;
 }
@@ -257,3 +604,30 @@ button:not(:disabled):active {
     transition: none;
   }
 }
+
+/* A selected chip (Thread's sort): ink with white on the cream page; on the
+   dark one outlined in the cream instead, as on iPhone — the ink fill turns
+   cream there and would swallow its label. */
+.chip-on { background-color: #111; color: #fff; border-color: #111; }
+:root.dark .chip-on { background-color: #2a2826; color: #f4efe7; border-color: #f4efe7; }
+
+/* For You's record cards (SpotlightCard). Cream page: a pale wash of the tone.
+   Dark page: the raised surface, edged by a faint rule, with the tone as a glow
+   from one corner fading to nothing, as mobile's SpotlightCard does there. */
+.spot-green { --spot-ink: #2d6a4f; --spot-ring: #cfe0d6; --spot-wash: linear-gradient(115deg, #e6f0ea, #f6f4ef 70%); }
+.spot-orange { --spot-ink: #ea6c0a; --spot-ring: #fbd5b5; --spot-wash: linear-gradient(115deg, #ffeedd, #f8f5f0 70%); }
+:root.dark .spot-green {
+  --spot-ink: #5fa883; --spot-ring: rgba(244, 239, 231, 0.10);
+  --spot-wash: linear-gradient(115deg, rgba(95, 168, 131, 0.16), rgba(95, 168, 131, 0) 60%), #211f1d;
+}
+:root.dark .spot-orange {
+  --spot-ink: #e8843f; --spot-ring: rgba(244, 239, 231, 0.10);
+  --spot-wash: linear-gradient(115deg, rgba(232, 132, 63, 0.15), rgba(232, 132, 63, 0) 60%), #211f1d;
+}
+.spot-card { background: var(--spot-wash); }
+:root.dark .spot-card { box-shadow: inset 0 0 0 1px rgba(244, 239, 231, 0.07); }
+/* The record's blurred cover: stronger on the dark page, where it is the light. */
+.spot-glow { opacity: 0.22; }
+.group:hover .spot-glow { opacity: 0.36; }
+:root.dark .spot-glow { opacity: 0.3; }
+:root.dark .group:hover .spot-glow { opacity: 0.42; }

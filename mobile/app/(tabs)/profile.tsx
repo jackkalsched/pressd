@@ -717,7 +717,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderColor: colors.border,
   },
   compactTitle: { fontFamily: fonts.displayBlack, fontSize: 22, color: colors.ink, letterSpacing: 0.5 },
 
@@ -840,7 +840,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderColor: colors.border,
   },
   optionText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.ink },
   sheetHint: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted, marginTop: spacing.md },

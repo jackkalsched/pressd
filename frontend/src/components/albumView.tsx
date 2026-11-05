@@ -7,20 +7,20 @@ import { songScoreColor, BANG_THRESHOLD, SKIP_THRESHOLD } from '../types'
 import { coverUrl } from '@pressd/shared/covers'
 import { stagger } from '../lib/format'
 
-export const GREEN = '#2d6a4f'
-export const RECOMMEND = '#ea7a2a'
-export const DANGER = '#b91c1c'
+export const GREEN = 'var(--c-2d6a4f)'
+export const RECOMMEND = 'var(--c-ea7a2a)'
+export const DANGER = 'var(--c-b91c1c)'
 
 /** The top bar's controls. */
 export const PILL =
-  'inline-flex items-center gap-1.5 rounded-full border border-[#e2dbd0] bg-white/80 px-3.5 py-1.5 text-[13px] font-semibold text-[#2d6a4f] hover:border-[#2d6a4f] hover:bg-white disabled:opacity-60'
+  'inline-flex items-center gap-1.5 rounded-full border border-(--c-e2dbd0) bg-(--c-fff)/80 px-3.5 py-1.5 text-[13px] font-semibold text-(--c-2d6a4f) hover:border-(--c-2d6a4f) hover:bg-(--c-fff) disabled:opacity-60'
 
 /** The view you're on, among the top bar's controls. */
 export const PILL_ACTIVE =
-  'inline-flex items-center gap-1.5 rounded-full border border-[#2d6a4f] bg-[#2d6a4f] px-3.5 py-1.5 text-[13px] font-semibold text-white'
+  'inline-flex items-center gap-1.5 rounded-full border border-(--c-2d6a4f) bg-(--c-green-fill) px-3.5 py-1.5 text-[13px] font-semibold text-white'
 
 /** A small caps label over a group of numbers or rows. */
-export const SECTION_LABEL = 'm-0 text-[11px] font-bold tracking-[0.16em] text-[#a8998a]'
+export const SECTION_LABEL = 'm-0 text-[11px] font-bold tracking-[0.16em] text-(--c-a8998a)'
 
 /** The record's colour, faintly, behind the top of the page. */
 export function CoverWash({ url }: { url: string | null | undefined }) {
@@ -106,7 +106,7 @@ export function CompareScores({ left, right }: { left: CompareSide; right: Compa
     <>
       <div className="flex items-stretch">
         {[left, right].map((side, i) => (
-          <div key={side.label} className={`min-w-0 flex-1 ${i === 1 ? 'border-l border-[#e2dbd0] pl-8' : ''}`}>
+          <div key={side.label} className={`min-w-0 flex-1 ${i === 1 ? 'border-l border-(--c-e2dbd0) pl-8' : ''}`}>
             <p className="m-0 truncate text-[11px] font-bold tracking-[0.16em]" style={{ color: side.color }}>{side.label}</p>
             <p className="font-display m-0 mt-1 text-[56px] font-bold leading-none tabular-nums" style={{ color: side.color }}>
               {side.score.toFixed(2)}
@@ -114,9 +114,9 @@ export function CompareScores({ left, right }: { left: CompareSide; right: Compa
           </div>
         ))}
       </div>
-      <div className="relative mt-6 h-2 rounded-full bg-[#2d6a4f]/15">
+      <div className="relative mt-6 h-2 rounded-full bg-(--c-2d6a4f)/15">
         <div
-          className="grow-x absolute inset-y-0 left-0 rounded-full bg-[#2d6a4f]/45"
+          className="grow-x absolute inset-y-0 left-0 rounded-full bg-(--c-2d6a4f)/45"
           style={{ width: `${Math.max(pos(left.score), pos(right.score))}%` }}
         />
         {[left, right].map(side => (
@@ -127,7 +127,7 @@ export function CompareScores({ left, right }: { left: CompareSide; right: Compa
           />
         ))}
       </div>
-      <div className="mt-1.5 flex justify-between text-[11px] text-[#8a7f72] tabular-nums">
+      <div className="mt-1.5 flex justify-between text-[11px] text-(--c-8a7f72) tabular-nums">
         {[5, 6, 7, 8, 9, 10].map((n) => <span key={n}>{n}</span>)}
       </div>
     </>
@@ -148,11 +148,11 @@ export function StatFigure({ label, value, digits = 1, suffix = '', color, index
     <div className="rise-in" style={stagger(index)}>
       <p
         className="font-display m-0 text-[26px] font-bold leading-none tabular-nums"
-        style={{ color: value == null ? '#c8c0b4' : (color ?? songScoreColor(value)) }}
+        style={{ color: value == null ? 'var(--c-c8c0b4)' : (color ?? songScoreColor(value)) }}
       >
         {value != null ? `${value.toFixed(digits)}${suffix}` : '—'}
       </p>
-      <p className="m-0 mt-1.5 text-[12px] font-medium text-[#8a7f72]">{label}</p>
+      <p className="m-0 mt-1.5 text-[12px] font-medium text-(--c-8a7f72)">{label}</p>
     </div>
   )
 }

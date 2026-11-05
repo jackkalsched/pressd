@@ -768,7 +768,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderColor: colors.border,
   },
   compactTitle: { fontFamily: fonts.displayBlack, fontSize: 20, color: colors.ink, letterSpacing: 0.5 },
   // gap, not just space-between: with nothing between them the title and the
@@ -801,7 +801,7 @@ const styles = StyleSheet.create({
   sectionMetaBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 3, paddingHorizontal: 9, borderRadius: radii.pill, backgroundColor: colors.greenSoft },
   sectionMetaBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },
 
-  hairline: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  hairline: { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
 
   mediaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 2 },
   mediaText: { flex: 1, minWidth: 0 },
@@ -876,6 +876,6 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.4)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: colors.bg, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, paddingTop: spacing.lg, paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   sheetTitle: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink, marginBottom: spacing.sm },
-  optionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  optionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.md, borderBottomWidth: 1, borderColor: colors.border },
   optionText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.ink },
 })

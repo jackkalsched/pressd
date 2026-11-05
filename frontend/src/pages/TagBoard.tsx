@@ -94,20 +94,20 @@ export default function TagBoard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f9f8f6]">
+    <div className="min-h-screen bg-(--c-f9f8f6)">
       <div className="mx-auto w-full max-w-[1600px] px-4 md:px-12 py-6 md:py-8 pb-24">
         <button
           onClick={goBack}
-          className="flex items-center gap-1.5 text-[13px] font-medium text-[#8a7f72] hover:text-[#111] transition-colors mb-5"
+          className="flex items-center gap-1.5 text-[13px] font-medium text-(--c-8a7f72) hover:text-(--c-111) transition-colors mb-5"
         >
           <ArrowLeft size={16} /> Back
         </button>
 
         {/* ── Masthead ─────────────────────────────────────────────── */}
-        <div className="flex flex-wrap items-end justify-between gap-6 pb-6 mb-8 border-b border-[#e8e2d9]">
+        <div className="flex flex-wrap items-end justify-between gap-6 pb-6 mb-8 border-b border-(--c-e8e2d9)">
           <div className="min-w-0">
-            <p className="m-0 mb-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-[#2d6a4f]">{kicker}</p>
-            <h1 className="m-0 font-display text-4xl md:text-5xl font-bold text-[#1c1917] tracking-tight">{tag}</h1>
+            <p className="m-0 mb-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-(--c-2d6a4f)">{kicker}</p>
+            <h1 className="m-0 font-display text-4xl md:text-5xl font-bold text-(--c-1c1917) tracking-tight">{tag}</h1>
           </div>
           {data && data.count > 0 && (
             <div className="flex flex-wrap gap-x-10 gap-y-4">
@@ -132,13 +132,13 @@ export default function TagBoard() {
         </div>
 
         {isLoading ? (
-          <div className="py-16 flex justify-center text-[#aaa]">
+          <div className="py-16 flex justify-center text-(--c-aaa)">
             <Loader2 size={20} className="animate-spin" />
           </div>
         ) : isError ? (
-          <p className="py-16 text-center text-sm text-[#777] m-0">Couldn't load these records just now.</p>
+          <p className="py-16 text-center text-sm text-(--c-777) m-0">Couldn't load these records just now.</p>
         ) : items.length === 0 ? (
-          <p className="py-16 text-center text-sm text-[#777] m-0">
+          <p className="py-16 text-center text-sm text-(--c-777) m-0">
             {isOwn ? "You haven't" : `${ownerName} hasn't`} rated anything in {tag} yet.
           </p>
         ) : (
@@ -154,7 +154,7 @@ export default function TagBoard() {
                     className="text-center group rise-in"
                     style={stagger(i === 1 ? 0 : i === 0 ? 2 : 3)}
                   >
-                    <div className={`font-display font-bold leading-none mb-2.5 ${i === 1 ? 'text-[44px] text-[#111]' : 'text-[34px] text-[#bbb]'}`}>
+                    <div className={`font-display font-bold leading-none mb-2.5 ${i === 1 ? 'text-[44px] text-(--c-111)' : 'text-[34px] text-(--c-bbb)'}`}>
                       {it.rank}
                     </div>
                     <div className="flex justify-center">
@@ -162,16 +162,16 @@ export default function TagBoard() {
                         <Cover artUrl={it.album_art_url} seed={it.artist} size={i === 1 ? 210 : 165} radius={14} />
                       </div>
                     </div>
-                    <p className="text-[14.5px] font-bold text-[#111] mt-3 leading-tight group-hover:text-[#2d6a4f] transition-colors">
+                    <p className="text-[14.5px] font-bold text-(--c-111) mt-3 leading-tight group-hover:text-(--c-2d6a4f) transition-colors">
                       {it.album_name}
                     </p>
-                    <p className="text-[12.5px] text-[#777] mt-0.5">
+                    <p className="text-[12.5px] text-(--c-777) mt-0.5">
                       {it.artist}{it.year ? ` · ${it.year}` : ''}
                     </p>
                     <div className="flex items-center justify-center gap-2 mt-2">
                       <ScorePill score={it.score} big />
                       {overall.get(it.album_id) && (
-                        <span className="text-[11.5px] text-[#a8998a] tabular-nums">#{overall.get(it.album_id)} overall</span>
+                        <span className="text-[11.5px] text-(--c-a8998a) tabular-nums">#{overall.get(it.album_id)} overall</span>
                       )}
                     </div>
                   </Link>
@@ -183,27 +183,27 @@ export default function TagBoard() {
 
             {/* ── Board ──────────────────────────────────────────── */}
             {rest.length > 0 && (
-              <div className="border-t border-[#e2e2e2]">
+              <div className="border-t border-(--c-e2e2e2)">
                 {rest.map((it, i) => (
                   <Link
                     key={it.album_id}
                     to={`/album/${it.album_id}`}
                     style={stagger(i + 4)}
-                    className="rise-in group grid grid-cols-[32px_44px_minmax(0,1fr)_auto] md:grid-cols-[44px_56px_minmax(0,1fr)_120px_auto] items-center gap-3 md:gap-4 px-1.5 py-3 border-b border-[#ededed] hover:bg-[#f2f0ec] active:bg-[#ebe7e0] transition-colors"
+                    className="rise-in group grid grid-cols-[32px_44px_minmax(0,1fr)_auto] md:grid-cols-[44px_56px_minmax(0,1fr)_120px_auto] items-center gap-3 md:gap-4 px-1.5 py-3 border-b border-(--c-ededed) hover:bg-(--c-f2f0ec) active:bg-(--c-ebe7e0) transition-colors"
                   >
-                    <span className="font-display text-[19px] text-[#aaa] tabular-nums text-center">{it.rank}</span>
+                    <span className="font-display text-[19px] text-(--c-aaa) tabular-nums text-center">{it.rank}</span>
                     <div className={`flex justify-center ${COVER_LIFT}`} style={{ willChange: 'transform' }}>
                       <Cover artUrl={it.album_art_url} seed={it.artist} size={44} radius={8} fontSize={18} />
                     </div>
                     <div className="min-w-0">
-                      <p className="m-0 text-[14.5px] font-semibold text-[#111] leading-tight truncate group-hover:text-[#2d6a4f] transition-colors">
+                      <p className="m-0 text-[14.5px] font-semibold text-(--c-111) leading-tight truncate group-hover:text-(--c-2d6a4f) transition-colors">
                         {it.album_name}
                       </p>
-                      <p className="m-0 text-[12.5px] text-[#777] mt-0.5 truncate">
+                      <p className="m-0 text-[12.5px] text-(--c-777) mt-0.5 truncate">
                         {it.artist}{it.year ? ` · ${it.year}` : ''}
                       </p>
                     </div>
-                    <span className="hidden md:block text-xs text-[#aaa] whitespace-nowrap text-right tabular-nums">
+                    <span className="hidden md:block text-xs text-(--c-aaa) whitespace-nowrap text-right tabular-nums">
                       {overall.get(it.album_id) ? `#${overall.get(it.album_id)} of ${libraryCount} overall` : ''}
                     </span>
                     <span className="flex justify-end">
@@ -223,11 +223,11 @@ export default function TagBoard() {
 function Stat({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <div className="min-w-0 max-w-[220px]">
-      <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#a8998a]">{label}</p>
-      <p className="m-0 mt-1 font-display text-[30px] font-bold tabular-nums leading-none" style={{ color: color ?? '#1c1917' }}>
+      <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-(--c-a8998a)">{label}</p>
+      <p className="m-0 mt-1 font-display text-[30px] font-bold tabular-nums leading-none" style={{ color: color ?? 'var(--c-1c1917)' }}>
         {value}
       </p>
-      {sub && <p className="m-0 mt-1.5 text-[12px] text-[#8a7f72] truncate">{sub}</p>}
+      {sub && <p className="m-0 mt-1.5 text-[12px] text-(--c-8a7f72) truncate">{sub}</p>}
     </div>
   )
 }

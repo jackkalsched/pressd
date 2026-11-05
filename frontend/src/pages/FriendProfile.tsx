@@ -18,7 +18,7 @@ import Ratings from './Ratings'
 type Tab = 'library' | 'stats' | 'ratings'
 
 function avatarColor(name: string): string {
-  const colors = ['#2d6a4f', '#1d4ed8', '#7c3aed', '#b45309', '#0f766e', '#be185d', '#c2410c']
+  const colors = ['var(--c-2d6a4f)', 'var(--c-1d4ed8)', 'var(--c-7c3aed)', 'var(--c-b45309)', 'var(--c-0f766e)', 'var(--c-be185d)', 'var(--c-c2410c)']
   let h = 0
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % colors.length
   return colors[h]
@@ -193,7 +193,7 @@ export default function FriendProfile() {
   const backToFriends = (
     <button
       onClick={goBack}
-      className="flex items-center gap-1.5 text-[#57534e] hover:text-[#1c1917] text-sm transition-colors"
+      className="flex items-center gap-1.5 text-(--c-57534e) hover:text-(--c-1c1917) text-sm transition-colors"
     >
       <ArrowLeft size={16} /> Back
     </button>
@@ -201,10 +201,10 @@ export default function FriendProfile() {
 
   if (!valid || profileError || (!profileLoading && !person)) {
     return (
-      <div className="min-h-screen bg-[#f9f8f6] p-4 md:p-8">
+      <div className="min-h-screen bg-(--c-f9f8f6) p-4 md:p-8">
         {backToFriends}
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <p className="text-[#78716c] text-sm">This profile isn't available.</p>
+          <p className="text-(--c-78716c) text-sm">This profile isn't available.</p>
         </div>
       </div>
     )
@@ -212,9 +212,9 @@ export default function FriendProfile() {
 
   if (!person) {
     return (
-      <div className="min-h-screen bg-[#f9f8f6] p-4 md:p-8">
+      <div className="min-h-screen bg-(--c-f9f8f6) p-4 md:p-8">
         {backToFriends}
-        <div className="flex items-center justify-center py-24 text-[#a8998a] gap-2">
+        <div className="flex items-center justify-center py-24 text-(--c-a8998a) gap-2">
           <Loader2 size={16} className="animate-spin" /> <span className="text-sm">Loading…</span>
         </div>
       </div>
@@ -228,7 +228,7 @@ export default function FriendProfile() {
   ]
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#f9f8f6]">
+    <div className="relative min-h-screen overflow-x-hidden bg-(--c-f9f8f6)">
       <div className="relative p-4 md:p-8">
       <div className="mb-5">{backToFriends}</div>
 
@@ -248,7 +248,7 @@ export default function FriendProfile() {
               onClick={() => setSheet('profile')}
               aria-label="Edit profile"
               title="Edit profile"
-              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border-none bg-[#f9f8f6] text-[#1c1917] shadow-[0_6px_16px_-8px_rgba(0,0,0,0.5)] hover:bg-white"
+              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border-none bg-(--c-f9f8f6) text-(--c-1c1917) shadow-[0_6px_16px_-8px_rgba(0,0,0,0.5)] hover:bg-(--c-fff)"
             >
               <Pencil size={16} />
             </button>
@@ -256,7 +256,7 @@ export default function FriendProfile() {
               onClick={() => setSheet('settings')}
               aria-label="Settings"
               title="Settings"
-              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border-none bg-[#f9f8f6] text-[#1c1917] shadow-[0_6px_16px_-8px_rgba(0,0,0,0.5)] hover:bg-white"
+              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border-none bg-(--c-f9f8f6) text-(--c-1c1917) shadow-[0_6px_16px_-8px_rgba(0,0,0,0.5)] hover:bg-(--c-fff)"
             >
               <Settings size={17} />
             </button>
@@ -272,10 +272,10 @@ export default function FriendProfile() {
         {/* The avatar, and under it the shape of every album score — mobile
             draws the same histogram beneath its average. */}
         <div className="-mt-14 flex w-[122px] shrink-0 flex-col self-stretch md:-mt-24 md:w-[186px]">
-          <div className="relative z-10 rounded-full bg-[#f9f8f6] p-[5px] shadow-[0_18px_40px_-18px_rgba(40,25,10,0.55)] md:p-[7px]">
+          <div className="relative z-10 rounded-full bg-(--c-f9f8f6) p-[5px] shadow-[0_18px_40px_-18px_rgba(40,25,10,0.55)] md:p-[7px]">
             <div
               className="flex h-[112px] w-[112px] items-center justify-center overflow-hidden rounded-full text-[44px] font-bold text-white md:h-[172px] md:w-[172px] md:text-[68px]"
-              style={{ background: person.avatarUrl ? '#ebe5dc' : avatarColor(person.name) }}
+              style={{ background: person.avatarUrl ? 'var(--c-ebe5dc)' : avatarColor(person.name) }}
             >
               {person.avatarUrl
                 ? <img src={person.avatarUrl} alt={person.name} className="h-full w-full object-cover" />
@@ -296,10 +296,10 @@ export default function FriendProfile() {
         <div className="min-w-0 flex-1 pt-4 md:pt-6">
           {/* Line height 1.2, not 1: `truncate` clips to the line box, and
               Playfair's descenders (the j, g, y) hang below a 1.0 line. */}
-          <h1 className="font-display m-0 truncate pb-[0.06em] text-[40px] font-bold leading-[1.2] tracking-tight text-[#1c1917] md:text-[56px]">
+          <h1 className="font-display m-0 truncate pb-[0.06em] text-[40px] font-bold leading-[1.2] tracking-tight text-(--c-1c1917) md:text-[56px]">
             {person.name}
           </h1>
-          <p className="m-0 mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[15px] text-[#8a7f72]">
+          <p className="m-0 mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[15px] text-(--c-8a7f72)">
             {[
               `@${person.name}`,
               profile?.location && (
@@ -312,7 +312,7 @@ export default function FriendProfile() {
               !isSelf && mutualCount > 0 && `${mutualCount} mutual friend${mutualCount === 1 ? '' : 's'}`,
             ].filter(Boolean).map((part, i) => (
               <span key={i} className="flex items-center gap-2.5">
-                {i > 0 && <span aria-hidden className="text-[#c8c0b4]">•</span>}
+                {i > 0 && <span aria-hidden className="text-(--c-c8c0b4)">•</span>}
                 <span>{part}</span>
               </span>
             ))}
@@ -320,7 +320,7 @@ export default function FriendProfile() {
           {/* The bio on its own line, wrapping to three before it's cut —
               inline beside the handle it truncated after a few words. */}
           {person.bio && (
-            <p className="m-0 mt-2 max-w-2xl whitespace-pre-line text-[15px] leading-relaxed text-[#57534e] line-clamp-3">
+            <p className="m-0 mt-2 max-w-2xl whitespace-pre-line text-[15px] leading-relaxed text-(--c-57534e) line-clamp-3">
               {person.bio}
             </p>
           )}
@@ -346,7 +346,7 @@ export default function FriendProfile() {
             <>
               <button
                 onClick={shareProfile}
-                className="flex h-11 items-center gap-2 rounded-full bg-[#2d6a4f] px-5 text-[14.5px] font-semibold text-white shadow-[0_10px_24px_-10px_rgba(45,106,79,0.75)] hover:bg-[#245c43]"
+                className="flex h-11 items-center gap-2 rounded-full bg-(--c-green-fill) px-5 text-[14.5px] font-semibold text-white shadow-[0_10px_24px_-10px_rgba(45,106,79,0.75)] hover:bg-(--c-green-fill-hover)"
               >
                 {shared ? <><Check size={16} className="pop" /> Link copied</> : 'Share profile'}
               </button>
@@ -362,8 +362,8 @@ export default function FriendProfile() {
                 // page invites, and being friends is shown just as plainly.
                 className={`flex h-12 shrink-0 items-center gap-2 rounded-full px-6 text-[15px] font-semibold transition-[background-color,transform,box-shadow] duration-200 ease-out ${
                   requested
-                    ? 'bg-[#2d6a4f]/12 text-[#2d6a4f]'
-                    : 'bg-[#2d6a4f] text-white shadow-[0_10px_24px_-10px_rgba(45,106,79,0.75)] hover:-translate-y-px hover:bg-[#245c43] hover:shadow-[0_14px_28px_-10px_rgba(45,106,79,0.8)]'
+                    ? 'bg-(--c-2d6a4f)/12 text-(--c-2d6a4f)'
+                    : 'bg-(--c-green-fill) text-white shadow-[0_10px_24px_-10px_rgba(45,106,79,0.75)] hover:-translate-y-px hover:bg-(--c-green-fill-hover) hover:shadow-[0_14px_28px_-10px_rgba(45,106,79,0.8)]'
                 } disabled:cursor-default`}
               >
                 {busy ? <Loader2 size={16} className="animate-spin" />
@@ -377,21 +377,21 @@ export default function FriendProfile() {
                   onClick={() => setMenuOpen(o => !o)}
                   aria-label="More"
                   aria-expanded={menuOpen}
-                  className="flex h-12 w-12 items-center justify-center rounded-full border border-[#e2dbd0] bg-white text-[#57534e] transition-colors hover:border-[#2d6a4f] hover:text-[#2d6a4f]"
+                  className="flex h-12 w-12 items-center justify-center rounded-full border border-(--c-e2dbd0) bg-(--c-fff) text-(--c-57534e) transition-colors hover:border-(--c-2d6a4f) hover:text-(--c-2d6a4f)"
                 >
-                  {linkCopied ? <Check size={18} className="pop text-[#2d6a4f]" /> : <MoreHorizontal size={20} />}
+                  {linkCopied ? <Check size={18} className="pop text-(--c-2d6a4f)" /> : <MoreHorizontal size={20} />}
                 </button>
                 {menuOpen && (
                   <>
                     <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
-                    <div className="menu-in absolute right-0 top-14 z-30 min-w-[200px] overflow-hidden rounded-2xl border border-[#ece5da] bg-white py-1.5 shadow-[0_18px_40px_-18px_rgba(40,25,10,0.45)]">
-                      <button onClick={copyProfileLink} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[14px] font-medium text-[#1c1917] hover:bg-[#f5f0e8]">
-                        <Link2 size={16} className="text-[#8a7f72]" /> Copy profile link
+                    <div className="menu-in absolute right-0 top-14 z-30 min-w-[200px] overflow-hidden rounded-2xl border border-(--c-ece5da) bg-(--c-fff) py-1.5 shadow-[0_18px_40px_-18px_rgba(40,25,10,0.45)]">
+                      <button onClick={copyProfileLink} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[14px] font-medium text-(--c-1c1917) hover:bg-(--c-f5f0e8)">
+                        <Link2 size={16} className="text-(--c-8a7f72)" /> Copy profile link
                       </button>
                       {isFriend && (
                         <button
                           onClick={() => { setMenuOpen(false); setConfirmRemove(true) }}
-                          className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[14px] font-medium text-[#b1542f] hover:bg-[#f5f0e8]"
+                          className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[14px] font-medium text-(--c-b1542f) hover:bg-(--c-f5f0e8)"
                         >
                           <UserMinus size={16} /> Remove friend
                         </button>
@@ -408,7 +408,7 @@ export default function FriendProfile() {
 
       {/* ── Headline numbers, between two rules ─────────────────
           The average and the four counts, in mobile's order. */}
-      <div className="mt-8 grid grid-cols-3 items-end gap-x-6 gap-y-6 border-y border-[#e8e2d9] px-2 py-6 md:grid-cols-5 md:px-6">
+      <div className="mt-8 grid grid-cols-3 items-end gap-x-6 gap-y-6 border-y border-(--c-e8e2d9) px-2 py-6 md:grid-cols-5 md:px-6">
         {[
           { value: summary?.avg_album_score != null ? summary.avg_album_score.toFixed(2) : '—', label: 'Avg score',
             color: summary?.avg_album_score != null ? songScoreColor(summary.avg_album_score) : undefined },
@@ -418,10 +418,10 @@ export default function FriendProfile() {
           { value: theirFriends.length.toLocaleString(), label: 'Friends' },
         ].map((st, i) => (
           <div key={st.label} className="rise-in" style={stagger(i)}>
-            <p className="font-display m-0 text-[30px] font-bold leading-none tabular-nums md:text-[36px]" style={{ color: st.color ?? '#1c1917' }}>
+            <p className="font-display m-0 text-[30px] font-bold leading-none tabular-nums md:text-[36px]" style={{ color: st.color ?? 'var(--c-1c1917)' }}>
               {st.value}
             </p>
-            <p className="m-0 mt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#a8998a]">{st.label}</p>
+            <p className="m-0 mt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-(--c-a8998a)">{st.label}</p>
           </div>
         ))}
       </div>
@@ -430,17 +430,14 @@ export default function FriendProfile() {
       <div className="mt-6 mb-2 px-2 md:px-6">
             {(topGenres.length > 0 || topSubgenres.length > 0) && (
               <div className="mt-4">
-                <p className="text-[10px] font-semibold text-[#a8998a] uppercase tracking-[0.1em] mb-1.5">
-                  Favorite genres
-                </p>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {topGenres.map((g) => (
-                    <span key={g} className="text-xs font-semibold text-[#2d6a4f] bg-[#2d6a4f]/10 px-2.5 py-1 rounded-full">
+                    <span key={g} className="text-xs font-semibold text-(--c-2d6a4f) bg-(--c-2d6a4f)/10 px-2.5 py-1 rounded-full">
                       {g}
                     </span>
                   ))}
                   {topSubgenres.map((g) => (
-                    <span key={g} className="text-xs font-medium text-[#78716c] bg-[#efe9e0] px-2.5 py-1 rounded-full">
+                    <span key={g} className="text-xs font-medium text-(--c-78716c) bg-(--c-efe9e0) px-2.5 py-1 rounded-full">
                       {g}
                     </span>
                   ))}
@@ -458,14 +455,14 @@ export default function FriendProfile() {
       )}
 
       {/* ── Tab switcher ─────────────────────────────────────────── */}
-      <div ref={tabsRef} className="flex items-center border-t border-[#e8e2d9] pt-5 mb-6">
-        <div className="flex items-center gap-1 bg-[#efe9e0] rounded-xl p-1 shrink-0">
+      <div ref={tabsRef} className="flex items-center border-t border-(--c-e8e2d9) pt-5 mb-6">
+        <div className="flex items-center gap-1 bg-(--c-efe9e0) rounded-xl p-1 shrink-0">
           {tabs.map(({ key, label }) => (
             <button
               key={key}
               onClick={() => setTab(key)}
               className={`text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors ${
-                tab === key ? 'bg-white text-[#1c1917] shadow-sm' : 'text-[#78716c] hover:text-[#1c1917]'
+                tab === key ? 'bg-(--c-fff) text-(--c-1c1917) shadow-sm' : 'text-(--c-78716c) hover:text-(--c-1c1917)'
               }`}
             >
               {label}
@@ -483,9 +480,9 @@ export default function FriendProfile() {
       {confirmRemove && person && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm fade-in" onClick={busy ? undefined : () => setConfirmRemove(false)} />
-          <div role="alertdialog" aria-modal="true" aria-labelledby="unfriend-title" className="relative w-full max-w-sm rounded-3xl bg-[#f9f8f6] p-6 text-center shadow-xl pop-in">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="unfriend-title" className="relative w-full max-w-sm rounded-3xl bg-(--c-f9f8f6) p-6 text-center shadow-xl pop-in">
             <div className="mx-auto w-fit"><Avatar name={person.name} avatarUrl={person.avatarUrl} size={56} /></div>
-            <h2 id="unfriend-title" className="font-display m-0 mt-4 text-[22px] font-bold leading-snug text-[#1c1917]">
+            <h2 id="unfriend-title" className="font-display m-0 mt-4 text-[22px] font-bold leading-snug text-(--c-1c1917)">
               Remove {person.name} as a friend?
             </h2>
             <div className="mt-6 flex gap-2.5">
@@ -493,14 +490,14 @@ export default function FriendProfile() {
                 onClick={() => setConfirmRemove(false)}
                 disabled={busy}
                 autoFocus
-                className="h-11 flex-1 rounded-full border border-[#e2dbd0] bg-white text-[14.5px] font-semibold text-[#57534e] hover:border-[#a8998a]"
+                className="h-11 flex-1 rounded-full border border-(--c-e2dbd0) bg-(--c-fff) text-[14.5px] font-semibold text-(--c-57534e) hover:border-(--c-a8998a)"
               >
                 Cancel
               </button>
               <button
                 onClick={() => changeFriendship(true)}
                 disabled={busy}
-                className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#b1542f] text-[14.5px] font-semibold text-white hover:bg-[#9a4727] disabled:opacity-60"
+                className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-(--c-b1542f) text-[14.5px] font-semibold text-white hover:bg-(--c-9a4727) disabled:opacity-60"
               >
                 {busy ? <Loader2 size={16} className="animate-spin" /> : <UserMinus size={16} />}
                 Remove

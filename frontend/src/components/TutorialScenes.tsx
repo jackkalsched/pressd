@@ -22,8 +22,8 @@ import { fetchArtStrip } from '../api'
 import { songScoreColor } from '../types'
 import { avatarColor } from '../lib/format'
 
-const GREEN = '#2d6a4f'
-const INSET = '#ece6dc'
+const GREEN = 'var(--c-2d6a4f)'
+const INSET = 'var(--c-ece6dc)'
 
 function reducedMotion(): boolean {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -79,9 +79,9 @@ function tween(from: number, to: number, ms: number, on: (v: number) => void, al
   })
 }
 
-const eyebrow = 'text-[9.5px] font-bold uppercase tracking-[0.12em] text-[#a8a29e] text-center'
-const titleCls = 'font-display text-[20px] font-bold text-[#1c1917] text-center truncate mt-0.5'
-const metaCls = 'text-[11.5px] font-medium text-[#a8a29e] text-center mt-0.5'
+const eyebrow = 'text-[9.5px] font-bold uppercase tracking-[0.12em] text-(--c-a8a29e) text-center'
+const titleCls = 'font-display text-[20px] font-bold text-(--c-1c1917) text-center truncate mt-0.5'
+const metaCls = 'text-[11.5px] font-medium text-(--c-a8a29e) text-center mt-0.5'
 
 // ── 1. Front to back ────────────────────────────────────────────────────────
 // A miniature of the rating screen's track phase, keystroke for keystroke: the
@@ -161,7 +161,7 @@ export function FrontToBackScene() {
         <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: INSET }}>
           <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${(done / TRACKS.length) * 100}%`, background: GREEN }} />
         </div>
-        <span className="text-[11px] font-medium text-[#a8a29e] tabular-nums">{done} / {TRACKS.length}</span>
+        <span className="text-[11px] font-medium text-(--c-a8a29e) tabular-nums">{done} / {TRACKS.length}</span>
       </div>
 
       <div
@@ -174,7 +174,7 @@ export function FrontToBackScene() {
         <p className={metaCls}>{t.time}</p>
         <p
           className="m-0 mt-2 text-center font-bold text-[40px] leading-none tabular-nums"
-          style={{ color: value != null ? songScoreColor(value) : '#c8c0b4', fontFamily: "'Playfair Display', serif" }}
+          style={{ color: value != null ? songScoreColor(value) : 'var(--c-c8c0b4)', fontFamily: "'Playfair Display', serif" }}
         >
           {field || '—'}
         </p>
@@ -190,7 +190,7 @@ export function FrontToBackScene() {
           />
         ))}
         <div
-          className="absolute top-1/2 w-3.5 h-3.5 -ml-[7px] -mt-[7px] rounded-full bg-white border-2 border-[#1c1917] transition-[left,opacity] duration-300 ease-out"
+          className="absolute top-1/2 w-3.5 h-3.5 -ml-[7px] -mt-[7px] rounded-full bg-(--c-fff) border-2 border-(--c-1c1917) transition-[left,opacity] duration-300 ease-out"
           style={{ left: `${((value ?? 0) / 10) * 100}%`, opacity: value == null ? 0 : 1 }}
         />
       </div>
@@ -202,10 +202,10 @@ export function FrontToBackScene() {
         {at < LAST ? 'Next track' : 'Rate the album'} <ArrowRight size={14} />
       </div>
 
-      <div className="mt-3 rounded-xl border border-[#ece6dc] px-3 py-2.5">
+      <div className="mt-3 rounded-xl border border-(--c-ece6dc) px-3 py-2.5">
         <div className="flex items-baseline justify-between">
-          <span className="text-[9.5px] font-bold tracking-[0.1em] text-[#2d6a4f]">RUNNING AVG</span>
-          <span className="text-[15px] font-bold text-[#1c1917] tabular-nums">{avg != null ? avg.toFixed(2) : '—'}</span>
+          <span className="text-[9.5px] font-bold tracking-[0.1em] text-(--c-2d6a4f)">RUNNING AVG</span>
+          <span className="text-[15px] font-bold text-(--c-1c1917) tabular-nums">{avg != null ? avg.toFixed(2) : '—'}</span>
         </div>
         <div className="flex gap-1.5 mt-2">
           {TRACKS.map((x, i) => (
@@ -222,9 +222,9 @@ export function FrontToBackScene() {
       </div>
 
       <div className="flex items-center gap-2 mt-2.5 px-1">
-        <span className="w-3.5 text-[11px] text-[#c8c0b4]">{upNext.num}</span>
-        <span className="flex-1 truncate text-[13px] font-medium text-[#a8a29e]">{upNext.title}</span>
-        <span className="text-[11px] text-[#c8c0b4]">{upNext.note}</span>
+        <span className="w-3.5 text-[11px] text-(--c-c8c0b4)">{upNext.num}</span>
+        <span className="flex-1 truncate text-[13px] font-medium text-(--c-a8a29e)">{upNext.title}</span>
+        <span className="text-[11px] text-(--c-c8c0b4)">{upNext.note}</span>
       </div>
     </div>
   )
@@ -288,18 +288,18 @@ export function TheRecordScene() {
       <p className={titleCls}>Late Summer</p>
       <p className={metaCls}>4 tracks scored · avg {SONG_AVG.toFixed(2)}</p>
 
-      <div className="mt-3 rounded-xl border border-[#ece6dc] overflow-hidden">
+      <div className="mt-3 rounded-xl border border-(--c-ece6dc) overflow-hidden">
         {FACTOR_DEMO.map((f, i) => (
-          <div key={f.label} className={`flex items-center gap-3 px-3 py-2 ${i < FACTOR_DEMO.length - 1 ? 'border-b border-[#f1ece4]' : ''}`}>
+          <div key={f.label} className={`flex items-center gap-3 px-3 py-2 ${i < FACTOR_DEMO.length - 1 ? 'border-b border-(--c-f1ece4)' : ''}`}>
             <div className="flex-1 min-w-0">
-              <p className="m-0 text-[13px] font-semibold text-[#1c1917] truncate">{f.label}</p>
-              <p className="m-0 text-[10.5px] text-[#a8a29e] truncate">{f.desc}</p>
+              <p className="m-0 text-[13px] font-semibold text-(--c-1c1917) truncate">{f.label}</p>
+              <p className="m-0 text-[10.5px] text-(--c-a8a29e) truncate">{f.desc}</p>
             </div>
             <div
               className="w-12 h-8 rounded-lg flex items-center justify-center border transition-colors"
-              style={{ borderColor: typing === i ? GREEN : '#e7e0d6', background: '#faf8f5' }}
+              style={{ borderColor: typing === i ? GREEN : 'var(--c-e7e0d6)', background: 'var(--c-faf8f5)' }}
             >
-              <span className="text-[14px] font-bold tabular-nums" style={{ color: values[i] ? '#1c1917' : '#c8c0b4' }}>
+              <span className="text-[14px] font-bold tabular-nums" style={{ color: values[i] ? 'var(--c-1c1917)' : 'var(--c-c8c0b4)' }}>
                 {values[i] || '—'}
               </span>
             </div>
@@ -314,7 +314,7 @@ export function TheRecordScene() {
         <p className="m-0 leading-none tabular-nums" style={{ fontFamily: "'Playfair Display', serif", fontWeight: 800, fontSize: 44, color: GREEN }}>
           {(reduce ? ALBUM_SCORE : score).toFixed(2)}
         </p>
-        <p className="m-0 mt-1 text-[9.5px] font-bold tracking-[0.14em] text-[#2d6a4f]">FINAL SCORE</p>
+        <p className="m-0 mt-1 text-[9.5px] font-bold tracking-[0.14em] text-(--c-2d6a4f)">FINAL SCORE</p>
       </div>
     </div>
   )
@@ -365,8 +365,8 @@ export function YourCatalogScene() {
     <div className="w-full relative" style={{ height: TILE + 58 }}>
       <div className="flex gap-1.5 h-full">
         {SHELVES.map((s) => (
-          <div key={s} className="flex-1 rounded-xl pt-2 text-center" style={{ background: '#f5f1ea' }}>
-            <span className="text-[9.5px] font-bold tracking-[0.08em] text-[#a8a29e]">{s.toUpperCase()}</span>
+          <div key={s} className="flex-1 rounded-xl pt-2 text-center" style={{ background: 'var(--c-f5f1ea)' }}>
+            <span className="text-[9.5px] font-bold tracking-[0.08em] text-(--c-a8a29e)">{s.toUpperCase()}</span>
           </div>
         ))}
       </div>
@@ -395,7 +395,7 @@ export function YourCatalogScene() {
         <Cover url={art[1]} size={TILE} seed="b" />
       </div>
       <div
-        className="absolute rounded-full text-center text-[10.5px] font-semibold text-[#c2410c] truncate"
+        className="absolute rounded-full text-center text-[10.5px] font-semibold text-(--c-c2410c) truncate"
         style={{
           bottom: 4,
           left: 4,
@@ -429,14 +429,14 @@ export function FriendsScene() {
   const art = useArt()
   // Staggered with CSS, so reduced motion is the stylesheet's to switch off.
   const rise = (i: number): CSSProperties => ({ animationDelay: `${i * 420}ms` })
-  const row = 'tut-rise flex items-center gap-2.5 rounded-xl bg-white border border-[#ece6dc] px-3 py-2'
+  const row = 'tut-rise flex items-center gap-2.5 rounded-xl bg-(--c-fff) border border-(--c-ece6dc) px-3 py-2'
 
   return (
     <div className="w-full flex flex-col gap-2">
       <div className={row} style={rise(0)}>
         <Initial name="Maya" />
-        <span className="flex-1 min-w-0 truncate text-[13.5px] text-[#57534e]">
-          <span className="font-semibold text-[#1c1917]">Maya</span> rated an album
+        <span className="flex-1 min-w-0 truncate text-[13.5px] text-(--c-57534e)">
+          <span className="font-semibold text-(--c-1c1917)">Maya</span> rated an album
         </span>
         <Cover url={art[2]} size={34} seed="c" />
         <span className="rounded-md px-1.5 py-0.5 text-[12px] font-bold text-white" style={{ background: songScoreColor(9.12) }}>9.12</span>
@@ -444,21 +444,21 @@ export function FriendsScene() {
 
       <div className={row} style={rise(1)}>
         <Initial name="Sam" />
-        <span className="flex-1 min-w-0 rounded-xl bg-[#f5f1ea] px-2.5 py-1.5 text-[13px] text-[#1c1917] line-clamp-2">
+        <span className="flex-1 min-w-0 rounded-xl bg-(--c-f5f1ea) px-2.5 py-1.5 text-[13px] text-(--c-1c1917) line-clamp-2">
           The closer makes the whole record.
         </span>
-        <span className="flex items-center gap-1 text-[12px] font-semibold text-[#a8a29e]">
+        <span className="flex items-center gap-1 text-[12px] font-semibold text-(--c-a8a29e)">
           <MessageCircle size={13} /> 12
         </span>
       </div>
 
       <div className={row} style={rise(2)}>
-        <span className="w-7 text-center text-[15px] font-bold text-[#1c1917]">#3</span>
-        <span className="flex items-center text-[12px] font-bold text-[#2d6a4f]">
+        <span className="w-7 text-center text-[15px] font-bold text-(--c-1c1917)">#3</span>
+        <span className="flex items-center text-[12px] font-bold text-(--c-2d6a4f)">
           <ArrowUp size={12} strokeWidth={2.6} />2
         </span>
         <Cover url={art[3]} size={34} seed="d" />
-        <span className="flex-1 min-w-0 truncate text-[13.5px] text-[#57534e]">Charts this week</span>
+        <span className="flex-1 min-w-0 truncate text-[13.5px] text-(--c-57534e)">Charts this week</span>
       </div>
     </div>
   )
@@ -503,11 +503,11 @@ export function LearnsYouScene() {
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-[24px] leading-7 font-bold text-[#1c1917] tabular-nums">{Math.floor(progress)}</span>
-            <span className="text-[11px] text-[#a8a29e]">of 10</span>
+            <span className="text-[24px] leading-7 font-bold text-(--c-1c1917) tabular-nums">{Math.floor(progress)}</span>
+            <span className="text-[11px] text-(--c-a8a29e)">of 10</span>
           </div>
         </div>
-        <span className="text-[12.5px] font-medium text-[#a8a29e]">albums rated</span>
+        <span className="text-[12.5px] font-medium text-(--c-a8a29e)">albums rated</span>
       </div>
 
       <div className="flex gap-3 mt-4">
@@ -524,7 +524,7 @@ export function LearnsYouScene() {
           </div>
         ))}
       </div>
-      <p className="m-0 mt-3.5 text-[9.5px] font-bold tracking-[0.14em] text-[#2d6a4f]">PREDICTED FOR YOU</p>
+      <p className="m-0 mt-3.5 text-[9.5px] font-bold tracking-[0.14em] text-(--c-2d6a4f)">PREDICTED FOR YOU</p>
     </div>
   )
 }

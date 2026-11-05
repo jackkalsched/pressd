@@ -19,26 +19,26 @@ export default function TrendingBoard({
   onOpen: (albumId: number) => void
 }) {
   return (
-    <ol className="m-0 list-none overflow-hidden rounded-[22px] bg-[#f2eee7]/70 p-1.5">
+    <ol className="m-0 list-none overflow-hidden rounded-[22px] bg-(--c-f2eee7)/70 p-1.5">
       {rows.map((row, i) => (
         <li key={row.album_id} className="rise-in" style={{ '--i': i } as CSSProperties}>
-          {i > 0 && <div className="mx-4 h-px bg-[#e8e1d6]" />}
+          {i > 0 && <div className="mx-4 h-px bg-(--c-e8e1d6)" />}
           <button
             type="button"
             onClick={() => onOpen(row.album_id)}
-            className="group flex w-full items-center gap-4 rounded-[16px] px-3.5 py-3 text-left transition-colors hover:bg-[#ebe5db]"
+            className="group flex w-full items-center gap-4 rounded-[16px] px-3.5 py-3 text-left transition-colors hover:bg-(--c-ebe5db)"
           >
-            <span className="font-display w-[22px] shrink-0 text-center text-[15px] font-bold tabular-nums text-[#c2b8ad]">
+            <span className="font-display w-[22px] shrink-0 text-center text-[15px] font-bold tabular-nums text-(--c-c2b8ad)">
               {i + 1}
             </span>
             <div className={`shrink-0 ${COVER_LIFT}`} style={{ willChange: 'transform' }}>
               <Cover artUrl={row.album_art_url} seed={row.artist} size={58} radius={13} fontSize={24} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-display m-0 truncate text-[16px] font-bold text-[#1c1917]">{row.album_name}</p>
-              <p className="m-0 mt-0.5 truncate text-[12.5px] text-[#8a7f72]">{row.artist}</p>
+              <p className="font-display m-0 truncate text-[16px] font-bold text-(--c-1c1917)">{row.album_name}</p>
+              <p className="m-0 mt-0.5 truncate text-[12.5px] text-(--c-8a7f72)">{row.artist}</p>
             </div>
-            <span className="hidden shrink-0 text-right text-[11.5px] text-[#8a7f72] tabular-nums sm:block" style={{ width: 118 }}>
+            <span className="hidden shrink-0 text-right text-[11.5px] text-(--c-8a7f72) tabular-nums sm:block" style={{ width: 118 }}>
               {row.rater_count} {row.rater_count === 1 ? 'rating' : 'ratings'}
               {row.last_rated ? ` · ${timeAgo(row.last_rated)}` : ''}
             </span>

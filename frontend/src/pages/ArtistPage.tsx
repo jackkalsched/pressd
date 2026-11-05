@@ -16,7 +16,7 @@ import { ScoreKdeCompare, ScoreVersus, SimilarArtistComparisons, SongGapChart } 
 import { songScoreColor } from '../types'
 import { stagger } from '../lib/format'
 
-const INK = '#1c1917'
+const INK = 'var(--c-1c1917)'
 
 /** Which rating set the page is showing — mobile's three scopes.
  *   mine    — this library's ratings, ranked among its own artists
@@ -60,7 +60,7 @@ function PercentileBar({
   index?: number
 }) {
   const display    = percentile !== null ? (invert ? 100 - percentile : percentile) : null
-  const color      = display !== null ? barColor(display) : '#c8c0b4'
+  const color      = display !== null ? barColor(display) : 'var(--c-c8c0b4)'
   const circlePct  = display !== null ? Math.max(3, Math.min(97, display)) : 50
 
   const fillStyle: React.CSSProperties = smallSample
@@ -83,26 +83,26 @@ function PercentileBar({
   }
 
   return (
-    <div className="flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-[#f2eee7] rise-in" style={stagger(index)}>
-      <span className="text-[#57534e] text-[13.5px] w-32 text-right shrink-0 leading-tight">{label}</span>
+    <div className="flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-(--c-f2eee7) rise-in" style={stagger(index)}>
+      <span className="text-(--c-57534e) text-[13.5px] w-32 text-right shrink-0 leading-tight">{label}</span>
 
-      <div className="flex-1 relative h-2 bg-[#ebe5dc] rounded-full">
+      <div className="flex-1 relative h-2 bg-(--c-ebe5dc) rounded-full">
         {display !== null ? (
           <>
             <div className="grow-x absolute inset-y-0 left-0 rounded-full" style={{ ...fillStyle, ...stagger(index) }} />
             <div
-              className="absolute top-1/2 w-[30px] h-[30px] rounded-full flex items-center justify-center text-[12.5px] font-extrabold tracking-tight leading-none text-white border-[2.5px] border-[#f9f8f6] shadow-[0_6px_14px_-8px_rgba(40,25,10,0.7)] z-10 tabular-nums"
+              className="absolute top-1/2 w-[30px] h-[30px] rounded-full flex items-center justify-center text-[12.5px] font-extrabold tracking-tight leading-none text-white border-[2.5px] border-(--c-f9f8f6) shadow-[0_6px_14px_-8px_rgba(40,25,10,0.7)] z-10 tabular-nums"
               style={badgeStyle}
             >
               {Math.round(display)}
             </div>
           </>
         ) : (
-          <span className="absolute inset-0 flex items-center justify-center text-[#c8c0b4] text-[11px]">—</span>
+          <span className="absolute inset-0 flex items-center justify-center text-(--c-c8c0b4) text-[11px]">—</span>
         )}
       </div>
 
-      <span className={`font-display text-[15px] font-bold w-14 text-right shrink-0 tabular-nums ${smallSample ? 'text-[#a8998a]' : 'text-[#1c1917]'}`}>
+      <span className={`font-display text-[15px] font-bold w-14 text-right shrink-0 tabular-nums ${smallSample ? 'text-(--c-a8998a)' : 'text-(--c-1c1917)'}`}>
         {value}
       </span>
     </div>
@@ -205,12 +205,12 @@ export default function ArtistPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64 text-[#8a7f72] gap-2">
+      <div className="flex items-center justify-center h-64 text-(--c-8a7f72) gap-2">
         <Loader2 size={16} className="animate-spin" /> Loading…
       </div>
     )
   }
-  if (error || !data) return <div className="p-8 text-[#8a7f72]">Artist not found.</div>
+  if (error || !data) return <div className="p-8 text-(--c-8a7f72)">Artist not found.</div>
 
   const stats    = buildStats(data)
   const others   = data.all_artists.filter(
@@ -226,7 +226,7 @@ export default function ArtistPage() {
   // page. The "100 = avg" notes went in October 2026 with the album pages' look.
   const inlineStats: { label: string; value: string | number; sub?: string; color?: string }[] = [
     { label: 'Avg Song Score', value: stats.avgSongScore,
-      color: data.avg_song_score !== null ? songScoreColor(data.avg_song_score) : '#c8c0b4' },
+      color: data.avg_song_score !== null ? songScoreColor(data.avg_song_score) : 'var(--c-c8c0b4)' },
     { label: 'Songs Rated',    value: data.song_count },
     { label: 'Song Score Rank',
       value: data.song_score_rank !== null ? `#${data.song_score_rank}` : '—',
@@ -237,19 +237,19 @@ export default function ArtistPage() {
     { label: 'Song+',   value: stats.songPlus },
     { label: 'wSong+',  value: stats.wSongPlus },
     { label: 'Bang%',         value: stats.bangPct, color: GREEN },
-    { label: 'Skip%',         value: stats.skipPct, color: '#c0392b' },
+    { label: 'Skip%',         value: stats.skipPct, color: 'var(--c-c0392b)' },
     { label: 'Consistency+',  value: stats.consistencyPlus },
   ]
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#f9f8f6]">
+    <div className="relative min-h-screen overflow-x-hidden bg-(--c-f9f8f6)">
     {/* The best-scored record's colour, faintly, as on the album pages. */}
     <CoverWash url={[...data.albums].sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).find(a => a.album_art_url)?.album_art_url} />
     <div className="relative p-4 md:p-8 md:pr-8 max-w-6xl">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-1.5 text-[13px] font-medium text-[#57534e] hover:text-[#111] transition-colors"
+          className="flex items-center gap-1.5 text-[13px] font-medium text-(--c-57534e) hover:text-(--c-111) transition-colors"
         >
           <ArrowLeft size={16} /> Back
         </button>
@@ -261,7 +261,7 @@ export default function ArtistPage() {
               onClick={() => toggle(m)}
               aria-pressed={mode === m}
               className={mode === m
-                ? 'inline-flex items-center gap-1.5 rounded-full border border-[#2d6a4f] bg-[#2d6a4f] px-3.5 py-1.5 text-[13px] font-semibold text-white pop'
+                ? 'inline-flex items-center gap-1.5 rounded-full border border-(--c-2d6a4f) bg-(--c-green-fill) px-3.5 py-1.5 text-[13px] font-semibold text-white pop'
                 : PILL}
             >
               {m === 'compare' ? 'Compare' : 'Pressd avg'}
@@ -273,30 +273,30 @@ export default function ArtistPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-10">
         <div className="rise-in" style={stagger(0)}>
-          <h1 className="font-display m-0 text-[40px] font-bold leading-tight text-[#1c1917]">{data.artist}</h1>
+          <h1 className="font-display m-0 text-[40px] font-bold leading-tight text-(--c-1c1917)">{data.artist}</h1>
           {/* A library's page counts what it has rated; the pooled page leads
               with how much of Pressd's listening the artist accounts for. */}
           {mode === 'pressd' ? (
-            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[14px] text-[#57534e]">
+            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[14px] text-(--c-57534e)">
               {data.popularity_rank != null && (
-                <span><span className="font-bold text-[#1c1917]">{ordinal(data.popularity_rank)}</span>/{data.popularity_of} most rated artist on Pressd</span>
+                <span><span className="font-bold text-(--c-1c1917)">{ordinal(data.popularity_rank)}</span>/{data.popularity_of} most rated artist on Pressd</span>
               )}
               {data.genre_popularity_rank != null && data.popularity_genre && (
-                <span><span className="font-bold text-[#1c1917]">{ordinal(data.genre_popularity_rank)}</span>/{data.genre_popularity_of} in {data.popularity_genre}</span>
+                <span><span className="font-bold text-(--c-1c1917)">{ordinal(data.genre_popularity_rank)}</span>/{data.genre_popularity_of} in {data.popularity_genre}</span>
               )}
             </div>
           ) : (
-            <p className="m-0 text-[#57534e] text-[15px] mt-1.5">
+            <p className="m-0 text-(--c-57534e) text-[15px] mt-1.5">
               {data.album_count} rated {data.album_count === 1 ? 'album' : 'albums'}
             </p>
           )}
           {(data.genre || data.subgenres.length > 0) && (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {data.genre && (
-                <span className="rounded-full bg-[#2d6a4f]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[#2d6a4f]">{data.genre}</span>
+                <span className="rounded-full bg-(--c-2d6a4f)/10 px-2.5 py-1 text-[11.5px] font-semibold text-(--c-2d6a4f)">{data.genre}</span>
               )}
               {data.subgenres.map((s) => (
-                <span key={s} className="rounded-full bg-[#efebe5] px-2.5 py-1 text-[11.5px] font-medium text-[#78716c]">{s}</span>
+                <span key={s} className="rounded-full bg-(--c-efebe5) px-2.5 py-1 text-[11.5px] font-medium text-(--c-78716c)">{s}</span>
               ))}
             </div>
           )}
@@ -312,7 +312,7 @@ export default function ArtistPage() {
                   key={a.id}
                   to={albumHref(a.id)}
                   title={a.album_name}
-                  className="group relative block w-20 h-20 rounded-2xl overflow-hidden border-[2.5px] border-[#f9f8f6] shadow-[0_14px_28px_-16px_rgba(40,25,10,0.6)] hover:z-10 pop-in"
+                  className="group relative block w-20 h-20 rounded-2xl overflow-hidden border-[2.5px] border-(--c-f9f8f6) shadow-[0_14px_28px_-16px_rgba(40,25,10,0.6)] hover:z-10 pop-in"
                   style={{ marginLeft: i === 0 ? 0 : '-12px', zIndex: shown.length - i, animationDelay: `${i * 45}ms` }}
                 >
                   <CoverImg url={a.album_art_url} displayPx={80} alt={a.album_name} className={`w-full h-full object-cover ${COVER_LIFT}`} />
@@ -324,7 +324,7 @@ export default function ArtistPage() {
       </div>
 
       {data.small_sample && (
-        <p className="m-0 mb-6 text-[13.5px] font-medium text-[#2d6a4f]">
+        <p className="m-0 mb-6 text-[13.5px] font-medium text-(--c-2d6a4f)">
           Rate at least {SMALL_SAMPLE} songs to see advanced stats!
         </p>
       )}
@@ -344,9 +344,9 @@ export default function ArtistPage() {
           <div key={label} className="rise-in" style={stagger(i + 1)}>
             <p className="font-display m-0 text-[26px] font-bold leading-none tabular-nums" style={{ color: color ?? INK }}>
               {value}
-              {sub && <span className="ml-1 font-sans text-[13px] font-medium text-[#a8998a]">{sub}</span>}
+              {sub && <span className="ml-1 font-sans text-[13px] font-medium text-(--c-a8998a)">{sub}</span>}
             </p>
-            <p className="m-0 mt-1.5 text-[12px] font-medium text-[#8a7f72]">{label}</p>
+            <p className="m-0 mt-1.5 text-[12px] font-medium text-(--c-8a7f72)">{label}</p>
           </div>
         ))}
       </div>
@@ -385,9 +385,9 @@ export default function ArtistPage() {
       <div className="mb-12">
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <p className={SECTION_LABEL}>SONG SCORE VS EXTERNAL FACTORS — ALL ARTISTS</p>
-          <p className="m-0 flex items-center gap-3 text-[12px] text-[#8a7f72]">
+          <p className="m-0 flex items-center gap-3 text-[12px] text-(--c-8a7f72)">
             <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: GREEN }} />{data.artist}</span>
-            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#d6cdc0]" />others</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-(--c-d6cdc0)" />others</span>
           </p>
         </div>
         <ResponsiveContainer width="100%" height={420}>
@@ -397,20 +397,20 @@ export default function ArtistPage() {
               dataKey="avg_song_score"
               name="Avg Song Score"
               domain={[1, 10]}
-              tick={{ fill: '#a8998a', fontSize: 11 }}
+              tick={{ fill: 'var(--c-a8998a)', fontSize: 11 }}
               axisLine={false}
               tickLine={false}
-              label={{ value: 'Avg Song Score', fill: '#a8998a', fontSize: 11, position: 'insideBottom', offset: -12 }}
+              label={{ value: 'Avg Song Score', fill: 'var(--c-a8998a)', fontSize: 11, position: 'insideBottom', offset: -12 }}
             />
             <YAxis
               type="number"
               dataKey="avg_external"
               name="Avg External"
               domain={['auto', 'auto']}
-              tick={{ fill: '#a8998a', fontSize: 11 }}
+              tick={{ fill: 'var(--c-a8998a)', fontSize: 11 }}
               axisLine={false}
               tickLine={false}
-              label={{ value: 'Avg External', fill: '#a8998a', fontSize: 11, angle: -90, position: 'insideLeft', offset: 14 }}
+              label={{ value: 'Avg External', fill: 'var(--c-a8998a)', fontSize: 11, angle: -90, position: 'insideLeft', offset: 14 }}
             />
             <ZAxis range={[28, 28]} />
             {/* Recharts slides its tooltip between points, and on the first
@@ -419,24 +419,24 @@ export default function ArtistPage() {
                 keyed by artist so moving to a neighbour fades rather than jumps. */}
             <Tooltip
               isAnimationActive={false}
-              cursor={{ strokeDasharray: '3 3', stroke: '#e2dbd0' }}
+              cursor={{ strokeDasharray: '3 3', stroke: 'var(--c-e2dbd0)' }}
               content={({ payload }) => {
                 if (!payload?.length) return null
                 const d = payload[0].payload as { artist: string; avg_song_score: number; avg_external: number }
                 return (
-                  <div key={d.artist} className="fade-in rounded-xl border border-[#e2dbd0] bg-white px-3 py-2 text-[12px] shadow-sm">
-                    <p className="m-0 font-semibold text-[#1c1917]">{d.artist}</p>
-                    <p className="m-0 mt-0.5 tabular-nums text-[#8a7f72]">Song {d.avg_song_score?.toFixed(2)} · Ext {d.avg_external?.toFixed(2)}</p>
+                  <div key={d.artist} className="fade-in rounded-xl border border-(--c-e2dbd0) bg-(--c-fff) px-3 py-2 text-[12px] shadow-sm">
+                    <p className="m-0 font-semibold text-(--c-1c1917)">{d.artist}</p>
+                    <p className="m-0 mt-0.5 tabular-nums text-(--c-8a7f72)">Song {d.avg_song_score?.toFixed(2)} · Ext {d.avg_external?.toFixed(2)}</p>
                   </div>
                 )
               }}
             />
-            <Scatter data={others} fill="#d6cdc0" opacity={0.85} />
+            <Scatter data={others} fill="var(--c-d6cdc0)" opacity={0.85} />
             {selfPoint && (
               <Scatter
                 data={[selfPoint]}
                 shape={(props: { cx?: number; cy?: number }) => (
-                  <circle cx={props.cx} cy={props.cy} r={8} fill={GREEN} stroke="#fff" strokeWidth={2.5} />
+                  <circle cx={props.cx} cy={props.cy} r={8} fill={GREEN} stroke="var(--c-fff)" strokeWidth={2.5} />
                 )}
               />
             )}
@@ -457,7 +457,7 @@ export default function ArtistPage() {
         const AlbumCard = ({ album, ep = false }: { album: typeof data.albums[0]; ep?: boolean }) => (
           <Link
             to={albumHref(album.id)}
-            className={`group flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-[#f2eee7] ${ep ? 'opacity-80 hover:opacity-100' : ''}`}
+            className={`group flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-(--c-f2eee7) ${ep ? 'opacity-80 hover:opacity-100' : ''}`}
           >
             <div className={`w-14 h-14 shrink-0 overflow-hidden rounded-xl shadow-[0_10px_22px_-14px_rgba(40,25,10,0.6)] ${COVER_LIFT}`}>
               {album.album_art_url
@@ -465,8 +465,8 @@ export default function ArtistPage() {
                 : <Cover artUrl={null} seed={album.album_name} size={56} radius={0} fontSize={20} />}
             </div>
             <div className="flex-1 min-w-0">
-              <p className={`m-0 text-[14.5px] font-semibold truncate ${ep ? 'text-[#57534e]' : 'text-[#1c1917]'}`}>{album.album_name}</p>
-              <p className="m-0 text-[#8a7f72] text-[12.5px] mt-0.5">
+              <p className={`m-0 text-[14.5px] font-semibold truncate ${ep ? 'text-(--c-57534e)' : 'text-(--c-1c1917)'}`}>{album.album_name}</p>
+              <p className="m-0 text-(--c-8a7f72) text-[12.5px] mt-0.5">
                 {album.year ?? '—'}
                 {mode === 'pressd' && album.rater_count != null && ` · ${album.rater_count} ${album.rater_count === 1 ? 'rater' : 'raters'}`}
               </p>
@@ -474,12 +474,12 @@ export default function ArtistPage() {
             <div className="text-right shrink-0">
               <p
                 className="font-display m-0 text-[22px] font-bold leading-none tabular-nums"
-                style={{ color: album.score != null ? songScoreColor(album.score) : '#c8c0b4' }}
+                style={{ color: album.score != null ? songScoreColor(album.score) : 'var(--c-c8c0b4)' }}
               >
                 {album.score?.toFixed(2) ?? '—'}
               </p>
               {album.avg_external !== null && (
-                <p className="m-0 mt-1 text-[#8a7f72] text-[12px] tabular-nums">ext {album.avg_external.toFixed(2)}</p>
+                <p className="m-0 mt-1 text-(--c-8a7f72) text-[12px] tabular-nums">ext {album.avg_external.toFixed(2)}</p>
               )}
             </div>
           </Link>

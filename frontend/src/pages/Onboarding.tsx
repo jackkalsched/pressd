@@ -20,12 +20,12 @@ function Belt({ urls, duration, size }: { urls: string[]; duration: number; size
     <div className="belt-fade overflow-hidden">
       <div className="belt-track gap-3 py-1.5" style={{ '--belt-duration': `${duration}s` } as React.CSSProperties}>
         {content.map((url, i) => (
-          <div key={i} className={`${size} shrink-0 rounded-xl overflow-hidden bg-[#ece6dc] shadow-[0_4px_14px_-4px_rgba(50,30,10,0.25)]`}>
+          <div key={i} className={`${size} shrink-0 rounded-xl overflow-hidden bg-(--c-ece6dc) shadow-[0_4px_14px_-4px_rgba(50,30,10,0.25)]`}>
             {url ? (
               <CoverImg url={url} displayPx={112} alt="" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#e8dfd2] to-[#cfc3b0]">
-                <Music size={20} className="text-[#b0a090]" strokeWidth={1.25} />
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-(--c-e8dfd2) to-(--c-cfc3b0)">
+                <Music size={20} className="text-(--c-b0a090)" strokeWidth={1.25} />
               </div>
             )}
           </div>
@@ -113,7 +113,7 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="min-h-screen bg-[#faf8f5] flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-(--c-faf8f5) flex flex-col overflow-hidden">
 
       {/* ── Conveyor: the community's shelves rolling past ─────────── */}
       <div className="pt-10 md:pt-14 -rotate-2 scale-[1.06] select-none pointer-events-none" aria-hidden="true">
@@ -126,22 +126,22 @@ export default function Onboarding() {
       {/* ── Copy + search ───────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col items-center px-4 pt-10 md:pt-14 pb-10">
         <div className="w-full max-w-md">
-          <p className="text-[#2d6a4f] text-[11px] font-bold uppercase tracking-[0.18em] text-center">
+          <p className="text-(--c-2d6a4f) text-[11px] font-bold uppercase tracking-[0.18em] text-center">
             Welcome to Pressd
           </p>
-          <h1 className="font-display text-[#1c1917] text-3xl md:text-4xl font-bold text-center leading-tight mt-2">
+          <h1 className="font-display text-(--c-1c1917) text-3xl md:text-4xl font-bold text-center leading-tight mt-2">
             Start with an album you know by heart.
           </h1>
-          <p className="text-[#78716c] text-sm text-center mt-3 leading-relaxed">
+          <p className="text-(--c-78716c) text-sm text-center mt-3 leading-relaxed">
             Your first rating starts your library — and starts teaching
             Pressd your taste. Search any album, then score it track by track.
           </p>
 
           {/* Search */}
           <div ref={dropdownRef} className="relative mt-8">
-            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#bbb] pointer-events-none" />
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-(--c-bbb) pointer-events-none" />
             {searching && (
-              <Loader2 size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#bbb] animate-spin pointer-events-none" />
+              <Loader2 size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-(--c-bbb) animate-spin pointer-events-none" />
             )}
             <input
               autoFocus
@@ -150,27 +150,27 @@ export default function Onboarding() {
               value={query}
               onChange={(e) => { setQuery(e.target.value); setSelected(null) }}
               onFocus={() => results.length > 0 && setShowDropdown(true)}
-              className={`w-full bg-white border text-[#111] text-sm pl-10 pr-9 py-3 rounded-xl focus:outline-none focus:border-[#2d6a4f] transition-colors placeholder:text-[#bbb] shadow-sm ${selected ? 'border-[#2d6a4f]' : 'border-[#e8e2d9]'}`}
+              className={`w-full bg-(--c-fff) border text-(--c-111) text-sm pl-10 pr-9 py-3 rounded-xl focus:outline-none focus:border-(--c-2d6a4f) transition-colors placeholder:text-(--c-bbb) shadow-sm ${selected ? 'border-(--c-2d6a4f)' : 'border-(--c-e8e2d9)'}`}
             />
             {showDropdown && (
-              <div className="absolute z-10 top-full mt-1.5 left-0 right-0 bg-white border border-[#e8e2d9] rounded-xl shadow-lg overflow-hidden max-h-72 overflow-y-auto">
+              <div className="absolute z-10 top-full mt-1.5 left-0 right-0 bg-(--c-fff) border border-(--c-e8e2d9) rounded-xl shadow-lg overflow-hidden max-h-72 overflow-y-auto">
                 {results.map((r) => (
                   <button
                     key={`${r.source}:${r.source_id}`}
                     type="button"
                     onMouseDown={(e) => { e.preventDefault(); selectResult(r) }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[#f7f3ee] transition-colors text-left border-b border-[#f0ebe3] last:border-0"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-(--c-f7f3ee) transition-colors text-left border-b border-(--c-f0ebe3) last:border-0"
                   >
                     {r.cover_url ? (
                       <CoverImg url={r.cover_url} displayPx={36} alt="" className="w-9 h-9 rounded-md object-cover shrink-0" />
                     ) : (
-                      <div className="w-9 h-9 rounded-md bg-[#e8e2d9] shrink-0 flex items-center justify-center">
-                        <Music size={13} className="text-[#b0a090]" />
+                      <div className="w-9 h-9 rounded-md bg-(--c-e8e2d9) shrink-0 flex items-center justify-center">
+                        <Music size={13} className="text-(--c-b0a090)" />
                       </div>
                     )}
                     <div className="min-w-0">
-                      <p className="text-[#111] text-sm font-medium truncate leading-snug">{r.album_name}</p>
-                      <p className="text-[#aaa] text-xs truncate">
+                      <p className="text-(--c-111) text-sm font-medium truncate leading-snug">{r.album_name}</p>
+                      <p className="text-(--c-aaa) text-xs truncate">
                         {r.artist}
                         {r.year ? ` · ${r.year}` : r.total_tracks ? ` · ${r.total_tracks} tracks` : ''}
                       </p>
@@ -178,7 +178,7 @@ export default function Onboarding() {
                   </button>
                 ))}
                 {mbPending && (
-                  <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-[#a8998a] border-t border-[#f0ebe3] bg-[#fafafa]">
+                  <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-(--c-a8998a) border-t border-(--c-f0ebe3) bg-(--c-fafafa)">
                     <Loader2 size={11} className="animate-spin shrink-0" />
                     Checking more sources…
                   </div>
@@ -188,14 +188,14 @@ export default function Onboarding() {
           </div>
 
           {noResults && !searching && query.trim().length >= 2 && (
-            <p className="text-[#a8998a] text-xs text-center mt-3">
+            <p className="text-(--c-a8998a) text-xs text-center mt-3">
               No results — try another spelling or a different album.
             </p>
           )}
 
           {/* Selected album preview — becomes the tracklist loader on start */}
           {selected && importing && (
-            <div className="bg-white rounded-xl px-3.5 border border-[#2d6a4f]/25 shadow-sm mt-4">
+            <div className="bg-(--c-fff) rounded-xl px-3.5 border border-(--c-2d6a4f)/25 shadow-sm mt-4">
               <TracklistLoader
                 albumName={selected.album_name}
                 artist={selected.artist}
@@ -205,15 +205,15 @@ export default function Onboarding() {
             </div>
           )}
           {selected && !importing && (
-            <div className="flex items-center gap-3 bg-white rounded-xl px-3.5 py-3 border border-[#2d6a4f]/25 shadow-sm mt-4">
+            <div className="flex items-center gap-3 bg-(--c-fff) rounded-xl px-3.5 py-3 border border-(--c-2d6a4f)/25 shadow-sm mt-4">
               {selected.cover_url ? (
                 <CoverImg url={selected.cover_url} displayPx={48} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
               ) : (
-                <div className="w-12 h-12 rounded-lg bg-[#e8e2d9] shrink-0" />
+                <div className="w-12 h-12 rounded-lg bg-(--c-e8e2d9) shrink-0" />
               )}
               <div className="min-w-0">
-                <p className="text-[#111] text-sm font-semibold truncate">{selected.album_name}</p>
-                <p className="text-[#aaa] text-xs truncate">
+                <p className="text-(--c-111) text-sm font-semibold truncate">{selected.album_name}</p>
+                <p className="text-(--c-aaa) text-xs truncate">
                   {selected.artist}
                   {selected.year ? ` · ${selected.year}` : ''}
                   {selected.total_tracks ? ` · ${selected.total_tracks} tracks` : ''}
@@ -222,13 +222,13 @@ export default function Onboarding() {
             </div>
           )}
 
-          {error && <p className="text-[#c0392b] text-xs text-center mt-3">{error}</p>}
+          {error && <p className="text-(--c-c0392b) text-xs text-center mt-3">{error}</p>}
 
           <button
             type="button"
             onClick={handleStart}
             disabled={!selected || importing}
-            className="w-full mt-4 py-3 rounded-xl text-sm font-semibold bg-[#2d6a4f] hover:bg-[#245c43] active:bg-[#1e5238] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2d6a4f]"
+            className="w-full mt-4 py-3 rounded-xl text-sm font-semibold bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) active:bg-(--c-1e5238) text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--c-2d6a4f)"
           >
             {importing
               ? <><Loader2 size={14} className="animate-spin" /> Setting up…</>
@@ -238,7 +238,7 @@ export default function Onboarding() {
           <button
             type="button"
             onClick={handleSkip}
-            className="block mx-auto mt-5 text-[#a8998a] text-xs hover:text-[#78716c] transition-colors"
+            className="block mx-auto mt-5 text-(--c-a8998a) text-xs hover:text-(--c-78716c) transition-colors"
           >
             I'll explore first →
           </button>

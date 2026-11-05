@@ -81,16 +81,16 @@ export default function CommunityAlbum() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#f9f8f6] flex items-center justify-center gap-2 text-[#a8998a]">
+      <div className="min-h-screen bg-(--c-f9f8f6) flex items-center justify-center gap-2 text-(--c-a8998a)">
         <Loader2 size={16} className="animate-spin" /> Loading…
       </div>
     )
   }
   if (isError || !data) {
     return (
-      <div className="min-h-screen bg-[#f9f8f6] flex flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="font-display m-0 text-2xl font-bold text-[#1c1917]">Couldn&rsquo;t load this album</p>
-        <button onClick={leave} className="text-sm font-semibold text-[#2d6a4f] hover:text-[#245c43]">Go back</button>
+      <div className="min-h-screen bg-(--c-f9f8f6) flex flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="font-display m-0 text-2xl font-bold text-(--c-1c1917)">Couldn&rsquo;t load this album</p>
+        <button onClick={leave} className="text-sm font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43)">Go back</button>
       </div>
     )
   }
@@ -176,13 +176,13 @@ export default function CommunityAlbum() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#f9f8f6]">
+    <div className="relative min-h-screen overflow-x-hidden bg-(--c-f9f8f6)">
       <CoverWash url={shown.album_art_url} />
 
       <div className="relative mx-auto w-full max-w-[1400px] px-4 pb-24 md:px-12">
         {/* ── Top bar ──────────────────────────────────────────────── */}
         <div className="flex flex-wrap items-center justify-between gap-3 py-6">
-          <button onClick={leave} className="flex items-center gap-1.5 text-[13px] font-medium text-[#57534e] hover:text-[#111]">
+          <button onClick={leave} className="flex items-center gap-1.5 text-[13px] font-medium text-(--c-57534e) hover:text-(--c-111)">
             <ArrowLeft size={16} /> Back
           </button>
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -223,9 +223,9 @@ export default function CommunityAlbum() {
                   <Cover artUrl={null} seed={shown.artist} size={380} radius={0} fontSize={120} />
                 )}
               </div>
-              <h1 className="font-display m-0 mt-6 text-[34px] font-bold leading-tight text-[#1c1917]">{shown.album_name}</h1>
-              <p className="m-0 mt-1.5 text-[15px] text-[#57534e]">
-                <Link to={`/artist/${encodeURIComponent(shown.artist)}`} className="font-semibold text-[#1c1917] hover:text-[#2d6a4f] hover:underline underline-offset-2">
+              <h1 className="font-display m-0 mt-6 text-[34px] font-bold leading-tight text-(--c-1c1917)">{shown.album_name}</h1>
+              <p className="m-0 mt-1.5 text-[15px] text-(--c-57534e)">
+                <Link to={`/artist/${encodeURIComponent(shown.artist)}`} className="font-semibold text-(--c-1c1917) hover:text-(--c-2d6a4f) hover:underline underline-offset-2">
                   {shown.artist}
                 </Link>
                 {shown.year ? ` · ${shown.year}` : ''}
@@ -233,10 +233,10 @@ export default function CommunityAlbum() {
               {(shown.genre || subs.length > 0) && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {shown.genre && (
-                    <span className="rounded-full bg-[#2d6a4f]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[#2d6a4f]">{shown.genre}</span>
+                    <span className="rounded-full bg-(--c-2d6a4f)/10 px-2.5 py-1 text-[11.5px] font-semibold text-(--c-2d6a4f)">{shown.genre}</span>
                   )}
                   {subs.map((s) => (
-                    <span key={s} className="rounded-full bg-[#efebe5] px-2.5 py-1 text-[11.5px] font-medium text-[#78716c]">{s}</span>
+                    <span key={s} className="rounded-full bg-(--c-efebe5) px-2.5 py-1 text-[11.5px] font-medium text-(--c-78716c)">{s}</span>
                   ))}
                 </div>
               )}
@@ -263,7 +263,7 @@ export default function CommunityAlbum() {
                 onQueue={queue}
               />
             )}
-            {error && <p className="m-0 mt-4 text-[13px] text-[#c0392b]">{error}</p>}
+            {error && <p className="m-0 mt-4 text-[13px] text-(--c-c0392b)">{error}</p>}
           </main>
         </div>
       </div>
@@ -310,26 +310,26 @@ function AveragedView({
         <div className="flex-1 py-2">
           <p
             className="font-display m-0 text-[64px] font-bold leading-none tabular-nums"
-            style={{ color: data.avg_score != null ? GREEN : '#c8c0b4' }}
+            style={{ color: data.avg_score != null ? GREEN : 'var(--c-c8c0b4)' }}
           >
             {data.avg_score != null ? data.avg_score.toFixed(2) : '—'}
           </p>
-          <p className="m-0 mt-2 text-[11px] font-bold tracking-[0.16em] text-[#2d6a4f]">PRESSD AVG</p>
-          <p className="m-0 mt-0.5 text-[13px] text-[#8a7f72] tabular-nums">{raters}</p>
+          <p className="m-0 mt-2 text-[11px] font-bold tracking-[0.16em] text-(--c-2d6a4f)">PRESSD AVG</p>
+          <p className="m-0 mt-0.5 text-[13px] text-(--c-8a7f72) tabular-nums">{raters}</p>
         </div>
         {showPrediction && (
           <>
-            <div className="mx-8 my-2 w-px bg-[#e2dbd0]" />
+            <div className="mx-8 my-2 w-px bg-(--c-e2dbd0)" />
             <div className="flex-1 py-2">
               <p
                 className="font-display m-0 text-[64px] font-bold leading-none tabular-nums text-transparent [-webkit-text-stroke:2px_#2d6a4f]"
               >
                 {data.predicted_score!.toFixed(2)}
               </p>
-              <p className="m-0 mt-2 flex items-center gap-1 text-[11px] font-bold tracking-[0.16em] text-[#2d6a4f]">
+              <p className="m-0 mt-2 flex items-center gap-1 text-[11px] font-bold tracking-[0.16em] text-(--c-2d6a4f)">
                 <Star size={11} fill={GREEN} strokeWidth={0} /> FOR YOU
               </p>
-              <p className="m-0 mt-0.5 text-[13px] text-[#8a7f72]">predicted</p>
+              <p className="m-0 mt-0.5 text-[13px] text-(--c-8a7f72)">predicted</p>
             </div>
           </>
         )}
@@ -339,9 +339,9 @@ function AveragedView({
           thing that would create one. */}
       {noOneElse && recommendFrom != null && (
         <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3 rise-in" style={stagger(1)}>
-          <p className="m-0 text-[14.5px] text-[#57534e]">
+          <p className="m-0 text-[14.5px] text-(--c-57534e)">
             {data.you?.score != null
-              ? <>No one else has rated <span className="font-semibold text-[#1c1917]">{data.album_name}</span> yet.</>
+              ? <>No one else has rated <span className="font-semibold text-(--c-1c1917)">{data.album_name}</span> yet.</>
               : <>No one has rated it yet.</>}
           </p>
           <button
@@ -349,7 +349,7 @@ function AveragedView({
             className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[13.5px] font-semibold text-white"
             style={{ background: RECOMMEND }}
           >
-            <Star size={13} fill="#fff" strokeWidth={0} /> Recommend to a friend
+            <Star size={13} fill="var(--c-fff)" strokeWidth={0} /> Recommend to a friend
           </button>
         </div>
       )}
@@ -362,12 +362,12 @@ function AveragedView({
 
       {/* Why it's on your shelf, read off your own copy. */}
       {data.recommended_by_name && (
-        <div className="mt-6 border-l-2 border-[#f3b98a] pl-4 rise-in" style={stagger(1)}>
+        <div className="mt-6 border-l-2 border-(--c-f3b98a) pl-4 rise-in" style={stagger(1)}>
           <p className="m-0 flex items-center gap-1.5 text-[13.5px] font-semibold" style={{ color: RECOMMEND }}>
             <Star size={13} fill={RECOMMEND} strokeWidth={0} /> Recommended by {data.recommended_by_name}
           </p>
           {data.recommendation_note && (
-            <p className="font-display m-0 mt-1.5 text-[15px] leading-relaxed text-[#1c1917]">&ldquo;{data.recommendation_note}&rdquo;</p>
+            <p className="font-display m-0 mt-1.5 text-[15px] leading-relaxed text-(--c-1c1917)">&ldquo;{data.recommendation_note}&rdquo;</p>
           )}
         </div>
       )}
@@ -389,7 +389,7 @@ function AveragedView({
             <button
               onClick={onRate}
               disabled={busy === 'rate'}
-              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[#2d6a4f] text-[15px] font-semibold text-white hover:bg-[#245c43] disabled:opacity-70"
+              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-(--c-green-fill) text-[15px] font-semibold text-white hover:bg-(--c-green-fill-hover) disabled:opacity-70"
             >
               {busy === 'rate' ? <Loader2 size={16} className="animate-spin" /> : <Play size={14} fill="currentColor" />}
               {data.your_status === 'listening' ? 'Continue' : 'Rate now'}
@@ -400,7 +400,7 @@ function AveragedView({
               onClick={onQueue}
               disabled={busy === 'queue' || queued}
               className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-xl text-[15px] font-semibold ${
-                queued ? 'bg-[#2d6a4f]/10 text-[#2d6a4f]' : 'border border-[#d7cfc3] bg-white text-[#1c1917] hover:border-[#2d6a4f]'
+                queued ? 'bg-(--c-2d6a4f)/10 text-(--c-2d6a4f)' : 'border border-(--c-d7cfc3) bg-(--c-fff) text-(--c-1c1917) hover:border-(--c-2d6a4f)'
               }`}
             >
               {busy === 'queue' ? <Loader2 size={16} className="animate-spin" /> : queued ? <Check size={16} className="pop" /> : <Plus size={16} />}
@@ -414,18 +414,18 @@ function AveragedView({
       <ol className="m-0 -mx-4 list-none p-0">
         {data.tracks.map((t, i) => (
           <RevealRow key={`${t.title}-${i}`} index={i}>
-            <div className="flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-[#f2eee7]">
-              <span className="w-6 shrink-0 text-right text-[12.5px] text-[#b5aa9c] tabular-nums">{t.track_number}</span>
-              <span className="min-w-0 flex-1 truncate text-[14.5px] text-[#1c1917]">{t.title}</span>
+            <div className="flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-(--c-f2eee7)">
+              <span className="w-6 shrink-0 text-right text-[12.5px] text-(--c-b5aa9c) tabular-nums">{t.track_number}</span>
+              <span className="min-w-0 flex-1 truncate text-[14.5px] text-(--c-1c1917)">{t.title}</span>
               <BangSkip score={t.avg_score} />
               {t.avg_score != null && (
-                <span className="hidden w-[64px] text-right text-[11.5px] text-[#a8998a] tabular-nums sm:block">
+                <span className="hidden w-[64px] text-right text-[11.5px] text-(--c-a8998a) tabular-nums sm:block">
                   {t.rater_count} {t.rater_count === 1 ? 'rater' : 'raters'}
                 </span>
               )}
               <span
                 className="font-display w-10 text-right text-[16px] font-bold tabular-nums"
-                style={{ color: t.avg_score != null ? songScoreColor(t.avg_score) : '#c8c0b4' }}
+                style={{ color: t.avg_score != null ? songScoreColor(t.avg_score) : 'var(--c-c8c0b4)' }}
               >
                 {t.avg_score != null ? t.avg_score.toFixed(1) : '—'}
               </span>
@@ -460,7 +460,7 @@ function CompareView({ data }: { data: CommunityAlbumData }) {
     if (!widest || gap > widest.gap) widest = { title: t.title, gap }
   }
 
-  const youSide = { label: 'YOU', score: yourScore, color: '#44403c', tick: '#1c1917' }
+  const youSide = { label: 'YOU', score: yourScore, color: 'var(--c-44403c)', tick: 'var(--c-1c1917)' }
   const themSide = { label: 'PRESSD USERS', score: avgScore, color: GREEN, tick: GREEN }
   const [left, right] = youLeft ? [youSide, themSide] : [themSide, youSide]
 
@@ -470,18 +470,18 @@ function CompareView({ data }: { data: CommunityAlbumData }) {
         <CompareScores left={left} right={right} />
 
         {Math.abs(diff) < 0.005 ? (
-          <p className="m-0 mt-5 text-[15px] text-[#1c1917]">You landed exactly on the Pressd average.</p>
+          <p className="m-0 mt-5 text-[15px] text-(--c-1c1917)">You landed exactly on the Pressd average.</p>
         ) : (
-          <p className="m-0 mt-5 text-[15px] text-[#1c1917]">
+          <p className="m-0 mt-5 text-[15px] text-(--c-1c1917)">
             You rated this{' '}
-            <span className="font-bold tabular-nums" style={{ color: diff > 0 ? GREEN : '#c0392b' }}>{Math.abs(diff).toFixed(2)}</span>
+            <span className="font-bold tabular-nums" style={{ color: diff > 0 ? GREEN : 'var(--c-c0392b)' }}>{Math.abs(diff).toFixed(2)}</span>
             {` ${diff > 0 ? 'above' : 'below'} the Pressd average`}
           </p>
         )}
         {widest && widest.gap > 0 && (
-          <p className="m-0 mt-1 text-[13.5px] text-[#57534e]">Biggest difference on &ldquo;{widest.title}&rdquo;</p>
+          <p className="m-0 mt-1 text-[13.5px] text-(--c-57534e)">Biggest difference on &ldquo;{widest.title}&rdquo;</p>
         )}
-        <p className="m-0 mt-1 text-[13px] text-[#8a7f72]">
+        <p className="m-0 mt-1 text-[13px] text-(--c-8a7f72)">
           Averaged across {cmpRaters} other {cmpRaters === 1 ? 'rater' : 'raters'}
         </p>
       </div>
@@ -490,7 +490,7 @@ function CompareView({ data }: { data: CommunityAlbumData }) {
         <p className={SECTION_LABEL}>TRACKS</p>
         <p className="m-0 text-[11px] font-bold tracking-[0.12em]">
           <span style={{ color: left.color }}>{left.label}</span>
-          <span className="text-[#c2b8ad]"> / </span>
+          <span className="text-(--c-c2b8ad)"> / </span>
           <span style={{ color: right.color }}>{right.label}</span>
         </p>
       </div>
@@ -501,9 +501,9 @@ function CompareView({ data }: { data: CommunityAlbumData }) {
           const isWidest = widest != null && widest.gap > 0 && t.title === widest.title
           return (
             <RevealRow key={`${t.title}-${i}`} index={i}>
-              <div className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-[#f2eee7] ${isWidest ? 'bg-[#2d6a4f]/[0.07]' : ''}`}>
-                <span className="w-6 shrink-0 text-right text-[12.5px] text-[#b5aa9c] tabular-nums">{t.track_number}</span>
-                <span className={`min-w-0 flex-1 truncate text-[14.5px] ${isWidest ? 'font-semibold text-[#1c1917]' : 'text-[#1c1917]'}`}>{t.title}</span>
+              <div className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-(--c-f2eee7) ${isWidest ? 'bg-(--c-2d6a4f)/[0.07]' : ''}`}>
+                <span className="w-6 shrink-0 text-right text-[12.5px] text-(--c-b5aa9c) tabular-nums">{t.track_number}</span>
+                <span className={`min-w-0 flex-1 truncate text-[14.5px] ${isWidest ? 'font-semibold text-(--c-1c1917)' : 'text-(--c-1c1917)'}`}>{t.title}</span>
                 <span className="font-display w-12 text-right text-[16px] font-bold tabular-nums" style={{ color: left.color }}>
                   {leftVal != null ? leftVal.toFixed(1) : '—'}
                 </span>

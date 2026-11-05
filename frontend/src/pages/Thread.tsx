@@ -29,7 +29,7 @@ import FullReviewModal from '../components/FullReviewModal'
 import CoverImg from '../components/CoverImg'
 
 // Matches the red For You uses for a worst track.
-const DOWN = '#e0492b'
+const DOWN = 'var(--c-e0492b)'
 
 const SORTS: { key: ThreadSort; label: string }[] = [
   { key: 'popular', label: 'Popular' },
@@ -126,11 +126,11 @@ export default function Thread() {
   const title = meta?.title || album || 'Discussion'
 
   return (
-    <div className="min-h-screen bg-[#f9f8f6]">
+    <div className="min-h-screen bg-(--c-f9f8f6)">
       <div className="mx-auto w-full max-w-[1600px] px-4 md:px-12 py-6 md:py-8 pb-24">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-1.5 text-[13px] font-medium text-[#8a7f72] hover:text-[#111] transition-colors mb-5"
+          className="flex items-center gap-1.5 text-[13px] font-medium text-(--c-8a7f72) hover:text-(--c-111) transition-colors mb-5"
           aria-label="Back"
         >
           <ArrowLeft size={16} /> Back
@@ -147,26 +147,26 @@ export default function Thread() {
                     displayPx={400}
                     loading="eager"
                     alt=""
-                    className="w-16 h-16 lg:w-full lg:h-auto lg:aspect-square rounded-xl lg:rounded-2xl object-cover shrink-0 bg-[#f0ebe3] lg:shadow-[0_18px_40px_-18px_rgba(50,30,10,0.45)]"
+                    className="w-16 h-16 lg:w-full lg:h-auto lg:aspect-square rounded-xl lg:rounded-2xl object-cover shrink-0 bg-(--c-f0ebe3) lg:shadow-[0_18px_40px_-18px_rgba(50,30,10,0.45)]"
                   />
                 ) : (
-                  <div className="w-16 h-16 lg:w-full lg:h-auto lg:aspect-square rounded-xl lg:rounded-2xl shrink-0 bg-[#ece6dc]" />
+                  <div className="w-16 h-16 lg:w-full lg:h-auto lg:aspect-square rounded-xl lg:rounded-2xl shrink-0 bg-(--c-ece6dc)" />
                 )}
                 <div className="min-w-0">
-                  <p className="hidden lg:block text-[10.5px] font-bold uppercase tracking-[0.16em] text-[#a8998a] m-0 mb-1">
+                  <p className="hidden lg:block text-[10.5px] font-bold uppercase tracking-[0.16em] text-(--c-a8998a) m-0 mb-1">
                     Discussion
                   </p>
-                  <h1 className="font-display text-xl lg:text-[28px] lg:leading-tight font-bold text-[#111] truncate lg:whitespace-normal m-0">
+                  <h1 className="font-display text-xl lg:text-[28px] lg:leading-tight font-bold text-(--c-111) truncate lg:whitespace-normal m-0">
                     {title}
                   </h1>
                   {!!meta?.subtitle && (
-                    <p className="text-[12.5px] lg:text-[15px] text-[#8a7f72] truncate m-0 mt-0.5">{meta.subtitle}</p>
+                    <p className="text-[12.5px] lg:text-[15px] text-(--c-8a7f72) truncate m-0 mt-0.5">{meta.subtitle}</p>
                   )}
                 </div>
               </div>
 
               {!locked && page?.summary && (
-                <div className="mt-5 lg:mt-6 lg:pt-6 lg:border-t lg:border-[#eee]">
+                <div className="mt-5 lg:mt-6 lg:pt-6 lg:border-t lg:border-(--c-eee)">
                   <Summary summary={page.summary} />
                 </div>
               )}
@@ -176,20 +176,20 @@ export default function Thread() {
           {/* ── The room ───────────────────────────────────────────── */}
           <main className="flex-1 min-w-0">
             {metaLoading ? (
-              <div className="flex items-center gap-2 text-[#aaa] text-sm py-16 justify-center">
+              <div className="flex items-center gap-2 text-(--c-aaa) text-sm py-16 justify-center">
                 <Loader2 size={16} className="animate-spin" /> Loading…
               </div>
             ) : locked ? (
-              <div className="flex flex-col items-center text-center gap-3 py-20 lg:py-32 px-6 rounded-2xl border border-dashed border-[#e2dbd0]">
-                <Lock size={28} className="text-[#c2b8ad]" />
-                <p className="font-display text-xl font-bold text-[#111] m-0">Not yet</p>
-                <p className="text-sm text-[#8a7f72] leading-relaxed max-w-sm m-0">
+              <div className="flex flex-col items-center text-center gap-3 py-20 lg:py-32 px-6 rounded-2xl border border-dashed border-(--c-e2dbd0)">
+                <Lock size={28} className="text-(--c-c2b8ad)" />
+                <p className="font-display text-xl font-bold text-(--c-111) m-0">Not yet</p>
+                <p className="text-sm text-(--c-8a7f72) leading-relaxed max-w-sm m-0">
                   {LOCKED_COPY[meta?.lockedReason ?? ''] ?? 'This thread is not open to you yet.'}
                 </p>
                 {album && (
                   <Link
                     to="/library"
-                    className="mt-2 text-sm font-semibold text-[#2d6a4f] hover:text-[#245c43] transition-colors"
+                    className="mt-2 text-sm font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) transition-colors"
                   >
                     Go to your library
                   </Link>
@@ -204,10 +204,12 @@ export default function Thread() {
                       <button
                         key={s.key}
                         onClick={() => setSort(s.key)}
-                        className={`text-[12px] font-medium px-3 py-1.5 rounded-full transition-colors ${
+                        // Ink with white on the cream page; outlined in the cream on the
+                        // dark one (.chip-on), where an ink fill turns cream.
+                        className={`text-[12px] font-medium px-3 py-1.5 rounded-full border-[1.5px] border-transparent transition-colors ${
                           sort === s.key
-                            ? 'bg-[#111] text-white'
-                            : 'bg-[#efebe5] text-[#666] hover:bg-[#e6e0d7]'
+                            ? 'chip-on'
+                            : 'bg-(--c-efebe5) text-(--c-666) hover:bg-(--c-e6e0d7)'
                         }`}
                       >
                         {s.label}
@@ -217,7 +219,7 @@ export default function Thread() {
                   {/* Describes the room, not the record — which is why it sits
                       out here rather than in the summary. */}
                   {!!page?.summary && (
-                    <span className="text-[12px] text-[#a8998a] tabular-nums shrink-0">
+                    <span className="text-[12px] text-(--c-a8998a) tabular-nums shrink-0">
                       {page.summary.raters} {page.summary.raters === 1 ? 'rater' : 'raters'}
                     </span>
                   )}
@@ -228,12 +230,12 @@ export default function Thread() {
                   <div className="mb-7">
                     {replyTo && (
                       <div className="flex items-center justify-between gap-3 mb-2">
-                        <span className="text-[12px] text-[#8a7f72] truncate">
+                        <span className="text-[12px] text-(--c-8a7f72) truncate">
                           Replying to {replyTo.author?.name ?? 'a post'}
                         </span>
                         <button
                           onClick={() => setReplyTo(null)}
-                          className="text-[12px] font-semibold text-[#2d6a4f] hover:text-[#245c43] transition-colors shrink-0"
+                          className="text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) transition-colors shrink-0"
                         >
                           Cancel
                         </button>
@@ -251,19 +253,19 @@ export default function Thread() {
                         }}
                         rows={2}
                         placeholder={replyTo ? 'Write a reply…' : 'Say something about this record…'}
-                        className="flex-1 min-w-0 resize-none bg-white border border-[#e2dbd0] rounded-xl px-3.5 py-2.5 text-[14px] text-[#111] placeholder:text-[#bbb] focus:outline-none focus:border-[#2d6a4f] transition-colors"
+                        className="flex-1 min-w-0 resize-none bg-(--c-fff) border border-(--c-e2dbd0) rounded-xl px-3.5 py-2.5 text-[14px] text-(--c-111) placeholder:text-(--c-bbb) focus:outline-none focus:border-(--c-2d6a4f) transition-colors"
                       />
                       <button
                         onClick={() => send.mutate()}
                         disabled={!draft.trim() || send.isPending}
                         aria-label="Post"
-                        className="w-10 h-10 shrink-0 rounded-full bg-[#2d6a4f] hover:bg-[#245c43] disabled:bg-[#ececec] disabled:text-[#bbb] text-white flex items-center justify-center transition-colors"
+                        className="w-10 h-10 shrink-0 rounded-full bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) disabled:bg-(--c-ececec) disabled:text-(--c-bbb) text-white flex items-center justify-center transition-colors"
                       >
                         {send.isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                       </button>
                     </div>
                     {send.isError && (
-                      <p className="text-[12px] text-[#c0392b] mt-1.5 m-0">
+                      <p className="text-[12px] text-(--c-c0392b) mt-1.5 m-0">
                         {(send.error as Error).message || 'Could not post.'}
                       </p>
                     )}
@@ -272,11 +274,11 @@ export default function Thread() {
 
                 {/* ── The conversation ───────────────────────────────── */}
                 {postsLoading && threadId ? (
-                  <div className="flex items-center gap-2 text-[#aaa] text-sm py-10 justify-center">
+                  <div className="flex items-center gap-2 text-(--c-aaa) text-sm py-10 justify-center">
                     <Loader2 size={16} className="animate-spin" /> Loading posts…
                   </div>
                 ) : posts.length === 0 ? (
-                  <p className="text-center text-sm text-[#a8998a] py-12 m-0">
+                  <p className="text-center text-sm text-(--c-a8998a) py-12 m-0">
                     Nobody has said anything yet. Be the first.
                   </p>
                 ) : (
@@ -313,7 +315,7 @@ function Summary({ summary }: { summary: ThreadSummary }) {
   const worst = summary.bottomTrack?.title
 
   return (
-    <div className="pb-5 border-b border-[#eee] lg:pb-0 lg:border-0">
+    <div className="pb-5 border-b border-(--c-eee) lg:pb-0 lg:border-0">
       {/* A rule instead of a filled card: these are the record's numbers, not
           another voice in the room, and a panel made them read as one. */}
       <div className="flex items-center gap-6">
@@ -333,13 +335,13 @@ function Summary({ summary }: { summary: ThreadSummary }) {
         <>
           <button
             onClick={() => setOpen((o) => !o)}
-            className="lg:hidden mt-4 flex items-center gap-1 text-[12px] font-semibold text-[#2d6a4f] hover:text-[#245c43] transition-colors"
+            className="lg:hidden mt-4 flex items-center gap-1 text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) transition-colors"
             aria-expanded={open}
           >
             {open ? 'Hide' : 'Every'} track{open ? 's' : ''} {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
           <div className={`${open ? 'block' : 'hidden'} lg:block mt-3 lg:mt-6`}>
-            <p className="hidden lg:block text-[10.5px] font-bold uppercase tracking-[0.16em] text-[#a8998a] m-0 mb-2">
+            <p className="hidden lg:block text-[10.5px] font-bold uppercase tracking-[0.16em] text-(--c-a8998a) m-0 mb-2">
               Track by track
             </p>
             <ol className="m-0 p-0 list-none">
@@ -377,27 +379,27 @@ function TrackAverage({
   const color = songScoreColor(track.score)
   return (
     <li className="rise-in flex items-center gap-2.5 py-[5px] min-w-0" style={{ '--i': index } as CSSProperties}>
-      <span className="w-5 text-right text-[11.5px] text-[#b5aa9c] tabular-nums shrink-0">{number}</span>
+      <span className="w-5 text-right text-[11.5px] text-(--c-b5aa9c) tabular-nums shrink-0">{number}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className={`text-[13px] truncate ${mark ? 'font-semibold text-[#111]' : 'text-[#44403c]'}`}>
+          <span className={`text-[13px] truncate ${mark ? 'font-semibold text-(--c-111)' : 'text-(--c-44403c)'}`}>
             {track.title}
           </span>
           {mark && (
             <Triangle
               size={9}
-              color={mark === 'best' ? '#2d6a4f' : DOWN}
+              color={mark === 'best' ? 'var(--c-2d6a4f)' : DOWN}
               style={mark === 'best' ? undefined : { transform: 'rotate(180deg)' }}
               className="shrink-0"
             />
           )}
           {fewer && (
-            <span className="text-[10.5px] text-[#b5aa9c] shrink-0 tabular-nums">
+            <span className="text-[10.5px] text-(--c-b5aa9c) shrink-0 tabular-nums">
               {track.raters} {track.raters === 1 ? 'rater' : 'raters'}
             </span>
           )}
         </div>
-        <div className="mt-1 h-[3px] rounded-full bg-[#ece6dc] overflow-hidden">
+        <div className="mt-1 h-[3px] rounded-full bg-(--c-ece6dc) overflow-hidden">
           <div className="grow-x h-full rounded-full" style={{ width: `${track.score * 10}%`, background: color, '--i': index } as CSSProperties} />
         </div>
       </div>
@@ -417,11 +419,11 @@ function SummaryTrack({ best, track }: { best: boolean; track: { title: string; 
     <div className="flex items-center gap-2 min-w-0">
       <Triangle
         size={10}
-        color={best ? '#2d6a4f' : DOWN}
+        color={best ? 'var(--c-2d6a4f)' : DOWN}
         style={best ? undefined : { transform: 'rotate(180deg)' }}
         className="shrink-0"
       />
-      <span className="text-[13px] font-medium text-[#111] truncate">{track.title}</span>
+      <span className="text-[13px] font-medium text-(--c-111) truncate">{track.title}</span>
       <span
         className="font-display text-[14px] font-bold tabular-nums shrink-0 ml-auto"
         style={{ color: songScoreColor(track.score) }}
@@ -499,7 +501,7 @@ function PostRow({
 
   if (post.deleted) {
     return (
-      <p className="text-[13px] italic text-[#c2b8ad] py-3.5 border-b border-[#f0ebe3] m-0">
+      <p className="text-[13px] italic text-(--c-c2b8ad) py-3.5 border-b border-(--c-f0ebe3) m-0">
         This post was removed.
       </p>
     )
@@ -507,9 +509,9 @@ function PostRow({
 
   if (system) {
     return (
-      <div className="bg-[#2d6a4f]/8 rounded-xl px-4 py-3.5 mb-3">
-        <p className="text-[10px] font-bold tracking-[0.1em] text-[#2d6a4f] mb-1 m-0">PRESS&rsquo;D</p>
-        <p className="font-display text-[15px] text-[#111] leading-relaxed whitespace-pre-wrap break-words m-0">
+      <div className="bg-(--c-2d6a4f)/8 rounded-xl px-4 py-3.5 mb-3">
+        <p className="text-[10px] font-bold tracking-[0.1em] text-(--c-2d6a4f) mb-1 m-0">PRESS&rsquo;D</p>
+        <p className="font-display text-[15px] text-(--c-111) leading-relaxed whitespace-pre-wrap break-words m-0">
           {post.body}
         </p>
       </div>
@@ -517,18 +519,18 @@ function PostRow({
   }
 
   return (
-    <div className={`group py-3.5 border-b border-[#f0ebe3] rounded-lg ${fresh?.id === post.id ? 'flash' : ''}`}>
+    <div className={`group py-3.5 border-b border-(--c-f0ebe3) rounded-lg ${fresh?.id === post.id ? 'flash' : ''}`}>
       <div className="flex items-center gap-3 mb-1">
         {/* The person first and largest. Whose opinion this is matters more than
             what they scored it — so their face, then their name. */}
         <AuthorLink author={post.author} gap="gap-3">
           <Avatar name={post.author?.name ?? '?'} avatarUrl={post.author?.avatarUrl} size={30} />
-          <span className="text-[16px] font-semibold text-[#111] truncate group-hover/author:underline underline-offset-2">
+          <span className="text-[16px] font-semibold text-(--c-111) truncate group-hover/author:underline underline-offset-2">
             {post.author?.name ?? 'Unknown'}
           </span>
         </AuthorLink>
         {post.createdAt && (
-          <span className="text-[11px] text-[#c2b8ad] shrink-0">{timeAgo(post.createdAt)}</span>
+          <span className="text-[11px] text-(--c-c2b8ad) shrink-0">{timeAgo(post.createdAt)}</span>
         )}
         <div className="ml-auto flex items-center gap-2.5 shrink-0">
           {post.author?.score != null && (
@@ -549,7 +551,7 @@ function PostRow({
             <button
               onClick={() => setMenu((v) => !v)}
               aria-label="Post actions"
-              className="text-[#ccc] hover:text-[#555] opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+              className="text-(--c-ccc) hover:text-(--c-555) opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
             >
               <MoreHorizontal size={16} />
             </button>
@@ -557,7 +559,7 @@ function PostRow({
               <>
                 {/* Catches the click that dismisses the menu. */}
                 <div className="fixed inset-0 z-10" onClick={() => setMenu(false)} />
-                <div className="menu-in absolute right-0 top-6 z-20 w-44 bg-white border border-[#e8e2d9] rounded-xl shadow-lg py-1">
+                <div className="menu-in absolute right-0 top-6 z-20 w-44 bg-(--c-fff) border border-(--c-e8e2d9) rounded-xl shadow-lg py-1">
                   {[
                     { value: 'reply', label: 'Reply' },
                     { value: 'copy', label: 'Copy text' },
@@ -567,7 +569,7 @@ function PostRow({
                     <button
                       key={o.value}
                       onClick={() => act(o.value)}
-                      className="w-full text-left px-3.5 py-2 text-[13px] text-[#444] hover:bg-[#f7f5f2] transition-colors"
+                      className="w-full text-left px-3.5 py-2 text-[13px] text-(--c-444) hover:bg-(--c-f7f5f2) transition-colors"
                     >
                       {o.label}
                     </button>
@@ -585,12 +587,12 @@ function PostRow({
       {hidden ? (
         <button
           onClick={() => setRevealed(true)}
-          className="text-[14px] italic text-[#bbb] hover:text-[#888] transition-colors text-left"
+          className="text-[14px] italic text-(--c-bbb) hover:text-(--c-888) transition-colors text-left"
         >
           Spoiler — click to read
         </button>
       ) : (
-        <p className="text-[14.5px] text-[#111] leading-relaxed whitespace-pre-wrap break-words m-0">
+        <p className="text-[14.5px] text-(--c-111) leading-relaxed whitespace-pre-wrap break-words m-0">
           {post.body}
         </p>
       )}
@@ -604,14 +606,14 @@ function PostRow({
         />
         <button
           onClick={() => onReply(post)}
-          className="text-[12px] font-medium text-[#a8998a] hover:text-[#555] transition-colors"
+          className="text-[12px] font-medium text-(--c-a8998a) hover:text-(--c-555) transition-colors"
         >
           Reply
         </button>
         {post.replyCount > 0 && (
           <button
             onClick={() => setOpen((v) => !v)}
-            className="flex items-center gap-1 text-[12px] font-semibold text-[#2d6a4f] hover:text-[#245c43] transition-colors"
+            className="flex items-center gap-1 text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) transition-colors"
           >
             {post.replyCount} {post.replyCount === 1 ? 'reply' : 'replies'}
             {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
@@ -622,9 +624,9 @@ function PostRow({
       {/* Indented and ruled on the left so a reply reads as hanging off the post
           above it rather than as another post in the thread. */}
       {open && (
-        <div className="mt-3 pl-3.5 border-l-2 border-[#f0ebe3]">
+        <div className="mt-3 pl-3.5 border-l-2 border-(--c-f0ebe3)">
           {repliesLoading ? (
-            <div className="flex items-center gap-1.5 text-[#bbb] text-xs py-2">
+            <div className="flex items-center gap-1.5 text-(--c-bbb) text-xs py-2">
               <Loader2 size={12} className="animate-spin" /> Loading replies…
             </div>
           ) : (
@@ -635,18 +637,18 @@ function PostRow({
                 style={{ '--i': ri } as CSSProperties}
               >
                 {r.deleted ? (
-                  <p className="text-[13px] italic text-[#c2b8ad] m-0">This reply was removed.</p>
+                  <p className="text-[13px] italic text-(--c-c2b8ad) m-0">This reply was removed.</p>
                 ) : (
                   <>
                     <div className="flex items-center gap-2.5 mb-0.5">
                       <AuthorLink author={r.author} gap="gap-2.5">
                         <Avatar name={r.author?.name ?? '?'} avatarUrl={r.author?.avatarUrl} size={22} />
-                        <span className="text-[13.5px] font-semibold text-[#111] truncate group-hover/author:underline underline-offset-2">
+                        <span className="text-[13.5px] font-semibold text-(--c-111) truncate group-hover/author:underline underline-offset-2">
                           {r.author?.name ?? 'Unknown'}
                         </span>
                       </AuthorLink>
                       {r.createdAt && (
-                        <span className="text-[10.5px] text-[#c2b8ad] shrink-0">{timeAgo(r.createdAt)}</span>
+                        <span className="text-[10.5px] text-(--c-c2b8ad) shrink-0">{timeAgo(r.createdAt)}</span>
                       )}
                       {r.author?.score != null && (
                         <span
@@ -660,7 +662,7 @@ function PostRow({
                         <FullReviewButton compact name={r.author?.name ?? 'their'} onOpen={() => setReviewOf(r.id)} />
                       )}
                     </div>
-                    <p className="text-[13.5px] text-[#111] leading-relaxed whitespace-pre-wrap break-words m-0">
+                    <p className="text-[13.5px] text-(--c-111) leading-relaxed whitespace-pre-wrap break-words m-0">
                       {r.body}
                     </p>
                     <div className="mt-1.5">
@@ -727,7 +729,7 @@ function FullReviewButton({
         onClick={() => setOpen((v) => !v)}
         aria-label={`${name}'s full review`}
         aria-expanded={open}
-        className={`transition-colors ${open ? 'text-[#2d6a4f]' : 'text-[#b5aa9c] hover:text-[#2d6a4f]'}`}
+        className={`transition-colors ${open ? 'text-(--c-2d6a4f)' : 'text-(--c-b5aa9c) hover:text-(--c-2d6a4f)'}`}
       >
         <FileText size={compact ? 13 : 15} />
       </button>
@@ -735,12 +737,12 @@ function FullReviewButton({
         <>
           {/* Catches the click that dismisses the dropdown. */}
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="menu-in absolute right-0 top-6 z-20 bg-white border border-[#e8e2d9] rounded-xl shadow-lg py-1">
+          <div className="menu-in absolute right-0 top-6 z-20 bg-(--c-fff) border border-(--c-e8e2d9) rounded-xl shadow-lg py-1">
             <button
               onClick={() => { setOpen(false); onOpen() }}
-              className="w-full flex items-center gap-2 whitespace-nowrap text-left px-3.5 py-2 text-[13px] text-[#444] hover:bg-[#f7f5f2] transition-colors"
+              className="w-full flex items-center gap-2 whitespace-nowrap text-left px-3.5 py-2 text-[13px] text-(--c-444) hover:bg-(--c-f7f5f2) transition-colors"
             >
-              <FileText size={13} className="text-[#8a7f72]" />
+              <FileText size={13} className="text-(--c-8a7f72)" />
               Access {name}&rsquo;s full review
             </button>
           </div>

@@ -37,13 +37,13 @@ export default function ProfilePicks({ profile, editable }: { profile: Profile; 
 
   return (
     <section className="mb-8">
-      <h2 className="font-wide m-0 mb-4 text-[19px] tracking-[0.01em] text-[#1c1917]">{possessive(profile.name)} shelf</h2>
+      <h2 className="font-wide m-0 mb-4 text-[19px] tracking-[0.01em] text-(--c-1c1917)">{possessive(profile.name)} shelf</h2>
       <div className="max-w-3xl">
         <div className="flex items-end pt-4">
           {shown.map(({ album, slot }, i) => {
             const face = album ? (
-              <div className="relative aspect-square overflow-hidden rounded-xl bg-[#ebe5dc]">
-                <span className="font-display absolute inset-0 flex items-center justify-center text-[40px] text-[#a8998a]">
+              <div className="relative aspect-square overflow-hidden rounded-xl bg-(--c-ebe5dc)">
+                <span className="font-display absolute inset-0 flex items-center justify-center text-[40px] text-(--c-a8998a)">
                   {album.album_name[0]?.toUpperCase()}
                 </span>
                 {album.album_art_url && (
@@ -51,7 +51,7 @@ export default function ProfilePicks({ profile, editable }: { profile: Profile; 
                 )}
               </div>
             ) : (
-              <div className="flex aspect-square items-center justify-center rounded-xl border-2 border-dashed border-[#d7cfc3] bg-[#f9f8f6] text-[#c8c0b4]">
+              <div className="flex aspect-square items-center justify-center rounded-xl border-2 border-dashed border-(--c-d7cfc3) bg-(--c-f9f8f6) text-(--c-c8c0b4)">
                 <Plus size={28} />
               </div>
             )
@@ -129,26 +129,26 @@ function ShelfDialog({ slot, profile, onClose }: { slot: number; profile: Profil
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm fade-in" onClick={saving ? undefined : onClose} />
-      <div role="dialog" aria-modal="true" aria-labelledby="shelf-title" className="relative flex max-h-[80vh] w-full max-w-lg flex-col rounded-3xl bg-[#f9f8f6] shadow-xl pop-in">
+      <div role="dialog" aria-modal="true" aria-labelledby="shelf-title" className="relative flex max-h-[80vh] w-full max-w-lg flex-col rounded-3xl bg-(--c-f9f8f6) shadow-xl pop-in">
         <div className="px-6 pt-6">
           <div className="flex items-start justify-between gap-4">
-            <h2 id="shelf-title" className="font-display m-0 text-[24px] font-bold leading-tight text-[#1c1917]">Which record goes on your shelf?</h2>
-            <button onClick={onClose} aria-label="Close" className="mt-1 text-[#a8998a] hover:text-[#57534e]"><X size={18} /></button>
+            <h2 id="shelf-title" className="font-display m-0 text-[24px] font-bold leading-tight text-(--c-1c1917)">Which record goes on your shelf?</h2>
+            <button onClick={onClose} aria-label="Close" className="mt-1 text-(--c-a8998a) hover:text-(--c-57534e)"><X size={18} /></button>
           </div>
-          <div className="mt-4 flex items-center gap-2 rounded-xl border border-[#e2dbd0] bg-white px-3 py-2.5">
-            <Search size={15} className="text-[#a8998a]" />
+          <div className="mt-4 flex items-center gap-2 rounded-xl border border-(--c-e2dbd0) bg-(--c-fff) px-3 py-2.5">
+            <Search size={15} className="text-(--c-a8998a)" />
             <input
               autoFocus
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search your rated albums"
-              className="flex-1 bg-transparent text-[14px] text-[#1c1917] placeholder:text-[#b5aa9c] focus:outline-none"
+              className="flex-1 bg-transparent text-[14px] text-(--c-1c1917) placeholder:text-(--c-b5aa9c) focus:outline-none"
             />
           </div>
           <div className="flex items-center justify-between py-2">
-            {error ? <p className="m-0 text-[13px] text-[#b91c1c]">{error}</p> : <span />}
+            {error ? <p className="m-0 text-[13px] text-(--c-b91c1c)">{error}</p> : <span />}
             {here && (
-              <button onClick={() => save(null)} disabled={saving} className="text-[13px] font-medium text-[#78716c] hover:text-[#1c1917]">
+              <button onClick={() => save(null)} disabled={saving} className="text-[13px] font-medium text-(--c-78716c) hover:text-(--c-1c1917)">
                 Take it off the shelf
               </button>
             )}
@@ -156,23 +156,23 @@ function ShelfDialog({ slot, profile, onClose }: { slot: number; profile: Profil
         </div>
         <ul className="m-0 min-h-0 flex-1 list-none overflow-y-auto px-3 pb-4">
           {albums.isLoading ? (
-            <li className="flex justify-center py-10"><Loader2 size={18} className="animate-spin text-[#2d6a4f]" /></li>
+            <li className="flex justify-center py-10"><Loader2 size={18} className="animate-spin text-(--c-2d6a4f)" /></li>
           ) : rows.length === 0 ? (
-            <li className="py-10 text-center text-[14px] text-[#8a7f72]">{q ? 'Nothing matches your search.' : 'No rated albums yet.'}</li>
+            <li className="py-10 text-center text-[14px] text-(--c-8a7f72)">{q ? 'Nothing matches your search.' : 'No rated albums yet.'}</li>
           ) : rows.map((a, i) => (
             <li key={a.id}>
               <button
                 onClick={() => save(a.id)}
                 disabled={saving}
-                className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-[#f2eee7] disabled:opacity-60"
+                className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-(--c-f2eee7) disabled:opacity-60"
               >
-                <span className="w-6 shrink-0 text-right text-[12.5px] tabular-nums text-[#b5aa9c]">{i + 1}</span>
+                <span className="w-6 shrink-0 text-right text-[12.5px] tabular-nums text-(--c-b5aa9c)">{i + 1}</span>
                 <span className="h-10 w-10 shrink-0 overflow-hidden rounded-lg">
                   {a.albumArtUrl ? <CoverImg url={a.albumArtUrl} displayPx={40} alt="" className="h-full w-full object-cover" /> : <Cover artUrl={null} seed={a.albumName} size={40} radius={0} fontSize={16} />}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14.5px] font-semibold text-[#1c1917]">{a.albumName}</span>
-                  <span className="block truncate text-[12.5px] text-[#8a7f72]">{a.artist}</span>
+                  <span className="block truncate text-[14.5px] font-semibold text-(--c-1c1917)">{a.albumName}</span>
+                  <span className="block truncate text-[12.5px] text-(--c-8a7f72)">{a.artist}</span>
                 </span>
                 {a.score != null && (
                   <span className="font-display shrink-0 text-[16px] font-bold tabular-nums" style={{ color: songScoreColor(a.score) }}>
@@ -180,7 +180,7 @@ function ShelfDialog({ slot, profile, onClose }: { slot: number; profile: Profil
                   </span>
                 )}
                 {/* Ticked: everything on the shelf, so a record isn't picked twice by mistake. */}
-                <span className="w-5 shrink-0">{onShelf.has(a.id) && <Check size={17} className="text-[#2d6a4f]" strokeWidth={2.6} />}</span>
+                <span className="w-5 shrink-0">{onShelf.has(a.id) && <Check size={17} className="text-(--c-2d6a4f)" strokeWidth={2.6} />}</span>
               </button>
             </li>
           ))}

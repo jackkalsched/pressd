@@ -40,12 +40,12 @@ export default function TopSongTiebreak({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-[#1c1917]/45 fade-in" />
-      <div className="relative w-full max-w-[440px] bg-[#faf8f5] rounded-3xl px-6 pt-6 pb-4 shadow-xl pop-in">
-        <div className="w-9 h-9 rounded-full bg-[#2d6a4f]/10 flex items-center justify-center">
-          <Star size={16} fill="#2d6a4f" color="#2d6a4f" strokeWidth={0} />
+      <div className="relative w-full max-w-[440px] bg-(--c-faf8f5) rounded-3xl px-6 pt-6 pb-4 shadow-xl pop-in">
+        <div className="w-9 h-9 rounded-full bg-(--c-2d6a4f)/10 flex items-center justify-center">
+          <Star size={16} fill="var(--c-2d6a4f)" color="var(--c-2d6a4f)" strokeWidth={0} />
         </div>
-        <h2 className="font-display text-[26px] font-bold text-[#1c1917] mt-4 mb-0">It&rsquo;s a tie</h2>
-        <p className="text-[14.5px] leading-[21px] text-[#78716c] mt-1.5 mb-4">
+        <h2 className="font-display text-[26px] font-bold text-(--c-1c1917) mt-4 mb-0">It&rsquo;s a tie</h2>
+        <p className="text-[14.5px] leading-[21px] text-(--c-78716c) mt-1.5 mb-4">
           You rated {countPhrase(songs.length)} a{' '}
           <span className="font-bold" style={{ color: songScoreColor(score) }}>{score.toFixed(1)}</span>.
           Which one was your favorite?
@@ -57,12 +57,12 @@ export default function TopSongTiebreak({
               key={s.id}
               onClick={() => onPick(s.id)}
               disabled={busy}
-              className="rise-in w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left hover:bg-[#2d6a4f]/8 disabled:opacity-50"
+              className="rise-in w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left hover:bg-(--c-2d6a4f)/8 disabled:opacity-50"
               style={{ '--i': i } as React.CSSProperties}
             >
-              <span className="w-6 text-right text-[13px] text-[#a8998a] tabular-nums shrink-0">{s.trackNumber}</span>
-              <span className="flex-1 min-w-0 text-[15px] font-semibold text-[#1c1917]">{s.title}</span>
-              {busy && <Loader2 size={14} className="animate-spin text-[#a8998a]" />}
+              <span className="w-6 text-right text-[13px] text-(--c-a8998a) tabular-nums shrink-0">{s.trackNumber}</span>
+              <span className="flex-1 min-w-0 text-[15px] font-semibold text-(--c-1c1917)">{s.title}</span>
+              {busy && <Loader2 size={14} className="animate-spin text-(--c-a8998a)" />}
             </button>
           ))}
         </div>
@@ -72,7 +72,7 @@ export default function TopSongTiebreak({
         <button
           onClick={onSkip}
           disabled={busy}
-          className="w-full mt-2 py-2.5 text-[13.5px] font-semibold text-[#a8998a] hover:text-[#57534e]"
+          className="w-full mt-2 py-2.5 text-[13.5px] font-semibold text-(--c-a8998a) hover:text-(--c-57534e)"
         >
           I can&rsquo;t choose
         </button>

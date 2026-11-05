@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { X, Download, Loader2, Star } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import { fetchAlbums, fetchAlbumColor } from '../api'
-import { BANG_THRESHOLD, SKIP_THRESHOLD, pickTopSong, songScoreColor } from '../types'
+import { BANG_THRESHOLD, SKIP_THRESHOLD, pickTopSong } from '../types'
+// The shared helper, not ../types': the card is a picture, on the light scale.
+import { songScoreColor } from '@pressd/shared/types'
 import type { Album } from '../types'
 import { useUser } from '../context/UserContext'
 

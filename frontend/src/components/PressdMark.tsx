@@ -18,8 +18,8 @@ const DISC_CY = 103
 // vanish. Cream legs against the dark disc hold contrast on the green field and
 // keep the highlight sweep visible, which the light-on-light reversal loses.
 const TONES = {
-  primary: { leg: '#3E6B54', disc: '#212220', label: '#F4F2EC', spindle: '#212220', sweep: '#F4F2EC' },
-  onGreen: { leg: '#F4F2EC', disc: '#212220', label: '#F4F2EC', spindle: '#212220', sweep: '#F4F2EC' },
+  primary: { leg: 'var(--c-3e6b54)', disc: 'var(--c-212220)', label: 'var(--c-f4f2ec)', spindle: 'var(--c-212220)', sweep: 'var(--c-f4f2ec)' },
+  onGreen: { leg: 'var(--c-f4f2ec)', disc: 'var(--c-212220)', label: 'var(--c-f4f2ec)', spindle: 'var(--c-212220)', sweep: 'var(--c-f4f2ec)' },
 } as const
 
 export default function PressdMark({

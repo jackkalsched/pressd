@@ -21,10 +21,10 @@ function scoreBadgeColor(score: number, mu: number, sd: number): string {
   const SD_RANGE = 2.5
   if (score >= mu) {
     const t = Math.min(1, (score - mu) / (SD_RANGE * sd))
-    return `hsl(${Math.round(30 + t * 108)}, 70%, 30%)`
+    return `hsl(${Math.round(30 + t * 108)}, 70%, var(--badge-l))`
   } else {
     const t = Math.min(1, (mu - score) / (SD_RANGE * sd))
-    return `hsl(${Math.round(30 - t * 30)}, 72%, 30%)`
+    return `hsl(${Math.round(30 - t * 30)}, 72%, var(--badge-l))`
   }
 }
 
@@ -103,8 +103,8 @@ export default function AlbumCard({ album, showActions = true }: Props) {
       <div
         ref={cardRef}
         className={`
-          group relative flex flex-col bg-[#faf8f5] rounded-2xl overflow-hidden
-          border border-[#e8e2d9] cursor-pointer
+          group relative flex flex-col bg-(--c-faf8f5) rounded-2xl overflow-hidden
+          border border-(--c-e8e2d9) cursor-pointer
           transition-[transform,box-shadow] duration-[180ms] ease-out will-change-transform
           hover:-translate-y-[5px] hover:scale-[1.02]
           hover:shadow-[0_14px_36px_-4px_rgba(50,30,10,0.14),0_4px_10px_-2px_rgba(50,30,10,0.08)]
@@ -122,7 +122,7 @@ export default function AlbumCard({ album, showActions = true }: Props) {
         onMouseLeave={() => { if (!deleting) setConfirmDelete(false) }}
       >
         {/* ── Cover ─────────────────────────────────────────────────── */}
-        <div className="aspect-square relative overflow-hidden bg-[#ece6dc] shrink-0">
+        <div className="aspect-square relative overflow-hidden bg-(--c-ece6dc) shrink-0">
 
           {/* Skeleton shimmer while image loads */}
           {!imgLoaded && album.albumArtUrl && (
@@ -138,9 +138,9 @@ export default function AlbumCard({ album, showActions = true }: Props) {
               onLoad={() => setImgLoaded(true)}
             />
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-[#e8dfd2] to-[#cfc3b0]">
-              <Music size={34} className="text-[#b0a090]" strokeWidth={1.25} />
-              <span className="text-[#b0a090] text-[10px] font-semibold tracking-[0.2em] uppercase select-none">
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-(--c-e8dfd2) to-(--c-cfc3b0)">
+              <Music size={34} className="text-(--c-b0a090)" strokeWidth={1.25} />
+              <span className="text-(--c-b0a090) text-[10px] font-semibold tracking-[0.2em] uppercase select-none">
                 {album.albumName.slice(0, 3)}
               </span>
             </div>
@@ -152,17 +152,17 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           {/* Recommended star */}
           {album.recommendedBy !== null && (
             <div
-              className="absolute top-2.5 left-2.5 bg-white/80 backdrop-blur-sm rounded-full p-1 shadow-sm"
+              className="absolute top-2.5 left-2.5 bg-(--c-fff)/80 backdrop-blur-sm rounded-full p-1 shadow-sm"
               title={album.recommendedByName ? `Recommended by ${album.recommendedByName}` : 'Recommended'}
             >
-              <Star size={12} fill="#f97316" color="#f97316" />
+              <Star size={12} fill="var(--c-f97316)" color="var(--c-f97316)" />
             </div>
           )}
 
           {/* Score badge */}
           {album.score !== null && (
             <div
-              className="absolute top-2.5 right-2.5 text-[13px] font-bold px-3 py-1 rounded-full shadow-md tracking-tight select-none bg-white"
+              className="absolute top-2.5 right-2.5 text-[13px] font-bold px-3 py-1 rounded-full shadow-md tracking-tight select-none bg-(--c-fff)"
               style={{
                 color: scoreRange
                   ? scoreBadgeColor(album.score, scoreRange.mu, scoreRange.sd)
@@ -189,11 +189,11 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           {/* No-skips badge — every track cleared the skip line */}
           {noSkips && (
             <div
-              className="absolute bottom-2.5 left-2.5 flex items-center gap-1 bg-white/85 backdrop-blur-sm rounded-full pl-1.5 pr-2 py-1 shadow-sm ring-1 ring-black/5 select-none"
+              className="absolute bottom-2.5 left-2.5 flex items-center gap-1 bg-(--c-fff)/85 backdrop-blur-sm rounded-full pl-1.5 pr-2 py-1 shadow-sm ring-1 ring-black/5 select-none"
               title="No skips — every track scored above the skip line"
             >
-              <Sparkles size={11} className="text-[#2d6a4f]" strokeWidth={2.25} />
-              <span className="text-[#2d6a4f] text-[9px] font-bold uppercase tracking-[0.08em] leading-none">
+              <Sparkles size={11} className="text-(--c-2d6a4f)" strokeWidth={2.25} />
+              <span className="text-(--c-2d6a4f) text-[9px] font-bold uppercase tracking-[0.08em] leading-none">
                 No skips
               </span>
             </div>
@@ -202,10 +202,10 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           {/* EP / Single tag — short releases score as the song mean */}
           {releaseTag && album.status !== 'listening' && (
             <div
-              className="absolute bottom-2.5 right-2.5 bg-white/85 backdrop-blur-sm rounded-full px-2 py-1 shadow-sm ring-1 ring-black/5 select-none"
+              className="absolute bottom-2.5 right-2.5 bg-(--c-fff)/85 backdrop-blur-sm rounded-full px-2 py-1 shadow-sm ring-1 ring-black/5 select-none"
               title={`${releaseTag} — scored as the average of its songs`}
             >
-              <span className="text-[#78716c] text-[9px] font-bold uppercase tracking-[0.08em] leading-none">
+              <span className="text-(--c-78716c) text-[9px] font-bold uppercase tracking-[0.08em] leading-none">
                 {releaseTag}
               </span>
             </div>
@@ -219,9 +219,9 @@ export default function AlbumCard({ album, showActions = true }: Props) {
                   <span className="text-white/65 text-[10px] font-medium tracking-wide uppercase">In progress</span>
                   <span className="text-white/65 text-[10px] tabular-nums">{ratedSongs}/{album.songs.length}</span>
                 </div>
-                <div className="h-[3px] bg-white/15 rounded-full">
+                <div className="h-[3px] bg-(--c-fff)/15 rounded-full">
                   <div
-                    className="h-[3px] bg-[#6ee7b7] rounded-full transition-all duration-500"
+                    className="h-[3px] bg-(--c-6ee7b7) rounded-full transition-all duration-500"
                     style={{ width: `${album.songs.length > 0 ? (ratedSongs / album.songs.length) * 100 : 0}%` }}
                   />
                 </div>
@@ -232,19 +232,19 @@ export default function AlbumCard({ album, showActions = true }: Props) {
 
         {/* ── Metadata ──────────────────────────────────────────────── */}
         <div className="px-3 pt-2.5 pb-3">
-          <p className="text-[#1c1917] text-[13px] font-semibold leading-snug line-clamp-2">
+          <p className="text-(--c-1c1917) text-[13px] font-semibold leading-snug line-clamp-2">
             {album.albumName}
           </p>
-          <p className="text-[#78716c] text-[11px] mt-0.5 truncate">
+          <p className="text-(--c-78716c) text-[11px] mt-0.5 truncate">
             {artists} · {album.year}
           </p>
           {album.genre && (
-            <p className="text-[#a8a29e] text-[10px] mt-0.5 truncate uppercase tracking-[0.08em]">
+            <p className="text-(--c-a8a29e) text-[10px] mt-0.5 truncate uppercase tracking-[0.08em]">
               {album.genre}
             </p>
           )}
           {album.recommendedBy !== null && album.recommendedByName && (
-            <p className="text-[#ea7a2a] text-[10px] mt-1 truncate font-medium">
+            <p className="text-(--c-ea7a2a) text-[10px] mt-1 truncate font-medium">
               ★ rec. by {album.recommendedByName}
             </p>
           )}
@@ -260,7 +260,7 @@ export default function AlbumCard({ album, showActions = true }: Props) {
                 {album.status === 'to_listen' && !isViewingFriend && (
                   <button
                     onClick={(e) => { e.stopPropagation(); navigate(`/rate/${album.id}`) }}
-                    className="flex-1 flex items-center justify-center gap-1.5 bg-[#2d6a4f] hover:bg-[#245c43] active:bg-[#1e5238] text-white text-[11px] font-semibold py-2 rounded-lg transition-colors min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2d6a4f]"
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) active:bg-(--c-1e5238) text-white text-[11px] font-semibold py-2 rounded-lg transition-colors min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--c-2d6a4f)"
                   >
                     <Play size={10} fill="currentColor" strokeWidth={0} /> Start Rating
                   </button>
@@ -270,7 +270,7 @@ export default function AlbumCard({ album, showActions = true }: Props) {
                   <>
                     <button
                       onClick={(e) => { e.stopPropagation(); navigate(`/rate/${album.id}`) }}
-                      className="flex-1 flex items-center justify-center gap-1.5 bg-[#2d6a4f] hover:bg-[#245c43] active:bg-[#1e5238] text-white text-[11px] font-semibold py-2 rounded-lg transition-colors min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2d6a4f]"
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) active:bg-(--c-1e5238) text-white text-[11px] font-semibold py-2 rounded-lg transition-colors min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--c-2d6a4f)"
                     >
                       <ChevronRight size={12} /> Continue
                     </button>
@@ -284,7 +284,7 @@ export default function AlbumCard({ album, showActions = true }: Props) {
                           ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200 focus-visible:outline-red-400'
                           : deleteError
                             ? 'bg-red-50 text-red-600 border-red-200'
-                            : 'bg-[#f0ebe3] hover:bg-[#e5ddd2] text-[#a8998a] border-[#ddd5c8] focus-visible:outline-[#a8998a]'
+                            : 'bg-(--c-f0ebe3) hover:bg-(--c-e5ddd2) text-(--c-a8998a) border-(--c-ddd5c8) focus-visible:outline-(--c-a8998a)'
                       }`}
                       title={deleteError ? "Couldn't delete — try again" : 'Delete'}
                     >
@@ -303,16 +303,16 @@ export default function AlbumCard({ album, showActions = true }: Props) {
                   <>
                     <button
                       onClick={(e) => { e.stopPropagation(); navigate(`/album/${album.id}`) }}
-                      className="flex-1 flex items-center justify-center bg-[#f0ebe3] hover:bg-[#e5ddd2] active:bg-[#d9d0c4] text-[#57534e] text-[11px] font-semibold py-2 rounded-lg transition-colors min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#78716c]"
+                      className="flex-1 flex items-center justify-center bg-(--c-f0ebe3) hover:bg-(--c-e5ddd2) active:bg-(--c-d9d0c4) text-(--c-57534e) text-[11px] font-semibold py-2 rounded-lg transition-colors min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--c-78716c)"
                     >
                       View
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowRecommend(true) }}
-                      className="w-9 flex items-center justify-center bg-[#fff7ed] hover:bg-[#ffedd5] active:bg-[#fed7aa] text-[#f97316] rounded-lg transition-colors border border-[#fcd9a8] min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f97316]"
+                      className="w-9 flex items-center justify-center bg-(--c-fff7ed) hover:bg-(--c-ffedd5) active:bg-(--c-fed7aa) text-(--c-f97316) rounded-lg transition-colors border border-(--c-fcd9a8) min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--c-f97316)"
                       title="Recommend to a friend"
                     >
-                      <Star size={13} fill="#f97316" strokeWidth={0} />
+                      <Star size={13} fill="var(--c-f97316)" strokeWidth={0} />
                     </button>
                   </>
                 )}

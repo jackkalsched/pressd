@@ -13,9 +13,13 @@ import { ArrowRight } from 'lucide-react'
 import { Cover } from './covers'
 import CoverImg from './CoverImg'
 
+// Each tone's ink, wash and ring live in index.css (.spot-green, .spot-orange),
+// so they follow the theme. On the dark page the card is the raised surface
+// with a faint edge, the tone a glow from one corner, and the record's blurred
+// cover — stronger there — gives it its colour: mobile's dark SpotlightCard.
 const TONES = {
-  green: { ink: '#2d6a4f', wash: 'linear-gradient(115deg, #e6f0ea, #f6f4ef 70%)', ring: '#cfe0d6' },
-  orange: { ink: '#ea6c0a', wash: 'linear-gradient(115deg, #ffeedd, #f8f5f0 70%)', ring: '#fbd5b5' },
+  green: { ink: 'var(--spot-ink)', ring: 'var(--spot-ring)', className: 'spot-green' },
+  orange: { ink: 'var(--spot-ink)', ring: 'var(--spot-ring)', className: 'spot-orange' },
 } as const
 
 const RING = 58
@@ -63,8 +67,8 @@ export default function SpotlightCard({
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className="rise-in group relative w-full overflow-hidden rounded-[28px] text-left isolate transition-shadow duration-300 hover:shadow-[0_22px_44px_-26px_rgba(50,30,10,0.5)]"
-      style={{ background: t.wash, '--i': index } as CSSProperties}
+      className={`${t.className} spot-card rise-in group relative w-full overflow-hidden rounded-[28px] text-left isolate transition-shadow duration-300 hover:shadow-[0_22px_44px_-26px_rgba(50,30,10,0.5)]`}
+      style={{ '--i': index } as CSSProperties}
     >
       {/* The record's colour, as light rather than as a picture. Scaled past
           the edges so the blur has no hard border to fade against. */}
@@ -75,7 +79,7 @@ export default function SpotlightCard({
           displayPx={120}
           alt=""
           aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 h-full w-full scale-150 object-cover opacity-[0.22] blur-3xl saturate-150 transition-opacity duration-500 group-hover:opacity-[0.36]"
+          className="spot-glow pointer-events-none absolute inset-0 -z-10 h-full w-full scale-150 object-cover blur-3xl saturate-150 transition-opacity duration-500"
         />
       )}
 
@@ -85,7 +89,7 @@ export default function SpotlightCard({
             <Cover artUrl={artUrl} seed={seed} size={92} radius={18} />
           </div>
           {badge && (
-            <div className="absolute -bottom-1.5 -right-2 rounded-full ring-[3px] ring-white/90 transition-transform duration-300 ease-out group-hover:scale-[1.04]">
+            <div className="absolute -bottom-1.5 -right-2 rounded-full ring-[3px] ring-(--c-fff)/90 transition-transform duration-300 ease-out group-hover:scale-[1.04]">
               {badge}
             </div>
           )}
@@ -95,7 +99,7 @@ export default function SpotlightCard({
           <p className="m-0 mb-1 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.16em]" style={{ color: t.ink }}>
             {eyebrow}
           </p>
-          <p className="m-0 font-display text-[22px] font-bold leading-tight text-[#1c1917] truncate">{title}</p>
+          <p className="m-0 font-display text-[22px] font-bold leading-tight text-(--c-1c1917) truncate">{title}</p>
           {children}
         </div>
 

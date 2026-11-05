@@ -39,15 +39,15 @@ export default function TracklistLoader({
   const art = coverUrl ? (
     <CoverImg url={coverUrl} displayPx={compact ? 48 : 160} loading="eager" alt="" className={`${compact ? 'w-12 h-12 rounded-lg' : 'w-40 h-40 rounded-2xl'} object-cover shrink-0`} />
   ) : (
-    <div className={`${compact ? 'w-12 h-12 rounded-lg text-lg' : 'w-40 h-40 rounded-2xl text-5xl'} bg-[#e8e2d9] text-[#b0a090] shrink-0 flex items-center justify-center font-semibold`}>
+    <div className={`${compact ? 'w-12 h-12 rounded-lg text-lg' : 'w-40 h-40 rounded-2xl text-5xl'} bg-(--c-e8e2d9) text-(--c-b0a090) shrink-0 flex items-center justify-center font-semibold`}>
       {albumName[0]?.toUpperCase()}
     </div>
   )
 
   const bar = (
-    <div className={`${compact ? 'w-full' : 'w-64'} h-[5px] bg-[#efe9e0] rounded-full overflow-hidden`}>
+    <div className={`${compact ? 'w-full' : 'w-64'} h-[5px] bg-(--c-efe9e0) rounded-full overflow-hidden`}>
       <div
-        className="h-full bg-[#2d6a4f] rounded-full transition-[width] duration-[1600ms] ease-out"
+        className="h-full bg-(--c-green-fill) rounded-full transition-[width] duration-[1600ms] ease-out"
         style={{ width: `${width}%` }}
       />
     </div>
@@ -56,7 +56,7 @@ export default function TracklistLoader({
   // The dots sit in their own fixed-width slot so the label doesn't shuffle
   // left and right as they cycle.
   const label = (
-    <p className="text-[#78716c] text-[13px] font-medium">
+    <p className="text-(--c-78716c) text-[13px] font-medium">
       Loading tracklist<span className="inline-block w-4 text-left">{dots}</span>
     </p>
   )
@@ -67,8 +67,8 @@ export default function TracklistLoader({
         {art}
         <div className="flex-1 min-w-0 flex flex-col gap-2">
           <div className="min-w-0">
-            <p className="text-[#111] text-sm font-semibold truncate">{albumName}</p>
-            <p className="text-[#aaa] text-xs truncate">{artist}</p>
+            <p className="text-(--c-111) text-sm font-semibold truncate">{albumName}</p>
+            <p className="text-(--c-aaa) text-xs truncate">{artist}</p>
           </div>
           {bar}
           {label}
@@ -81,8 +81,8 @@ export default function TracklistLoader({
     <div className="flex flex-col items-center justify-center gap-5 py-10 text-center">
       {art}
       <div>
-        <p className="text-[#111] text-xl font-semibold">{albumName}</p>
-        <p className="text-[#78716c] text-sm mt-0.5">{artist}</p>
+        <p className="text-(--c-111) text-xl font-semibold">{albumName}</p>
+        <p className="text-(--c-78716c) text-sm mt-0.5">{artist}</p>
       </div>
       {bar}
       {label}

@@ -13,8 +13,8 @@ import { avatarColor } from '../lib/format'
 import Avatar from './Avatar'
 import CoverImg from './CoverImg'
 
-const GREEN = '#2d6a4f'
-const DOWN = '#c0392b'
+const GREEN = 'var(--c-2d6a4f)'
+const DOWN = 'var(--c-c0392b)'
 
 // The line runs 5–10: below 5 is rare enough that giving it half the width
 // would crowd everyone else into the right half. A lower score sits at the end.
@@ -36,7 +36,7 @@ function NumberLine({ raters }: { raters: CompareItem['raters'] }) {
         const left = `${pct(r.score)}%`
         // The tick keeps the name's colour even under a photo, so the mark stays
         // findable whether or not the picture reads at 26px.
-        const color = r.is_you ? '#111' : avatarColor(r.name || '?')
+        const color = r.is_you ? 'var(--c-111)' : avatarColor(r.name || '?')
         return (
           <div key={i} className="pointer-events-none" title={`${r.is_you ? 'You' : r.name} · ${r.score.toFixed(2)}`}>
             <div
@@ -52,11 +52,11 @@ function NumberLine({ raters }: { raters: CompareItem['raters'] }) {
                 zIndex: r.is_you ? 1 : undefined,
               }}
             >
-              <div className="rounded-full border-2 border-white" style={{ lineHeight: 0 }}>
+              <div className="rounded-full border-2 border-(--c-fff)" style={{ lineHeight: 0 }}>
                 {r.is_you && !r.avatar_url ? (
                   <div
                     className="rounded-full flex items-center justify-center text-white font-bold"
-                    style={{ width: 22, height: 22, background: '#111', fontSize: 10 }}
+                    style={{ width: 22, height: 22, background: 'var(--c-111)', fontSize: 10 }}
                   >
                     {(r.name || '?')[0].toUpperCase()}
                   </div>
@@ -68,7 +68,7 @@ function NumberLine({ raters }: { raters: CompareItem['raters'] }) {
           </div>
         )
       })}
-      <div className="absolute inset-x-0 flex justify-between text-[11px] text-[#aaa] tabular-nums" style={{ top: 50, marginInline: -4 }}>
+      <div className="absolute inset-x-0 flex justify-between text-[11px] text-(--c-aaa) tabular-nums" style={{ top: 50, marginInline: -4 }}>
         {[5, 6, 7, 8, 9, 10].map((n) => <span key={n}>{n}</span>)}
       </div>
     </div>
@@ -96,9 +96,9 @@ export default function CompareCard({ item }: { item: CompareItem }) {
     // touch screens (index.css), which have no hover to open it with.
     <div
       className="
-        group bg-white border border-[#e2e2e2] rounded-2xl p-5 self-start
+        group bg-(--c-fff) border border-(--c-e2e2e2) rounded-2xl p-5 self-start
         transition-[transform,box-shadow,border-color] duration-[180ms] ease-out will-change-transform
-        hover:border-[#c8c8c8] hover:-translate-y-[5px] hover:scale-[1.02]
+        hover:border-(--c-c8c8c8) hover:-translate-y-[5px] hover:scale-[1.02]
         hover:shadow-[0_14px_36px_-4px_rgba(50,30,10,0.14),0_4px_10px_-2px_rgba(50,30,10,0.08)]
         motion-reduce:transition-none motion-reduce:hover:transform-none motion-reduce:hover:shadow-none
       "
@@ -106,7 +106,7 @@ export default function CompareCard({ item }: { item: CompareItem }) {
       <div className="flex gap-4">
         <button
           onClick={openAlbum}
-          className="w-[72px] h-[72px] shrink-0 rounded-lg overflow-hidden bg-[#e8e8e8] flex items-center justify-center text-[#aaa]"
+          className="w-[72px] h-[72px] shrink-0 rounded-lg overflow-hidden bg-(--c-e8e8e8) flex items-center justify-center text-(--c-aaa)"
           aria-label={`View ${item.album_name}`}
         >
           {item.album_art_url
@@ -116,11 +116,11 @@ export default function CompareCard({ item }: { item: CompareItem }) {
         <div className="flex-1 min-w-0 pt-0.5">
           <button
             onClick={openAlbum}
-            className="block max-w-full text-left text-lg font-bold text-[#111] truncate hover:underline underline-offset-2"
+            className="block max-w-full text-left text-lg font-bold text-(--c-111) truncate hover:underline underline-offset-2"
           >
             {item.album_name}
           </button>
-          <p className="text-sm text-[#999] truncate">
+          <p className="text-sm text-(--c-999) truncate">
             {item.artist}{item.year ? ` · ${item.year}` : ''}
           </p>
           <p className="text-sm font-semibold mt-1.5" style={{ color: disagreement ? DOWN : GREEN }}>
@@ -133,21 +133,21 @@ export default function CompareCard({ item }: { item: CompareItem }) {
 
       <div className="card-action-row grid grid-rows-[0fr] group-hover:grid-rows-[1fr] group-focus-within:grid-rows-[1fr] transition-[grid-template-rows] duration-150 ease-out motion-reduce:transition-none">
         <div className="overflow-hidden min-h-0">
-          <div className="mt-2 divide-y divide-[#f3f3f3]">
+          <div className="mt-2 divide-y divide-(--c-f3f3f3)">
             {item.raters.map((r, i) => {
               const who = (
                 <>
                   {r.is_you && !r.avatar_url ? (
                     <div
                       className="rounded-full flex items-center justify-center text-white font-bold shrink-0"
-                      style={{ width: 28, height: 28, background: '#111', fontSize: 12 }}
+                      style={{ width: 28, height: 28, background: 'var(--c-111)', fontSize: 12 }}
                     >
                       {(r.name || '?')[0].toUpperCase()}
                     </div>
                   ) : (
                     <Avatar name={r.name} avatarUrl={r.avatar_url} size={28} />
                   )}
-                  <span className="text-sm font-semibold text-[#111] truncate">{r.is_you ? 'You' : r.name}</span>
+                  <span className="text-sm font-semibold text-(--c-111) truncate">{r.is_you ? 'You' : r.name}</span>
                 </>
               )
               return (
@@ -167,7 +167,7 @@ export default function CompareCard({ item }: { item: CompareItem }) {
                       {who}
                     </button>
                   )}
-                  <span className="flex-1 min-w-0 text-sm text-[#777] italic truncate">
+                  <span className="flex-1 min-w-0 text-sm text-(--c-777) italic truncate">
                     {r.review ? `“${r.review}”` : ''}
                   </span>
                   <span className="font-display text-base font-bold tabular-nums shrink-0" style={{ color: songScoreColor(r.score) }}>

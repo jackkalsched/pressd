@@ -17,6 +17,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Unbounded:wght@700&display=swap" rel="stylesheet" />
+    <!-- Light or dark before the first paint, so a dark page never flashes
+         cream: the same rule as src/lib/appearance.ts, which takes over after. -->
+    <script>
+      try {
+        var a = localStorage.getItem('pressd-appearance')
+        if (a === 'dark' || (a !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches))
+          document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

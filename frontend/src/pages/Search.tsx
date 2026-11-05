@@ -92,7 +92,7 @@ export default function Search() {
         <button
           onClick={handleBackfill}
           disabled={backfillState === 'loading'}
-          className="flex items-center gap-1.5 text-xs text-[#888] hover:text-[#e8e8e8] px-3 py-1.5 bg-[#1a1a1a] border border-[#2a2a2a] hover:border-[#444] rounded-lg transition-colors disabled:opacity-40"
+          className="flex items-center gap-1.5 text-xs text-(--c-888) hover:text-(--c-e8e8e8) px-3 py-1.5 bg-(--c-1a1a1a) border border-(--c-2a2a2a) hover:border-(--c-444) rounded-lg transition-colors disabled:opacity-40"
         >
           {backfillState === 'loading'
             ? <Loader2 size={12} className="animate-spin" />
@@ -103,27 +103,27 @@ export default function Search() {
 
       <div className="flex gap-3 mb-8">
         <div className="flex-1 relative">
-          <SearchIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
+          <SearchIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--c-555)" />
           <input
             type="text"
             placeholder="Album name or artist…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            className="w-full bg-[#1a1a1a] border border-[#2a2a2a] text-[#e8e8e8] text-sm pl-9 pr-4 py-2.5 rounded-lg focus:outline-none focus:border-[#c8a84b] transition-colors placeholder:text-[#444]"
+            className="w-full bg-(--c-1a1a1a) border border-(--c-2a2a2a) text-(--c-e8e8e8) text-sm pl-9 pr-4 py-2.5 rounded-lg focus:outline-none focus:border-(--c-c8a84b) transition-colors placeholder:text-(--c-444)"
           />
         </div>
         <button
           onClick={handleSearch}
           disabled={searching}
-          className="bg-[#c8a84b] hover:bg-[#d4b45e] disabled:opacity-50 text-black text-sm font-semibold px-5 rounded-lg transition-colors"
+          className="bg-(--c-c8a84b) hover:bg-(--c-d4b45e) disabled:opacity-50 text-black text-sm font-semibold px-5 rounded-lg transition-colors"
         >
           Search
         </button>
       </div>
 
       {searching && (
-        <div className="flex flex-col items-center gap-1.5 text-[#888] text-sm py-8">
+        <div className="flex flex-col items-center gap-1.5 text-(--c-888) text-sm py-8">
           <div className="flex items-center gap-2">
             <Loader2 size={16} className="animate-spin" />
             Searching iTunes, Deezer & MusicBrainz…
@@ -133,7 +133,7 @@ export default function Search() {
 
       {error && !searching && (
         <div className="text-center py-12">
-          <p className="text-[#888] text-sm">{error}</p>
+          <p className="text-(--c-888) text-sm">{error}</p>
         </div>
       )}
 
@@ -147,30 +147,30 @@ export default function Search() {
             return (
               <div
                 key={key}
-                className="flex items-center gap-4 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4"
+                className="flex items-center gap-4 bg-(--c-1a1a1a) border border-(--c-2a2a2a) rounded-xl p-4"
               >
-                <div className="w-14 h-14 shrink-0 bg-[#252525] rounded-lg overflow-hidden flex items-center justify-center text-[#444] text-xl font-bold">
+                <div className="w-14 h-14 shrink-0 bg-(--c-252525) rounded-lg overflow-hidden flex items-center justify-center text-(--c-444) text-xl font-bold">
                   {result.cover_url
                     ? <img src={result.cover_url} alt={result.album_name} className="w-full h-full object-cover" />
                     : result.album_name[0]}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[#e8e8e8] text-sm font-medium truncate">{result.album_name}</p>
-                  <p className="text-[#888] text-xs mt-0.5">{result.artist}{result.year ? ` · ${result.year}` : ''}</p>
-                  <p className="text-[#555] text-xs mt-0.5">
+                  <p className="text-(--c-e8e8e8) text-sm font-medium truncate">{result.album_name}</p>
+                  <p className="text-(--c-888) text-xs mt-0.5">{result.artist}{result.year ? ` · ${result.year}` : ''}</p>
+                  <p className="text-(--c-555) text-xs mt-0.5">
                     {result.total_tracks ? `${result.total_tracks} tracks` : result.source}
                   </p>
                 </div>
                 <div className="flex gap-2 shrink-0">
                   {state.add === 'done' ? (
-                    <span className="flex items-center gap-1.5 text-xs text-[#4caf6e] px-3 py-1.5">
+                    <span className="flex items-center gap-1.5 text-xs text-(--c-4caf6e) px-3 py-1.5">
                       <Check size={13} /> Added
                     </span>
                   ) : (
                     <button
                       onClick={() => handleAdd(result)}
                       disabled={busy}
-                      className="flex items-center gap-1.5 text-xs text-[#888] hover:text-[#e8e8e8] px-3 py-1.5 bg-[#252525] hover:bg-[#2f2f2f] rounded-lg transition-colors disabled:opacity-40"
+                      className="flex items-center gap-1.5 text-xs text-(--c-888) hover:text-(--c-e8e8e8) px-3 py-1.5 bg-(--c-252525) hover:bg-(--c-2f2f2f) rounded-lg transition-colors disabled:opacity-40"
                     >
                       {state.add === 'loading'
                         ? <Loader2 size={13} className="animate-spin" />
@@ -181,7 +181,7 @@ export default function Search() {
                   <button
                     onClick={() => handleRate(result)}
                     disabled={busy}
-                    className="flex items-center gap-1.5 text-xs text-[#c8a84b] font-medium px-3 py-1.5 bg-[#c8a84b]/10 hover:bg-[#c8a84b]/20 rounded-lg transition-colors disabled:opacity-40"
+                    className="flex items-center gap-1.5 text-xs text-(--c-c8a84b) font-medium px-3 py-1.5 bg-(--c-c8a84b)/10 hover:bg-(--c-c8a84b)/20 rounded-lg transition-colors disabled:opacity-40"
                   >
                     {state.rate === 'loading'
                       ? <Loader2 size={13} className="animate-spin" />

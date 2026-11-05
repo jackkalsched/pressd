@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderColor: colors.border,
   },
   factorRowLast: { borderBottomWidth: 0 },
   factorLabel: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink },

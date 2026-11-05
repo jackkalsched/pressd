@@ -28,26 +28,26 @@ import { songScoreColor } from '../types'
 import { Cover, COVER_LIFT } from './covers'
 import { threadPath } from '../lib/threads'
 
-const SECTION_LABEL = 'text-[11px] font-semibold uppercase tracking-[0.16em] text-[#a8998a] m-0'
+const SECTION_LABEL = 'text-[11px] font-semibold uppercase tracking-[0.16em] text-(--c-a8998a) m-0'
 
-const GREEN = '#2d6a4f'
-const RED = '#c0392b'
+const GREEN = 'var(--c-2d6a4f)'
+const RED = 'var(--c-c0392b)'
 
 const VERDICTS: Record<HeatedMood, { label: string; icon: LucideIcon; ink: string; glow: string; pill: string }> = {
   // A room that can't agree is the better story than where its average lands,
   // so divided wins when a record is also loved or hated. Its pill and glow run
   // red into green — the record looks pulled both ways.
   divided: {
-    label: 'Divided', icon: Swords, ink: '#a8482f',
+    label: 'Divided', icon: Swords, ink: 'var(--c-a8482f)',
     glow: `linear-gradient(90deg, ${RED}, #d9a03b, ${GREEN})`,
     pill: `linear-gradient(90deg, ${RED}, #c47a2c 50%, ${GREEN})`,
   },
   // The rest are the room's face, by its mean: laughing ≥ 8, smiling ≥ 7.25,
   // meh ≥ 6.5, angry below (discover.py, _mood).
   loved: { label: 'Loved', icon: Laugh, ink: GREEN, glow: `linear-gradient(90deg, #3f8a63, ${GREEN})`, pill: GREEN },
-  liked: { label: 'Liked', icon: Smile, ink: '#4f7f3a', glow: 'linear-gradient(90deg, #8fbf6a, #6a9a45)', pill: '#5f8f42' },
+  liked: { label: 'Liked', icon: Smile, ink: 'var(--c-4f7f3a)', glow: 'linear-gradient(90deg, #8fbf6a, #6a9a45)', pill: 'var(--c-5f8f42)' },
   hated: { label: 'Hated', icon: Angry, ink: RED, glow: `linear-gradient(90deg, ${RED}, #a8482f)`, pill: RED },
-  lukewarm: { label: 'Lukewarm', icon: Meh, ink: '#9a7b2f', glow: 'linear-gradient(90deg, #d9b25b, #c9a24a)', pill: '#b08a2e' },
+  lukewarm: { label: 'Lukewarm', icon: Meh, ink: 'var(--c-9a7b2f)', glow: 'linear-gradient(90deg, #d9b25b, #c9a24a)', pill: 'var(--c-b08a2e)' },
 }
 
 /** The server decides (the shared client covers a backend without `mood`). */
@@ -68,7 +68,7 @@ export default function HeatedDiscussions() {
     <section className="mb-9">
       <div className="flex items-baseline justify-between mb-4 gap-3.5">
         <h2 className={SECTION_LABEL}>Heated discussions</h2>
-        <span className="text-[11px] text-[#b3a99c]">Right now</span>
+        <span className="text-[11px] text-(--c-b3a99c)">Right now</span>
       </div>
       {/* The page pads its content, so the rail bleeds back out and re-pads
           itself — cards run off the edge rather than stopping short.
@@ -122,19 +122,19 @@ function Card({ record: r, index }: { record: HeatedRecord; index: number }) {
             <Icon size={18} strokeWidth={2.4} />
           </span>
           {r.isNew && (
-            <span className="absolute right-2 top-2 rounded-full bg-[#1c1917] px-2 py-[3px] text-[9.5px] font-bold tracking-[0.08em] text-white">
+            <span className="absolute right-2 top-2 rounded-full bg-(--c-1c1917) px-2 py-[3px] text-[9.5px] font-bold tracking-[0.08em] text-(--c-fff)">
               NEW
             </span>
           )}
         </div>
       </div>
 
-      <p className="m-0 mt-3.5 text-[14px] font-bold text-[#1c1917] truncate">{r.albumName}</p>
-      <p className="m-0 mt-0.5 text-[12px] text-[#8a7f72] truncate">{r.artist ?? ''}</p>
+      <p className="m-0 mt-3.5 text-[14px] font-bold text-(--c-1c1917) truncate">{r.albumName}</p>
+      <p className="m-0 mt-0.5 text-[12px] text-(--c-8a7f72) truncate">{r.artist ?? ''}</p>
 
       {r.meanScore != null && <RoomMeter mean={r.meanScore} spread={r.spread} index={index} />}
 
-      <div className="mt-2 flex items-center gap-2 text-[11px] font-medium text-[#a8998a] tabular-nums">
+      <div className="mt-2 flex items-center gap-2 text-[11px] font-medium text-(--c-a8998a) tabular-nums">
         {r.recentReviews > 0 && (
           // Live: reviews landed in the last few days.
           <span className="flex items-center gap-1.5 font-semibold" style={{ color: v.ink }}>
@@ -166,7 +166,7 @@ function RoomMeter({ mean, spread, index }: { mean: number; spread: number; inde
   return (
     <div className="mt-2.5 flex items-center gap-2.5">
       <div className="relative h-2.5 flex-1">
-        <div className="absolute inset-0 rounded-full bg-[#ece6dc]" />
+        <div className="absolute inset-0 rounded-full bg-(--c-ece6dc)" />
         <div
           className="grow-x absolute inset-y-0 rounded-full transition-[filter] duration-300 group-hover:brightness-110"
           style={{
@@ -179,7 +179,7 @@ function RoomMeter({ mean, spread, index }: { mean: number; spread: number; inde
           } as CSSProperties}
         />
         <div
-          className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] bg-white transition-transform duration-300 ease-out group-hover:scale-110"
+          className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] bg-(--c-fff) transition-transform duration-300 ease-out group-hover:scale-110"
           style={{ left: `${pos(mean)}%`, borderColor: songScoreColor(mean), boxShadow: `0 0 8px 1px ${songScoreColor(mean)}` }}
         />
       </div>

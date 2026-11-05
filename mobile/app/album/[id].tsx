@@ -1759,7 +1759,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   // Separators sit between tracks only — none against the header, none trailing.
-  cmpTrackDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  cmpTrackDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   cmpTrackNum: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, width: 18 },
   cmpTrackTitle: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.ink },
   cmpTrackScore: { fontFamily: fonts.bodyBold, fontSize: 15, width: 40, textAlign: 'right' },
@@ -2005,7 +2005,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderColor: colors.border,
   },
   trackMain: { flex: 1, minWidth: 0 },
   trackTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
@@ -2026,7 +2026,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderColor: colors.border,
   },
   reviewSheetTitle: {
     flex: 1,
