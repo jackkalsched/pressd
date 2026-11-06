@@ -15,6 +15,7 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends
 from PIL import Image
 from sqlmodel import Session, select
+from sqlalchemy import func
 
 from ..database import engine, get_session
 from ..deps import current_user
@@ -297,32 +298,13 @@ def download_models():
 
 
 @router.post("/backfill-covers")
-async def backfill_covers(session: Session = Depends(get_session)):
-    """Fetch missing album art from MusicBrainz Cover Art Archive for all albums."""
-    albums = session.exec(select(Album)).all()
-    updated = 0
-    skipped = 0
-    failed = 0
-
-    async with httpx.AsyncClient(timeout=10, headers=MB_HEADERS) as client:
-        for album in albums:
-            if album.album_art_url:
-                skipped += 1
-                continue
-            try:
-                await asyncio.sleep(0.35)  # respect MB rate limit
-                url = await _fetch_cover_url(client, album.album_name, album.artist)
-                if url:
-                    album.album_art_url = url
-                    session.add(album)
-                    session.commit()
-                    session.refresh(album)
-                    updated += 1
-                else:
-                    failed += 1
-            except Exception:
-                failed += 1
-    return {"updated": updated, "skipped": skipped, "failed": failed}
+def backfill_covers(session: Session = Depends(get_session)):
+    """Look for a cover for every copy without one (backend/covers.py)."""
+    from .. import covers
+    albums = covers.coverless(session)
+    result = covers.fill(session, albums)
+    total = session.exec(select(func.count()).select_from(Album)).one()
+    return {"updated": result["updated"], "skipped": total - len(albums), "failed": result["missing"]}
 
 
 # ── Bulk audio analysis ───────────────────────────────────────────────────────

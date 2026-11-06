@@ -1,0 +1,33 @@
+name: Fill covers
+
+# Looks again for a cover for every album copy saved without one
+# (worker/fill_covers.py, backend/covers.py). A record added on its release day
+# often has no art in any catalog yet; this picks it up once one publishes it.
+
+on:
+  schedule:
+    - cron: "40 11 * * *" # daily, 03:40 PT
+  workflow_dispatch:
+
+concurrency:
+  group: fill-covers
+  cancel-in-progress: false
+
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements-worker.txt
+
+      - name: Fill in missing album covers
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m worker.fill_covers

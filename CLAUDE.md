@@ -135,6 +135,7 @@ python -m worker.nightly_predict             # all eligible users
 python -m worker.nightly_predict --user 1 --skip-llm --force
 python -m worker.catalog_predict --dry-run
 python song_score_model.py                   # retrain → song_score_model.pkl
+python -m worker.fill_covers [--dry-run]    # look again for every album copy with no cover (also daily in CI, fill-covers.yml)
 python -m worker.taste_evaluate --out PATH   # taste overlap: factorization vs layered baseline on held-out
                                              # song scores; reads production only; names users, keep it local
                                              # (--pairs 1:84,1:12: eye-test pairs by user id; default user 1's)
@@ -1561,6 +1562,13 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   Web draws covers with `CoverImg` (and `covers.tsx`'s `Cover`), mobile with
   `CoverImage`; a new cover goes through one of them, not a bare `<img>`/`Image`. The
   share card is the exception — it rasterises the stored full-size image. Stored
+  A copy saved without a cover is looked for again (`backend/covers.py`, November 2026):
+  another copy of the record, then Deezer, iTunes and MusicBrainz + the Archive, each hit
+  checked with `same_album` — in the background right after the import, daily by
+  `worker/fill_covers.py` (`.github/workflows/fill-covers.yml`, 03:40 PT), and by `POST /albums/enrich-covers`
+  on web's Library. A release-day import is the usual case: *Dream Fatigue* was on
+  MusicBrainz with no art anywhere, and the Archive knew its cover before it could serve
+  it (a 500 on the image), so the Archive check GETs the image and keeps only a real one.
   Archive covers are the `_thumb500` copy: until October 2026 the backfill stored the
   uploaded original (643 albums, 0.3–11 MB each), rewritten once to the thumbnail,
   and both writers (`util.py` backfill,

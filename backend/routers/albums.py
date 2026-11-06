@@ -1,5 +1,6 @@
 import json
 import re
+import threading
 from collections import defaultdict
 from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -624,11 +625,30 @@ def import_album(
         _queue_genre_tagging(album.id, album.artist, album.album_name, album.year,
                              genre_qualifier(data.get("genre")))
 
+    if not album.album_art_url:
+        _queue_cover_fill(album.id)
+
     return {
         **album.model_dump(),
         "songs": [s.model_dump() for s in album.songs],
         "already_existed": False,
     }
+
+
+def _queue_cover_fill(album_id: int) -> None:
+    """Look for a cover in the background when the picked result had none
+    (backend/covers.py). The daily worker keeps looking if this finds nothing."""
+    def _run():
+        try:
+            from ..database import engine
+            from .. import covers
+            with Session(engine) as s:
+                album = s.get(Album, album_id)
+                if album and not album.album_art_url:
+                    print(f"[covers] album {album_id}: {covers.fill(s, [album])}")
+        except Exception as e:
+            print(f"[covers] album {album_id} failed: {type(e).__name__}: {e}")
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def _parse_release_date(v) -> date | None:
@@ -1418,65 +1438,11 @@ def enrich_covers(
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
-    """Fill in missing album_art_url values by searching iTunes."""
-    import requests as _requests
-
-    albums = session.exec(
-        select(Album)
-        .where(Album.user_id == user.id)
-        .where(Album.album_art_url.is_(None))
-    ).all()
-
-    def _norm(s: str | None) -> str:
-        return re.sub(r"[^a-z0-9]", "", (s or "").lower())
-
-    def _itunes_search(term: str, norm_name: str, norm_artists: list[str]) -> str | None:
-        resp = _requests.get(
-            "https://itunes.apple.com/search",
-            params={"term": term, "entity": "album", "limit": 5},
-            timeout=6,
-        )
-        results = resp.json().get("results", [])
-        # Title AND artist must both match — a same-titled album by a different
-        # artist is worse than no art at all. Artist compares as a substring in
-        # either direction so combined credits ("Bruno Mars, Anderson .Paak &
-        # Silk Sonic") still match. No fall-back-to-first-result.
-        for r in results:
-            if _norm(r.get("collectionName")) != norm_name:
-                continue
-            r_artist = _norm(r.get("artistName"))
-            if any(na and (na in r_artist or r_artist in na) for na in norm_artists):
-                raw = r.get("artworkUrl100", "")
-                return raw.replace("100x100bb", "600x600bb") if raw else None
-        return None
-
-    updated = 0
-    for album in albums:
-        try:
-            norm_name = _norm(album.album_name)
-            norm_artists = [_norm(album.artist)]
-            if album.extra_artists:
-                try:
-                    norm_artists += [_norm(a) for a in json.loads(album.extra_artists)]
-                except (json.JSONDecodeError, TypeError):
-                    pass
-            # Pass 1: album + artist (handles most cases)
-            url = _itunes_search(f"{album.album_name} {album.artist}", norm_name, norm_artists)
-            # Pass 2: album name only (handles multi-artist credits like Silk
-            # Sonic, where the credited artist breaks the search term but the
-            # artist check above still verifies the result)
-            if not url:
-                url = _itunes_search(album.album_name, norm_name, norm_artists)
-            if url:
-                album.album_art_url = url
-                session.add(album)
-                updated += 1
-        except Exception:
-            continue
-
-    if updated:
-        session.commit()
-    return {"updated": updated, "total_missing": len(albums)}
+    """Look again for covers the caller's copies are missing (backend/covers.py)."""
+    from .. import covers
+    albums = covers.coverless(session, user.id)
+    result = covers.fill(session, albums)
+    return {"updated": result["updated"], "total_missing": len(albums)}
 
 
 @router.delete("/{album_id}")
