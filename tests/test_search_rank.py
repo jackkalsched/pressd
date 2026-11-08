@@ -49,3 +49,9 @@ def test_people_friends_first():
     rows = [{"id": 1, "name": "jackk", "already_friends": False, "request_sent": False, "request_received": False},
             {"id": 2, "name": "jack", "already_friends": True, "request_sent": False, "request_received": False}]
     assert [r["id"] for r in people_group("jack", rows, limit=4)] == [2, 1]
+
+def test_unlinked_songs_are_left_out():
+    s = lambda tid, aid: N(track_id=tid, title="Nights", album_id=aid, album_name="Blonde",
+        artist="Frank Ocean", subject_key="frank ocean||blonde", user_id=1, status="rated")
+    rows = songs_group("nights", [s(None, 10), s(None, 11), s(7, 12)], me=1, limit=4)
+    assert [r["track_id"] for r in rows] == [7]

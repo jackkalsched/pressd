@@ -139,7 +139,9 @@ def songs_group(q, cands, me, limit) -> list[dict]:
     qualifying = {c.subject_key for c in cands if c.status == "rated" or c.user_id == me}
     by_track: dict[int, list] = {}
     for c in cands:
-        if c.subject_key in qualifying:
+        # An unlinked song has no recording identity; grouping them would merge
+        # every one into a single row.
+        if c.subject_key in qualifying and c.track_id is not None:
             by_track.setdefault(c.track_id, []).append(c)
     rows = []
     for track_id, copies in by_track.items():
