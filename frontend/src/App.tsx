@@ -26,6 +26,7 @@ import Tutorial from './pages/Tutorial'
 import Username from './pages/Username'
 import TagBoard from './pages/TagBoard'
 import CommunityAlbum from './pages/CommunityAlbum'
+import GlobalSearch from './pages/GlobalSearch'
 
 function PublicHome() {
   const { activeUser } = useUser()
@@ -82,6 +83,7 @@ function ProtectedRoutes() {
       <Routes>
         <Route path="/" element={<Navigate to="/for-you" replace />} />
         <Route path="/for-you" element={<ForYou />} />
+        <Route path="/search" element={<GlobalSearch />} />
         <Route path="/library" element={<Library />} />
         <Route path="/ratings" element={<Ratings />} />
         <Route path="/stats" element={<Stats />} />

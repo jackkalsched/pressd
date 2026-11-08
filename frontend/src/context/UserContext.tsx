@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { addPhone, fetchMe, markTutorialSeen, removePhone, skipPhonePrompt } from '../api'
+import { recentKey } from '@pressd/shared/recentSearches'
 
 export interface UserInfo {
   id: number
@@ -113,6 +114,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   function signOut() {
     try { localStorage.removeItem('pressd_token') } catch { /* ignore */ }
+    // This account's recent searches, so a shared browser doesn't show them to the next.
+    if (activeUser) {
+      try { localStorage.removeItem(recentKey(activeUser.id)) } catch { /* ignore */ }
+    }
     setActiveUserState(null)
     setViewingUser(null)
   }

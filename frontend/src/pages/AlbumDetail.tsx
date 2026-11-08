@@ -36,6 +36,7 @@ import { Cover } from '../components/covers'
 import {
   BangSkip, CoverWash, DANGER, GREEN, PILL, PILL_ACTIVE, RECOMMEND, RevealRow, SECTION_LABEL, StatFigure,
 } from '../components/albumView'
+import { useTrackHighlight, trackParam } from '../lib/trackHighlight'
 import { stagger } from '../lib/format'
 import VinylSpinner from '../components/VinylSpinner'
 
@@ -188,6 +189,9 @@ export default function AlbumDetail() {
   const canCompareThem = !!album && !isOwn && album.status === 'rated' && album.score != null
     && yourCopy?.status === 'rated' && yourCopy.score != null
   const comparing = canCompareThem && params.get('view') === 'compare'
+  // A song from search: lit only on your own rated copy (§1: the first pass
+  // stays in order, so an unfinished copy opens with no jump).
+  const litTrack = useTrackHighlight(trackParam(params), isOwn && album?.status === 'rated' && !comparing)
 
   const { data: yourAlbum } = useQuery({
     queryKey: ['album', yourCopy?.id],
@@ -550,7 +554,10 @@ export default function AlbumDetail() {
                 const top = topSong != null && song.id === topSong.id && song.score != null
                 return (
                   <RevealRow key={song.id} index={i}>
-                    <div className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-(--c-f2eee7) ${top ? 'bg-(--c-2d6a4f)/[0.07]' : ''}`}>
+                    <div
+                      data-track-id={song.trackId ?? undefined}
+                      className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-(--c-f2eee7) ${top ? 'bg-(--c-2d6a4f)/[0.07]' : ''} ${litTrack != null && song.trackId === litTrack ? 'flash' : ''}`}
+                    >
                       <span className="w-6 shrink-0 text-right text-[12.5px] text-(--c-b5aa9c) tabular-nums">{song.trackNumber}</span>
                       <span className={`min-w-0 flex-1 truncate text-[14.5px] text-(--c-1c1917) ${top ? 'font-semibold' : ''}`}>
                         {song.title}

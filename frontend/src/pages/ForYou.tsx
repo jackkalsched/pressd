@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play } from 'lucide-react'
+import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Search } from 'lucide-react'
 import { fetchAlbum, fetchAlbums, fetchFeed, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion } from '../api'
 import type { NewRelease, PredictedPick, RecommendSuggestion, TopReview } from '../api'
 import { MIN_RATED_ALBUMS, songScoreColor } from '../types'
@@ -120,7 +120,6 @@ export default function ForYou() {
 
   // ── derived ──
   const now = new Date()
-  const dateStr = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
   const hour = now.getHours()
   // Reads as one sentence with the name: "Good afternoon jack." The late-night
   // one takes a comma, since "Up late jack" isn't a greeting.
@@ -300,12 +299,22 @@ export default function ForYou() {
         <div className="flex-1 min-w-0">
 
           {/* header */}
-          <header className="mb-7">
-            <p className="m-0 mb-1.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-(--c-a8998a)">{dateStr}</p>
-            <h1 className="m-0 text-[40px] leading-none font-black tracking-[0.01em]" style={{ fontFamily: "'Playfair Display', serif" }}>For You</h1>
-            <p className="mt-2.5 text-[15px] text-(--c-8a7f72)">
-              {greeting}{firstName ? `${greetingJoin}${firstName}` : ''}. Here&rsquo;s what&rsquo;s moving on Pressd this week.
-            </p>
+          <header className="mb-7 flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="m-0 text-[40px] leading-none font-black tracking-[0.01em]" style={{ fontFamily: "'Playfair Display', serif" }}>For You</h1>
+              <p className="mt-2.5 text-[15px] text-(--c-8a7f72)">
+                {greeting}{firstName ? `${greetingJoin}${firstName}` : ''}. Here&rsquo;s what&rsquo;s moving on Pressd this week.
+              </p>
+            </div>
+            {/* Bare: no circle or fill behind it (Jack). The padding is the hit area. */}
+            <Link
+              to="/search"
+              aria-label="Search Pressd"
+              title="Search Pressd"
+              className="-m-2 shrink-0 p-2 text-(--c-1c1917) transition-colors hover:text-(--c-2d6a4f)"
+            >
+              <Search size={24} strokeWidth={2.2} />
+            </Link>
           </header>
 
           {/* first-run CTA when the account is empty */}

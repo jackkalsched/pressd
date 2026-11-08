@@ -559,6 +559,25 @@ Before typing, the last `RECENT_MAX` (8) tapped results, kept in the Keychain un
 `track` param (a track id): once the row lays out it scrolls into the upper third and a
 green wash fades over 1.5 s — own copy only when rated, community view by `track_id`.
 
+**Search on the web** (`frontend/src/pages/GlobalSearch.tsx` at `/search`, November 2026)
+— iPhone's screen, laid out wide. For You's header has the same bare `Search` icon at its
+top right, where the date was (no circle or fill behind it). The field runs across the top,
+autofocused; **Esc** or Cancel goes back (`/for-you` with no history); ↑/↓ move a highlight
+through the visible rows, in reading order, and Enter opens it. People, Albums, Artists and
+Songs sit as four columns at `lg` (two at `md`, one below), From the catalogs full width
+under them. The behaviour is mobile's line for line: the debounce, four per group with See
+all / Show less, the catalog check by name|artist (only unchecked hits asked, an unchecked
+hit hidden, shown if the check fails), the "Nothing on Pressd matches" line and the error
+only once the current query has answered (`!isPlaceholderData`), the same taps (a person
+`/u/{id}`, an artist `/artist/{name}?mode=pressd`), and rows in Add an album's type
+(`AddAlbumModal`'s `text-sm font-medium` / `text-xs`). A catalog row opens the record's
+community page by name; its Rate now / Add buttons resolve and import as Add an album does
+(rate → `/rate/{id}`). Recents live in `localStorage` under `recentKey(user id)`, read
+synchronously so a tap can't be overwritten by the read; `UserContext.signOut` removes the
+item. `AlbumDetail` (your copy, only when rated) and `CommunityAlbum` read `?track=` through
+`lib/trackHighlight.ts`: the row with that `data-track-id` scrolls to the middle and plays
+`flash` once. The orphan `pages/Search.tsx` is a different, older page.
+
 **`backend/routers/albums.py`** (1,335) — the largest router. `import_album` (`:398`)
 dedups, inserts, then `_link_tracks` resolves global track ids through
 `tracklink.link_album` (recording identity, above). `GET /albums/{id}` also returns
@@ -1435,7 +1454,8 @@ for editing a review later, and both paths post into the thread through
    [TagBoard.tsx](frontend/src/pages/TagBoard.tsx) at `/stats/:kind/:tag?user=&owner=`
    over `fetchTagRecords` — mobile's `app/genre/[tag].tsx`, plus each record's rank in
    the whole library. Bang vs skip and most-rated artists came across with it.
-6. **Artist page.** Closed but for the photo (`fetchArtistImage` is mobile-only), October
+6. **Artist page.** Closed but for the photo on the page itself (web calls `fetchArtistImage`
+   only for search's artist rows), October
    2026. Web has mobile's three scopes, as pills and `?mode=` in the URL: *mine*, *Pressd
    avg* (`population=global`: every copy pooled, ranked site-wide, with the popularity
    ranks) and *Compare* (`both`: the two song averages side by side, *Where you split*,

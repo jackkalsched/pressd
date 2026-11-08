@@ -39,6 +39,7 @@ import { useUser } from '../context/UserContext'
 import CoverImg from '../components/CoverImg'
 import { BangSkip, CompareScores, CoverWash, DANGER, GREEN, PILL, RECOMMEND, RevealRow, SECTION_LABEL, StatFigure } from '../components/albumView'
 import { stagger } from '../lib/format'
+import { trackParam, useTrackHighlight } from '../lib/trackHighlight'
 import VinylSpinner from '../components/VinylSpinner'
 
 export default function CommunityAlbum() {
@@ -74,6 +75,8 @@ export default function CommunityAlbum() {
   const [busy, setBusy] = useState<'rate' | 'queue' | 'delete' | null>(null)
   const [queued, setQueued] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // A song from search: scrolled to and lit once the tracklist is on screen.
+  const litTrack = useTrackHighlight(trackParam(params), !!data && data.tracks.length > 0)
 
   function leave() {
     if (window.history.state?.idx > 0) navigate(-1)
@@ -251,10 +254,11 @@ export default function CommunityAlbum() {
           {/* ── The room ───────────────────────────────────────────── */}
           <main className="min-w-0">
             {comparing && canCompare && shown.you ? (
-              <CompareView data={shown} />
+              <CompareView data={shown} litTrack={litTrack} />
             ) : (
               <AveragedView
                 data={shown}
+                litTrack={litTrack}
                 notRated={notRated}
                 inLibrary={inLibrary}
                 noOneElse={noOneElse}
@@ -275,9 +279,10 @@ export default function CommunityAlbum() {
 // ── The averaged view ─────────────────────────────────────────────────────────
 
 function AveragedView({
-  data, notRated, inLibrary, noOneElse, busy, queued, onRate, onQueue,
+  data, litTrack, notRated, inLibrary, noOneElse, busy, queued, onRate, onQueue,
 }: {
   data: CommunityAlbumData
+  litTrack: number | null
   notRated: boolean
   inLibrary: boolean
   noOneElse: boolean
@@ -415,7 +420,10 @@ function AveragedView({
       <ol className="m-0 -mx-4 list-none p-0">
         {data.tracks.map((t, i) => (
           <RevealRow key={`${t.title}-${i}`} index={i}>
-            <div className="flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-(--c-f2eee7)">
+            <div
+              data-track-id={t.track_id ?? undefined}
+              className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-(--c-f2eee7) ${litTrack != null && t.track_id === litTrack ? 'flash' : ''}`}
+            >
               <span className="w-6 shrink-0 text-right text-[12.5px] text-(--c-b5aa9c) tabular-nums">{t.track_number}</span>
               <span className="min-w-0 flex-1 truncate text-[14.5px] text-(--c-1c1917)">{t.title}</span>
               <BangSkip score={t.avg_score} />
@@ -444,7 +452,7 @@ function AveragedView({
  *  average includes your own copy, and a panel headed "Pressd users | You"
  *  would otherwise count you on both sides — on a two-rater record that halves
  *  every gap. The lower score sits on the left, as on mobile. */
-function CompareView({ data }: { data: CommunityAlbumData }) {
+function CompareView({ data, litTrack }: { data: CommunityAlbumData; litTrack: number | null }) {
   const you = data.you!
   const avgScore = data.others_avg_score ?? data.avg_score!
   const cmpRaters = data.others_rater_count || data.rater_count
@@ -502,7 +510,10 @@ function CompareView({ data }: { data: CommunityAlbumData }) {
           const isWidest = widest != null && widest.gap > 0 && t.title === widest.title
           return (
             <RevealRow key={`${t.title}-${i}`} index={i}>
-              <div className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-(--c-f2eee7) ${isWidest ? 'bg-(--c-2d6a4f)/[0.07]' : ''}`}>
+              <div
+                data-track-id={t.track_id ?? undefined}
+                className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-(--c-f2eee7) ${isWidest ? 'bg-(--c-2d6a4f)/[0.07]' : ''} ${litTrack != null && t.track_id === litTrack ? 'flash' : ''}`}
+              >
                 <span className="w-6 shrink-0 text-right text-[12.5px] text-(--c-b5aa9c) tabular-nums">{t.track_number}</span>
                 <span className={`min-w-0 flex-1 truncate text-[14.5px] ${isWidest ? 'font-semibold text-(--c-1c1917)' : 'text-(--c-1c1917)'}`}>{t.title}</span>
                 <span className="font-display w-12 text-right text-[16px] font-bold tabular-nums" style={{ color: left.color }}>
