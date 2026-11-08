@@ -82,7 +82,7 @@ PLAN_*.md         gitignored design docs; code cites them by section
 | `backend/routers/` | 16 routers, **121 endpoints** | 8,357 |
 | `worker/` | `nightly_predict`, `catalog_predict`, `artist_clusters`, `audio_ingest`, `refresh_new_releases`, `taste_nightly`, `taste_health`, … | 3,449 |
 | `theme_predictor/` | `predict_single`, `personalize`, `global_factors`, `corpus`, … | 1,896 |
-| `shared/src/api.ts` | the single API client, 108 exported functions | 2,147 |
+| `shared/src/api.ts` | the single API client, 111 exported functions | 2,147 |
 | `frontend/src/` | 22 pages, 35 components, 8 lib modules | 16,566 |
 | `mobile/` | 20 routes, 38 components, 22 lib modules | 21,555 |
 
@@ -546,7 +546,7 @@ field focused, **Cancel** back. From two characters (200 ms debounce) it asks
 `useAlbumSearch`'s hits minus every one `searchKnown` says Pressd has, held back until
 that check answers (a small spinner in the heading meanwhile). Each group shows four;
 **See all** re-asks that one group (`searchAll(q, group)`) in place, **Show less** puts it
-back. Every row uses Add an album's row type (Plus Jakarta, no Playfair); albums and songs
+back. Every row uses Add an album's row type (Plus Jakarta, no Playfair italic; scores in Playfair); albums and songs
 show the cover, artists their photo (`['artist-image', name]`, the artist page's cache),
 people their avatar. An album shows your score, Listening / To Listen, or the PRESSD AVG,
 to two decimals. Taps: a person through `useOpenProfile`; your copy `/album/{id}`; anyone

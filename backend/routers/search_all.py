@@ -43,6 +43,15 @@ SONG_CAP = 400
 PEOPLE_CAP = 40
 
 
+def effective_limit(group: Optional[str], limit: Optional[int]) -> int:
+    """Rows per group: a given limit (capped at FULL); else FULL for one group's
+    "See all", and the preview plus one for the overview, whose extra row is how
+    a client knows there is more than it shows."""
+    if limit is None:
+        return FULL if group else PREVIEW + 1
+    return min(limit, FULL)
+
+
 def like_pattern(q: str) -> str:
     q = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return f"%{q}%"
@@ -109,13 +118,13 @@ def _song_cands(session: Session, me: int, p: str, pf: str) -> list:
 def search_all(
     q: str = Query(""),
     group: Optional[str] = Query(None),
-    limit: int = Query(PREVIEW, ge=1),
+    limit: Optional[int] = Query(None, ge=1),
     session: Session = Depends(get_session),
     me: PressUser = Depends(current_user),
 ):
     if group is not None and group not in ALLOWED_GROUPS:
         raise HTTPException(status_code=422, detail=f"group must be one of {', '.join(ALLOWED_GROUPS)}")
-    limit = min(limit, FULL)
+    limit = effective_limit(group, limit)
     wanted = (group,) if group else ALLOWED_GROUPS
     out: dict[str, list] = {g: [] for g in wanted}
     q = q.strip()

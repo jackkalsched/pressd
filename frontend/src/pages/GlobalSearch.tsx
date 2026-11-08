@@ -150,7 +150,7 @@ export default function GlobalSearch() {
   function rows<G extends SearchGroup>(g: G): { list: SearchResults[G]; more: boolean } {
     const base: SearchResults[G] = results?.[g] ?? ([] as SearchResults[G])
     if (expanded === g && full) return { list: full[g], more: false }
-    return { list: base.slice(0, SHOWN) as SearchResults[G], more: base.length >= SHOWN }
+    return { list: base.slice(0, SHOWN) as SearchResults[G], more: base.length > SHOWN }
   }
 
   // ── The catalogs, minus what Pressd already has ──
@@ -259,7 +259,7 @@ export default function GlobalSearch() {
           document.querySelector(`[data-nav="${next}"]`)?.scrollIntoView({ block: 'nearest' })
         })
       }
-    } else if (e.key === 'Enter' && lit >= 0) {
+    } else if (e.key === 'Enter' && lit >= 0 && !picked) {
       e.preventDefault()
       open(navItems[lit])
     }

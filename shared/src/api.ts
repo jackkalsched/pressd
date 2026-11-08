@@ -1290,7 +1290,10 @@ export async function searchUsers(q: string, excludeUserId: number): Promise<Use
  *  of them, with a longer list. Throws on a failed response so screens can show it. */
 export async function searchAll(q: string, group?: SearchGroup): Promise<SearchResults> {
   const params = new URLSearchParams({ q })
-  if (group) params.set('group', group)
+  if (group) {
+    params.set('group', group)
+    params.set('limit', '25')
+  }
   const res = await apiFetch(`${BASE()}/search/all?${params}`)
   if (!res.ok) throw new Error('Search failed')
   const d = await res.json()

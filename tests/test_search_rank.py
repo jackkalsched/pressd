@@ -57,3 +57,8 @@ def test_unlinked_songs_are_left_out():
         artist="Frank Ocean", subject_key="frank ocean||blonde", user_id=1, status="rated", art_url=None)
     rows = songs_group("nights", [s(None, 10), s(None, 11), s(7, 12)], me=1, limit=4)
     assert [r["track_id"] for r in rows] == [7]
+
+
+def test_fold_spells_ampersand_as_and():
+    assert fold("Simon & Garfunkel") == "simon and garfunkel"
+    assert match_rank("simon and garfunkel", "Simon & Garfunkel") == 0

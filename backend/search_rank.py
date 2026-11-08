@@ -41,6 +41,7 @@ def fold(s: str | None) -> str:
         return ""
     s = unicodedata.normalize("NFKD", s).casefold()
     s = "".join(c for c in s if not unicodedata.combining(c))
+    s = s.replace("&", " and ")  # subject_key spells it out
     return _NON_ALNUM.sub(" ", s).strip()
 
 

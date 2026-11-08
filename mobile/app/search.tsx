@@ -122,7 +122,7 @@ export default function SearchScreen() {
   }
 
   // ── Pressd ──
-  const { data: results, isLoading, isError } = useQuery({
+  const { data: results, isLoading, isError, isPlaceholderData } = useQuery({
     queryKey: ['search', userId, q],
     queryFn: () => searchAll(q),
     enabled: active && userId != null,
@@ -147,7 +147,7 @@ export default function SearchScreen() {
   function rows<G extends SearchGroup>(g: G): { list: SearchResults[G]; more: boolean } {
     const base: SearchResults[G] = results?.[g] ?? ([] as SearchResults[G])
     if (expanded === g && full) return { list: full[g], more: false }
-    return { list: base.slice(0, SHOWN) as SearchResults[G], more: base.length >= SHOWN }
+    return { list: base.slice(0, SHOWN) as SearchResults[G], more: base.length > SHOWN }
   }
 
   // ── The catalogs, minus what Pressd already has ──
@@ -213,6 +213,7 @@ export default function SearchScreen() {
   const songs = rows('songs')
   const nothingOnPressd =
     results != null &&
+    !isPlaceholderData &&
     results.people.length + results.albums.length + results.artists.length + results.songs.length === 0
 
   function seeAll(g: SearchGroup | 'catalog') {
@@ -297,7 +298,7 @@ export default function SearchScreen() {
                 <VinylSpinner size={44} />
               </View>
             )}
-            {isError && !results && <Text style={styles.note}>Search isn&rsquo;t answering. Try again.</Text>}
+            {isError && !isPlaceholderData && !results && <Text style={styles.note}>Search isn&rsquo;t answering. Try again.</Text>}
             {nothingOnPressd && <Text style={styles.note}>Nothing on Pressd matches &ldquo;{q}&rdquo;.</Text>}
 
             {people.list.length > 0 && (

@@ -17,3 +17,12 @@ def test_parse_known_caps_and_validates():
 
 def test_groups():
     assert ALLOWED_GROUPS == ("people", "albums", "artists", "songs")
+
+
+def test_effective_limit_defaults():
+    from backend.routers.search_all import effective_limit, FULL, PREVIEW
+    assert effective_limit(None, None) == PREVIEW + 1
+    assert effective_limit("albums", None) == FULL
+    assert effective_limit("albums", 10) == 10
+    assert effective_limit("albums", 999) == FULL
+    assert effective_limit(None, 999) == FULL
