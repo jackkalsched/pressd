@@ -1465,7 +1465,11 @@ for editing a review later, and both paths post into the thread through
    Pressd scope an album row is one record rated by anyone,
    pooled across copies (`stats._artist_album_rows`, keyed on `_clean_album` of the title alone, scored as
    the plain mean of copies — the community page's own PRESSD AVG), so both clients
-   open the record's community page from it, not one owner's copy. Both pages list
+   open the record's community page from it, not one owner's copy. The *Pressd avg* scope's statistics — the league table, the song-score-against-external-factors
+   scatter, ranks and percentiles — count only what the userbase has in common (November 2026,
+   `backend/common_ratings.py`): a song only if 3+ different users scored it (`track_id`), a record's
+   factors only if 3+ users rated a copy, and an artist on the board only with 15+ such songs. The
+   "most rated" ranks still count every rating, and *mine* and *Compare* are untouched. Both pages list
    records newest first and nothing else: the discography grids (web's
    `DiscographyGrid`, mobile's `Discography.tsx`, deleted) and web's Discover list went,
    along with the releases nobody on Pressd had added. So `fetchAotyAlbums` and

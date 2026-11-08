@@ -13,6 +13,7 @@ from ..deps import authorize_friend, current_user, viewable_user_id
 from ..models import Album, ArtistMeta, PressUser, Song
 from ..trackkeys import _clean_album as _same_record
 from ..credits import album_artists, song_artists
+from ..common_ratings import common_keys, qualifying_artists, song_key
 from ..scoring import BANG_THRESHOLD, SKIP_THRESHOLD, compute_a_score, get_factor_stats
 
 router = APIRouter(prefix="/stats", tags=["stats"])
@@ -409,7 +410,8 @@ def _artist_album_rows(albums: list[Album], album_ext, song_counts: dict[int, in
 
 
 def _artist_payload(
-    session: Session, artist_name: str, all_albums_any_status: list[Album], pooled: bool = False
+    session: Session, artist_name: str, all_albums_any_status: list[Album], pooled: bool = False,
+    common_only: bool = False,
 ) -> dict:
     """Everything the artist page shows, computed over whatever scope it's given.
 
@@ -443,13 +445,38 @@ def _artist_payload(
     _song_counts: dict[int, int] = {r[0]: r[1] for r in _count_rows}
 
     _scored_rows = session.exec(
-        select(Song.album_id, Song.score)
+        select(Song.album_id, Song.score, Song.track_id, Song.title)
         .where(Song.score.is_not(None))
         .where(Song.album_id.in_(user_album_ids))
     ).all()
+    # On the global artist page (`common_only`), the statistics count only what
+    # the userbase has in common: a song at least three people scored, a
+    # record's factors at least three people rated, an artist with fifteen such
+    # songs (backend/common_ratings.py). One user's page, and the compare view,
+    # keep every rating. The unfiltered scores still feed the "most rated"
+    # ranks, which measure how much listening an artist gets, not how good.
+    _owner = {a.id: a.user_id for a in all_albums_any_status}
+    _common_songs = common_keys(
+        (song_key(t, ti), _owner[aid]) for aid, _sc, t, ti in _scored_rows
+    ) if common_only else None
+    _common_records = common_keys(
+        (a.subject_key, a.user_id) for a in all_albums if a.subject_key
+    ) if common_only else None
     _album_scores: dict[int, list[float]] = defaultdict(list)
-    for _aid, _sc in _scored_rows:
-        _album_scores[_aid].append(_sc)
+    _album_scores_all: dict[int, list[float]] = defaultdict(list)
+    _album_keys: dict[int, set] = defaultdict(set)
+    for _aid, _sc, _tid, _title in _scored_rows:
+        _album_scores_all[_aid].append(_sc)
+        key = song_key(_tid, _title)
+        if _common_songs is None or key in _common_songs:
+            _album_scores[_aid].append(_sc)
+            _album_keys[_aid].add(key)
+
+    def common_ext(a: Album):
+        """A copy's external factors, if this scope may count its record."""
+        if _common_records is not None and a.subject_key not in _common_records:
+            return None
+        return album_ext(a)
 
     song_scores = [
         score
@@ -460,7 +487,7 @@ def _artist_payload(
     song_count = len(song_scores)
     avg_song_score = sum(song_scores) / song_count if song_scores else None
 
-    ext_vals = [e for a in artist_albums if (e := album_ext(a)) is not None]
+    ext_vals = [e for a in artist_albums if (e := common_ext(a)) is not None]
     avg_external = sum(ext_vals) / len(ext_vals) if ext_vals else None
 
     bangs = [s for s in song_scores if s >= BANG_THRESHOLD]
@@ -469,12 +496,22 @@ def _artist_payload(
     skip_pct = len(skips) / song_count if song_count else None
 
     by_artist_songs: dict[str, list[float]] = defaultdict(list)
+    by_artist_listened: dict[str, list[float]] = defaultdict(list)
+    by_artist_keys: dict[str, set] = defaultdict(set)
     for a in all_albums_any_status:
         if a.status == "rated" or _song_counts.get(a.id, 0) <= 6:
+            # Only albums with scores add an artist, so the board's order
+            # (insertion order) is what it was before the common-songs rule.
             scores = _album_scores.get(a.id)
-            if scores:
-                for name in album_artists(a):
+            listened = _album_scores_all.get(a.id)
+            for name in album_artists(a):
+                if scores:
                     by_artist_songs[name].extend(scores)
+                    by_artist_keys[name] |= _album_keys[a.id]
+                if listened:
+                    by_artist_listened[name].extend(listened)
+    # On the global page an artist reaches the board only with fifteen common songs.
+    _on_board = qualifying_artists(by_artist_keys) if common_only else None
 
     # How much of this scope's listening the artist accounts for, overall and
     # within their own genre. Ranked on songs rated rather than albums: an
@@ -490,14 +527,14 @@ def _artist_payload(
     )
 
     def _rank_within(pool: list[str]) -> tuple[int | None, int]:
-        ordered = sorted(pool, key=lambda k: (-len(by_artist_songs[k]), k.lower()))
+        ordered = sorted(pool, key=lambda k: (-len(by_artist_listened[k]), k.lower()))
         lowered = artist_name.strip().lower()
         for i, k in enumerate(ordered):
             if k.strip().lower() == lowered:
                 return i + 1, len(ordered)
         return None, len(ordered)
 
-    _all_artists = [k for k, v in by_artist_songs.items() if v]
+    _all_artists = [k for k, v in by_artist_listened.items() if v]
     popularity_rank, popularity_of = _rank_within(_all_artists)
     if _this_genre:
         genre_rank, genre_rank_of = _rank_within(
@@ -508,7 +545,7 @@ def _artist_payload(
 
     by_artist_ext: dict[str, list[float]] = defaultdict(list)
     for a in all_albums:
-        if (e := album_ext(a)) is not None:
+        if (e := common_ext(a)) is not None:
             for name in album_artists(a):
                 by_artist_ext[name].append(e)
 
@@ -517,6 +554,8 @@ def _artist_payload(
     scatter_rows = []
     for art in by_artist_songs:
         s = by_artist_songs[art]
+        if not s or (_on_board is not None and art not in _on_board):
+            continue
         e = by_artist_ext.get(art, [])
         n = len(s)
         bang_n = sum(1 for x in s if x >= BANG_THRESHOLD)
@@ -931,7 +970,7 @@ def artist_detail(
         return session.exec(select(Album)).all()
 
     if population == "global":
-        g = _artist_payload(session, artist_name, scope_global(), pooled=True)
+        g = _artist_payload(session, artist_name, scope_global(), pooled=True, common_only=True)
         g["catalog_art"] = _artist_catalog_art(session, artist_name)
         return g
 
