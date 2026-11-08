@@ -1143,7 +1143,7 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
     buckets: dict[object, dict] = {}
     for s in sorted(base.songs, key=lambda s: s.track_number or 0) if base else []:
         buckets[norm(s)] = {
-            "title": s.title, "track_number": s.track_number,
+            "title": s.title, "track_number": s.track_number, "track_id": s.track_id,
             "scores": [], "others": [], "your_score": None,
         }
     for c in copies:
@@ -1154,7 +1154,7 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
             b = buckets.get(key)
             if b is None:
                 b = buckets.setdefault(key, {
-                    "title": s.title, "track_number": s.track_number,
+                    "title": s.title, "track_number": s.track_number, "track_id": s.track_id,
                     "scores": [], "others": [], "your_score": None,
                 })
             else:
@@ -1174,6 +1174,7 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
         {
             "title": b["title"],
             "track_number": b["track_number"],
+            "track_id": b["track_id"],
             "avg_score": avg(b["scores"]),
             "rater_count": len(b["scores"]),
             "others_avg_score": avg(b["others"]),

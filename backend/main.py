@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db
-from .routers import albums, songs, stats, search, aoty, util, audio, users, auth, social, comments, discover, public, discussions, overlap
+from .routers import albums, songs, stats, search, aoty, util, audio, users, auth, social, comments, discover, public, discussions, overlap, search_all
 
 app = FastAPI(title="Pressd API")
 
@@ -28,6 +28,7 @@ app.include_router(albums.router)
 app.include_router(songs.router)
 app.include_router(stats.router)
 app.include_router(search.router)
+app.include_router(search_all.router)
 app.include_router(aoty.router)
 app.include_router(util.router)
 app.include_router(audio.router)

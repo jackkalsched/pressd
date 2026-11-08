@@ -72,14 +72,14 @@ PLAN_*.md         gitignored design docs; code cites them by section
 
 | Area | Role | LOC |
 |---|---|---|
-| `backend/main.py` | CORS, 15 routers, `init_db()` on startup, `/health` | 46 |
+| `backend/main.py` | CORS, 16 routers, `init_db()` on startup, `/health` | 46 |
 | `backend/database.py` | engine + **the entire migration system** (§3) | 274 |
 | `backend/models.py` | 29 SQLModel tables | 722 |
 | `backend/deps.py` | `current_user`, `viewable_user_id`, `thread_access` — the auth invariant | 148 |
 | `backend/scoring.py` | framework 1: the user's own album score | 267 |
 | `backend/global_rating.py` | framework 2: the userbase-pooled rating | 155 |
 | `backend/trackkeys.py` | normalization keys; pure stdlib, imported everywhere | 163 |
-| `backend/routers/` | 15 routers, **119 endpoints** | 8,357 |
+| `backend/routers/` | 16 routers, **121 endpoints** | 8,357 |
 | `worker/` | `nightly_predict`, `catalog_predict`, `artist_clusters`, `audio_ingest`, `refresh_new_releases`, `taste_nightly`, `taste_health`, … | 3,449 |
 | `theme_predictor/` | `predict_single`, `personalize`, `global_factors`, `corpus`, … | 1,896 |
 | `shared/src/api.ts` | the single API client, 108 exported functions | 2,147 |
@@ -255,8 +255,8 @@ logs and runs again on the next boot.
                                  │
           ┌──────────────────────┼───────────────────────────┐
           ▼                      ▼                           ▼
-   routers/ (15)           scoring.py                trackkeys.py
-   119 endpoints           global_rating.py          (normalization —
+   routers/ (16)           scoring.py                trackkeys.py
+   121 endpoints           global_rating.py          (normalization —
                                  │                    imported by web,
                                  ▼                    worker, and scripts)
                           Postgres (Supabase)
@@ -527,6 +527,16 @@ and never back to the source. It used to be an opt-in "Use it" button gated to �
 sources, and that gate blocked every real match there was (12 *Showgirl* songs from
 *The Encore*, all full-album sources); the gate also counted the source's scored songs,
 not its tracks.
+
+**`backend/routers/search_all.py`** (November 2026) — the single search box. `GET /search/all?q=&group=&limit=`
+returns `people`, `albums`, `artists`, `songs` (one key with `group`; `limit` 4, capped at 25; `q` under two
+characters answers empty; a bad `group` is 422), ranked by `search_rank`. `POST /search/known` takes up to 50
+`{name, artist}` from a catalog search and says which Pressd already has, so the client opens that record instead of
+offering an import. A record qualifies when the caller owns a copy or anyone has rated one — the SQL applies it, so
+a stranger's To Listen never leaves the database — and **singles are included**, which the library hides. Candidates
+load in two steps (copies whose own text matches, then every visible copy of those records by `subject_key`),
+because the ranker counts raters from what it is handed; the first step is capped (400 copies, 40 people).
+`_community_payload` track rows now carry `track_id` (null for a title-keyed bucket).
 
 **`backend/routers/albums.py`** (1,335) — the largest router. `import_album` (`:398`)
 dedups, inserts, then `_link_tracks` resolves global track ids through
