@@ -223,7 +223,7 @@ Expected: `[{"kind":"own","albumId":3,"highlight":7},{"kind":"own","albumId":3,"
 
 **Files:**
 - Create: `mobile/app/search.tsx`
-- Modify: `mobile/app/(tabs)/index.tsx` — masthead: replace `styles.date` text with a search `Pressable` (lucide `Search`, `tc.ink`), 36pt round, `accessibilityLabel="Search"`, `router.push('/search')`; remove the now-unused `today` value and `date` style
+- Modify: `mobile/app/(tabs)/index.tsx` — masthead: replace `styles.date` text with a search `Pressable` (lucide `Search`, `tc.ink`), the bare icon with no circle or fill behind it (Jack), a comfortable tap target via hitSlop, `accessibilityLabel="Search"`, `router.push('/search')`; remove the now-unused `today` value and `date` style
 - Modify: `mobile/app/album/[id].tsx` — `track` search param: scroll to and briefly highlight the row whose `trackId` (own copy) / `track_id` (community) matches, only when the copy is rated or the view is community
 - Modify: `mobile/lib/auth.tsx` — `signOut` removes `recentKey(user.id)` from SecureStore
 - Modify: `CLAUDE.md` — For You masthead and the search screen (iPhone)
@@ -247,7 +247,7 @@ Expected: typecheck clean; eslint no more than **126 errors and 6 warnings**. Me
 **Files:**
 - Create: `frontend/src/pages/GlobalSearch.tsx`
 - Modify: `frontend/src/App.tsx` — `<Route path="/search" element={<GlobalSearch />} />` inside the protected routes
-- Modify: `frontend/src/pages/ForYou.tsx` — header: replace the date (`dateStr`) with a round search button (lucide `Search`) linking to `/search`; drop unused date code
+- Modify: `frontend/src/pages/ForYou.tsx` — header: replace the date (`dateStr`) with a bare search icon (lucide `Search`, no circle or fill behind it — Jack) linking to `/search`; drop unused date code
 - Modify: `frontend/src/pages/AlbumDetail.tsx` and `frontend/src/pages/CommunityAlbum.tsx` — `?track=<id>` scrolls to and `flash`es that track row (own copy only when rated)
 - Modify: `frontend/src/context/UserContext.tsx` — `signOut` removes `localStorage[recentKey(id)]` (in try/catch)
 - Modify: `CLAUDE.md` — For You header, `/search`, the album pages' `track` param, and §12 nothing else
