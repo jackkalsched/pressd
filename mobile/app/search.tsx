@@ -152,24 +152,47 @@ export default function SearchScreen() {
 
   // ── The catalogs, minus what Pressd already has ──
   const { results: catalogHits, searching: catalogSearching } = useAlbumSearch(active ? query : '')
-  const knownInput = useMemo(
-    () => catalogHits.map((r) => ({ name: r.album_name, artist: r.artist })),
-    [catalogHits],
-  )
-  const { data: known, isError: knownFailed, isLoading: knownLoading } = useQuery({
-    queryKey: ['search-known', knownInput],
-    queryFn: () => searchKnown(knownInput),
-    enabled: active && knownInput.length > 0,
-    staleTime: 5 * 60_000,
+  // Whether Pressd has each catalog hit, by name and artist, kept for the screen's
+  // life. The hook answers twice per query (iTunes + Deezer, then MusicBrainz merged
+  // in), so the check runs only for hits not yet asked about, and rows already
+  // cleared stay put while it does.
+  const [verdicts, setVerdicts] = useState<Map<string, boolean>>(() => new Map())
+  const unchecked = useMemo(() => {
+    const seen = new Set<string>()
+    const out: { name: string; artist: string }[] = []
+    for (const r of catalogHits) {
+      const k = hitKey(r)
+      if (verdicts.has(k) || seen.has(k)) continue
+      seen.add(k)
+      out.push({ name: r.album_name, artist: r.artist })
+    }
+    return out
+  }, [catalogHits, verdicts])
+  const { isError: knownFailed } = useQuery({
+    queryKey: ['search-known', unchecked],
+    queryFn: async () => {
+      const known = await searchKnown(unchecked)
+      const have = new Set(known.map((k) => k.index))
+      setVerdicts((prev) => {
+        const next = new Map(prev)
+        unchecked.forEach((u, i) => next.set(`${u.name}|${u.artist}`, have.has(i)))
+        return next
+      })
+      return known
+    },
+    enabled: active && unchecked.length > 0,
   })
-  // Held back until the check answers, so a record Pressd has doesn't flash in and
-  // out; shown unfiltered if the check fails.
-  const fresh: AlbumSearchResult[] = useMemo(() => {
-    if (!known && !knownFailed) return []
-    const drop = new Set((known ?? []).map((k) => k.index))
-    return catalogHits.filter((_, i) => !drop.has(i))
-  }, [catalogHits, known, knownFailed])
-  const catalogPending = active && (catalogSearching || (knownInput.length > 0 && knownLoading))
+  // A hit not yet checked is held back, so a record Pressd has doesn't flash in and
+  // out; if the check fails, it's shown.
+  const fresh: AlbumSearchResult[] = useMemo(
+    () =>
+      catalogHits.filter((r) => {
+        const v = verdicts.get(hitKey(r))
+        return v === undefined ? knownFailed : !v
+      }),
+    [catalogHits, verdicts, knownFailed],
+  )
+  const catalogPending = active && (catalogSearching || (unchecked.length > 0 && !knownFailed))
   const catalogShown = expanded === 'catalog' ? fresh : fresh.slice(0, SHOWN)
 
   if (catalog.picked) {
@@ -438,6 +461,10 @@ function catalogItem(r: AlbumSearchResult): RecentItem {
     artUrl: r.cover_url,
     target: { kind: 'catalog', album_name: r.album_name, artist: r.artist, deezer: deezerIdOf(r) } satisfies Target,
   }
+}
+
+function hitKey(r: AlbumSearchResult): string {
+  return `${r.album_name}|${r.artist}`
 }
 
 function recordsLabel(n: number): string {
