@@ -775,7 +775,8 @@ const styles = StyleSheet.create({
   compactTitle: { fontFamily: fonts.displayBlack, fontSize: 20, color: colors.ink, letterSpacing: 0.5 },
   masthead: {
     flexDirection: 'row',
-    alignItems: 'center',
+    // The icon sits on the title's baseline, not its middle (Jack).
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: spacing.md,
     marginTop: spacing.md,
@@ -786,6 +787,9 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
+    // The title's line box runs below its baseline for descenders; lifting the
+    // icon by that gap puts its foot level with the bottom of "For You".
+    marginBottom: 3,
   },
   title: { flexShrink: 0, fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: 0.5 },
   sub: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkTertiary, marginTop: 4 },

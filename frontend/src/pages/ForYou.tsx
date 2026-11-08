@@ -311,7 +311,8 @@ export default function ForYou() {
               to="/search"
               aria-label="Search Pressd"
               title="Search Pressd"
-              className="-m-2 shrink-0 p-2 text-(--c-1c1917) transition-colors hover:text-(--c-2d6a4f)"
+              // mt-0 drops the icon 8px, so its foot sits on the 40px title's baseline rather than level with its top (Jack).
+              className="-m-2 mt-0 shrink-0 p-2 text-(--c-1c1917) transition-colors hover:text-(--c-2d6a4f)"
             >
               <Search size={24} strokeWidth={2.2} />
             </Link>
