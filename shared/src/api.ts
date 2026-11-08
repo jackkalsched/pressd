@@ -3,6 +3,7 @@ import type {
   DiscussionPost, SubjectRef, ThreadMeta, ThreadPage, ThreadSort,
   FeedPost, HeatedMood, HeatedRecord, SubjectType,
   TasteReason, Overlap, OverlapAlbum, PeopleSheetData, SheetPerson, SheetSong, SheetAction,
+  SearchResults, SearchGroup, SearchAlbum, SearchArtist, SearchSong,
 } from './types'
 
 // ── Runtime configuration ─────────────────────────────────────────────────────
@@ -367,6 +368,8 @@ export interface CommunityTrack {
   others_avg_score?: number | null
   others_rater_count?: number
   title: string
+  /** The global track this row is, when it has one; search deep-links highlight on it. */
+  track_id?: number | null
   track_number: number | null
   avg_score: number | null
   rater_count: number
@@ -1281,6 +1284,56 @@ export async function searchUsers(q: string, excludeUserId: number): Promise<Use
   const res = await apiFetch(`${BASE()}/users/search?q=${encodeURIComponent(q)}&exclude_user_id=${excludeUserId}`)
   if (!res.ok) return []
   return res.json()
+}
+
+/** One search across people, records, artists and songs; `group` asks for just one
+ *  of them, with a longer list. Throws on a failed response so screens can show it. */
+export async function searchAll(q: string, group?: SearchGroup): Promise<SearchResults> {
+  const params = new URLSearchParams({ q })
+  if (group) params.set('group', group)
+  const res = await apiFetch(`${BASE()}/search/all?${params}`)
+  if (!res.ok) throw new Error('Search failed')
+  const d = await res.json()
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  return {
+    people: d.people ?? [],
+    albums: (d.albums ?? []).map((a: any): SearchAlbum => ({
+      albumId: a.album_id,
+      name: a.name,
+      artist: a.artist,
+      artUrl: a.art_url ?? null,
+      mine: a.mine,
+      status: a.status,
+      yourScore: a.your_score ?? null,
+      pressdAvg: a.pressd_avg ?? null,
+      raters: a.raters,
+    })),
+    artists: (d.artists ?? []).map((a: any): SearchArtist => ({ name: a.name, records: a.records })),
+    songs: (d.songs ?? []).map((s: any): SearchSong => ({
+      trackId: s.track_id,
+      title: s.title,
+      albumId: s.album_id,
+      albumName: s.album_name,
+      artist: s.artist,
+      mine: s.mine,
+      status: s.status,
+    })),
+  }
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+}
+
+/** Which catalog albums (by name and artist) Pressd already has, by position. */
+export async function searchKnown(
+  items: { name: string; artist: string }[],
+): Promise<{ index: number; subjectKey: string; albumId: number }[]> {
+  const res = await apiFetch(`${BASE()}/search/known`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(items),
+  })
+  if (!res.ok) throw new Error('Search failed')
+  const d: { index: number; subject_key: string; album_id: number }[] = await res.json()
+  return d.map(r => ({ index: r.index, subjectKey: r.subject_key, albumId: r.album_id }))
 }
 
 export async function addFriend(

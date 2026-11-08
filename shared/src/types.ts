@@ -450,3 +450,43 @@ export interface PeopleSheetData {
 }
 
 export type SheetAction = 'shown' | 'add' | 'open_discussion' | 'not_now' | 'open_profile'
+
+// ── Global search (GET /search/all) ───────────────────────────────────────────
+
+export type SearchPerson = import('./api').UserSearchResult
+
+export interface SearchAlbum {
+  albumId: number
+  name: string
+  artist: string
+  artUrl: string | null
+  mine: boolean
+  status: AlbumStatus
+  yourScore: number | null
+  pressdAvg: number | null
+  raters: number
+}
+
+export interface SearchArtist {
+  name: string
+  records: number
+}
+
+export interface SearchSong {
+  trackId: number
+  title: string
+  albumId: number
+  albumName: string
+  artist: string
+  mine: boolean
+  status: AlbumStatus
+}
+
+export interface SearchResults {
+  people: SearchPerson[]
+  albums: SearchAlbum[]
+  artists: SearchArtist[]
+  songs: SearchSong[]
+}
+
+export type SearchGroup = 'people' | 'albums' | 'artists' | 'songs'

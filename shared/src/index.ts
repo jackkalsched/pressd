@@ -4,3 +4,5 @@ export { searchAlbumsRanked, mergeAndRank, albumKey, normalizeTitle } from './al
 export { useAlbumSearch } from './hooks/useAlbumSearch'
 export { useRecalibrationMessage, RECALIBRATION_MESSAGES, RECALIBRATION_INTERVAL_MS } from './hooks/useRecalibration'
 export { seedDrafts, firstOpenIndex, canJumpTo, nextTrackIndex } from './rating'
+export { pushRecent, recentKey, songTarget, RECENT_MAX } from './recentSearches'
+export type { RecentItem } from './recentSearches'
