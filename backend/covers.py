@@ -102,16 +102,42 @@ def _musicbrainz(client: httpx.Client, album: Album) -> str | None:
         credit = (g.get("artist-credit") or [{}])[0].get("name", "")
         if not g.get("id") or not _matches(album, g.get("title"), credit):
             continue
-        time.sleep(1)  # MusicBrainz asks for one request a second
-        # The 500px thumbnail, stored at the Archive machine it redirects to,
-        # as search.py's resolve stores it (CLAUDE.md, covers).
-        # A GET for the image itself, not a HEAD: on the day a cover is uploaded
-        # the Archive knows it (a redirect) before its machine can serve it (a
-        # 500 there), and only a real image is worth storing — the next pass
-        # tries again.
-        with client.stream("GET", f"{CAA}/release-group/{g['id']}/front-500", follow_redirects=True, timeout=15) as art:
+        # The group's own image first, then each of its releases': the group
+        # address stands for one release's art, and that one can be broken
+        # while another serves. *Dream Fatigue*'s group pointed at a release
+        # whose image answered 500 for days; its other release had a working
+        # cover the whole time.
+        candidates = [f"{CAA}/release-group/{g['id']}/front-500"]
+        releases = g.get("releases")
+        if releases is None:
+            time.sleep(1)
+            lookup = client.get(f"https://musicbrainz.org/ws/2/release-group/{g['id']}", params={"inc": "releases", "fmt": "json"})
+            releases = lookup.json().get("releases") or [] if lookup.is_success else []
+        candidates += [f"{CAA}/release/{rel['id']}/front-500" for rel in releases if rel.get("id")]
+        for address in candidates:
+            url = _image(client, address)
+            if url:
+                return url
+    return None
+
+
+def _image(client: httpx.Client, address: str) -> str | None:
+    """Where `address` lands, if a real image is served there.
+
+    The 500px thumbnail, stored at the Archive machine it redirects to, as
+    search.py's resolve stores it (CLAUDE.md, covers). A GET for the image
+    itself, not a HEAD: the Archive can know a cover (a redirect) that its
+    machine can't serve (a 500 there, or no answer), and only a real image is
+    worth storing — the next pass tries again. A stall on one address mustn't
+    cost the others, so each catches its own timeout.
+    """
+    time.sleep(1)  # MusicBrainz asks for one request a second; the Archive is its sibling
+    try:
+        with client.stream("GET", address, follow_redirects=True, timeout=15) as art:
             if art.status_code == 200 and art.headers.get("content-type", "").startswith("image/"):
                 return str(art.url)
+    except httpx.HTTPError as e:
+        print(f"[covers] {address}: {type(e).__name__}")
     return None
 
 
