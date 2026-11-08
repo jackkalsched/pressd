@@ -550,7 +550,7 @@ back. Every row uses Add an album's row type (Plus Jakarta, no Playfair); albums
 show the cover, artists their photo (`['artist-image', name]`, the artist page's cache),
 people their avatar. An album shows your score, Listening / To Listen, or the PRESSD AVG,
 to two decimals. Taps: a person through `useOpenProfile`; your copy `/album/{id}`; anyone
-else's record its community view; an artist `/artist/{name}`; a song through
+else's record its community view; an artist `/artist/{name}?mode=pressd` (the artist page opens on the Pressd average for `mode=pressd`, as it does on Compare for `mode=compare`; no param is still *mine*); a song through
 `songTarget`, which adds `track` only to a rated copy of yours or the community view. A
 catalog row previews the record, and its Rate now / Add to library buttons are Add an
 album's, both screens going through `mobile/lib/catalogPick.ts` (`useCatalogPick`).

@@ -113,7 +113,7 @@ export default function SearchScreen() {
         })
         return
       case 'artist':
-        router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent(t.name) } })
+        router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent(t.name), mode: 'pressd' } })
         return
       case 'catalog':
         catalog.preview(t)

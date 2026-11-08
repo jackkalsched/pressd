@@ -102,8 +102,11 @@ export default function ArtistPage() {
 
   // Arriving from a comparison card should land on the comparison, not on your
   // own numbers — the card was showing a split, and the page it opens has to be
-  // the page that split lives on.
-  const [mode, setMode] = useState<Mode>(modeParam === 'compare' ? 'compare' : 'mine')
+  // the page that split lives on. Search opens on the Pressd average: it found
+  // the artist across everyone's records, not only yours.
+  const [mode, setMode] = useState<Mode>(
+    modeParam === 'compare' ? 'compare' : modeParam === 'pressd' ? 'pressd' : 'mine',
+  )
   const { data, isLoading } = useQuery({
     queryKey: ['artist', artist, user?.id, mode],
     queryFn: () => fetchArtistDetail(artist, user!.id, POPULATION[mode]),
