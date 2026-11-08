@@ -536,7 +536,28 @@ offering an import. A record qualifies when the caller owns a copy or anyone has
 a stranger's To Listen never leaves the database — and **singles are included**, which the library hides. Candidates
 load in two steps (copies whose own text matches, then every visible copy of those records by `subject_key`),
 because the ranker counts raters from what it is handed; the first step is capped (400 copies, 40 people).
-`_community_payload` track rows now carry `track_id` (null for a title-keyed bucket).
+`_community_payload` track rows now carry `track_id` (null for a title-keyed bucket). A song row carries the
+`art_url` of the copy it points at, so its cover is the record a tap opens.
+
+**Search on iPhone** (`mobile/app/search.tsx`, November 2026) — opened by the bare search
+icon at the top right of For You's masthead, where the date was; pushed over the tabs,
+field focused, **Cancel** back. From two characters (200 ms debounce) it asks
+`searchAll` and draws People, Albums, Artists, Songs, then **From the catalogs**:
+`useAlbumSearch`'s hits minus every one `searchKnown` says Pressd has, held back until
+that check answers (a small spinner in the heading meanwhile). Each group shows four;
+**See all** re-asks that one group (`searchAll(q, group)`) in place, **Show less** puts it
+back. Every row uses Add an album's row type (Plus Jakarta, no Playfair); albums and songs
+show the cover, artists their photo (`['artist-image', name]`, the artist page's cache),
+people their avatar. An album shows your score, Listening / To Listen, or the PRESSD AVG,
+to two decimals. Taps: a person through `useOpenProfile`; your copy `/album/{id}`; anyone
+else's record its community view; an artist `/artist/{name}`; a song through
+`songTarget`, which adds `track` only to a rated copy of yours or the community view. A
+catalog row previews the record, and its Rate now / Add to library buttons are Add an
+album's, both screens going through `mobile/lib/catalogPick.ts` (`useCatalogPick`).
+Before typing, the last `RECENT_MAX` (8) tapped results, kept in the Keychain under
+`recentKey(user id)` with **Clear**; `signOut` deletes that item. `album/[id]` reads the
+`track` param (a track id): once the row lays out it scrolls into the upper third and a
+green wash fades over 1.5 s — own copy only when rated, community view by `track_id`.
 
 **`backend/routers/albums.py`** (1,335) — the largest router. `import_album` (`:398`)
 dedups, inserts, then `_link_tracks` resolves global track ids through

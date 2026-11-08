@@ -40,10 +40,12 @@ def test_collaboration_counts_for_each_artist():
 
 def test_song_is_one_row_per_track_and_points_at_my_copy():
     s = lambda tid, title, aid, user, status="rated": N(track_id=tid, title=title, album_id=aid, album_name="Blonde",
-        artist="Frank Ocean", subject_key="frank ocean||blonde", user_id=user, status=status)
+        artist="Frank Ocean", subject_key="frank ocean||blonde", user_id=user, status=status, art_url=f"art{aid}")
     cands = [s(7, "Nights", 10, 2), s(7, "Nights", 11, 3), s(7, "NIGHTS", 12, 1, status="listening")]
     rows = songs_group("nights", cands, me=1, limit=4)
     assert len(rows) == 1 and rows[0]["album_id"] == 12 and rows[0]["mine"] and rows[0]["title"] == "Nights"
+    # The cover is the pointed-at copy's.
+    assert rows[0]["art_url"] == "art12"
 
 def test_people_friends_first():
     rows = [{"id": 1, "name": "jackk", "already_friends": False, "request_sent": False, "request_received": False},
@@ -52,6 +54,6 @@ def test_people_friends_first():
 
 def test_unlinked_songs_are_left_out():
     s = lambda tid, aid: N(track_id=tid, title="Nights", album_id=aid, album_name="Blonde",
-        artist="Frank Ocean", subject_key="frank ocean||blonde", user_id=1, status="rated")
+        artist="Frank Ocean", subject_key="frank ocean||blonde", user_id=1, status="rated", art_url=None)
     rows = songs_group("nights", [s(None, 10), s(None, 11), s(7, 12)], me=1, limit=4)
     assert [r["track_id"] for r in rows] == [7]

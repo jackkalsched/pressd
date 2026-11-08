@@ -11,6 +11,7 @@
     "./albumSearch": "./src/albumSearch.ts",
     "./covers": "./src/covers.ts",
     "./rating": "./src/rating.ts",
+    "./recentSearches": "./src/recentSearches.ts",
     "./hooks/useAlbumSearch": "./src/hooks/useAlbumSearch.ts",
     "./hooks/useRecalibration": "./src/hooks/useRecalibration.ts"
   },

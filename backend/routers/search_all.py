@@ -101,7 +101,7 @@ def _song_cands(session: Session, me: int, p: str, pf: str) -> list:
     ).all()
     return [SimpleNamespace(
         track_id=s.track_id, title=s.title, album_id=a.id, album_name=a.album_name,
-        artist=a.artist, subject_key=a.subject_key, user_id=a.user_id, status=a.status,
+        art_url=a.album_art_url, artist=a.artist, subject_key=a.subject_key, user_id=a.user_id, status=a.status,
     ) for s, a in rows]
 
 

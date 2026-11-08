@@ -157,6 +157,7 @@ def songs_group(q, cands, me, limit) -> list[dict]:
             "title": title,
             "album_id": rep.album_id,
             "album_name": rep.album_name,
+            "art_url": rep.art_url,
             "artist": rep.artist,
             "mine": bool(mine),
             "status": rep.status,

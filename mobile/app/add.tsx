@@ -15,11 +15,9 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Image } from 'expo-image'
 import { Check, Plus, Search, Star, X } from 'lucide-react-native'
-import { useQueryClient } from '@tanstack/react-query'
 import { useAlbumSearch } from '@pressd/shared/hooks/useAlbumSearch'
 import type { AlbumSearchResult } from '@pressd/shared/api'
-import { importAlbum, resolveAlbum } from '../lib/api'
-import { useAuth } from '../lib/auth'
+import { catalogKey, deezerIdOf, useCatalogPick } from '../lib/catalogPick'
 import TracklistLoader from '../components/TracklistLoader'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors } from '../theme/tokens'
 
@@ -34,62 +32,12 @@ function meta(r: AlbumSearchResult): string {
 export default function AddAlbum() {
   const tc = useColors()
   const router = useRouter()
-  const { user } = useAuth()
   const [query, setQuery] = useState('')
   const { results, searching, mbPending, noResults } = useAlbumSearch(query)
-  const [picked, setPicked] = useState<AlbumSearchResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  // Rows already shelved this session — the list stays put after "add", so
-  // without a mark there's nothing to show the tap landed.
-  const [shelved, setShelved] = useState<string[]>([])
-  const queryClient = useQueryClient()
-
-  function keyFor(r: AlbumSearchResult): string {
-    return `${r.source}:${r.source_id}`
-  }
-
-  /** The third way out of a search result: look before you commit. Opens the
-   *  userbase view by name+artist — the record may not be in Pressd at all yet
-   *  — carrying the Deezer id when we have one so the tracklist resolves and
-   *  Rate now can import from it. Nothing is written to the library here. */
+  const { picked, error, shelved, pick, preview: previewBy } = useCatalogPick()
+  const keyFor = catalogKey
   function preview(r: AlbumSearchResult) {
-    const deezerId = r.source === 'deezer' ? r.source_id : null
-    router.push({
-      pathname: '/album/[id]',
-      params: {
-        // The id segment goes unused once name+artist are present, but the
-        // route still requires one.
-        id: deezerId ?? '0',
-        name: r.album_name,
-        artist: r.artist,
-        ...(deezerId ? { deezer: deezerId } : {}),
-      },
-    })
-  }
-
-  /** Both actions import the same album — they differ in the status it lands
-   *  in and where you end up. "Rate now" opens the rating flow; "Add to
-   *  library" shelves it under To Listen and stays here, so several records
-   *  can be queued from one search. */
-  async function pick(r: AlbumSearchResult, mode: 'rate' | 'shelve') {
-    if (picked || !user) return
-    setPicked(r)
-    setError(null)
-    try {
-      const full = await resolveAlbum(r)
-      const album = await importAlbum(full, mode === 'rate' ? 'listening' : 'to_listen', user.id)
-      if (mode === 'rate') {
-        router.replace({ pathname: '/rate/[id]', params: { id: String(album.id) } })
-        return
-      }
-      // Shelved: the library grids are now stale wherever they're mounted.
-      queryClient.invalidateQueries({ queryKey: ['albums'] })
-      setShelved((s) => [...s, keyFor(r)])
-      setPicked(null)
-    } catch {
-      setError('Could not load that album. Try another result.')
-      setPicked(null)
-    }
+    previewBy({ album_name: r.album_name, artist: r.artist, deezer: deezerIdOf(r) })
   }
 
   // The tracklist fetch owns the whole sheet — there's nothing useful to do on

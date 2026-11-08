@@ -477,6 +477,8 @@ export interface SearchSong {
   title: string
   albumId: number
   albumName: string
+  /** The cover of the copy the row points at. */
+  artUrl: string | null
   artist: string
   mine: boolean
   status: AlbumStatus

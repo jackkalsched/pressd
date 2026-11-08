@@ -3,6 +3,7 @@
 // sign-in / sign-out flows to screens.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import * as SecureStore from 'expo-secure-store'
+import { recentKey } from '@pressd/shared/recentSearches'
 import { loadPrefs } from './prefs'
 import {
   signInWithGoogle,
@@ -76,10 +77,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // The account's recent searches go with it, so the next person to sign in on
+  // this phone doesn't see what the last one looked for.
   const signOut = useCallback(() => {
+    if (user) {
+      try {
+        SecureStore.deleteItemAsync(recentKey(user.id)).catch(() => {})
+      } catch { /* nothing stored */ }
+    }
     setToken(null)
     persistUser(null)
-  }, [persistUser])
+  }, [persistUser, user])
 
   // Hydrate token + user from the Keychain once at launch.
   useEffect(() => {

@@ -7,7 +7,7 @@ import { ActivityIndicator, Animated, Dimensions, Pressable, RefreshControl, Scr
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { ArrowRight, ChevronDown, MessageCircle, Triangle } from 'lucide-react-native'
+import { ArrowRight, ChevronDown, MessageCircle, Search, Triangle } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchPredictedPicks,
@@ -344,9 +344,6 @@ export default function ForYou() {
     } catch { /* ignore */ }
   }
 
-  const today = new Date()
-    .toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-    .toUpperCase()
   const firstName = user?.name?.split(' ')[0] ?? ''
   const reviews = topReviews?.reviews ?? []
 
@@ -377,10 +374,15 @@ export default function ForYou() {
         <Animated.View style={{ opacity: mastheadOpacity, transform: [{ translateY: mastheadShift }] }}>
           <View style={styles.masthead}>
             <Text style={styles.title}>For You</Text>
-            {/* Two lines rather than one: on a narrow screen — a smaller phone,
-                or any phone with Display Zoom or large text — a single-line
-                date has nowhere to go and rides into the title. */}
-            <Text style={styles.date} numberOfLines={2}>{today}</Text>
+            <Pressable
+              onPress={() => router.push('/search')}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Search"
+              style={({ pressed }) => [styles.searchBtn, pressed && { opacity: 0.5 }]}
+            >
+              <Search size={22} color={tc.ink} strokeWidth={2.2} />
+            </Pressable>
           </View>
           <Text style={styles.sub}>
             {greeting()}{firstName ? ` ${firstName}` : ''}, here&rsquo;s what&rsquo;s moving this week.
@@ -771,25 +773,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   compactTitle: { fontFamily: fonts.displayBlack, fontSize: 20, color: colors.ink, letterSpacing: 0.5 },
-  // gap, not just space-between: with nothing between them the title and the
-  // date are free to touch once the row runs out of width.
   masthead: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
     marginTop: spacing.md,
   },
-  // Shrinks and wraps; the title holds its size. A 40pt masthead losing
-  // characters is a worse trade than a date on two lines.
-  date: {
-    flexShrink: 1,
-    fontFamily: fonts.bodyBold,
-    fontSize: 12,
-    letterSpacing: 1.4,
-    color: colors.inkTertiary,
-    marginBottom: 8,
-    textAlign: 'right',
+  // The bare icon, nothing drawn behind it; the box is only the tap target.
+  searchBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: { flexShrink: 0, fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: 0.5 },
   sub: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkTertiary, marginTop: 4 },

@@ -1314,6 +1314,7 @@ export async function searchAll(q: string, group?: SearchGroup): Promise<SearchR
       title: s.title,
       albumId: s.album_id,
       albumName: s.album_name,
+      artUrl: s.art_url ?? null,
       artist: s.artist,
       mine: s.mine,
       status: s.status,

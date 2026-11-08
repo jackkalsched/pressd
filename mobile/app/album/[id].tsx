@@ -1,7 +1,7 @@
 // Album detail — read view for any album, and the entry into the rating screen:
 // "Rate" (to-listen), "Continue" (listening), or "Edit rating" (rated). Shows
 // the final or predicted score, factor breakdown, and per-track scores.
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Animated,
   Dimensions,
@@ -165,15 +165,19 @@ function OutlineScore({ value, size = SCORE_SIZE }: { value: number; size?: numb
 
 export default function AlbumDetail() {
   const tc = useColors()
-  const { id, community, name, artist, deezer, compare } = useLocalSearchParams<{
+  const { id, community, name, artist, deezer, compare, track } = useLocalSearchParams<{
     id: string
     community?: string
     name?: string
     artist?: string
     deezer?: string
     compare?: string
+    /** A track id from search: scroll to that song and light it up briefly. */
+    track?: string
   }>()
   const albumId = Number(id)
+  const highlightTrack = track ? Number(track) : null
+  const { listRef, scrollToRow } = useScrollToRow()
 
   // New releases arrive by name+artist (they may not exist in Pressd yet);
   // everything else arrives with a copy's id.
@@ -328,6 +332,7 @@ export default function AlbumDetail() {
         // Arriving from a personal copy's Compare button opens straight on the
         // breakdown rather than the averaged view.
         initialComparing={compare === '1'}
+        highlightTrack={highlightTrack}
         onOpenYours={
           shown.your_album_id != null
             ? () =>
@@ -548,6 +553,7 @@ export default function AlbumDetail() {
       </View>
 
       <Animated.ScrollView
+        ref={listRef}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
@@ -778,14 +784,23 @@ export default function AlbumDetail() {
         />
 
         <Text style={styles.sectionLabel}>TRACKS</Text>
-        {sorted.map((s) => (
-          <TrackRow
-            key={s.id}
-            song={s}
-            scrollY={scrollY}
-            onMeasure={(y) => rowYs.current.set(s.id, y)}
-          />
-        ))}
+        {sorted.map((s) => {
+          // Only once rated: an unfinished copy's songs still unlock in order, and
+          // a search must not point past where the listener has reached.
+          const lit = isMine && album.status === 'rated' && highlightTrack != null && s.trackId === highlightTrack
+          return (
+            <TrackRow
+              key={s.id}
+              song={s}
+              scrollY={scrollY}
+              highlighted={lit}
+              onMeasure={(y) => {
+                rowYs.current.set(s.id, y)
+                if (lit) scrollToRow(y)
+              }}
+            />
+          )
+        })}
 
         <ReviewSection
           album={album}
@@ -831,10 +846,12 @@ function CommunityAlbum({
   onRate,
   onQueue,
   initialComparing = false,
+  highlightTrack = null,
   onOpenYours,
   onDeleted,
 }: {
   data: CommunityAlbumData
+  highlightTrack?: number | null
   onBack: () => void
   onOpenArtist: (name: string) => void
   onRate: () => void
@@ -848,6 +865,7 @@ function CommunityAlbum({
   const tc = useColors()
   const queryClient = useQueryClient()
   const [comparing, setComparing] = useState(initialComparing)
+  const { listRef, scrollToRow } = useScrollToRow()
   const [rating, setRating] = useState(false)
   const [queuing, setQueuing] = useState(false)
   const [queued, setQueued] = useState(false)
@@ -1068,7 +1086,7 @@ function CommunityAlbum({
       <AlbumBackdrop albumArtUrl={data.album_art_url} album={data.album_name} artist={data.artist} />
       <SafeAreaView style={styles.screen} edges={['top']}>
         {header}
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView ref={listRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.head}>
             {data.album_art_url ? (
               <Image source={{ uri: data.album_art_url }} style={styles.art} contentFit="cover" />
@@ -1220,8 +1238,15 @@ function CommunityAlbum({
           )}
 
           <Text style={styles.sectionLabel}>TRACKS</Text>
-          {data.tracks.map((t, i) => (
-            <View key={`${t.title}-${i}`} style={styles.trackRow}>
+          {data.tracks.map((t, i) => {
+            const lit = highlightTrack != null && t.track_id === highlightTrack
+            return (
+            <View
+              key={`${t.title}-${i}`}
+              style={styles.trackRow}
+              onLayout={lit ? (e) => scrollToRow(e.nativeEvent.layout.y) : undefined}
+            >
+              {lit && <HighlightWash />}
               <Text style={styles.trackNum}>{t.track_number}</Text>
               <Text style={styles.trackTitle} numberOfLines={1}>{t.title}</Text>
               <BangSkip score={t.avg_score} />
@@ -1233,11 +1258,40 @@ function CommunityAlbum({
                 <Text style={styles.trackScoreEmpty}>—</Text>
               )}
             </View>
-          ))}
+            )
+          })}
         </ScrollView>
       </SafeAreaView>
     </View>
   )
+}
+
+/** The page's scroll view, and a one-time jump that brings a row (by its offset in
+ *  the content) to the upper third of the screen — for a song opened from search. */
+function useScrollToRow() {
+  const listRef = useRef<ScrollView>(null)
+  const done = useRef(false)
+  const scrollTo = useCallback((y: number) => {
+    if (done.current) return
+    done.current = true
+    // After the rows above it have laid out, so the offset holds.
+    setTimeout(() => listRef.current?.scrollTo({ y: Math.max(0, y - WINDOW_H * 0.35), animated: true }), 300)
+  }, [])
+  return { listRef, scrollToRow: scrollTo }
+}
+
+/** A green wash behind the song search opened the page on, fading once it's in view. */
+function HighlightWash() {
+  const [fade] = useState(() => new Animated.Value(1))
+  useEffect(() => {
+    const run = Animated.sequence([
+      Animated.delay(800),
+      Animated.timing(fade, { toValue: 0, duration: 1500, useNativeDriver: true }),
+    ])
+    run.start()
+    return () => run.stop()
+  }, [fade])
+  return <Animated.View pointerEvents="none" style={[styles.highlightWash, { opacity: fade }]} />
 }
 
 /**
@@ -1248,10 +1302,12 @@ function CommunityAlbum({
 function TrackRow({
   song,
   scrollY,
+  highlighted = false,
   onMeasure,
 }: {
   song: Song
   scrollY: Animated.Value
+  highlighted?: boolean
   onMeasure: (y: number) => void
 }) {
   const [y, setY] = useState<number | null>(null)
@@ -1275,6 +1331,7 @@ function TrackRow({
         y == null ? null : { opacity: progress, transform: [{ translateY }] },
       ]}
     >
+      {highlighted && <HighlightWash />}
       <View style={styles.trackMain}>
         <View style={styles.trackTop}>
           <Text style={styles.trackNum}>{song.trackNumber}</Text>
@@ -1990,6 +2047,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     paddingVertical: spacing.md,
+  },
+  highlightWash: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: -spacing.sm,
+    right: -spacing.sm,
+    borderRadius: radii.sm,
+    backgroundColor: colors.greenSoft,
   },
   trackMain: { flex: 1, minWidth: 0 },
   trackTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
