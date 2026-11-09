@@ -9,8 +9,8 @@
 // pair with no evidence and a pair measured at the middle look the same on purpose.
 import { StyleSheet, Text, View } from 'react-native'
 import Avatar from './Avatar'
-import type { Overlap } from '@pressd/shared/types'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors } from '../theme/tokens'
+import { overlapScore, type Overlap } from '@pressd/shared/types'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../theme/tokens'
 
 export function OverlapPill({ overlap, me }: {
   overlap: Overlap
@@ -28,7 +28,7 @@ export function OverlapPill({ overlap, me }: {
       accessibilityLabel={`${overlap.percent}% taste overlap`}
     >
       <Avatar name={me.name} avatarUrl={me.avatarUrl} size={26} />
-      <Text style={styles.percent} maxFontSizeMultiplier={NUM_SCALE_CAP}>{overlap.percent}%</Text>
+      <Text style={[styles.percent, { color: scoreColor(overlapScore(overlap.percent)) }]} maxFontSizeMultiplier={NUM_SCALE_CAP}>{overlap.percent}%</Text>
       <Text style={styles.label} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>taste overlap</Text>
     </View>
   )

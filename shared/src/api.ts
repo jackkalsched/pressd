@@ -2,7 +2,7 @@ import type {
   Album, Song, ArtistStats, FactorStats, FactorPoints,
   DiscussionPost, SubjectRef, ThreadMeta, ThreadPage, ThreadSort,
   FeedPost, HeatedMood, HeatedRecord, SubjectType,
-  TasteReason, Overlap, OverlapAlbum, PeopleSheetData, SheetPerson, SheetSong, SheetAction,
+  TasteReason, Overlap, OverlapAlbum, PeopleSheetData, SheetPerson, SheetSong, SheetAction, FriendOverlap,
   SearchResults, SearchGroup, SearchAlbum, SearchArtist, SearchSong,
 } from './types'
 
@@ -2208,6 +2208,19 @@ export async function fetchOverlap(userId: number): Promise<Overlap> {
     sharedRecords: ((d.shared_records as Record<string, unknown>[] | undefined) ?? []).map(transformOverlapAlbum),
     sharedCount: (d.shared_count as number | undefined) ?? 0,
   }
+}
+
+/** A profile's friends, each with the viewer's taste overlap with them, highest
+ *  first; the viewer, when in the list, first with a null percent. */
+export async function fetchFriendsOverlap(userId: number): Promise<FriendOverlap[]> {
+  const res = await apiFetch(`${BASE()}/overlap/friends/${userId}`)
+  if (!res.ok) throw new Error('Failed to load friends')
+  const rows = (await res.json()) as Record<string, unknown>[]
+  return rows.map((r) => ({
+    user: toUserInfo(r.user as Parameters<typeof toUserInfo>[0]),
+    percent: (r.percent as number | null) ?? null,
+    relationship: ((r.relationship as string | undefined) ?? 'none') as FriendOverlap['relationship'],
+  }))
 }
 
 /** The people sheet owed after a first rating, or null when nothing is owed.

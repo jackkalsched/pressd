@@ -32,6 +32,7 @@ import StatsView from '../../components/StatsView'
 import ProfileBanner from '../../components/ProfileBanner'
 import { getPrefs } from '../../lib/prefs'
 import SettingsSheet, { type SheetMode } from '../../components/SettingsSheet'
+import FriendsSheet from '../../components/FriendsSheet'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
@@ -165,6 +166,7 @@ export default function Profile() {
   }, [pathname])
 
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [friendsOpen, setFriendsOpen] = useState(false)
   const [sheetMode, setSheetMode] = useState<SheetMode>('settings')
   const openSheet = (mode: SheetMode) => { setSheetMode(mode); setSheetOpen(true) }
 
@@ -342,7 +344,7 @@ export default function Profile() {
                   value: summary?.total_songs_rated != null ? summary.total_songs_rated.toLocaleString() : '—',
                   label: 'Songs',
                 },
-                { value: String(friends.length), label: 'Friends' },
+                { value: String(friends.length), label: 'Friends', onPress: () => setFriendsOpen(true) },
               ]}
               genres={topGenres}
               subgenres={topSubgenres}
@@ -568,6 +570,7 @@ export default function Profile() {
       />
 
       <SettingsSheet visible={sheetOpen} mode={sheetMode} onClose={() => setSheetOpen(false)} />
+      <FriendsSheet userId={user.id} name={user.name} visible={friendsOpen} onClose={() => setFriendsOpen(false)} />
     </View>
   )
 }

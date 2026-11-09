@@ -28,7 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useSegments } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Clock, MessageCircle, Triangle, UserPlus } from 'lucide-react-native'
-import { type PeopleSheetData, type SheetAction, type SheetPerson } from '@pressd/shared/types'
+import { overlapScore, type PeopleSheetData, type SheetAction, type SheetPerson } from '@pressd/shared/types'
 import { addFriend, fetchPeopleSheet, logSheetEvent } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { light, selection } from '../lib/haptics'
@@ -255,8 +255,8 @@ export default function PeopleSheet({ data, visible, onClose }: {
                     </Pressable>
                     <Text style={styles.name} numberOfLines={1} onPress={() => onOpenProfile(p)}>{p.user.name}</Text>
                     <View style={styles.overlap}>
-                      <Text style={styles.percent} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{p.percent}%</Text>
-                      <Text style={styles.overlapLabel} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>taste overlap</Text>
+                      <Text style={[styles.percent, { color: scoreColor(overlapScore(p.percent)) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{p.percent}%</Text>
+                      <Text style={[styles.overlapLabel, { color: scoreColor(overlapScore(p.percent)) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>taste overlap</Text>
                     </View>
                     <Pressable
                       style={[styles.addBtn, isAdded && styles.addBtnOn]}

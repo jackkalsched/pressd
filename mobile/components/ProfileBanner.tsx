@@ -43,6 +43,8 @@ const HEADER_SCALE_CAP = 1.3
 export interface BannerStatItem {
   value: string
   label: string
+  /** Makes the figure a button (the Friends count opens the friends sheet). */
+  onPress?: () => void
 }
 
 export default function ProfileBanner({
@@ -124,7 +126,15 @@ export default function ProfileBanner({
           <PlainAvatar name={name} avatarUrl={avatarUrl} />
           <View style={styles.figures}>
             {figures.map((s) => (
-              <View key={s.label} style={styles.figure}>
+              <Pressable
+                key={s.label}
+                style={({ pressed }) => [styles.figure, pressed && s.onPress ? { opacity: 0.6 } : null]}
+                onPress={s.onPress}
+                disabled={!s.onPress}
+                hitSlop={8}
+                accessibilityRole={s.onPress ? 'button' : undefined}
+                accessibilityLabel={s.onPress ? `${s.value} ${s.label}` : undefined}
+              >
                 {/* Held to one line: unbounded, "5,692" wrapped and pushed its
                     own label out of line. No adjustsFontSizeToFit: on iOS, with
                     a set lineHeight, it collapsed "458" to a few points in a
@@ -135,7 +145,7 @@ export default function ProfileBanner({
                 <Text style={styles.statLabel} numberOfLines={1} maxFontSizeMultiplier={HEADER_SCALE_CAP}>
                   {s.label}
                 </Text>
-              </View>
+              </Pressable>
             ))}
           </View>
         </View>

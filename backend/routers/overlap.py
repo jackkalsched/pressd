@@ -207,6 +207,35 @@ def profile_overlap(store, me: int, other: int) -> dict:
             "shared_records": [_album_brief(a) for a in shared[:SHARED_SHOWN]], "shared_count": len(shared)}
 
 
+def friends_overlap(store, me: int, owner: int) -> list[dict]:
+    """A profile's friends list, each friend with the *viewer's* taste overlap
+    with them — on your own profile, yours with each friend; on someone else's,
+    yours with each of theirs. You, when you're in their list, come first with no
+    percent; the rest by percent, highest first, then name.
+
+    The pairs go through the same live refresh as the profile's own pill
+    (`_refresh`, not marking the viewer fresh: a friends list is a subset of the
+    userbase, as one profile is), so a viewer who rated since last night reads
+    the list and the pills on the same numbers.
+
+    Each row also says where the viewer stands with that friend
+    (`relationship`: self / friends / sent / received / none), so someone
+    else's list can offer Add, Requested or Accept beside each person."""
+    ids = store.friend_ids(owner)
+    others = [u for u in ids if u != me]
+    if others:
+        _refresh(store, me, set(others), mark_fresh=False)
+    percents = store.stored_percents(me, others)
+    people = store.users(ids)
+    rel = store.relationships(me) if others else {}
+    rows = [{"user": public_user(people[u]),
+             "percent": None if u == me else round(percents.get(u, 50.0)),
+             "relationship": "self" if u == me else rel.get(u, "none")}
+            for u in ids if u in people]
+    rows.sort(key=lambda r: (r["percent"] is not None, -(r["percent"] or 0), r["user"]["name"].lower()))
+    return rows
+
+
 # ---------------------------------------------------------------- data access
 
 class Store:
@@ -235,6 +264,22 @@ class Store:
         rows = self.session.exec(select(Friendship.user_id_a, Friendship.user_id_b).where(
             or_(Friendship.user_id_a == me, Friendship.user_id_b == me))).all()
         return {b if a == me else a for a, b in rows}
+
+    def relationships(self, me: int) -> dict[int, str]:
+        """Where `me` stands with everyone they share a friendship row with:
+        friends, sent (asked by me) or received (asked of me)."""
+        rows = self.session.exec(select(Friendship).where(
+            or_(Friendship.user_id_a == me, Friendship.user_id_b == me))).all()
+        return {(f.user_id_b if f.user_id_a == me else f.user_id_a):
+                ("friends" if f.status == "accepted" else "sent" if f.requested_by == me else "received")
+                for f in rows}
+
+    def friend_ids(self, uid: int) -> list[int]:
+        """Accepted friendships only: a pending request isn't a friend."""
+        rows = self.session.exec(select(Friendship.user_id_a, Friendship.user_id_b).where(
+            or_(Friendship.user_id_a == uid, Friendship.user_id_b == uid),
+            Friendship.status == "accepted")).all()
+        return [b if a == uid else a for a, b in rows]
 
     def record_raters(self, subject_key: str, me: int) -> dict[int, Album]:
         """Each other user's most recent rated copy of the record."""
@@ -298,6 +343,13 @@ class Store:
 def get_overlap(user_id: int, user: PressUser = Depends(current_user), session: Session = Depends(get_session)):
     authorize_view(user, user_id, session)
     return profile_overlap(Store(session), user.id, user_id)
+
+
+@router.get("/overlap/friends/{user_id}")
+def get_friends_overlap(user_id: int, user: PressUser = Depends(current_user),
+                        session: Session = Depends(get_session)):
+    authorize_view(user, user_id, session)
+    return friends_overlap(Store(session), user.id, user_id)
 
 
 @router.get("/overlap/sheet")

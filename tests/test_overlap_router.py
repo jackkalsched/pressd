@@ -7,8 +7,8 @@ import pytest
 
 from backend.routers.albums import _owes_sheet
 from backend.routers.overlap import (
-    SHEET_TTL, Store, _apply_event, _choose_sheet, _closest_record, _eligible, _refresh, profile_overlap,
-    serve_sheet,
+    SHEET_TTL, Store, _apply_event, _choose_sheet, _closest_record, _eligible, _refresh, friends_overlap,
+    profile_overlap, serve_sheet,
 )
 from backend.scoring import top_bottom_songs
 
@@ -48,6 +48,8 @@ class FakeStore:
     rows: dict = field(default_factory=dict)                # other uid -> (percent, reason)
     refresh_fails: bool = False
     rollbacks: int = 0
+    friends: dict = field(default_factory=dict)             # uid -> accepted friend ids
+    rels: dict = field(default_factory=dict)                # other uid -> friends / sent / received
 
     def owed_sheets(self, me):
         return [s for s in self.sheets if s.user_id == me and s.status == "owed"]
@@ -60,6 +62,12 @@ class FakeStore:
 
     def friends_or_pending(self, me):
         return set(self.excluded)
+
+    def friend_ids(self, uid):
+        return list(self.friends.get(uid, []))
+
+    def relationships(self, me):
+        return dict(self.rels)
 
     def record_raters(self, subject_key, me):
         return {a.user_id: a for a in self.albums.values()
@@ -284,6 +292,40 @@ def test_no_record_in_the_reason_connects_through_a_shared_one():
     store = FakeStore(albums={10: album(10, 1), 20: album(20, 2)}, rows={2: (60.0, reason)})
     out = profile_overlap(store, 1, 2)
     assert out["reason"] == reason and out["connecting_album_id"] == 20
+
+
+# ---------------------------------------------------------------- a profile's friends
+
+def test_friends_list_is_the_viewers_overlap_highest_first():
+    # Viewer 1 on user 2's profile; 2's friends are 3, 4, 5 and the viewer.
+    store = FakeStore(friends={2: [3, 4, 1, 5]}, percents={3: 41.6, 4: 88.2})
+    out = friends_overlap(store, 1, 2)
+    assert [(r["user"]["id"], r["percent"]) for r in out] == [(1, None), (4, 88), (5, 50), (3, 42)]
+    assert store.refreshed == [(1, {3, 4, 5})]           # the same live refresh as a profile pill
+    assert set(out[1]["user"]) == {"id", "name", "avatar_url", "bio"}   # public_user only
+
+
+def test_own_friends_list():
+    store = FakeStore(friends={1: [7, 8]}, percents={8: 70.0})
+    assert [(r["user"]["id"], r["percent"]) for r in friends_overlap(store, 1, 1)] == [(8, 70), (7, 50)]
+
+
+def test_ties_break_on_name_and_no_friends_touches_nothing():
+    store = FakeStore(friends={2: [9, 6]})
+    assert [r["user"]["name"] for r in friends_overlap(store, 1, 2)] == ["user6", "user9"]
+    empty = FakeStore()
+    assert friends_overlap(empty, 1, 2) == [] and empty.refreshed == []
+
+
+def test_a_failed_refresh_serves_stored_numbers():
+    store = FakeStore(friends={2: [3]}, percents={3: 61.0}, refresh_fails=True)
+    assert friends_overlap(store, 1, 2)[0]["percent"] == 61 and store.rollbacks == 1
+
+
+def test_each_friend_says_where_the_viewer_stands():
+    store = FakeStore(friends={2: [1, 3, 4, 5, 6]}, rels={3: "friends", 4: "sent", 5: "received"})
+    got = {r["user"]["id"]: r["relationship"] for r in friends_overlap(store, 1, 2)}
+    assert got == {1: "self", 3: "friends", 4: "sent", 5: "received", 6: "none"}
 
 
 # ---------------------------------------------------------------- shared helpers

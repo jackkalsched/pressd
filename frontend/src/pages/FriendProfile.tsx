@@ -11,6 +11,7 @@ import { ScoreHistogram } from '../components/histograms'
 import ProfilePicks from '../components/ProfilePicks'
 import SettingsDialog, { type SettingsMode } from '../components/SettingsDialog'
 import { OverlapPill } from '../components/TasteOverlap'
+import FriendsDialog from '../components/FriendsDialog'
 import Avatar from '../components/Avatar'
 import Stats from './Stats'
 import Ratings from './Ratings'
@@ -49,6 +50,7 @@ export default function FriendProfile() {
   // Removing a friend always asks first, from the Friends button or the menu.
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [friendsOpen, setFriendsOpen] = useState(false)
   const valid = Number.isFinite(fid)
   // Your own page: Settings instead of the friend button, and picks you can change.
   const isSelf = activeUser?.id === fid
@@ -410,15 +412,32 @@ export default function FriendProfile() {
           { value: rated.length.toLocaleString(), label: 'Albums' },
           { value: artistCount.toLocaleString(), label: 'Artists' },
           { value: summary?.total_songs_rated != null ? summary.total_songs_rated.toLocaleString() : '—', label: 'Songs' },
-          { value: theirFriends.length.toLocaleString(), label: 'Friends' },
-        ].map((st, i) => (
-          <div key={st.label} className="rise-in" style={stagger(i)}>
-            <p className="font-display m-0 text-[30px] font-bold leading-none tabular-nums md:text-[36px]" style={{ color: st.color ?? 'var(--c-1c1917)' }}>
-              {st.value}
-            </p>
-            <p className="m-0 mt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-(--c-a8998a)">{st.label}</p>
-          </div>
-        ))}
+          { value: theirFriends.length.toLocaleString(), label: 'Friends', onClick: () => setFriendsOpen(true) },
+        ].map((st: { value: string; label: string; color?: string; onClick?: () => void }, i) => {
+          const figure = (
+            <>
+              <p className="font-display m-0 text-[30px] font-bold leading-none tabular-nums md:text-[36px]" style={{ color: st.color ?? 'var(--c-1c1917)' }}>
+                {st.value}
+              </p>
+              <p className="m-0 mt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-(--c-a8998a)">{st.label}</p>
+            </>
+          )
+          // The Friends count opens the list of them, with your overlap with each.
+          return st.onClick ? (
+            <button
+              key={st.label}
+              type="button"
+              onClick={st.onClick}
+              aria-label={`${st.value} ${st.label}`}
+              className="rise-in cursor-pointer text-left transition-opacity hover:opacity-70"
+              style={stagger(i)}
+            >
+              {figure}
+            </button>
+          ) : (
+            <div key={st.label} className="rise-in" style={stagger(i)}>{figure}</div>
+          )
+        })}
       </div>
 
       {/* Favourite genres, then the picks. */}
@@ -472,6 +491,9 @@ export default function FriendProfile() {
       {tab === 'ratings' && <Ratings embedded />}
       </div>
       {sheet && <SettingsDialog mode={sheet} onClose={() => setSheet(null)} />}
+      {friendsOpen && person && (
+        <FriendsDialog userId={fid} name={person.name} onClose={() => setFriendsOpen(false)} />
+      )}
       {confirmRemove && person && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm fade-in" onClick={busy ? undefined : () => setConfirmRemove(false)} />

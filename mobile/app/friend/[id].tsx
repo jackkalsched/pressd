@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native'
 import VinylSpinner from '../../components/VinylSpinner'
+import FriendsSheet from '../../components/FriendsSheet'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -93,6 +94,7 @@ export default function FriendProfile() {
   const [rankMetric, setRankMetric] = useState(defaultMetricFor('albums'))
   const [rankDir, setRankDir] = useState<RankDir>('desc')
   const [metricOpen, setMetricOpen] = useState(false)
+  const [friendsOpen, setFriendsOpen] = useState(false)
   const metricBtnRef = useRef<View>(null)
 
   function switchRankMode(m: RankMode) {
@@ -325,7 +327,7 @@ export default function FriendProfile() {
                   value: summary?.total_songs_rated != null ? summary.total_songs_rated.toLocaleString() : '—',
                   label: 'Songs',
                 },
-                { value: String(theirFriends.length), label: 'Friends' },
+                { value: String(theirFriends.length), label: 'Friends', onPress: () => setFriendsOpen(true) },
               ]}
               genres={topGenres}
               subgenres={topSubgenres}
@@ -470,6 +472,7 @@ export default function FriendProfile() {
         }}
         onClose={() => setMetricOpen(false)}
       />
+      <FriendsSheet userId={fid} name={person.name} visible={friendsOpen} onClose={() => setFriendsOpen(false)} />
     </View>
   )
 }

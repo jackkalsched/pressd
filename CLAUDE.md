@@ -781,7 +781,7 @@ axes are — decide that on purpose, not through a deploy.
 
 **Taste overlap on the surfaces (`backend/routers/overlap.py`, November 2026)** — the
 number on a profile and the people sheet after a first rating (spec §5; the nightly
-computation is §4, "Journey: taste overlap"). Three endpoints, all behind
+computation is §4, "Journey: taste overlap"). Four endpoints, all behind
 `current_user`; profiles are public, so anyone signed in may ask about anyone, and
 people appear only as `public_user`.
 
@@ -816,6 +816,20 @@ people appear only as `public_user`.
   what clears it (`status` shown, `shown_at`), logged once however many devices show
   it — and `not_now` also clears it. `add`, `open_discussion` and `open_profile` are
   logged as they come.
+- `GET /overlap/friends/{id}` → `[{user, percent, relationship}]`: that profile's accepted friends,
+  each with the **viewer's** overlap with them (`friends_overlap`) — yours with each of
+  theirs, or with each of yours on your own profile. 50 for a missing row; you, when
+  you're in their list, first with `percent` null; the rest highest first, then by name.
+  It runs the profile pill's live refresh (`mark_fresh=False`) over those friends, so the
+  list and the pills agree. Behind the **Friends** figure on both platforms: mobile's
+  `FriendsSheet` (a bottom sheet in `PeopleSheet`'s manner, opened from `ProfileBanner`'s
+  figure, which takes an `onPress`) and web's `FriendsDialog` (from `FriendProfile`'s stat
+  row). A row opens that person's profile and shows their bio, one line, under the name.
+  `relationship` is where the viewer stands with each (`self` / `friends` / `sent` /
+  `received` / `none`, from `Store.relationships`); on someone else's list each row but
+  yours ends in the profile button's words — **Add** or **Accept** (both `addFriend`,
+  which accepts a pending request), **Requested** or **Friends** — to the right of the
+  overlap. Your own list has none.
 
 **The live path** (`backend/taste_live.py`) keeps the sheet's numbers fresh: a caller
 who rated since their `tasteuser` row recomputes, inside the request, against that
@@ -836,8 +850,8 @@ vector) so that freshness is defined for everyone.
 **On web** (`components/TasteOverlap.tsx`, `components/PeopleSheet.tsx`, November
 2026). `FriendProfile` asks `fetchOverlap` (`['overlap', viewer, id]`) on anyone's profile
 but your own, and draws one `OverlapPill` under the bio for a friend and a stranger alike:
-a small outlined pill, your own avatar then the percent in Playfair green with "taste
-overlap" — a figure to read, not a link; the reason is its tooltip. Until November 2026 it
+a small outlined pill, your own avatar then the percent in Playfair, coloured on the score
+scale (below), with "taste overlap" — a figure to read, not a link; the reason is its tooltip. Until November 2026 it
 was filled, with both avatars and the covers of the records you'd both rated, each a link
 to compare. The endpoint still sends `shared_records` / `shared_count`, now unused by
 both apps. Only the button beside it says which relationship it is: **Add friend** /
@@ -868,7 +882,7 @@ cached sheet so a remount can't reopen it.
 November 2026) — the same features in mobile's layout. `app/friend/[id].tsx` asks
 `fetchOverlap` (`['overlap', viewer, id]`) on anyone but you and draws the taste overlap
 through `ProfileBanner`'s `overlap` slot — under the bio, as web's outlined pill: your own
-avatar, then "80% taste overlap" with the number in Playfair green, not tappable. The
+avatar, then "80% taste overlap" with the number in Playfair on the score scale, not tappable. The
 header above it: the banner nearly edge to edge, the avatar (80pt, ringed in the page colour)
 riding up over its bottom edge with three figures beside it (Albums, Songs, and the
 average in its score colour), then the name with a `stickers` slot to its right (empty
@@ -1622,6 +1636,11 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   Playfair italic (web `<i>` inside `.font-display`; mobile `fonts.displayItalic`, a
   loaded face, because iOS can't slant a custom font with `fontStyle`). Clash Display is the wordmark only, and Unbounded Bold (mobile `fonts.wide`, web `.font-wide`) the shelf's heading only. Web used DM Sans until September
   2026, share card included; don't bring a third face back.
+- **A taste overlap is coloured on the score scale**: `overlapScore(percent)`
+  (`shared/src/types.ts`) puts 0% at a 1 (red) and 100% at a 10 (green), and each
+  platform's own score colour draws it (web `songScoreColor`, mobile `scoreColor`), so
+  it follows dark mode as scores do. The profile pill, the people sheet and the friends
+  list all go through it; never a fixed green.
 - **A final album score is always shown to two decimals** (`8.20`, never `8.2`) —
   rated, predicted or projected, on both platforms. Song scores and factor values are
   one decimal. The tutorial's demo numbers follow the same rule.

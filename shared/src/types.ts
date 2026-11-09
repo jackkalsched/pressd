@@ -162,6 +162,14 @@ export function songScoreColor(score: number, dark = false): string {
 // Deterministic color for a user's default profile picture, derived from their
 // name so it's stable and distinct per person. Tuned for legible text and fills
 // on the light app background.
+/** A taste overlap's place on the score colour scale: 0% reads as a 1 (red),
+ *  100% as a 10 (green), so an overlap is coloured the way scores are. Pass the
+ *  result to each platform's score colour (web `songScoreColor`, mobile
+ *  `scoreColor` / `useScoreColor`), which follow the theme. */
+export function overlapScore(percent: number): number {
+  return 1 + (9 * Math.min(100, Math.max(0, percent))) / 100
+}
+
 export function avatarColor(seed: string): string {
   let hash = 0
   for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0
@@ -429,6 +437,15 @@ export interface Overlap {
 }
 
 export interface SheetSong { title: string; score: number }
+
+/** One row of a profile's friends list: the friend, and the viewer's taste
+ *  overlap with them — null for the viewer themselves. */
+export interface FriendOverlap {
+  user: UserInfo
+  percent: number | null
+  /** Where the viewer stands with this person. */
+  relationship: 'self' | 'friends' | 'sent' | 'received' | 'none'
+}
 
 export interface SheetPerson {
   user: UserInfo

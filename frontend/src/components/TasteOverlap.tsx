@@ -9,8 +9,8 @@
 // along as its tooltip. 50% is drawn like any other number: a pair with no
 // evidence and a pair measured at the middle look the same on purpose.
 import type { Overlap, TasteReason } from '../types'
+import { overlapScore, songScoreColor } from '../types'
 import Avatar from './Avatar'
-import { GREEN } from './albumView'
 
 // The server escapes every name it puts in `text` (html.escape, quote off) and
 // wraps album titles in <i>; nothing else in it is markup. The text is only
@@ -31,7 +31,7 @@ export function OverlapPill({ overlap, me }: { overlap: Overlap; me: Face }) {
       title={overlap.reason ? reasonPlain(overlap.reason) : undefined}
     >
       <Avatar name={me.name} avatarUrl={me.avatarUrl} size={30} />
-      <span className="font-display text-[24px] font-bold leading-none tabular-nums" style={{ color: GREEN }}>{overlap.percent}%</span>
+      <span className="font-display text-[24px] font-bold leading-none tabular-nums" style={{ color: songScoreColor(overlapScore(overlap.percent)) }}>{overlap.percent}%</span>
       <span className="text-[14px] font-medium text-(--c-8a7f72)">taste overlap</span>
     </div>
   )

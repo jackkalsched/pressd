@@ -13,13 +13,13 @@ import { Clock, MessageCircle, UserPlus, X } from 'lucide-react'
 import { addFriend, fetchPeopleSheet, logSheetEvent, resolveThread } from '../api'
 import { useUser } from '../context/UserContext'
 import type { PeopleSheetData, SheetAction, SheetPerson } from '../types'
+import { overlapScore, songScoreColor } from '../types'
 import { threadKey, threadPath } from '../lib/threads'
 import { PEOPLE_SHEET_KEY } from '../lib/peopleSheet'
 import { phoneVerifyConfigured } from '../lib/phoneVerify'
 import { stagger } from '../lib/format'
 import Avatar from './Avatar'
 import { Cover, COVER_LIFT } from './covers'
-import { GREEN } from './albumView'
 import VinylSpinner from './VinylSpinner'
 
 // Per page load, not per mount: Layout remounts between route trees (Charts has
@@ -177,7 +177,7 @@ export default function PeopleSheet({ data, onClose }: { data: PeopleSheetData; 
                   >
                     {p.user.name}
                   </button>
-                  <span className="flex shrink-0 items-baseline gap-1.5" style={{ color: GREEN }}>
+                  <span className="flex shrink-0 items-baseline gap-1.5" style={{ color: songScoreColor(overlapScore(p.percent)) }}>
                     <span className="font-display text-[26px] font-bold leading-none tabular-nums">{p.percent}%</span>
                     <span className="text-xs font-semibold">taste overlap</span>
                   </span>
