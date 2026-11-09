@@ -1699,9 +1699,17 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   both. Trending on Pressd stays a plain ranked list (`TrendingBoard`): no rank gets
   special treatment.
 - **Every wait shows the spinning record** (November 2026): `VinylSpinner`, one per
-  platform (`frontend/src/components/`, `mobile/components/`) — the disc from the Pressd
-  mark, held still while its reflections sweep round it, black in both themes, still
-  under reduced motion. Never `Loader2 animate-spin` on web or `ActivityIndicator` on mobile; mobile's
+  platform (`frontend/src/components/`, `mobile/components/`), drawn from
+  the vinyl-loader design handoff of November 2026 (its numbers live in the code). Each spinner picks one of the
+  handoff's 1b–1f at random when it appears — the record turning under a still light,
+  a tonearm, a pressing plate, grooves filling, the record out of a Pressd sleeve — except
+  at `SMALL_MAX` (28) or below, a button's or row's spinner, which is always 1b, and
+  under reduced motion, which is 1b standing still. Each is drawn at the handoff's
+  reference disc (120) and scaled into the `size` square, so a spinner's footprint never
+  depends on its variant; `variant` fixes one. Web's keyframes are the handoff's, in
+  `index.css` (`vl-*`); mobile runs each keyframe list as one `Animated` value
+  (`useCycle`) with the same easing per segment. 1a, the old spinning light, is gone.
+  Never `Loader2 animate-spin` on web or `ActivityIndicator` on mobile; mobile's
   takes `ActivityIndicator`'s props (`size` small/large/points, `color` ignored) and
   centres itself the same way. The drawing is duplicated across the two files; change both.
   Sized by what's waiting: 64 for a whole screen, 44–48 for a list or sheet, 32 for a

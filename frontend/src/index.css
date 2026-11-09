@@ -632,10 +632,78 @@ button:not(:disabled):active {
 :root.dark .spot-glow { opacity: 0.3; }
 :root.dark .group:hover .spot-glow { opacity: 0.42; }
 
-/* The loading record (VinylSpinner): its reflections sweep round once every
-   1.6s while the record holds still. Still under reduced motion. */
-@keyframes vinyl-turn { to { transform: rotate(360deg); } }
-.vinyl-spinner-light { transform-origin: 50px 50px; animation: vinyl-turn 1.6s linear infinite; }
+/* The loading record (VinylSpinner), from the vinyl-loader design handoff: the
+   handoff's layers and keyframes at its reference disc (120px), which the
+   component scales into the spinner's box. Literal colours: a record is black
+   in both themes; only the shadow and the tonearm and plate greys change in dark.
+   Everything holds still under reduced motion. */
+@property --vl-r { syntax: '<percentage>'; inherits: false; initial-value: 22%; }
+@keyframes vl-spin { to { transform: rotate(360deg); } }
+@keyframes vl-plate { 0%, 20% { transform: translateY(-46px); opacity: 0; } 34% { transform: translateY(-6px); opacity: 1; } 40% { transform: translateY(0); opacity: 1; } 56% { transform: translateY(-46px); opacity: 0; } 100% { transform: translateY(-46px); opacity: 0; } }
+@keyframes vl-squash { 0%, 38% { transform: scale(1, 1); } 43% { transform: scale(1.07, .9); } 52% { transform: scale(.98, 1.02); } 60%, 100% { transform: scale(1, 1); } }
+@keyframes vl-ripple { 0%, 40% { transform: scale(.45); opacity: 0; } 43% { opacity: .55; } 85%, 100% { transform: scale(1.35); opacity: 0; } }
+@keyframes vl-arm { 0%, 8% { transform: rotate(-28deg); } 22% { transform: rotate(0deg); } 78% { transform: rotate(9deg); } 92%, 100% { transform: rotate(-28deg); } }
+@keyframes vl-sleeve { 0%, 6% { transform: translateX(0); } 28%, 72% { transform: translateX(42%); } 94%, 100% { transform: translateX(0); } }
+@keyframes vl-grow { 0% { --vl-r: 22%; opacity: 1; } 85% { --vl-r: 100%; opacity: 1; } 100% { --vl-r: 100%; opacity: 0; } }
+
+.vl-spin { border-radius: 50%; animation: vl-spin 1.8s linear infinite; }
+.vl-disc {
+  position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
+  background: repeating-radial-gradient(circle, #1b1a19 0 2px, #222120 2px 3px);
+  box-shadow: 0 8px 20px rgba(28, 25, 23, .18);
+}
+:root.dark .vl-disc { box-shadow: 0 0 0 1px rgba(255, 255, 255, .08); }
+.vl-sheen {
+  background: conic-gradient(from 0deg, transparent 0deg 28deg, rgba(255,255,255,.22) 40deg, rgba(255,255,255,.06) 62deg, transparent 72deg 208deg, rgba(255,255,255,.22) 220deg, rgba(255,255,255,.06) 242deg, transparent 252deg);
+  -webkit-mask-image: radial-gradient(circle, transparent 0 38%, #000 39% 90%, transparent 91%);
+  mask-image: radial-gradient(circle, transparent 0 38%, #000 39% 90%, transparent 91%);
+}
+.vl-label { position: absolute; left: 33%; top: 33%; width: 34%; height: 34%; border-radius: 50%; background: #F4F2EC; overflow: hidden; }
+.vl-label-band { position: absolute; left: 0; right: 0; top: 0; height: 38%; background: #2d6a4f; }
+.vl-spindle { position: absolute; left: 42%; top: 42%; width: 16%; height: 16%; border-radius: 50%; background: #1c1917; }
+
+/* 1c: the tonearm. */
+.vl-pivot {
+  position: absolute; right: 6px; top: 0; width: 14px; height: 14px; border-radius: 50%;
+  background: #8a7f74; transform-origin: 7px 7px;
+}
+.vl-arm { animation: vl-arm 4s cubic-bezier(.6, 0, .3, 1) infinite; }
+.vl-arm-rod {
+  position: absolute; left: 5px; top: 7px; width: 4px; height: 74.4px; border-radius: 2px;
+  background: #6b625a; transform-origin: top; transform: rotate(22deg);
+}
+.vl-arm-head { position: absolute; left: -3px; bottom: -6px; width: 10px; height: 12px; border-radius: 2px; background: #2d6a4f; }
+:root.dark .vl-pivot { background: #A8998A; }
+:root.dark .vl-arm-rod { background: #CFC6BC; }
+
+/* 1d: the press. */
+.vl-ripple {
+  position: absolute; left: 10px; top: 30px; width: 120px; height: 120px; border-radius: 50%;
+  border: 2px solid #2d6a4f; box-sizing: border-box; animation: vl-ripple 1.8s ease-out infinite;
+}
+.vl-squash { animation: vl-squash 1.8s ease-out infinite; }
+.vl-plate {
+  position: absolute; left: 0; top: 18px; width: 140px; height: 12px; border-radius: 6px;
+  background: #3a3632; animation: vl-plate 1.8s cubic-bezier(.5, 0, .3, 1) infinite;
+}
+:root.dark .vl-plate { background: #CFC6BC; }
+
+/* 1e: grooves filling. */
+.vl-grooves {
+  background: repeating-radial-gradient(circle, rgba(111,191,142,.7) 0 var(--vl-gw, 1px), transparent var(--vl-gw, 1px) var(--vl-g, 4px));
+  -webkit-mask-image: radial-gradient(circle, #000 0 var(--vl-r), transparent calc(var(--vl-r) + 1%));
+  mask-image: radial-gradient(circle, #000 0 var(--vl-r), transparent calc(var(--vl-r) + 1%));
+  animation: vl-grow 2.4s ease-in-out infinite;
+}
+
+/* 1f: out of the sleeve. */
+.vl-slide { animation: vl-sleeve 3.2s cubic-bezier(.6, 0, .3, 1) infinite; }
+.vl-sleeve {
+  position: absolute; left: 0; top: 0; width: 130px; height: 130px; border-radius: 6px;
+  background: #2d6a4f; box-shadow: 0 8px 20px rgba(28, 25, 23, .18);
+  display: flex; align-items: flex-end; padding: 12px; box-sizing: border-box;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .vinyl-spinner-light { animation: none; }
+  .vl-spin, .vl-arm, .vl-squash, .vl-plate, .vl-ripple, .vl-grooves, .vl-slide { animation: none; }
 }
