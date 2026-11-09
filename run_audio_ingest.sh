@@ -5,7 +5,7 @@
 # (ops/launchd/install.sh); run it by hand whenever you like:
 #
 #   ./run_audio_ingest.sh              # analyze all albums with missing audio
-#   ./run_audio_ingest.sh --limit 20   # cap this run to 20 albums
+#   ./run_audio_ingest.sh --limit 20   # cap this run to 20 tracks
 #   ./run_audio_ingest.sh --preflight  # check the toolchain; analyze nothing
 #
 # PRESSD_UPDATE_YTDLP=1 upgrades yt-dlp first. The launchd job sets it: when

@@ -2,7 +2,10 @@
 Global audio ingest (PLAN_ml_worker_split §2): analyze every unique track
 that has no audio features yet, exactly once, shared across all users.
 
-Per-album yt-dlp download + Essentia extraction (source='yt_full'). Requires
+A first-in, first-out queue of recordings (one row per Track, however many
+people own the record; see tracks_needing_audio), each downloaded with yt-dlp
+and analyzed with Essentia (source='yt_full') once. A failure goes to the back
+of the queue with its reason on the Track. Requires
 essentia, yt-dlp, node and ffmpeg, so it runs on the Mac — yt-dlp is
 bot-blocked from datacenter IPs. Nightly via launchd (ops/launchd/install.sh);
 ./run_audio_ingest.sh runs it by hand.
@@ -41,10 +44,10 @@ Usage:
 """
 import argparse
 import glob
+import heapq
 import json
 import os
 import pathlib
-import re
 import shutil
 import subprocess
 import sys
@@ -98,20 +101,36 @@ class ToolchainError(RuntimeError):
     every remaining track would fail the same way."""
 
 
-def albums_needing_audio(con, limit: int | None = None):
-    """Albums (any user, any status) with ≥1 track lacking analyzed audio.
-    Dedup means an album whose tracks were analyzed via another user's copy
-    never shows up here."""
+def tracks_needing_audio(con, limit: int | None = None):
+    """The queue: one row per recording with no audio that is due for an
+    attempt, first in, first out — (track_id, title, artist, album_name).
+
+    One row per Track, never per album copy. Until November 2026 the job walked
+    album copies, so a record two people owned was downloaded twice a night
+    (Her Loss, Rodeo and XXXXX were each tried 42 times in six weeks of logs).
+    The search terms come from the oldest copy of a song on the recording.
+
+    A track's place in line is when it arrived (`created_at`), or, once it has
+    failed, when it last failed (`audio_failed_at`): a failure sends it to the
+    back, behind everything already waiting and ahead of what arrives later.
+    Before this the order was album id, so every night opened on the oldest
+    albums' unfindable tracks while that day's imports waited."""
     sql = f"""
-        SELECT DISTINCT a.id, a.artist, a.album_name
-        FROM album a
-        JOIN song s ON s.album_id = a.id
-        JOIN track t ON t.id = s.track_id
-        WHERE {_PENDING} AND {_DUE}
-        ORDER BY a.id
+        SELECT q.track_id, q.title, q.artist, q.album_name FROM (
+            SELECT DISTINCT ON (t.id)
+                   t.id AS track_id, s.title, a.artist, a.album_name,
+                   COALESCE(t.audio_failed_at, t.created_at) AS queued_at
+            FROM track t
+            JOIN song s ON s.track_id = t.id
+            JOIN album a ON a.id = s.album_id
+            WHERE {_PENDING} AND {_DUE}
+            ORDER BY t.id, a.id
+        ) q
+        ORDER BY q.queued_at, q.track_id
     """
-    rows = con.execute(text(sql)).fetchall()
-    return rows[:limit] if limit else rows
+    if limit:
+        sql += " LIMIT :limit"
+    return con.execute(text(sql), {"limit": limit} if limit else {}).fetchall()
 
 
 def _ytdlp_cmd(out_tmpl: str, search: str) -> list[str]:
@@ -168,94 +187,160 @@ def canary(analyze: bool = False) -> tuple[bool, str]:
         return False, why
 
 
-def analyze_album(album_id: int, artist: str, album_name: str) -> tuple[int, int]:
-    """Download + analyze this album's un-analyzed tracks; write trackaudio.
-    Returns (tracks analyzed, tracks attempted).
-
-    Holds a database connection only to read the to-do list and to write the
-    results, never across the downloads. An album is minutes of yt-dlp, and
-    Supabase's session pooler allows 15 clients for the whole project, the live
-    app included (CLAUDE.md §7)."""
-    from backend.routers.audio import _analyze_file
-
+def _record_failure(track_id: int, reason: str) -> None:
+    """Note why, and send the track to the back of the queue: its place in
+    line becomes now (`audio_failed_at`). The strike counts once per 12 hours,
+    so a crashed run and the catch-up that follows it are one bad night, not
+    two."""
     with engine.connect() as con:
-        todo = con.execute(text(f"""
-            SELECT s.track_id, s.title, s.track_number
-            FROM song s
-            JOIN track t ON t.id = s.track_id
-            WHERE s.album_id = :id AND {_PENDING} AND {_DUE}
-            ORDER BY s.track_number
-        """), {"id": album_id}).fetchall()
-    if not todo:
-        return 0, 0
+        con.execute(text(
+            "UPDATE track SET audio_failures = audio_failures"
+            " + CASE WHEN audio_failed_at > NOW() - INTERVAL '12 hours' THEN 0 ELSE 1 END,"
+            " audio_failed_at = NOW(), audio_fail_reason = :r WHERE id = :tid"),
+            {"tid": track_id, "r": reason[:240]})
+        con.commit()
 
-    results = []
-    failed: list[tuple[int, str]] = []  # (track_id, reason)
-    with tempfile.TemporaryDirectory() as tmpdir:
-        why: dict[int, str] = {}
-        for track_id, title, track_number in todo:
-            out_tmpl = os.path.join(tmpdir, f"{(track_number or 0):03d}_%(title)s.%(ext)s")
-            reason = _download(f"ytsearch1:{title} {artist} {album_name}", out_tmpl)
-            if reason:
-                why[track_number or 0] = reason
 
-        file_by_track: dict[int, str] = {}
-        for f in sorted(glob.glob(os.path.join(tmpdir, "*.mp3"))):
-            m = re.match(r"^(\d+)_", os.path.basename(f))
-            if m:
-                file_by_track[int(m.group(1))] = f
-
-        for track_id, title, track_number in todo:
-            audio_path = file_by_track.get(track_number or 0)
-            if not audio_path:
-                reason = why.get(track_number or 0, 'no file produced')
-                print(f"[audio_ingest] no audio for {title}: {reason}")
-                failed.append((track_id, reason))
-                continue
-            try:
-                results.append((track_id, title, _analyze_file(audio_path)))
-            except Exception as e:
-                print(f"[audio_ingest] analysis failed for {title}: {e}")
-                failed.append((track_id, f"analysis failed: {e}"))
-
-    if failed:
-        with engine.connect() as con:
-            for track_id, reason in failed:
-                # Once per night at most: a record several people own is tried
-                # once per copy, and that's one bad night, not three.
-                con.execute(text(
-                    "UPDATE track SET audio_failures = audio_failures"
-                    " + CASE WHEN audio_failed_at > NOW() - INTERVAL '12 hours' THEN 0 ELSE 1 END,"
-                    " audio_failed_at = NOW(), audio_fail_reason = :r WHERE id = :tid"),
-                    {"tid": track_id, "r": reason[:240]})
-            con.commit()
-
-    if not results:
-        return 0, len(todo)
-
+def _store_features(track_id: int, features: dict) -> None:
     col_names = ", ".join(_FEATURE_COLS)
     set_cols = ", ".join(f"{c} = EXCLUDED.{c}" for c in _FEATURE_COLS)
     placeholders = ", ".join(f":{c}" for c in _FEATURE_COLS)
-    analyzed = 0
     with engine.connect() as con:
-        for track_id, title, features in results:
-            try:
-                con.execute(text(
-                    f"INSERT INTO trackaudio (track_id, analyzed_at, source, {col_names})"
-                    f" VALUES (:tid, NOW(), 'yt_full', {placeholders})"
-                    f" ON CONFLICT (track_id) DO UPDATE SET {set_cols},"
-                    f" analyzed_at = NOW(), source = 'yt_full'"),
-                    {"tid": track_id, **{c: features.get(c) for c in _FEATURE_COLS}})
-                con.execute(text(
-                    "UPDATE track SET audio_failures = 0, audio_failed_at = NULL,"
-                    " audio_fail_reason = NULL WHERE id = :tid"), {"tid": track_id})
-                con.commit()
-                analyzed += 1
-                print(f"[audio_ingest] analyzed: {title}")
-            except Exception as e:
-                con.rollback()
-                print(f"[audio_ingest] write failed for {title}: {e}")
-    return analyzed, len(todo)
+        con.execute(text(
+            f"INSERT INTO trackaudio (track_id, analyzed_at, source, {col_names})"
+            f" VALUES (:tid, NOW(), 'yt_full', {placeholders})"
+            f" ON CONFLICT (track_id) DO UPDATE SET {set_cols},"
+            f" analyzed_at = NOW(), source = 'yt_full'"),
+            {"tid": track_id, **{c: features.get(c) for c in _FEATURE_COLS}})
+        con.execute(text(
+            "UPDATE track SET audio_failures = 0, audio_failed_at = NULL,"
+            " audio_fail_reason = NULL WHERE id = :tid"), {"tid": track_id})
+        con.commit()
+
+
+# Downloads in flight at once. Measured 2026-11-09 from the Mac, ten songs a
+# setting with the old one-at-a-time run going alongside: 1 → 4.2 tracks/min,
+# 2 → 9.4, 3 → 11.9, every download succeeding and none slower for the
+# company. YouTube's bot checks answer sustained volume rather than bursts,
+# so a run that meets one drops to a single downloader for the rest of the
+# night (see run_queue) — slower, never stopped.
+DOWNLOADERS = 3
+# How YouTube says "slow down" in yt-dlp's last ERROR line, as opposed to "no
+# such video": a rate limit, or the sign-in wall it puts up for suspected bots.
+BLOCK_SIGNS = ("http error 429", "too many requests", "sign in to confirm",
+               "not a bot", "rate-limit", "rate limit")
+# A breather before the single downloader carries on.
+FALLBACK_PAUSE_S = 60
+
+
+def _blocked(reason: str | None) -> bool:
+    return bool(reason) and any(s in reason.lower() for s in BLOCK_SIGNS)
+
+
+def _fetch(title: str, artist: str, album_name: str) -> tuple[str, str | None, str | None]:
+    """Download one recording into a directory of its own. Runs on a download
+    thread, so it touches neither Essentia nor the database. Returns (that
+    directory, the mp3 or None, yt-dlp's reason when there's no file)."""
+    tmpdir = tempfile.mkdtemp(prefix="pressd-ingest-")
+    try:
+        reason = _download(f"ytsearch1:{title} {artist} {album_name}",
+                           os.path.join(tmpdir, "track.%(ext)s"))
+    except BaseException:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        raise
+    mp3s = glob.glob(os.path.join(tmpdir, "*.mp3"))
+    return tmpdir, (mp3s[0] if mp3s else None), reason
+
+
+def _finish_track(track_id: int, title: str, path: str | None, reason: str | None) -> bool:
+    """Analyze and store one downloaded recording, or note why there's
+    nothing to analyze and send it to the back of the queue. True when it got
+    audio. On the main thread only: Essentia runs one track at a time.
+
+    Holds a database connection only for the write, never across a download:
+    Supabase's session pooler allows 15 clients for the whole project, the
+    live app included (CLAUDE.md §7)."""
+    from backend.routers.audio import _analyze_file
+
+    if not path:
+        reason = reason or "no file produced"
+        print(f"[audio_ingest] no audio for {title}: {reason}")
+        _record_failure(track_id, reason)
+        return False
+    try:
+        features = _analyze_file(path)
+    except Exception as e:
+        print(f"[audio_ingest] analysis failed for {title}: {e}")
+        _record_failure(track_id, f"analysis failed: {e}")
+        return False
+    try:
+        _store_features(track_id, features)
+    except Exception as e:
+        print(f"[audio_ingest] write failed for {title}: {e}")
+        return False
+    print(f"[audio_ingest] analyzed: {title}")
+    return True
+
+
+def run_queue(queue, stats: dict, downloaders: int = DOWNLOADERS) -> None:
+    """Work through the queue in order with `downloaders` downloads in flight,
+    analyzing each file on this thread as it lands.
+
+    The first download YouTube refuses as a bot or a rate limit drops the run
+    to one downloader — the old one-at-a-time pipeline — for the rest of the
+    night, after FALLBACK_PAUSE_S. That track, and any other started in
+    parallel that comes back refused, goes back to its own place in line
+    rather than taking a failure: the refusal was about the pace, not the
+    song. Once at one downloader a refusal counts like any other failure, as
+    it always did."""
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+
+    total = len(queue)
+    waiting = list(enumerate(queue, 1))  # (place, row); sorted, so a heap
+    heapq.heapify(waiting)
+    in_flight: dict = {}  # future -> (place, row, started while parallel)
+    stats["downloaders"] = downloaders
+
+    with ThreadPoolExecutor(max_workers=max(downloaders, 1)) as pool:
+        while waiting or in_flight:
+            while waiting and len(in_flight) < downloaders:
+                place, row = heapq.heappop(waiting)
+                track_id, title, artist, album_name = row
+                print(f"[audio_ingest] [{place}/{total}] {artist} – {title} "
+                      f"({album_name}; track {track_id})")
+                in_flight[pool.submit(_fetch, title, artist, album_name)] = (
+                    place, row, downloaders > 1)
+
+            done, _ = wait(in_flight, return_when=FIRST_COMPLETED)
+            for fut in sorted(done, key=lambda f: in_flight[f][0]):
+                place, row, parallel = in_flight.pop(fut)
+                track_id, title, _, _ = row
+                try:
+                    tmpdir, path, reason = fut.result()
+                except ToolchainError:
+                    raise
+                except Exception as e:
+                    print(f"[audio_ingest] ERROR on track {track_id}: {e}")
+                    stats["tracks_attempted"] += 1
+                    stats["failed"] += 1
+                    continue
+                try:
+                    if not path and parallel and _blocked(reason):
+                        heapq.heappush(waiting, (place, row))
+                        if downloaders > 1:
+                            downloaders = 1
+                            stats.update(downloaders=1, fell_back_at=place,
+                                         block_reason=reason[:240])
+                            print(f"[audio_ingest] YouTube refused a download ({reason}) — "
+                                  f"one downloader for the rest of the run, "
+                                  f"after {FALLBACK_PAUSE_S}s")
+                            time.sleep(FALLBACK_PAUSE_S)
+                        continue
+                    ok = _finish_track(track_id, title, path, reason)
+                finally:
+                    shutil.rmtree(tmpdir, ignore_errors=True)
+                stats["tracks_attempted"] += 1
+                stats["tracks" if ok else "failed"] += 1
 
 
 def preflight() -> bool:
@@ -342,7 +427,10 @@ def start_predictions() -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--limit", type=int, help="max albums this run")
+    ap.add_argument("--limit", type=int, help="max tracks this run")
+    ap.add_argument("--downloaders", type=int, default=DOWNLOADERS,
+                    help=f"downloads in flight at once (default {DOWNLOADERS}); "
+                         f"drops to 1 if YouTube refuses one")
     ap.add_argument("--preflight", action="store_true",
                     help="check toolchain, canary and database; analyze and record nothing")
     args = ap.parse_args()
@@ -351,7 +439,7 @@ def main() -> int:
 
     with engine.connect() as con:
         run_id = runlog.start(con, "audio_ingest")
-    stats = dict(linked=0, albums=0, tracks=0, tracks_attempted=0, failed_or_empty=0)
+    stats = dict(linked=0, tracks=0, tracks_attempted=0, failed=0)
 
     # Set by ops/launchd/nightly.sh: which commit of the deploy clone ran, so a
     # failure in workerrun can be tied to a change. Absent on hand-run jobs.
@@ -365,12 +453,12 @@ def main() -> int:
     try:
         with engine.connect() as con:
             stats["linked"] = sync_tracks(con)  # link songs imported since last run
-            albums = albums_needing_audio(con, args.limit)
+            queue = tracks_needing_audio(con, args.limit)
         print(f"[audio_ingest] {stats['linked']} new songs linked; "
-              f"{len(albums)} albums have unanalyzed tracks")
+              f"{len(queue)} tracks in the queue")
 
-        if not albums:
-            finish("ok", pending_albums=0)
+        if not queue:
+            finish("ok", pending_tracks=0)
             if commit:  # the nightly run, not one by hand
                 start_predictions()
             return 0
@@ -379,27 +467,16 @@ def main() -> int:
         if not passed:
             print(f"[audio_ingest] canary FAILED: {detail} — stopping; "
                   f"nothing downstream can succeed")
-            finish("error", pending_albums=len(albums), error=f"canary failed: {detail}")
+            finish("error", pending_tracks=len(queue), error=f"canary failed: {detail}")
             return 1
 
-        for i, (album_id, artist, album_name) in enumerate(albums, 1):
-            print(f"[audio_ingest] [{i}/{len(albums)}] {artist} – {album_name} (id={album_id})")
-            try:
-                n, tried = analyze_album(album_id, artist, album_name)
-            except ToolchainError:
-                raise
-            except Exception as e:
-                n, tried = 0, 0
-                print(f"[audio_ingest] ERROR on album {album_id}: {e}")
-            stats["tracks"] += n
-            stats["tracks_attempted"] += tried
-            stats["albums"] += 1 if n else 0
-            stats["failed_or_empty"] += 0 if n else 1
-            time.sleep(1)  # be polite between albums
+        run_queue(queue, stats, args.downloaders)
 
-        finish("ok", pending_albums=len(albums))
+        finish("ok", pending_tracks=len(queue))
         print(f"[audio_ingest] done: {stats['tracks']} of {stats['tracks_attempted']} tracks "
-              f"across {stats['albums']} albums ({stats['failed_or_empty']} with none)")
+              f"analyzed ({stats['failed']} sent to the back of the queue)"
+              + (f"; fell back to one downloader at track {stats['fell_back_at']}"
+                 if "fell_back_at" in stats else ""))
         if commit:  # the nightly run, not one by hand
             start_predictions()
         return 0

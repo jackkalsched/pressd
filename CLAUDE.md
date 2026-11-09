@@ -61,7 +61,7 @@ frontend/         React 19 + Vite SPA        → Vercel
 mobile/           Expo SDK 57 iOS app        → TestFlight
 worker/           nightly ML pipeline        → GitHub Actions, 02:30 PT
 ops/launchd/      nightly audio ingest       → launchd on the Mac, from a deploy clone of main
-tests/            pytest, backend-only: taste overlap's modules and router (no DB connection)
+tests/            pytest, backend-only: taste overlap, and the audio ingest's scheduler (no DB connection)
 shared/           @pressd/shared — TS source consumed by frontend + mobile, no build
 theme_predictor/  LLM album analysis; imported by the worker AND the web service
 song_score_model.py  LightGBM per-song model (1,211 lines) — train + inference
@@ -100,9 +100,10 @@ snake_case on the wire, camelCase at the client boundary.
 
 **The test suite is small and backend-only** (`tests/`, pytest, added with taste
 overlap: its matrix, baseline, live path, nightly stage, health check, router and the
-schema's delete order). Nothing else is covered — no vitest, nothing for scoring or the
-other routers — so for everything outside taste overlap verification is typecheck +
-lint + running it. Tests never open a database connection (`tests/conftest.py`).
+schema's delete order), plus the audio ingest's download scheduler
+(`tests/test_audio_queue.py`). Nothing else is covered — no vitest, nothing for scoring
+or the other routers — so for everything else verification is typecheck + lint +
+running it. Tests never open a database connection (`tests/conftest.py`).
 
 ---
 
@@ -1080,10 +1081,23 @@ independent `audio-health` job reads the ingest's `workerrun` row and goes red i
 last run errored, died mid-run, or is more than 36h old — the ingest's only channel into
 GitHub. Every ingest run starts with a **canary** download through the real yt-dlp
 invocation, because a broken toolchain and a track with no YouTube match look identical
-per track, and about twenty albums have no match on any night. A track that fails stops
-being retried every night: each failure is counted on its `Track` (`audio_failures`,
-`audio_failed_at`, `audio_fail_reason`; at most one a night, since a record several
-people own is tried once per copy), and after `MAX_TRIES` (3) it waits `RETRY_AFTER_DAYS`
+per track, and about twenty albums have no match on any night. The work is a
+first-in, first-out queue of **recordings**, not album copies (`tracks_needing_audio`,
+November 2026): one row per `Track` without audio, however many people own the record,
+so each is downloaded and analyzed once; until then a record two people owned was
+downloaded twice a night. A track's place in line is `COALESCE(audio_failed_at,
+created_at)`, so a failure sends it to the back, behind everything already waiting.
+**Three downloads run at once** (`DOWNLOADERS`; measured 2026-11-09 at 4.2 tracks/min
+for one, 9.4 for two, 11.9 for three, nothing refused), on threads; Essentia and the
+writes stay on the main thread, one track at a time (`run_queue`). The first download
+YouTube refuses as a rate limit or a bot check (`BLOCK_SIGNS`) drops the run to one
+downloader for the rest of the night after a 60s pause — the old pipeline, never a stop
+— and that track goes back to its place in line without a strike. A refusal at one
+downloader is a failure like any other. The run's `workerrun` row says which happened
+(`downloaders`, and `fell_back_at` / `block_reason` when it fell back).
+A track that fails stops being retried every night: each failure is counted on its
+`Track` (`audio_failures`, `audio_failed_at`, `audio_fail_reason`; at most one per 12
+hours, so a crashed run and its catch-up are one bad night), and after `MAX_TRIES` (3) it waits `RETRY_AFTER_DAYS`
 (7) between attempts; success resets it. Until October 2026 the same ~24 tracks —
 age-gated explicit songs, classical movements no search matches — were retried nightly,
 the worst for 30 nights. Four of them were titles Excel had turned into dates and times
@@ -1765,7 +1779,7 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   card's geometry lives in both `ShareCard.tsx` files by the same rule — every mobile
   measurement is the web pixel value passed through `u()`.
 - **Verification is the taste-overlap tests plus typecheck + lint + running it.** Tests:
-  `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3.13 -m pytest tests -q -p no:warnings` (95
+  `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3.13 -m pytest tests -q -p no:warnings` (139
   pass; none open a database connection, so they say nothing about production data —
   new taste-overlap code gets a test beside the others). Web:
   `cd frontend && npm run typecheck`. Mobile: `cd mobile && npm run typecheck`. Backend:
