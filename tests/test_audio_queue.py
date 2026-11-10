@@ -22,15 +22,21 @@ def _queue(n):
 def harness(monkeypatch):
     """Fake _fetch / _finish_track. `refuse` maps a title to how many times
     its download is refused as a bot before it goes through."""
-    state = dict(active=0, peak=0, peak_after_fallback=0, fell_back=False,
+    state = dict(active=0, peak=0, peak_from_retry=0, retrying=False, fell_back=False,
                  fetched=[], finished=[], refuse={}, lock=threading.Lock())
 
     def fetch(title, artist, album_name):
         with state["lock"]:
             state["active"] += 1
             state["peak"] = max(state["peak"], state["active"])
-            if state["fell_back"]:
-                state["peak_after_fallback"] = max(state["peak_after_fallback"], state["active"])
+            # From the refused track's second attempt on. Not from the moment
+            # of the fallback: a download handed out just before it can start
+            # its thread just after, and the scheduler only promises one at a
+            # time once it has waited for those, which it does before retrying.
+            if title in state["fetched"]:
+                state["retrying"] = True
+            if state["retrying"]:
+                state["peak_from_retry"] = max(state["peak_from_retry"], state["active"])
             state["fetched"].append(title)
             refused = state["refuse"].get(title, 0) > 0
             if refused:
@@ -46,7 +52,6 @@ def harness(monkeypatch):
 
     def fake_sleep(s):  # the fallback's pause; record it instead of waiting
         state["fell_back"] = True
-        state["fetched_at_fallback"] = len(state["fetched"])
 
     monkeypatch.setattr(ai, "_fetch", fetch)
     monkeypatch.setattr(ai, "_finish_track", finish)
@@ -89,15 +94,19 @@ def test_refusal_drops_to_one_downloader_and_keeps_going(harness):
     assert [t for t, _, _ in harness["finished"]].count("song 2") == 1
     assert harness["fetched"].count("song 2") == 2
     # One at a time from then on.
-    assert harness["peak_after_fallback"] <= 1
+    assert harness["peak_from_retry"] <= 1
 
 
-def test_refused_track_keeps_its_place(harness):
+def test_refused_track_keeps_its_place(harness, capsys):
     harness["refuse"] = {"song 1": 1}
     ai.run_queue(_queue(6), _stats(), downloaders=3)
-    # Downloads that had already started finish; the next one fetched is the
-    # refused track, ahead of everything behind it in the queue.
-    after = harness["fetched"][harness["fetched_at_fallback"]:]
+    # Read from the scheduler's own log, in the order it hands songs out — not
+    # from the fakes, where a download handed out just before the fallback can
+    # start its thread just after it. Downloads already handed out finish; the
+    # next one handed out is the refused track, ahead of the rest of the queue.
+    lines = capsys.readouterr().out.splitlines()
+    fell = next(i for i, ln in enumerate(lines) if "YouTube refused a download" in ln)
+    after = [ln.split("– ")[1].split(" (")[0] for ln in lines[fell:] if ln.startswith("[audio_ingest] [")]
     assert after[0] == "song 1"
     assert after[1:] == sorted(after[1:], key=lambda t: int(t.split()[1]))
     assert sorted(harness["fetched"]) == sorted(["song 1"] + [f"song {i}" for i in range(1, 7)])
