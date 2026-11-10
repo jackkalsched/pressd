@@ -54,6 +54,17 @@ def summary(user_id: int = Depends(viewable_user_id), session: Session = Depends
         .where(Song.score.is_not(None))
     ).all()
 
+    # The profile's Albums figure counts what the library shows: singles (one or
+    # two songs, the library's exclude_singles rule) are left out. A copy with no
+    # tracklist yet isn't a single. Everything else here still reads every rating.
+    track_counts = dict(session.exec(
+        select(Song.album_id, func.count(Song.id))
+        .join(Album, Song.album_id == Album.id)
+        .where(Album.user_id == user_id, Album.status == "rated")
+        .group_by(Song.album_id)
+    ).all())
+    albums_rated = sum(1 for a in rated if not 0 < track_counts.get(a.id, 0) <= 2)
+
     scores = [a.score for a in rated if a.score is not None]
     top_album = max(rated, key=lambda a: a.score or 0, default=None)
     top_song = max(all_songs, key=lambda s: s.score or 0, default=None)
@@ -102,7 +113,7 @@ def summary(user_id: int = Depends(viewable_user_id), session: Session = Depends
     total_10s = sum(1 for s in all_songs if s.score == 10.0)
 
     return {
-        "total_albums_rated": len(rated),
+        "total_albums_rated": albums_rated,
         "total_songs_rated": len(all_songs),
         "avg_album_score": round(sum(scores) / len(scores), 4) if scores else None,
         "top_album": {"name": top_album.album_name, "artist": top_album.artist, "score": top_album.score} if top_album else None,

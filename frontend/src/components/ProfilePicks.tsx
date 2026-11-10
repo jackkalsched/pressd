@@ -57,8 +57,15 @@ export default function ProfilePicks({ profile, editable }: { profile: Profile; 
               </div>
             )
             // Where it stands; .shelf-record (index.css) lifts it out from there.
-            const style = { zIndex: i, '--lift': `${LIFT[i]}px`, '--tilt': `${TILT[i]}deg` } as CSSProperties
-            const className = `shelf-record block min-w-0 flex-1 ${i > 0 ? '-ml-6' : ''} rounded-xl`
+            // Every record is the width it has on a full shelf of SHELF_SIZE (the
+            // row plus the overlaps, shared out), however many are shown: they
+            // used to stretch to fill the row, so a shelf of one was a 768px
+            // cover.
+            const style = {
+              zIndex: i, '--lift': `${LIFT[i]}px`, '--tilt': `${TILT[i]}deg`,
+              width: `calc((100% + ${SHELF_SIZE - 1} * 1.5rem) / ${SHELF_SIZE})`,
+            } as CSSProperties
+            const className = `shelf-record block min-w-0 flex-none ${i > 0 ? '-ml-6' : ''} rounded-xl`
             return editable ? (
               <button
                 key={slot}

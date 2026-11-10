@@ -663,7 +663,10 @@ username, bio, location — or `settings` — phone, Google link, the tutorial r
 sign-out. Every profile now shows **the shelf**
 (`components/ProfilePicks.tsx`; mobile's `ProfileBanner` `ShelfRow`) — "{name}'s shelf":
 four of the person's own rated albums, by slot, drawn as covers overlapping and
-staggered (`TILT` / `LIFT`, `SHELF_TILT` / `SHELF_LIFT`), under a heading in Unbounded Bold. On your own page
+staggered (`TILT` / `LIFT`, `SHELF_TILT` / `SHELF_LIFT`), under a heading in Unbounded Bold.
+Every cover is the width it has on a full shelf of `SHELF_SIZE`, however many are shown,
+on both platforms; on web they stretched to fill the row until November 2026, so a shelf
+of one was a 768px cover. On your own page
 every slot shows, empty ones dashed with a +, and a slot opens a picker over your rated
 albums best first (web's `ShelfDialog`, mobile's `app/favorite/album?slot=N`, also
 reached from Edit profile → Shelf); an album already on the shelf moves to the new slot
@@ -972,7 +975,10 @@ just the song mean. Duplicated as `isEP` in both rating screens — change one, 
 user's artist stats, but stay out of the library — `GET /albums/?exclude_singles=true`
 (one or two songs; a copy with no tracklist yet isn't one), asked for by Library,
 Rankings, the profile and genre pages on both platforms under their own cache key
-(`['albums', status, id, 'library']`), so the screens that need every copy keep theirs —
+(`['albums', status, id, 'library']`), so the screens that need every copy keep theirs,
+and by every profile's **Albums** figure: `GET /stats/summary`'s `total_albums_rated`
+counts by the same rule (November 2026; it had counted singles, so someone else's
+profile on iPhone and web's Stats page read higher than their library) —
 and off userbase-wide charts, where a one-track
 release rated 10 would outrank every real album on one person's say-so.
 
