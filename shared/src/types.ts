@@ -452,17 +452,14 @@ export interface SheetPerson {
   percent: number
   topSong: SheetSong | null
   bottomSong: SheetSong | null
-  /** Set in the fallback, where the songs come from their nearest record. */
-  fromAlbum: string | null
 }
 
 export interface PeopleSheetData {
   sheetId: number
   album: OverlapAlbum
-  fallback: boolean
   /** Every other user who rated the record, friends included — the heading's
-   *  count, not the few shown. Null in the fallback. */
-  raters: number | null
+   *  count, not the few shown. */
+  raters: number
   people: SheetPerson[]
 }
 

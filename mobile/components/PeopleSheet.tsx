@@ -85,7 +85,7 @@ export function PeopleSheetHost({ held }: { held: boolean }) {
 /** Drawn exactly as For You's review previews (ReviewCell) draw them. */
 function SongNotes({ person }: { person: SheetPerson }) {
   const tc = useColors()
-  const { topSong, bottomSong, fromAlbum } = person
+  const { topSong, bottomSong } = person
   if (!topSong && !bottomSong) return null
   return (
     <View style={styles.songNotes}>
@@ -104,11 +104,6 @@ function SongNotes({ person }: { person: SheetPerson }) {
           <Text style={styles.songNoteText} numberOfLines={1}>{bottomSong.title}</Text>
           <Text style={[styles.songNoteScore, { color: scoreColor(bottomSong.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{bottomSong.score.toFixed(1)}</Text>
         </View>
-      )}
-      {fromAlbum && (
-        <Text style={styles.fromAlbum} numberOfLines={1}>
-          from <Text style={styles.italic}>{fromAlbum}</Text>
-        </Text>
       )}
     </View>
   )
@@ -204,8 +199,6 @@ export default function PeopleSheet({ data, visible, onClose }: {
     })
   }
 
-  const counted = !data.fallback && data.raters != null
-
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={dismiss} onShow={onShow}>
       <View style={styles.backdrop}>
@@ -228,14 +221,8 @@ export default function PeopleSheet({ data, visible, onClose }: {
                 </View>
               )}
               <Text style={styles.title} numberOfLines={3}>
-                {counted ? (
-                  <>
-                    {data.raters} {data.raters === 1 ? 'person' : 'people'} rated{' '}
-                    <Text style={styles.titleAlbum}>{album.name}</Text> too
-                  </>
-                ) : (
-                  'People who like what you like'
-                )}
+                {data.raters} {data.raters === 1 ? 'person' : 'people'} rated{' '}
+                <Text style={styles.titleAlbum}>{album.name}</Text> too
               </Text>
             </View>
           </View>
@@ -299,7 +286,6 @@ export default function PeopleSheet({ data, visible, onClose }: {
 }
 
 const styles = StyleSheet.create({
-  italic: { fontStyle: 'italic' },
   backdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.45)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.bg,
@@ -357,7 +343,6 @@ const styles = StyleSheet.create({
   songNote: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   songNoteText: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary },
   songNoteScore: { fontFamily: fonts.bodyBold, fontSize: 12 },
-  fromAlbum: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary },
 
   footer: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
   notNow: {

@@ -797,20 +797,22 @@ people appear only as `public_user`.
   `connecting_album` (`{id, name, artist, art_url}`) is that copy, else their most
   recent rated copy of any record you both rated, else null.
 - `GET /overlap/sheet` → null, or `{sheet_id, album {id, name, artist, art_url},
-  fallback, raters, people: [{user, percent, top_song, bottom_song, from_album}]}`.
-  `raters` is every other user with a rated copy of the record, friends and pending
-  included — the heading's count, not the three shown — and null in the fallback. It serves the
+  fallback, raters, people: [{user, percent, top_song, bottom_song, from_album}]}`
+  (`fallback` always false and `from_album` always null, kept for app builds that
+  predate November 2026). `raters` is every other user with a rated copy of the record, friends and pending
+  included — the heading's count, not the three shown. It serves the
   newest `owed` sheet under **48 hours** old (`SHEET_TTL`) and supersedes every other
   owed one, and an owed sheet whose album was deleted or is no longer rated; that is
   its only write to sheets. It is otherwise **read-only**: asking again, or from the
   other device, serves the same sheet, and nothing is marked shown. People are other
-  users with a rated copy of the record (`subject_key`, any edition) — or, with none,
-  every user with a rated album (`fallback: true`) — never yourself, a friend, or anyone
-  with a request pending either way; `pick_people` takes two from the top quarter and
-  one from the bottom. Songs come from their copy of the record (`scoring.top_bottom_songs`,
-  the same pair For You's review previews show); in the fallback from their record
-  nearest it — most recent sharing a credited artist, else the same genre — named in
-  `from_album`. Nobody left: null, not an empty sheet.
+  users with a rated copy of the record (`subject_key`, any edition) — never yourself, a
+  friend, or anyone with a request pending either way; `pick_people` takes two from the
+  top quarter and one from the bottom. Songs come from their copy of the record
+  (`scoring.top_bottom_songs`, the same pair For You's review previews show). Nobody
+  left: null, and the sheet is superseded, so it can't turn up later once someone does
+  rate the record. Until November 2026 an empty record fell back to every user with a
+  rated album ("People who like what you like", songs from their nearest record), which
+  put strangers who'd never heard the album under it.
 - `POST /overlap/sheet/{id}/events` `{action, target_user_id}` → `{ok: true}`; 404 for a
   sheet that isn't yours. The client posts `shown` once the sheet is on screen — that is
   what clears it (`status` shown, `shown_at`), logged once however many devices show
@@ -834,7 +836,7 @@ people appear only as `public_user`.
 **The live path** (`backend/taste_live.py`) keeps the sheet's numbers fresh: a caller
 who rated since their `tasteuser` row recomputes, inside the request, against that
 record's raters (the sheet) or the one person (a profile) — never everyone, which is the
-nightly run's job, so the fallback sheet reads stored numbers. It is the nightly
+nightly run's job. It is the nightly
 computation on fewer users: same cells, the stored `tasteitem` album vectors and the
 others' stored taste vectors, and every column discounted by the whole userbase's
 raters, as the night does: the caller's songs, factors and album scores counted live,
@@ -868,9 +870,9 @@ device — and again when `RatingScreen` invalidates the key as its share card c
 (`closeFlow`). The rating flow is outside `Layout`, so the sheet opens over the album page
 the flow lands on, never inside the flow; it also waits while the one-time phone prompt
 is up. It is a dialog (`fade-in` + `pop-in`): the cover and "{raters} people rated *album*
-too" ("1 person" at one; "People who like what you like" in the fallback), one card per person — avatar
+too" ("1 person" at one), one card per person — avatar
 and name opening `/u/{id}`, the percent, **Add** (then Requested), and Best/Worst songs
-drawn as For You's review previews draw them, with "from *record*" in the fallback — side by
+drawn as For You's review previews draw them — side by
 side on desktop, then **Not now** and **Open the discussion** (`resolveThread`, then
 `threadPath`). `shown` is posted from the dialog's first render, once per sheet per page
 load (a module-level set, since `Layout` remounts between route trees); closing it any
@@ -908,7 +910,7 @@ flow lands on. A bottom sheet: dimmed backdrop, grab handle, dragged down or tap
 outside to close; the cover and the same heading as web; one row per person — avatar
 and name through `useOpenProfile`, the percent, **Add** (then Requested), and the best
 and worst song drawn as `ReviewCell` draws them (green up / `#e0492b` down `Triangle`,
-`songScoreColor`, one decimal), "from *record*" in the fallback; then **Not now** and
+`songScoreColor`, one decimal); then **Not now** and
 **Open the discussion** (`/thread/[subject]`, as `AlbumThoughts` opens it). `shown` is
 posted from the Modal's `onShow`, once per sheet per launch; the events are web's.
 
@@ -1806,7 +1808,7 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   card's geometry lives in both `ShareCard.tsx` files by the same rule — every mobile
   measurement is the web pixel value passed through `u()`.
 - **Verification is the taste-overlap tests plus typecheck + lint + running it.** Tests:
-  `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3.13 -m pytest tests -q -p no:warnings` (139
+  `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3.13 -m pytest tests -q -p no:warnings` (144
   pass; none open a database connection, so they say nothing about production data —
   new taste-overlap code gets a test beside the others). Web:
   `cd frontend && npm run typecheck`. Mobile: `cd mobile && npm run typecheck`. Backend:

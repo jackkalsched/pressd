@@ -2190,7 +2190,6 @@ function transformSheetPerson(p: Record<string, unknown>): SheetPerson {
     percent: p.percent as number,
     topSong: transformSheetSong(p.top_song as Record<string, unknown> | null),
     bottomSong: transformSheetSong(p.bottom_song as Record<string, unknown> | null),
-    fromAlbum: (p.from_album as string | null) ?? null,
   }
 }
 
@@ -2233,8 +2232,7 @@ export async function fetchPeopleSheet(): Promise<PeopleSheetData | null> {
   return {
     sheetId: d.sheet_id as number,
     album: transformOverlapAlbum(d.album),
-    fallback: !!d.fallback,
-    raters: (d.raters as number | null) ?? null,
+    raters: (d.raters as number | undefined) ?? 0,
     people: ((d.people ?? []) as Record<string, unknown>[]).map(transformSheetPerson),
   }
 }

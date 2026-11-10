@@ -7,7 +7,7 @@ import pytest
 
 from backend.routers.albums import _owes_sheet
 from backend.routers.overlap import (
-    SHEET_TTL, Store, _apply_event, _choose_sheet, _closest_record, _eligible, _refresh, friends_overlap,
+    SHEET_TTL, Store, _apply_event, _choose_sheet, _eligible, _refresh, friends_overlap,
     profile_overlap, serve_sheet,
 )
 from backend.scoring import top_bottom_songs
@@ -72,9 +72,6 @@ class FakeStore:
     def record_raters(self, subject_key, me):
         return {a.user_id: a for a in self.albums.values()
                 if a.subject_key == subject_key and a.status == "rated" and a.user_id != me}
-
-    def rated_users(self):
-        return sorted({a.user_id for a in self.albums.values() if a.status == "rated"})
 
     def rated_albums(self, uid):
         return [a for a in self.albums.values() if a.user_id == uid and a.status == "rated"]
@@ -202,35 +199,25 @@ def test_pair_without_a_row_is_fifty_on_the_sheet():
     assert serve_sheet(store, 1, NOW, random.Random(0))["people"][0]["percent"] == 50
 
 
-def test_fallback_when_nobody_else_rated_it():
+def test_no_sheet_when_nobody_else_rated_it():
+    # Other users have rated other records, but not this one: nobody to show, and
+    # the sheet is done rather than owed, so it can't surface later.
     store = FakeStore(
         sheets=[sheet(1, 10, hours_ago=1)],
         albums={10: album(10, 1),
                 20: album(20, 2, name="Channel Orange", subject="frankocean|channelorange"),
                 30: album(30, 3, name="IGOR", artist="Tyler, The Creator", subject="igor", genre="Hip-Hop")},
-        songs={20: [song(1, "Pyramids", 9.5)]},
     )
-    out = serve_sheet(store, 1, NOW, random.Random(0))
-    assert out["fallback"] is True
-    assert out["raters"] is None
-    people = {p["user"]["id"]: p for p in out["people"]}
-    assert set(people) == {2, 3}
-    assert people[2]["from_album"] == "Channel Orange"
-    assert people[2]["top_song"] == {"title": "Pyramids", "score": 9.5} and people[2]["bottom_song"] is None
-    assert people[3]["from_album"] is None and people[3]["top_song"] is None
-    assert store.refreshed == []        # the fallback never recomputes against every user
+    assert serve_sheet(store, 1, NOW, random.Random(0)) is None
+    assert store.superseded == [1]
+    assert store.refreshed == []
 
 
-def test_closest_record_same_artist_then_genre_then_none():
-    target = album(10, 1, extra='["Andre 3000"]')
-    by_artist_old = album(1, 2, name="Old", subject="a", artist="André 3000", genre="Rock", rated_hours_ago=50)
-    by_artist_new = album(2, 2, name="New", subject="b", artist="Frank Ocean", genre="Pop", rated_hours_ago=5)
-    by_genre = album(3, 2, name="Genre", subject="c", artist="SZA", genre="R&B", rated_hours_ago=1)
-    other = album(4, 2, name="Other", subject="d", artist="Slayer", genre="Metal")
-    assert _closest_record([by_artist_old, by_artist_new, by_genre, other], target).id == 2
-    assert _closest_record([by_artist_old], target).id == 1                 # a credited co-artist counts
-    assert _closest_record([by_genre, other], target).id == 3
-    assert _closest_record([other], target) is None
+def test_no_sheet_when_only_friends_rated_it():
+    store = FakeStore(sheets=[sheet(1, 10, hours_ago=1)], albums={10: album(10, 1), 20: album(20, 2)},
+                      excluded={2})
+    assert serve_sheet(store, 1, NOW, random.Random(0)) is None
+    assert store.superseded == [1]
 
 
 # ---------------------------------------------------------------- events

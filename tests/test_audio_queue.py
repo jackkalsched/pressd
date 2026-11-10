@@ -67,9 +67,14 @@ def test_three_in_flight_every_track_once(harness):
     assert stats == dict(linked=0, tracks=9, tracks_attempted=9, failed=0, downloaders=3)
 
 
-def test_starts_in_queue_order(harness):
+def test_starts_in_queue_order(harness, capsys):
+    # The order songs are handed out, which the main thread logs as it submits
+    # each one. Not the order the fakes record: three threads can start their
+    # downloads in any order, and that isn't the queue's to keep.
     ai.run_queue(_queue(7), _stats(), downloaders=3)
-    assert harness["fetched"] == [f"song {i}" for i in range(1, 8)]
+    started = [ln.split("– ")[1].split(" (")[0] for ln in capsys.readouterr().out.splitlines()
+               if ln.startswith("[audio_ingest] [")]
+    assert started == [f"song {i}" for i in range(1, 8)]
 
 
 def test_refusal_drops_to_one_downloader_and_keeps_going(harness):

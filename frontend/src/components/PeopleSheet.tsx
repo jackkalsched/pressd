@@ -56,7 +56,7 @@ export function PeopleSheetHost() {
 }
 
 function SongNotes({ person }: { person: SheetPerson }) {
-  const { topSong, bottomSong, fromAlbum } = person
+  const { topSong, bottomSong } = person
   if (!topSong && !bottomSong) return null
   // Drawn exactly as For You's review previews draw them.
   return (
@@ -73,7 +73,6 @@ function SongNotes({ person }: { person: SheetPerson }) {
           <span className="tabular-nums text-(--c-b3a99c)"> · {bottomSong.score.toFixed(1)}</span>
         </span>
       )}
-      {fromAlbum && <span className="w-full truncate">from <i>{fromAlbum}</i></span>}
     </div>
   )
 }
@@ -140,7 +139,7 @@ export default function PeopleSheet({ data, onClose }: { data: PeopleSheetData; 
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={data.fallback ? 'People who like what you like' : `People who rated ${album.name} too`}
+        aria-label={`People who rated ${album.name} too`}
         className="relative max-h-[calc(100vh-2rem)] w-full max-w-4xl overflow-y-auto rounded-[24px] border border-(--c-e8e2d9) bg-(--c-f9f8f6) p-6 shadow-xl pop-in md:p-8"
         onClick={(e) => e.stopPropagation()}
       >
@@ -149,11 +148,7 @@ export default function PeopleSheet({ data, onClose }: { data: PeopleSheetData; 
           {/* One face for the whole line, a title's: the album stands out by
               italics, not by switching family mid-sentence. */}
           <h2 className="font-display m-0 min-w-0 flex-1 text-[22px] font-bold leading-snug text-(--c-1c1917) md:text-[26px]">
-            {data.fallback || data.raters == null ? 'People who like what you like' : (
-              <>
-                {data.raters} {data.raters === 1 ? 'person' : 'people'} rated <i>{album.name}</i> too
-              </>
-            )}
+            {data.raters} {data.raters === 1 ? 'person' : 'people'} rated <i>{album.name}</i> too
           </h2>
           <button onClick={dismiss} aria-label="Close" className="self-start text-(--c-a8998a) transition-colors hover:text-(--c-57534e)">
             <X size={20} />

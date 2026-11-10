@@ -15,17 +15,17 @@ posts `shown` to the events endpoint once the sheet is on screen, and that clear
 `not_now` clears it too, for a client that never got as far as reporting `shown`.
 
 Who is on it: other users with a rated copy of the record (`subject_key`, any edition),
-or, when there are none, every user with a rated album ("People who like what you
-like"); never yourself, a friend, or anyone with a request pending either way.
+never yourself, a friend, or anyone with a request pending either way.
 `taste_overlap.pick_people` chooses two close and one far. Each row carries the
-person's favourite and least favourite song from their copy of the record — in the
-fallback, from their record closest to it: the most recent sharing a credited artist,
-else the same genre, else none.
+person's favourite and least favourite song from their copy of the record. With nobody
+like that there is no sheet: it is superseded, so it can't turn up hours later once
+someone does rate the record. Until November 2026 it fell back to every user with a
+rated album ("People who like what you like", songs from their nearest record), which
+put strangers who'd never heard the album under it; the record is the point.
 
 Before the sheet's numbers are read, a caller who rated since their stored vector
 recomputes against the record's raters (`taste_live.refresh`), so the people who just
-became comparable aren't shown at last night's 50. The fallback never recomputes: it
-would mean comparing against everyone, which is the nightly run's job. A recompute
+became comparable aren't shown at last night's 50. A recompute
 that fails is rolled back and logged, and the request serves the stored numbers
 (`_refresh`): last night's percent is a worse answer than a fresh one, not a reason to
 fail the profile or the sheet.
@@ -45,14 +45,12 @@ from pydantic import BaseModel
 from sqlalchemy import or_, update
 from sqlmodel import Session, select
 
-from ..credits import album_artists
 from ..database import get_session
 from ..deps import authorize_view, current_user, public_user
 from ..models import Album, Friendship, OverlapEvent, OverlapSheet, PressUser, Song, TasteOverlap
 from ..scoring import top_bottom_songs
 from ..taste_live import refresh as refresh_live
 from ..taste_overlap import pick_people
-from ..trackkeys import artist_key
 
 router = APIRouter(tags=["overlap"])
 
@@ -89,19 +87,6 @@ def _choose_sheet(owed: list, now: datetime) -> tuple[object | None, list[int]]:
 def _recent_first(albums: list) -> list:
     return sorted(albums, key=lambda a: (_utc(a.rated_at) or EPOCH, a.date_rated or datetime.min.date(), a.id),
                   reverse=True)
-
-
-def _closest_record(albums: list, target) -> object | None:
-    """A person's rated record nearest to `target`, for the fallback sheet: the most
-    recent sharing a credited artist (`album_artists`), else the most recent of the
-    same genre, else None."""
-    want = {artist_key(n) for n in album_artists(target)}
-    by_artist = [a for a in albums if want & {artist_key(n) for n in album_artists(a)}]
-    if by_artist:
-        return _recent_first(by_artist)[0]
-    genre = (target.genre or "").strip().lower()
-    by_genre = [a for a in albums if genre and (a.genre or "").strip().lower() == genre]
-    return _recent_first(by_genre)[0] if by_genre else None
 
 
 def _apply_event(sheet, action: str, now: datetime) -> bool:
@@ -146,22 +131,21 @@ def serve_sheet(store, me: int, now: datetime, rng: random.Random) -> dict | Non
     if sheet is not None and (album is None or album.user_id != me or album.status != "rated"):
         stale.append(sheet.id)          # deleted, or no longer a rating: nothing to show
         sheet = None
+    out = build_sheet(store, me, sheet, album, rng) if sheet else None
+    if sheet is not None and out is None:
+        stale.append(sheet.id)          # nobody else to show: done, not owed
     if stale:
         store.supersede(stale)
-    return build_sheet(store, me, sheet, album, rng) if sheet else None
+    return out
 
 
 def build_sheet(store, me: int, sheet, album, rng: random.Random) -> dict | None:
     excluded = store.friends_or_pending(me)
     raters = store.record_raters(album.subject_key, me) if album.subject_key else {}
     people = _eligible(sorted(raters), excluded, me)
-    fallback = not people
-    if fallback:
-        people = _eligible(store.rated_users(), excluded, me)
-        if not people:
-            return None
-    else:
-        _refresh(store, me, set(raters))
+    if not people:
+        return None
+    _refresh(store, me, set(raters))
     percents = store.stored_percents(me, people)
     picked = pick_people([(u, percents.get(u, 50.0)) for u in people], rng)
     users = store.users(picked)
@@ -169,22 +153,22 @@ def build_sheet(store, me: int, sheet, album, rng: random.Random) -> dict | None
     for uid in picked:
         if uid not in users:
             continue
-        copy = _closest_record(store.rated_albums(uid), album) if fallback else raters[uid]
-        top, bottom = top_bottom_songs(copy, store.album_songs(copy.id)) if copy else (None, None)
+        copy = raters[uid]
+        top, bottom = top_bottom_songs(copy, store.album_songs(copy.id))
         rows.append({
             "user": public_user(users[uid]),
             "percent": round(percents.get(uid, 50.0)),
             "top_song": _song(top),
             "bottom_song": _song(bottom),
-            "from_album": copy.album_name if fallback and copy else None,
+            "from_album": None,         # app builds from before Nov 2026 read it
         })
     if not rows:
         return None
     # Everyone else who rated the record, friends and pending included: they rated
-    # it too, and the heading counts them, not the three it shows. None in the
-    # fallback, whose people didn't rate it.
-    return {"sheet_id": sheet.id, "album": _album_brief(album), "fallback": fallback,
-            "raters": None if fallback else len(raters), "people": rows}
+    # it too, and the heading counts them, not the three it shows. `fallback` is
+    # always false now; app builds from before November 2026 still read it.
+    return {"sheet_id": sheet.id, "album": _album_brief(album), "fallback": False,
+            "raters": len(raters), "people": rows}
 
 
 def profile_overlap(store, me: int, other: int) -> dict:
@@ -289,9 +273,6 @@ class Store:
         for a in _recent_first(list(copies)):
             out.setdefault(a.user_id, a)
         return out
-
-    def rated_users(self) -> list[int]:
-        return sorted(self.session.exec(select(Album.user_id).where(Album.status == "rated").distinct()).all())
 
     def rated_albums(self, uid: int) -> list[Album]:
         return list(self.session.exec(select(Album).where(Album.user_id == uid, Album.status == "rated")).all())
