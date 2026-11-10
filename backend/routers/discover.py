@@ -6,9 +6,14 @@ week's releases ranked by Last.fm listeners, since albumoftheyear.org answers
 automated requests with a Cloudflare challenge (that module has the history and
 the measurements). Building it takes minutes, so worker/refresh_new_releases.py
 does it every 6 hours and stores it in `cachedfeed`; this endpoint only reads.
+
+`/discover/upcoming` is the same arrangement for records not out yet
+(`backend/upcoming_releases.py`, rebuilt daily): it reads the stored list,
+drops what has come out since, and filters it.
 """
 import json
 import time
+from types import SimpleNamespace
 from datetime import date, timedelta
 
 import httpx
@@ -21,11 +26,13 @@ from ..deps import current_user, public_user
 from ..global_rating import compute_global_ratings, is_single
 from ..scoring import MIN_RATED_ALBUMS, BANG_THRESHOLD, SKIP_THRESHOLD, predictions_unlocked
 from ..models import Album, AlbumPrediction, Friendship, PressUser, Song
-from ..trackkeys import album_key, subject_key_album
+from ..trackkeys import album_key, artist_key, subject_key_album
 from ..new_releases import (
     DEEZER_BASE, NoReleases, cover as _cover, quick_build, read_stored, write_stored,
     year as _year,
 )
+from .. import upcoming_releases
+from ..credits import album_artists
 
 router = APIRouter(prefix="/discover", tags=["discover"])
 
@@ -71,6 +78,47 @@ async def new_releases(
         session.rollback()
         print(f"[new-releases] could not store the quick list: {e}")
     return releases[:limit]
+
+
+_upcoming_cache: dict = {"releases": None, "built_at": None, "expires": 0.0}
+UPCOMING_TYPES = {"album", "ep", "single"}
+
+
+@router.get("/upcoming")
+def upcoming(
+    days: int = Query(90, ge=1, le=upcoming_releases.HORIZON_DAYS),
+    types: str = Query("album,ep,single"),
+    notable: bool = Query(False),
+    include_secondary: bool = Query(False),
+    limit: int = Query(500, ge=1, le=2000),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Records announced and dated but not out yet, soonest first; within a day,
+    notable ones first, then by the artist's Last.fm listeners.
+
+    `types` is a comma list of album / ep / single; `notable` keeps only records
+    Wikipedia lists; `include_secondary` adds live albums, compilations,
+    soundtracks, remixes and demos. Each row says whether it's by an artist in
+    the caller's library (`artist_in_library`, any status, any credited artist
+    of theirs, matched on `artist_key`). With nothing built yet: an empty list,
+    `built_at` null."""
+    wanted = {t.strip() for t in types.split(",")} & UPCOMING_TYPES
+    if not wanted:
+        raise HTTPException(status_code=422, detail="types must name album, ep or single")
+    now = time.monotonic()
+    if _upcoming_cache["expires"] <= now:
+        stored = upcoming_releases.read_stored(session)
+        _upcoming_cache.update(releases=stored[0] if stored else [],
+                               built_at=stored[1].isoformat() + "Z" if stored else None,
+                               expires=now + MEMORY_TTL)
+    library = {artist_key(name)
+               for artist, extra in session.exec(
+                   select(Album.artist, Album.extra_artists).where(Album.user_id == user.id)).all()
+               for name in album_artists(SimpleNamespace(artist=artist, extra_artists=extra))}
+    rows = upcoming_releases.select_upcoming(
+        _upcoming_cache["releases"], date.today(), days, wanted, notable, include_secondary, library)
+    return {"built_at": _upcoming_cache["built_at"], "total": len(rows), "releases": rows[:limit]}
 
 
 @router.get("/trending")

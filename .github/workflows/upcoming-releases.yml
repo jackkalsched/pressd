@@ -1,0 +1,41 @@
+name: Upcoming releases
+
+# Rebuilds the upcoming-releases list (records announced and dated but not out
+# yet) and stores it in `cachedfeed` (worker/refresh_upcoming_releases.py):
+# ListenBrainz's future releases, Wikipedia's album lists for what's notable,
+# Deezer and iTunes for ids and covers, Last.fm for each artist's audience.
+# Minutes of paced lookups, so it runs here and not inside a page request; the
+# endpoint (`/discover/upcoming`) only reads it. Daily: announcements arrive a
+# few a day.
+#
+# A failed run leaves the stored list as it was; this job going red is how a
+# dead or reshaped source gets noticed.
+
+on:
+  schedule:
+    - cron: "40 4 * * *" # daily, 04:40 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: upcoming-releases
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements-worker.txt
+
+      - name: Rebuild the upcoming-releases list
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+        run: python -m worker.refresh_upcoming_releases

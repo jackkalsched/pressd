@@ -61,7 +61,7 @@ frontend/         React 19 + Vite SPA        → Vercel
 mobile/           Expo SDK 57 iOS app        → TestFlight
 worker/           nightly ML pipeline        → GitHub Actions, 02:30 PT
 ops/launchd/      nightly audio ingest       → launchd on the Mac, from a deploy clone of main
-tests/            pytest, backend-only: taste overlap, and the audio ingest's scheduler (no DB connection)
+tests/            pytest, backend-only: taste overlap, the audio ingest's scheduler, upcoming releases (no DB connection)
 shared/           @pressd/shared — TS source consumed by frontend + mobile, no build
 theme_predictor/  LLM album analysis; imported by the worker AND the web service
 song_score_model.py  LightGBM per-song model (1,211 lines) — train + inference
@@ -100,7 +100,8 @@ snake_case on the wire, camelCase at the client boundary.
 
 **The test suite is small and backend-only** (`tests/`, pytest, added with taste
 overlap: its matrix, baseline, live path, nightly stage, health check, router and the
-schema's delete order), plus the audio ingest's download scheduler
+schema's delete order), plus the audio ingest's download scheduler and the upcoming-releases
+build's parsing, merge and filter
 (`tests/test_audio_queue.py`). Nothing else is covered — no vitest, nothing for scoring
 or the other routers — so for everything else verification is typecheck + lint +
 running it. Tests never open a database connection (`tests/conftest.py`).
@@ -137,6 +138,7 @@ python -m worker.nightly_predict --user 1 --skip-llm --force
 python -m worker.catalog_predict --dry-run
 python song_score_model.py                   # retrain → song_score_model.pkl
 python -m worker.fill_covers [--dry-run]    # look again for every album copy with no cover (also daily in CI, fill-covers.yml)
+python -m worker.refresh_upcoming_releases [--dry-run]  # rebuild the upcoming-releases list (daily in CI, upcoming-releases.yml)
 python -m worker.set_cover ID URL [--dry-run]  # a cover by hand, for a record no catalog has: every copy gets it
 python -m worker.taste_evaluate --out PATH   # taste overlap: factorization vs layered baseline on held-out
                                              # song scores; reads production only; names users, keep it local
@@ -322,6 +324,38 @@ top two were Tinashe and Taylor Swift; the new build puts those two first. Apple
 there for the biggest records MusicBrainz hasn't listed yet (Swift's *The Encore* that
 week). ListenBrainz's own `listen_count` is 0 for fresh releases, so it cannot rank.
 The page never waits on an outside source.
+
+### Journey: upcoming releases (November 2026; the page itself isn't built yet)
+
+```
+daily, GitHub Actions 04:40 UTC     .github/workflows/upcoming-releases.yml
+  worker/refresh_upcoming_releases.py → backend/upcoming_releases.py build()
+     1. ListenBrainz fresh releases, future=true, two 90-day windows → ~900 albums/EPs/singles
+        dated after today (one row per release group; live/compilation/… kept as `secondary`)
+     2. Wikipedia "List of {year} albums" pages (this year's half, next year's) → ~250 notable
+        records; a match marks a row `notable`, the rest (~110) join as albums
+     3. every artist's Last.fm listeners, for the order within a day — and the second way to be
+        notable: an album or EP (not live / compilation / soundtrack / remix / demo) by an artist
+        with NOTABLE_LISTENERS (500,000) or more; `notable_by` says which rule
+     4. notable rows: Deezer search (paced 6/s, retried when refused) → importable id, tracks,
+        cover; iTunes search (0.3/s) for what Deezer lacks
+     ~1,000 rows, ordered date → notable → listeners; stored in cachedfeed 'upcoming_releases'
+     fails (exit 1, workerrun 'error') when ListenBrainz gives < 100 or Wikipedia < 30
+GET /discover/upcoming?days=&types=&notable=&include_secondary=&limit=
+  reads the row (30-min memory copy), drops what's out since, filters, and flags
+  `artist_in_library` (the caller's albums' credited artists, by `artist_key`)
+```
+**Notable** — the page shows only these — is Wikipedia's list (an artist with an article of
+their own, and a cited announcement: 994 of 998 rows link one) **or** the listener rule,
+Jack's choice on 2026-11-10. Wikipedia alone missed 13 records by 500k+ artists that day,
+Stray Kids' *SUIATSU* among them; 250,000 would have added 28.
+The sources were chosen by live research on 2026-11-10 (the module docstring has it):
+ListenBrainz had 111 of the 191 notable records Wikipedia listed for the next 90 days,
+with the same date on 110, and is strong on indie, metal and international; Wikipedia is
+the notability filter and fills mainstream gaps. Ruled out: Genius's release calendar
+(Cloudflare challenge even from a residential IP, and sparse), Spotify (no upcoming data;
+closed to small apps in 2026), AOTY / RYM / AllMusic (Cloudflare), Reddit (login wall).
+Bandcamp's undocumented discover endpoint has indie pre-orders and is left out for now.
 
 ### Journey: the charts
 
@@ -1196,7 +1230,8 @@ nulls never overwrite stored values.
 | MusicBrainz | search (release *groups*), tracklist, **upcoming** releases | none, UA | in-proc 600s |
 | Cover Art Archive | covers for MB hits only — stored as the **500px thumbnail** on the Archive machine the stable address redirected to | none | via MB result |
 | Last.fm | listener counts (search prior), genre tags, **per-album listeners that rank new releases** | `LASTFM_API_KEY` (web + GitHub secret) | in-proc 600s; the ranking is stored |
-| ListenBrainz | new-release candidates: every album + EP of the last 7 days | none, UA | via the stored list |
+| ListenBrainz | new-release candidates: every album + EP of the last 7 days; **upcoming releases** (`future=true`, 90-day windows) | none, UA | via the stored lists |
+| Wikipedia (MediaWiki API) | upcoming releases: the "List of {year} albums" pages, parsed from wikitext — what's notable | none, UA | via the stored list |
 | Apple Music RSS | most-played albums released this week — candidates, and the quick fallback | none | via the stored list |
 | albumoftheyear.org | new-release feed, still tried first — **blocked by a Cloudflare challenge since 2026-09**, so in practice unused | none | — |
 | Discogs | artist discographies | `DISCOGS_TOKEN` | `ArtistMeta.albums_json` |
@@ -1237,6 +1272,7 @@ match).
 | global ratings board | `global_rating.py:45` | 60s | **process** |
 | search results | `search.py:34-37` | 600s, max 500 | **process** |
 | new releases | built into a `CachedFeed` row by a GitHub worker; memory copy re-read every 30 min | rebuilt 6h, served up to 3 days | shared ✅ survives restarts |
+| upcoming releases | `CachedFeed` row `upcoming_releases`, built daily by a GitHub worker; memory copy re-read every 30 min | rebuilt daily; past dates dropped on read | shared ✅ |
 | Apple JWKS, FCM creds | `auth.py:21`, `push.py:48` | — | **process** |
 | artist photos | `ArtistMeta` (Postgres) | 30d | shared ✅ |
 | album LLM factors | `albumfactors` (Postgres) | forever | shared ✅ |

@@ -570,6 +570,94 @@ export async function fetchNewReleases(limit = 12): Promise<NewRelease[]> {
   }))
 }
 
+/** A record announced and dated but not out yet (GET /discover/upcoming). */
+export interface UpcomingRelease {
+  /** The record key (`subject_key_album`), the same one threads group on. */
+  key: string
+  releaseDate: string
+  artist: string
+  title: string
+  type: 'album' | 'ep' | 'single'
+  /** live / compilation / soundtrack / remix / demo, when MusicBrainz says so. */
+  secondary: string | null
+  coverUrl: string | null
+  /** On Wikipedia's album list for its year, or an album / EP by an artist with
+   *  500,000+ Last.fm listeners. */
+  notable: boolean
+  /** Which rule made it notable. */
+  notableBy: 'wikipedia' | 'listeners' | null
+  genre: string | null
+  label: string | null
+  /** MusicBrainz's descriptive tags, up to five. */
+  tags: string[]
+  mbid: string | null
+  /** Importable once it's out; set for notable records Deezer already lists. */
+  deezerId: number | null
+  itunesId: number | null
+  trackCount: number | null
+  /** The artist's Last.fm listeners, for ordering within a day. */
+  artistListeners: number | null
+  /** By an artist in the caller's library. */
+  artistInLibrary: boolean
+  sources: string[]
+}
+
+export interface UpcomingReleases {
+  /** When the list was built (ISO), or null before the first build. */
+  builtAt: string | null
+  /** How many matched before `limit`. */
+  total: number
+  releases: UpcomingRelease[]
+}
+
+/** Upcoming records, soonest first; within a day notable first, then by the
+ *  artist's audience. `days` up to 180; `types` any of album / ep / single;
+ *  `notable` keeps Wikipedia-listed records only; `includeSecondary` adds live
+ *  albums, compilations, soundtracks, remixes and demos. */
+export async function fetchUpcomingReleases(params?: {
+  days?: number
+  types?: ('album' | 'ep' | 'single')[]
+  notable?: boolean
+  includeSecondary?: boolean
+  limit?: number
+}): Promise<UpcomingReleases> {
+  const qs = new URLSearchParams()
+  if (params?.days) qs.set('days', String(params.days))
+  if (params?.types?.length) qs.set('types', params.types.join(','))
+  if (params?.notable) qs.set('notable', 'true')
+  if (params?.includeSecondary) qs.set('include_secondary', 'true')
+  if (params?.limit) qs.set('limit', String(params.limit))
+  const q = qs.toString()
+  const res = await apiFetch(`${BASE()}/discover/upcoming${q ? `?${q}` : ''}`)
+  if (!res.ok) throw new Error('Failed to load upcoming releases')
+  const d = await res.json()
+  return {
+    builtAt: (d.built_at as string | null) ?? null,
+    total: (d.total as number) ?? 0,
+    releases: ((d.releases ?? []) as Record<string, unknown>[]).map((r) => ({
+      key: r.key as string,
+      releaseDate: r.release_date as string,
+      artist: r.artist as string,
+      title: r.title as string,
+      type: r.type as UpcomingRelease['type'],
+      secondary: (r.secondary as string | null) ?? null,
+      coverUrl: (r.cover_url as string | null) ?? null,
+      notable: !!r.notable,
+      notableBy: (r.notable_by as UpcomingRelease['notableBy']) ?? null,
+      genre: (r.genre as string | null) ?? null,
+      label: (r.label as string | null) ?? null,
+      tags: (r.tags as string[] | undefined) ?? [],
+      mbid: (r.mbid as string | null) ?? null,
+      deezerId: (r.deezer_id as number | null) ?? null,
+      itunesId: (r.itunes_id as number | null) ?? null,
+      trackCount: (r.track_count as number | null) ?? null,
+      artistListeners: (r.artist_listeners as number | null) ?? null,
+      artistInLibrary: !!r.artist_in_library,
+      sources: (r.sources as string[] | undefined) ?? [],
+    })),
+  }
+}
+
 // Popular albums across the whole userbase (grouped over per-user copies).
 export interface TrendingAlbum {
   album_id: number
