@@ -1,7 +1,7 @@
 // Artist page — per-artist stats scoped to a user: a full-bleed hero washed in
 // the artist's own colors, headline ranks, the savant-style percentile bars,
 // the song-score histogram, and the artist's albums.
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import VinylSpinner from '../../components/VinylSpinner'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -21,6 +21,7 @@ import ScoreKdeCompare from '../../components/ScoreKdeCompare'
 import SimilarArtistComparisons from '../../components/SimilarArtistComparisons'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, usePageRgb, useScoreColor, scoreColor, useColors } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
+import { scrollToTop } from '../../lib/scrollToTop'
 
 /** Which rating set the page is showing.
  *   mine    — your ratings, ranked among your own artists
@@ -93,6 +94,7 @@ function ordinal(n: number): string {
 }
 
 export default function ArtistPage() {
+  const scrollRef = useRef<ScrollView>(null)
   const sc = useScoreColor()
   const { name, mode: modeParam } = useLocalSearchParams<{ name: string; mode?: string }>()
   const artist = decodeURIComponent(name ?? '')
@@ -202,7 +204,7 @@ export default function ArtistPage() {
   return (
     <View style={[styles.root, { backgroundColor: hero[0] }]}>
       <StatusBar style="light" />
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
         {/* Hero — bleeds under the status bar, so the safe-area inset is padding
             here rather than a SafeAreaView edge. */}
         <View
@@ -273,7 +275,7 @@ export default function ArtistPage() {
             </View>
           </View>
 
-          <Text style={[styles.artist, { fontSize: nameSize(data.artist) }]} numberOfLines={2}>
+          <Text style={[styles.artist, { fontSize: nameSize(data.artist) }]} numberOfLines={2} onPress={() => scrollToTop(scrollRef)} accessibilityRole="button" accessibilityHint="Scrolls to the top">
             {data.artist}
           </Text>
           {/* Your own page counts what you've rated. The other two scopes lead

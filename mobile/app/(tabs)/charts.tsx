@@ -25,6 +25,7 @@ import AnchoredMenu, { type MenuOption } from '../../components/AnchoredMenu'
 import { revealStyle } from '../../lib/scrollReveal'
 import { colors, contentWidth, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
+import { scrollToTop, useCompactBar } from '../../lib/scrollToTop'
 
 const DOWN = '#c0392b'
 
@@ -125,7 +126,11 @@ export default function Charts() {
   const mastheadOpacity = scrollY.interpolate({ inputRange: [0, 70], outputRange: [1, 0], extrapolate: 'clamp' })
   const mastheadShift = scrollY.interpolate({ inputRange: [0, 70], outputRange: [0, -14], extrapolate: 'clamp' })
   const compactOpacity = scrollY.interpolate({ inputRange: [36, 82], outputRange: [0, 1], extrapolate: 'clamp' })
-  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })
+  // The titles take you back to the top (lib/scrollToTop); the compact bar
+  // takes taps only while it shows.
+  const scrollRef = useRef<unknown>(null)
+  const bar = useCompactBar(36)
+  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true, listener: bar.track })
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -133,11 +138,12 @@ export default function Charts() {
           compact bar down below the status bar (clock) explicitly. */}
       <Animated.View
         style={[[styles.compactHeader, { borderColor: tc.border }], { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
-        pointerEvents="none"
+        pointerEvents={bar.pointerEvents}
       >
-        <Text style={styles.compactTitle}>Charts</Text>
+        <Text style={styles.compactTitle} onPress={() => scrollToTop(scrollRef)} accessibilityRole="button" accessibilityHint="Scrolls to the top">Charts</Text>
       </Animated.View>
       <Animated.FlatList
+        ref={(r) => { scrollRef.current = r }}
         data={rest}
         keyExtractor={(it) => String(it.album_id)}
         contentContainerStyle={styles.content}
@@ -156,6 +162,7 @@ export default function Charts() {
                     and shrinking to something unreadable. */}
                 <Text
                   style={styles.title}
+                  onPress={() => scrollToTop(scrollRef)}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   maxFontSizeMultiplier={NUM_SCALE_CAP}

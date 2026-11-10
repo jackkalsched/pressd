@@ -50,6 +50,7 @@ import {
 import { avatarColor } from '@pressd/shared/types'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
+import { scrollToTop, useCompactBar } from '../../lib/scrollToTop'
 
 const DOWN = '#c0392b'
 const CONTENT_W = Dimensions.get('window').width - spacing.lg * 2
@@ -215,7 +216,11 @@ export default function Social() {
   const mastheadOpacity = scrollY.interpolate({ inputRange: [0, 70], outputRange: [1, 0], extrapolate: 'clamp' })
   const mastheadShift = scrollY.interpolate({ inputRange: [0, 70], outputRange: [0, -14], extrapolate: 'clamp' })
   const compactOpacity = scrollY.interpolate({ inputRange: [36, 82], outputRange: [0, 1], extrapolate: 'clamp' })
-  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })
+  // The titles take you back to the top (lib/scrollToTop); the compact bar
+  // takes taps only while it shows.
+  const scrollRef = useRef<unknown>(null)
+  const bar = useCompactBar(36)
+  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true, listener: bar.track })
   function selectTab(t: Tab) {
     scrollY.setValue(0)
     setTab(t)
@@ -264,14 +269,14 @@ export default function Social() {
           compact bar down below the status bar (clock) explicitly. */}
       <Animated.View
         style={[[styles.compactHeader, { borderColor: tc.border }], { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
-        pointerEvents="none"
+        pointerEvents={bar.pointerEvents}
       >
-        <Text style={styles.compactTitle}>Social</Text>
+        <Text style={styles.compactTitle} onPress={() => scrollToTop(scrollRef)} accessibilityRole="button" accessibilityHint="Scrolls to the top">Social</Text>
       </Animated.View>
 
       <Animated.View style={{ opacity: mastheadOpacity, transform: [{ translateY: mastheadShift }] }}>
         <View style={styles.header}>
-          <Text style={styles.pageTitle}>Social</Text>
+          <Text style={styles.pageTitle} onPress={() => scrollToTop(scrollRef)}>Social</Text>
           <Pressable style={styles.findBtn} onPress={() => setFindOpen(true)}>
             <UserPlus size={17} color={tc.green} />
             <Text style={styles.findBtnText}>Find friends</Text>
@@ -305,6 +310,7 @@ export default function Social() {
           <Text style={styles.empty}>No friend activity yet. Add friends to see their ratings.</Text>
         ) : (
           <Animated.ScrollView
+            ref={(r) => { scrollRef.current = r }}
             style={styles.fill}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
@@ -346,6 +352,7 @@ export default function Social() {
         )
       ) : tab === 'compare' ? (
         <Animated.FlatList
+          ref={(r) => { scrollRef.current = r }}
           data={compare}
           keyExtractor={(item, i) => `${item.album_id}-${i}`}
           style={styles.fill}
@@ -371,6 +378,7 @@ export default function Social() {
         />
       ) : tab === 'discussions' ? (
         <Animated.FlatList
+          ref={(r) => { scrollRef.current = r }}
           data={discussion?.posts ?? []}
           keyExtractor={(p) => String(p.id)}
           style={styles.fill}
@@ -403,6 +411,7 @@ export default function Social() {
         />
       ) : (
         <Animated.FlatList
+          ref={(r) => { scrollRef.current = r }}
           data={friends}
           keyExtractor={(f) => String(f.id)}
           style={styles.fill}

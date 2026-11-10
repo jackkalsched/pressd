@@ -51,6 +51,7 @@ import AlbumThoughts from '../../components/AlbumThoughts'
 import NoComparisonYet from '../../components/NoComparisonYet'
 import { confirmDeleteAlbum, useDeleteAlbum } from '../../lib/useDeleteAlbum'
 import { colors, contentWidth, fitType, fonts, radii, spacing, useColors, scoreColor } from '../../theme/tokens'
+import { scrollToTop } from '../../lib/scrollToTop'
 
 const WINDOW_H = Dimensions.get('window').height
 
@@ -578,7 +579,7 @@ export default function AlbumDetail() {
               </View>
             )}
           </View>
-          <Text style={styles.albumName} numberOfLines={2}>{album.albumName}</Text>
+          <Text style={styles.albumName} numberOfLines={2} onPress={() => scrollToTop(listRef)} accessibilityRole="button" accessibilityHint="Scrolls to the top">{album.albumName}</Text>
           <Text style={styles.artist} numberOfLines={1}>
             {[album.artist, ...album.extraArtists].map((n, i) => (
               <Text key={n}>
@@ -1095,7 +1096,7 @@ function CommunityAlbum({
                 <Text style={styles.artInitial}>{data.album_name[0]}</Text>
               </View>
             )}
-            <Text style={styles.albumName} numberOfLines={2}>{data.album_name}</Text>
+            <Text style={styles.albumName} numberOfLines={2} onPress={() => scrollToTop(listRef)} accessibilityRole="button" accessibilityHint="Scrolls to the top">{data.album_name}</Text>
             <Text style={styles.artist} numberOfLines={1}>
               <Text style={styles.artistLink} onPress={() => onOpenArtist(data.artist)}>{data.artist}</Text>
               {data.year ? ` · ${data.year}` : ''}

@@ -36,6 +36,7 @@ import FriendsSheet from '../../components/FriendsSheet'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
+import { scrollToTop, useCompactBar } from '../../lib/scrollToTop'
 
 const GAP = 10
 // The recommendation accent, shared with the Recommend control on album detail.
@@ -243,7 +244,11 @@ export default function Profile() {
   // the profile name fades in, matching the other tabs' treatment.
   const scrollY = useRef(new Animated.Value(0)).current
   const compactOpacity = scrollY.interpolate({ inputRange: [70, 130], outputRange: [0, 1], extrapolate: 'clamp' })
-  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })
+  // The titles take you back to the top (lib/scrollToTop); the compact bar
+  // takes taps only while it shows.
+  const scrollRef = useRef<unknown>(null)
+  const bar = useCompactBar(70)
+  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true, listener: bar.track })
 
   const isGrid = tab === 'library'
   const rankMetrics = rankMode === 'albums' ? ALBUM_METRICS : ARTIST_METRICS
@@ -315,11 +320,12 @@ export default function Profile() {
       {/* Compact bar: only the profile name remains once the banner scrolls off. */}
       <Animated.View
         style={[[styles.compactHeader, { borderColor: tc.border }], { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
-        pointerEvents="none"
+        pointerEvents={bar.pointerEvents}
       >
-        <Text style={styles.compactTitle} numberOfLines={1}>{user.name}</Text>
+        <Text style={styles.compactTitle} numberOfLines={1} onPress={() => scrollToTop(scrollRef)} accessibilityRole="button" accessibilityHint="Scrolls to the top">{user.name}</Text>
       </Animated.View>
       <Animated.FlatList
+        ref={(r) => { scrollRef.current = r }}
         key={isGrid ? 'grid' : 'list'}
         data={listData as Album[]}
         keyExtractor={(item: Album | ArtistRank) => ('id' in item ? String(item.id) : item.artist)}

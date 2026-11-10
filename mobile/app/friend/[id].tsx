@@ -49,6 +49,7 @@ import ProfileBanner from '../../components/ProfileBanner'
 import { OverlapPill } from '../../components/TasteOverlap'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
+import { scrollToTop, useCompactBar } from '../../lib/scrollToTop'
 
 const GAP = 10
 
@@ -183,7 +184,10 @@ export default function FriendProfile() {
   // green bar keeping just the name fades in.
   const scrollY = useRef(new Animated.Value(0)).current
   const compactOpacity = scrollY.interpolate({ inputRange: [70, 130], outputRange: [0, 1], extrapolate: 'clamp' })
-  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })
+  // The compact title takes you back to the top (lib/scrollToTop); the bar
+  // takes taps only while it shows.
+  const bar = useCompactBar(70)
+  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true, listener: bar.track })
 
   async function changeFriendship(change: () => Promise<unknown>) {
     if (friendBusy) return
@@ -289,9 +293,9 @@ export default function FriendProfile() {
       {/* Compact bar: only the name remains once the banner scrolls off. */}
       <Animated.View
         style={[[styles.compactHeader, { borderColor: tc.border }], { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
-        pointerEvents="none"
+        pointerEvents={bar.pointerEvents}
       >
-        <Text style={styles.compactTitle} numberOfLines={1}>{person.name}</Text>
+        <Text style={styles.compactTitle} numberOfLines={1} onPress={() => scrollToTop(listRef)} accessibilityRole="button" accessibilityHint="Scrolls to the top">{person.name}</Text>
       </Animated.View>
 
       {/* Back sits above the header, on the page rather than on the picture. */}

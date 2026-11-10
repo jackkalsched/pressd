@@ -169,6 +169,7 @@ function RootNavigator() {
         <Stack.Screen name="welcome" />
         <Stack.Screen name="add" options={{ presentation: 'modal' }} />
         <Stack.Screen name="search" />
+        <Stack.Screen name="upcoming" />
         <Stack.Screen name="first-album" options={{ presentation: 'modal' }} />
         <Stack.Screen name="rate/[id]" />
         <Stack.Screen name="album/[id]" />

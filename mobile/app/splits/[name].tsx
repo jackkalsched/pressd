@@ -6,7 +6,7 @@
 // this page answers is "where do I stand on the songs Press'd has actually
 // listened to", and that ordering puts the well-attended tracks first, where a
 // disagreement means something.
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import VinylSpinner from '../../components/VinylSpinner'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -18,6 +18,7 @@ import { fetchArtistDetail } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { GapAxisLabels, GapList } from '../../components/SongGapChart'
 import { colors, fonts, spacing, useColors } from '../../theme/tokens'
+import { scrollToTop } from '../../lib/scrollToTop'
 
 // Green into cream. A two-stop gradient creases where it meets the solid
 // header — the colour's rate of change jumps from nothing to constant, and the
@@ -43,6 +44,7 @@ function fadeColors(from: string, to: string) {
 }
 
 export default function ArtistSplits() {
+  const scrollRef = useRef<ScrollView>(null)
   const tc = useColors()
   // Green into the page, in whichever palette is showing.
   const fade = useMemo(() => fadeColors(tc.green, tc.bg), [tc])
@@ -81,7 +83,7 @@ export default function ArtistSplits() {
           <ArrowLeft size={18} color="#ffffff" />
           <Text style={styles.backText}>Back</Text>
         </Pressable>
-        <Text style={styles.title} numberOfLines={2}>{artist}</Text>
+        <Text style={styles.title} numberOfLines={2} onPress={() => scrollToTop(scrollRef)} accessibilityRole="button" accessibilityHint="Scrolls to the top">{artist}</Text>
         <Text style={styles.sub}>
           {isLoading ? 'Loading…' : `${rows.length} track${rows.length === 1 ? '' : 's'} you and Press'd have both rated`}
         </Text>
@@ -90,7 +92,7 @@ export default function ArtistSplits() {
           content below starts on flat cream. */}
       <LinearGradient colors={fade} style={styles.fade} pointerEvents="none" />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {isLoading ? (
           <VinylSpinner size={48} style={{ marginTop: spacing.xxl }} />
         ) : rows.length === 0 ? (

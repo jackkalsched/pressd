@@ -325,7 +325,7 @@ there for the biggest records MusicBrainz hasn't listed yet (Swift's *The Encore
 week). ListenBrainz's own `listen_count` is 0 for fresh releases, so it cannot rank.
 The page never waits on an outside source.
 
-### Journey: upcoming releases (November 2026; the page itself isn't built yet)
+### Journey: upcoming releases (November 2026; on iPhone, web's page not built yet)
 
 ```
 daily, GitHub Actions 04:40 UTC     .github/workflows/upcoming-releases.yml
@@ -356,6 +356,16 @@ the notability filter and fills mainstream gaps. Ruled out: Genius's release cal
 (Cloudflare challenge even from a residential IP, and sparse), Spotify (no upcoming data;
 closed to small apps in 2026), AOTY / RYM / AllMusic (Cloudflare), Reddit (login wall).
 Bandcamp's undocumented discover endpoint has indie pre-orders and is left out for now.
+
+**On iPhone** (`mobile/app/upcoming.tsx`): For You's NEW & POPULAR heading ends in "📅 Upcoming →"
+(`SectionHead`'s `action`), which pushes the page over the tabs. It asks for notable albums and
+EPs out to 180 days and draws a month at a time as a wall calendar: a release day is a tile of
+its biggest record's cover (by the artist's Last.fm listeners) with the date in the corner and
+"+N" for the rest; other days are grey numbers; arrows step between this month and the last
+with releases. Under it, "N releases scheduled" for the month, then each release day's
+records biggest first — cover, title, artist, "in N days". A tile scrolls to its day; a record
+opens its artist's page (nothing is out yet to rate). No genre, by decision: Wikipedia's
+genre column is mostly blank and the fallbacks were too thin to be worth a chip.
 
 ### Journey: the charts
 
@@ -1843,6 +1853,14 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   the installed core, and run the Release build before pushing. Don't add Firebase in
   Xcode as a Swift package either: React Native Firebase brings it through CocoaPods
   (`$RNFirebaseDisableSPM`), and two copies fail with `redefinition of module 'Firebase'`.
+- **A page's title takes you back to the top** (iPhone, November 2026): `mobile/lib/scrollToTop.ts`.
+  The big masthead title and the compact title in the bar that fades in both call
+  `scrollToTop(ref)` on the page's scroll view (ScrollView, FlatList or SectionList, Animated
+  or not) — For You, Charts, Social, Profile, someone's profile, a genre page, Upcoming, a
+  thread, the artist page, artist splits and both album views. A compact bar that takes taps
+  gets its `pointerEvents` from `useCompactBar(at)`, `at` being where its fade begins: a
+  transparent bar still catches taps, and would block the masthead's own back and search
+  controls under it. A new page with a title wires it the same way.
 - **Mobile device preferences live in `mobile/lib/prefs.ts`** (Keychain, loaded before
   the app is ready): haptics on/off, which shelf Library opens on, and appearance
   (System / Light / Dark, Settings → Preferences). Every buzz goes

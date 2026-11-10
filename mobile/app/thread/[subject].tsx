@@ -36,6 +36,7 @@ import { useOpenProfile } from '../../lib/useOpenProfile'
 import VoteButtons from '../../components/VoteButtons'
 import { threadKey } from '../../lib/refresh'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, useScoreColor, scoreColor } from '../../theme/tokens'
+import { scrollToTop } from '../../lib/scrollToTop'
 
 // Matches the red For You uses for a worst track.
 const DOWN = '#e0492b'
@@ -53,6 +54,7 @@ const LOCKED_COPY: Record<string, string> = {
 }
 
 export default function ThreadScreen() {
+  const scrollRef = useRef<ScrollView>(null)
   const tc = useColors()
   const { subject, artist, album, title } = useLocalSearchParams<{
     subject: string
@@ -135,7 +137,7 @@ export default function ThreadScreen() {
             <Image source={{ uri: meta.artUrl }} style={styles.art} contentFit="cover" />
           ) : null}
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.topTitle} numberOfLines={1}>
+            <Text style={styles.topTitle} numberOfLines={1} onPress={() => scrollToTop(scrollRef)} accessibilityRole="button" accessibilityHint="Scrolls to the top">
               {meta?.title || title || 'Discussion'}
             </Text>
             {!!meta?.subtitle && (
@@ -184,6 +186,7 @@ export default function ThreadScreen() {
             </View>
 
             <ScrollView
+              ref={scrollRef}
               contentContainerStyle={styles.list}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}

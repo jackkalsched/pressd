@@ -7,7 +7,7 @@ import { ActivityIndicator, Animated, Dimensions, Pressable, RefreshControl, Scr
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { ArrowRight, ChevronDown, MessageCircle, Search, Triangle } from 'lucide-react-native'
+import { ArrowRight, CalendarDays, ChevronDown, MessageCircle, Search, Triangle } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchPredictedPicks,
@@ -26,6 +26,7 @@ import { MIN_RATED_ALBUMS, type Album } from '@pressd/shared/types'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import RecommendationBanner from '../../components/RecommendationBanner'
 import PassItOnCell from '../../components/PassItOnCell'
+import { scrollToTop, useCompactBar } from '../../lib/scrollToTop'
 import { useOpenProfile } from '../../lib/useOpenProfile'
 import SpotlightCard from '../../components/SpotlightCard'
 import RecommendSheet from '../../components/RecommendSheet'
@@ -76,25 +77,27 @@ function dayLabel(iso: string | null): string {
   return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
 }
 
-function SectionHead({ label, meta, onMetaPress, metaRef }: {
+function SectionHead({ label, meta, onMetaPress, metaRef, action }: {
   label: string
   meta?: string
   onMetaPress?: () => void
   /** The meta chip doubles as a dropdown trigger; the menu anchors to it. */
   metaRef?: React.RefObject<View | null>
+  /** Drawn at the heading's right in place of a meta chip (New & Popular's calendar). */
+  action?: React.ReactNode
 }) {
   const tc = useColors()
   return (
     <View style={styles.sectionHead}>
       <Text style={styles.sectionLabel}>{label}</Text>
-      {meta == null ? null : onMetaPress ? (
+      {action ?? (meta == null ? null : onMetaPress ? (
         <Pressable ref={metaRef} style={styles.sectionMetaBtn} onPress={onMetaPress} hitSlop={8}>
           <Text style={styles.sectionMetaBtnText}>{meta}</Text>
           <ChevronDown size={12} color={tc.green} />
         </Pressable>
       ) : (
         <Text style={styles.sectionMeta}>{meta}</Text>
-      )}
+      ))}
     </View>
   )
 }
@@ -353,6 +356,8 @@ export default function ForYou() {
   const mastheadOpacity = scrollY.interpolate({ inputRange: [0, 96], outputRange: [1, 0], extrapolate: 'clamp' })
   const mastheadShift = scrollY.interpolate({ inputRange: [0, 96], outputRange: [0, -24], extrapolate: 'clamp' })
   const compactOpacity = scrollY.interpolate({ inputRange: [60, 118], outputRange: [0, 1], extrapolate: 'clamp' })
+  const scrollRef = useRef<ScrollView>(null)
+  const bar = useCompactBar(60)
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -360,20 +365,21 @@ export default function ForYou() {
           compact bar down below the status bar (clock) explicitly. */}
       <Animated.View
         style={[[styles.compactHeader, { borderColor: tc.border }], { opacity: compactOpacity, paddingTop: insets.top + spacing.sm }]}
-        pointerEvents="none"
+        pointerEvents={bar.pointerEvents}
       >
-        <Text style={styles.compactTitle}>For You</Text>
+        <Text style={styles.compactTitle} onPress={() => scrollToTop(scrollRef)} accessibilityRole="button" accessibilityHint="Scrolls to the top">For You</Text>
       </Animated.View>
       <Animated.ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
-        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true, listener: bar.track })}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={tc.green} />}
       >
         <Animated.View style={{ opacity: mastheadOpacity, transform: [{ translateY: mastheadShift }] }}>
           <View style={styles.masthead}>
-            <Text style={styles.title}>For You</Text>
+            <Text style={styles.title} onPress={() => scrollToTop(scrollRef)}>For You</Text>
             <Pressable
               onPress={() => router.push('/search')}
               hitSlop={8}
@@ -529,7 +535,22 @@ export default function ForYou() {
         {/* New & Popular — tap a cover to reveal add actions */}
         {newReleases.length > 0 && user && (
           <View style={styles.block}>
-            <SectionHead label="NEW & POPULAR" />
+            <SectionHead
+              label="NEW & POPULAR"
+              action={
+                <Pressable
+                  onPress={() => router.push('/upcoming')}
+                  hitSlop={10}
+                  style={styles.upcomingLink}
+                  accessibilityRole="button"
+                  accessibilityLabel="Upcoming releases"
+                >
+                  <CalendarDays size={16} color={tc.green} />
+                  <Text style={styles.upcomingLinkText}>Upcoming</Text>
+                  <ArrowRight size={14} color={tc.green} />
+                </Pressable>
+              }
+            />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rail}>
               {/* deezerId is null for releases that never matched Deezer, and
                   more than one of those is normal — keying on it alone collides. */}
@@ -826,6 +847,8 @@ const styles = StyleSheet.create({
   predictLabel: { fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 0.8, color: colors.inkMuted, marginTop: 1 },
   suggestCta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.md },
   textCtaLabel: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
+  upcomingLink: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  upcomingLinkText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
 
   rail: { marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg },
   railItem: { width: 128, marginRight: spacing.md },

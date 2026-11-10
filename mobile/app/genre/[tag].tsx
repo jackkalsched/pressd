@@ -28,6 +28,7 @@ import { avatarColor } from '@pressd/shared/types'
 import { revealStyle } from '../../lib/scrollReveal'
 import { colors, contentWidth, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
+import { scrollToTop } from '../../lib/scrollToTop'
 
 // Podium proportions and numeral caps copied from Charts deliberately: the two
 // boards sit one tap apart and any drift between them would read as a bug.
@@ -95,6 +96,7 @@ export default function TagRecordsBoard() {
   // Read off the same scroll event that drives the fade rather than a listener
   // on the value, and gated on a ref so the state only moves when the answer
   // actually changes — this runs every frame.
+  const scrollRef = useRef<unknown>(null)
   const [barLive, setBarLive] = useState(false)
   const barLiveRef = useRef(false)
   const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
@@ -121,10 +123,11 @@ export default function TagRecordsBoard() {
         <Pressable onPress={goBack} hitSlop={12} accessibilityLabel="Back">
           <ArrowLeft size={18} color={tc.ink} />
         </Pressable>
-        <Text style={styles.compactTitle} numberOfLines={1}>{label}</Text>
+        <Text style={styles.compactTitle} numberOfLines={1} onPress={() => scrollToTop(scrollRef)} accessibilityRole="button" accessibilityHint="Scrolls to the top">{label}</Text>
       </Animated.View>
 
       <Animated.FlatList
+        ref={(r) => { scrollRef.current = r }}
         data={rest}
         keyExtractor={(it) => String(it.album_id)}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.sm }]}
@@ -140,7 +143,7 @@ export default function TagRecordsBoard() {
               </Pressable>
               <Text style={styles.kicker}>{kicker}</Text>
               <View style={styles.masthead}>
-                <Text style={styles.title} numberOfLines={2}>{label}</Text>
+                <Text style={styles.title} numberOfLines={2} onPress={() => scrollToTop(scrollRef)}>{label}</Text>
                 {data && (
                   <Text style={styles.count}>
                     {data.count} {data.count === 1 ? 'RECORD' : 'RECORDS'}
