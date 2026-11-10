@@ -33,7 +33,18 @@ def _build_engine():
     # landed on the server and its reply never came back: the job sat in poll()
     # for eleven hours holding the run lock. With these, a dead peer is found
     # about a minute after the Mac wakes and the call raises.
-    return create_engine(url, pool_size=5, max_overflow=10, pool_pre_ping=True, echo=False,
+    #
+    # Pool size. Supabase's session pooler allows 15 clients for the whole
+    # project, so every process's ceiling comes out of the one Render serves the
+    # app from. Render (DATABASE_URL) keeps 5 + 10. Anything configured from .env's
+    # PG_* — a backend started for the simulator, the Mac's nightly ingest, a
+    # script — defaults to 2 + 2: on 2026-11-10 a local uvicorn held 8 of the 15,
+    # and a query from the same Mac was refused with "max clients reached".
+    # DB_POOL_SIZE / DB_MAX_OVERFLOW override either.
+    pool_size, overflow = (5, 10) if database_url else (2, 2)
+    pool_size = int(os.getenv("DB_POOL_SIZE", pool_size))
+    overflow = int(os.getenv("DB_MAX_OVERFLOW", overflow))
+    return create_engine(url, pool_size=pool_size, max_overflow=overflow, pool_pre_ping=True, echo=False,
                          connect_args={"keepalives": 1, "keepalives_idle": 30,
                                        "keepalives_interval": 10, "keepalives_count": 3})
 

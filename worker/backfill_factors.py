@@ -33,8 +33,9 @@ from worker import runlog
 
 
 # Supabase's session-mode pooler allows 15 clients across the entire project —
-# the live web service included — and backend.database's engine is configured
+# the live web service included — and backend.database's engine was configured
 # for pool_size(5) + max_overflow(10), which is exactly that ceiling on its own.
+# (Run from .env it is now 2 + 2; on Render, 5 + 10.)
 # A first attempt at six workers holding a connection across their LLM calls
 # took the pooler to EMAXCONNSESSION and locked the app out of its own database.
 #

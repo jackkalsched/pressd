@@ -199,7 +199,10 @@ creeps earlier each day. `pmset -g log` shows the dark wakes if it recurs.
 `PG_PASSWORD`; `JWT_SECRET`, `TOKEN_TTL_DAYS`, `APP_URL`, `ANTHROPIC_API_KEY`,
 `LASTFM_API_KEY`, `DISCOGS_TOKEN`, `GENIUS_ACCESS_TOKEN`, `THEME_LLM_MODEL`,
 `APPLE_BUNDLE_ID`, `FIREBASE_PROJECT_ID`, `FIREBASE_CREDENTIALS_JSON` (Render) |
-`FIREBASE_CREDENTIALS_FILE` (local), `SMTP_*`, `PHONE_HASH_KEY` (the HMAC key phone
+`FIREBASE_CREDENTIALS_FILE` (local), `SMTP_*`, `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` (the
+engine's pool; default 5 + 10 with `DATABASE_URL`, i.e. Render and the GitHub workers,
+and 2 + 2 when configured from `PG_*`, i.e. anything run on the Mac, because the
+project's 15 pooler clients are shared with production), `PHONE_HASH_KEY` (the HMAC key phone
 numbers are stored under — **the same value on Render and in local `.env`**, since both
 write the production database; unset, adding a number answers 503, and there is no
 fallback literal, on purpose). `GITHUB_DISPATCH_TOKEN` (the Mac's `.env` only — a
@@ -1259,7 +1262,7 @@ Current → risk → cheapest fix. Rows marked fixed have been implemented; the 
 | **P1** | ~~Finishing a rating rescored every user's library inside the request.~~ **Fixed.** The request now rescores only the rater ([albums.py:260](backend/routers/albums.py#L260)); the nightly job makes everyone exact again (`nightly_predict.py:385`); the userbase prior reads four columns instead of whole rows (`scoring.py:113`). On a 30-user test database one rating went from 124 queries to 13, and the rater's scores matched the old path exactly | ~~HIGH~~ → LOW | residual: the prior is still one scan over every rated album per rating, now of four numbers |
 | **P2** | `/discover/charts` selects every rated album, then filters and groups twice in Python, uncached (`discover.py:189`) | **HIGH** — the Charts tab, both platforms | memoise the response on its filter tuple with the existing 60s TTL + invalidation hook |
 | **P11** | ~~All 10 `/util/*` endpoints had no auth.~~ **Fixed.** The router now carries `dependencies=[Depends(current_user)]` (`util.py:31-45`) and the two web call sites that used a bare `fetch` were moved onto `fetchAlbumColor`. Verified: all ten answer 401 without a token. A signed-in user can still call `/backfill-genres?override=true` | ~~HIGH~~ → LOW | residual: move the seven maintenance routes out of HTTP entirely, beside `run_audio_ingest.sh` |
-| **P8** | Engine allows 15 connections *per process*; Supabase's session pooler allows 15 *per project* (`database.py:28` vs `backfill_factors.py:35`) | **HIGH** at scale | confirm pooler mode; size `pool_size` against the real limit ÷ instances |
+| **P8** | Engine allows 15 connections *per process* on Render; Supabase's session pooler allows 15 *per project* (`database.py`, `_build_engine`). **Partly fixed, November 2026:** a process run from `.env` (`PG_*`) now defaults to 2 + 2, after a local uvicorn for the simulator held 8 of the 15 and the pooler refused new clients (`EMAXCONNSESSION`) — 500s on the same Mac and less headroom for Render. `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` override | **HIGH** at scale | Render's own 5 + 10 still equals the whole project limit: size it against the real limit ÷ instances, or move to the transaction pooler |
 | **P5** | The ratings board and search cache are per-process. `invalidate_cache()` clears one process's board. New releases now persist in `CachedFeed` | **HIGH** the moment there's a 2nd instance | move the board to shared storage before scaling out, not before: at one process it would only be slower |
 | **P3** | `/discover/picks` runs a `NOT EXISTS` on `lower(trim(…))` with no functional index (`discover.py:321-326`) | MEDIUM — `albumprediction` grows as users × catalog | functional index, or store `album_key` on `Album` |
 | **P4** | `/albums/{id}/report` aggregates the **entire** song table, then filters in Python (`albums.py:578-581`) | MEDIUM | add `.where(Song.album_id.in_(...))` — one line |
