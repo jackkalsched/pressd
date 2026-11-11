@@ -86,3 +86,15 @@ export function binEntryMatches(e: BinEntry, query: string): boolean {
 export function binCardMatches(b: BinCard, query: string): boolean {
   return matches([b.title, b.sourceName, b.sourceYear != null ? String(b.sourceYear) : null], query)
 }
+
+// ── Progress ──────────────────────────────────────────────────────────────────
+// The bin page's progress strip: one cell per record in the list's own order,
+// so the filled cells sit where your rated records sit in the list.
+
+export type BinCell = 'rated' | 'saved' | 'empty'
+
+export function binCells(entries: BinEntry[]): BinCell[] {
+  return [...entries]
+    .sort((a, b) => a.position - b.position)
+    .map((e) => (e.mine?.status === 'rated' && e.mine.score != null ? 'rated' : e.mine ? 'saved' : 'empty'))
+}

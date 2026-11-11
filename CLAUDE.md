@@ -621,22 +621,25 @@ stored tracklist through `tracklink` (so the audio ingest fetches them), its Cla
 will be a 404 to anyone but its owner; `delete_own_account` deletes a user's bins.
 Surfaces: For You's **BINS** section (up to three `BinCard`s, "See all →") on both
 platforms — a Pressd bin's card carries the full-colour Pressd mark on a cream chip in
-the collage's lower-right corner (`BinMosaic`'s `pressd`); web's sidebar **Bins** (`/bins`, `/bins/:slug`: the banner, then a sticky column with the
-source and progress, the list beside it, two columns at `2xl`);
+the collage's lower-right corner (`BinMosaic`'s `pressd`); web's sidebar **Bins** (`/bins`, `/bins/:slug`: the banner, the centred title and progress, then the
+list, two columns at `2xl`);
 iPhone's **side menu** (`components/SideMenu.tsx`, the ≡ beside For You's search icon,
 sliding in from the right, the button's side, with its own ≡ landing exactly where the
 masthead's was — measured on the tap — so the same finger closes it; the header is the Pressd mark and wordmark on the ≡'s line; entries: Bins, and Settings —
 the profile's `SettingsSheet` in `settings` mode, which For You mounts too, opened once the
 menu has slid away), `app/bins/index.tsx` and
-`app/bins/[slug].tsx`. The bin page opens on a **banner** the width of the screen: the 2×2 collage scaled
-up and centred, under a dark wash (literal colours — it is dark in either appearance)
-and fading into the page at its foot, with the title over it in cream Playfair. Over the
-title, left-aligned, every Pressd bin (`kind` curated) carries the **Pressd-verified badge**
-(`PressdBinBadge`, one per platform): the full-colour Pressd mark on a cream chip — the same
-chip its card puts in the collage's corner (`BinMosaic`'s `pressd` draws it). It was a white
-outline of the mark for a day; that went, and with it the outline geometry. Below the banner (no second collage): the
-source as plain text (no link to the list, Jack's call), progress, Sort by, the records.
-On iPhone the back button floats on a dark disc and the status bar is light.
+`app/bins/[slug].tsx`. The bin page opens on a **banner** the width of the screen: the lead record's cover blurred
+into a wash, and over it the bin's first three covers fanned out (the first in front, the
+next two tilted behind), ending in a hard edge — no fade into the page (Jack's call); its
+colours are literal, dark in either appearance. Below it, centred: on a Pressd bin (`kind`
+curated) the bare Pressd mark — no chip behind it on the page — then the title in Playfair,
+then **progress** (`BinProgress`, one per platform): "22 of 100 rated" over a strip of one
+cell per record in the **list's own order**, fifty to a row (`binCells` in
+`shared/src/binSort.ts`), green where you've rated it, a pale green where it's in your
+library, empty otherwise, so the fills sit where your rated records sit in the list. No
+source line and no average (Jack's calls). A Pressd bin's **card** keeps the full-colour
+mark on a cream chip in its collage's corner (`PressdBinBadge`). Then Sort by and the
+records. On iPhone the back button floats on a dark disc and the status bar is light.
 A row always opens the record's Pressd page (the community view — through your copy's id
 when you hold one, else by name), never anyone's own rating. A **Sort by**
 dropdown (iPhone: `AnchoredMenu`, which gained `divider`; web: its own menu) picks the

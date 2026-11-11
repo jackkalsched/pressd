@@ -1,10 +1,9 @@
 // One bin — the Apple Music 100 Best Albums, say. Mobile's app/bins/[slug].tsx
-// laid out wide. A banner across the top projects the bin's 2×2 collage,
-// darkened and faded into the page, with the title over it in cream — dark
-// enough that the cream reads on a cream page — under the Pressd-verified
-// badge on Pressd's bins. Below it, as the album pages are: a sticky column
-// with the source and your progress, and its records filling the rest, in the
-// order the Sort by menu picks (shared/src/binSort.ts). Each record shows your
+// laid out wide. A banner across the top fans out the bin's first three
+// records over a blur of the first, ending in a hard edge; below it, centred,
+// the bare Pressd mark on Pressd's bins, the title and your progress (a cell per
+// record, in the list's order), then its records, in the order the Sort by
+// menu picks (shared/src/binSort.ts). Each record shows your
 // score or where it sits in your library, or Rate / Add.
 //
 // A record always opens as its Pressd page (the community view): through your
@@ -20,9 +19,9 @@ import { BIN_SORT_DIR, binEntryMatches, binSortLabel, sortBinEntries, type BinSo
 import BinSearch from '../components/BinSearch'
 import { songScoreColor } from '../types'
 import CoverImg from '../components/CoverImg'
-import PressdBinBadge from '../components/PressdBinBadge'
+import PressdMark from '../components/PressdMark'
 import VinylSpinner from '../components/VinylSpinner'
-import { BinProgressBar } from '../components/BinCard'
+import BinProgress from '../components/BinProgress'
 import { useUser } from '../context/UserContext'
 
 const SORTS: BinSort[] = ['list', 'pressd', 'raters', 'yours', 'unrated']
@@ -161,21 +160,26 @@ export default function Bin() {
 
   return (
     <div className="pb-24">
-      {/* The banner: the collage across the full width, centred, held low under
-          a dark wash and fading into the page at its foot. Its colours are
-          literal — the banner is dark in either appearance. */}
+      {/* The banner: the lead record blurred into a wash, and over it the
+          first three records fanned out, the first in front. It ends in a hard
+          edge (Jack's call); its colours are literal, dark in either
+          appearance. */}
       <header className="relative h-[340px] overflow-hidden bg-[#171615]">
-        <div className="absolute inset-x-0 top-1/2 grid aspect-square -translate-y-1/2 grid-cols-2 opacity-90">
-          {[0, 1, 2, 3].map((i) =>
-            data.covers[i] ? (
-              <CoverImg key={i} url={data.covers[i]} displayPx={1000} alt="" className="block h-full w-full object-cover" />
-            ) : (
-              <div key={i} />
-            ),
+        {data.covers[0] && (
+          <CoverImg url={data.covers[0]} displayPx={300} alt="" className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl" />
+        )}
+        <div className="absolute inset-0 bg-[rgba(14,12,10,0.28)]" />
+        <div className="absolute inset-x-0 top-1/2 flex h-[230px] -translate-y-1/2 items-center justify-center">
+          {data.covers[1] && (
+            <CoverImg url={data.covers[1]} displayPx={180} alt="" className="absolute h-[180px] w-[180px] -translate-x-[150px] -rotate-[8deg] rounded-2xl object-cover shadow-[0_14px_30px_rgba(0,0,0,0.35)]" />
+          )}
+          {data.covers[2] && (
+            <CoverImg url={data.covers[2]} displayPx={180} alt="" className="absolute h-[180px] w-[180px] translate-x-[150px] rotate-[8deg] rounded-2xl object-cover shadow-[0_14px_30px_rgba(0,0,0,0.35)]" />
+          )}
+          {data.covers[0] && (
+            <CoverImg url={data.covers[0]} displayPx={230} alt="" className="relative h-[230px] w-[230px] rounded-2xl object-cover shadow-[0_18px_40px_rgba(0,0,0,0.45)]" />
           )}
         </div>
-        <div className="absolute inset-0 bg-[rgba(14,12,10,0.6)]" />
-        <div className="absolute inset-x-0 bottom-0 h-24 bg-linear-to-b from-transparent to-(--c-f9f8f6)" />
         <button
           onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/bins'))}
           className="absolute left-6 top-6 md:left-12 flex h-9 w-9 items-center justify-center rounded-full bg-[rgba(12,10,8,0.42)] text-[#f9f8f6] hover:bg-[rgba(12,10,8,0.6)]"
@@ -183,32 +187,19 @@ export default function Bin() {
         >
           <ArrowLeft size={18} />
         </button>
-        <div className="absolute inset-x-0 bottom-20">
-          <div className="mx-auto w-full max-w-[1600px] px-6 md:px-12">
-            {data.kind === 'curated' && <PressdBinBadge width={72} className="mb-4" />}
-            <h1 className="m-0 max-w-[900px] font-display text-[40px] md:text-[56px] leading-[1.05] font-bold text-[#f9f8f6] [text-shadow:0_2px_14px_rgba(0,0,0,0.35)]">
-              {data.title}
-            </h1>
-          </div>
-        </div>
       </header>
 
-      <div className="mx-auto w-full max-w-[1600px] px-6 md:px-12 pt-2">
-      <div className="flex flex-col gap-10 lg:flex-row lg:items-start">
-        {/* The bin, pinned while its records scroll. */}
-        <aside className="lg:sticky lg:top-8 lg:w-[340px] shrink-0">
-          {data.sourceName && (
-            <p className="m-0 text-[14px] font-semibold text-(--c-57534e)">
-              {data.sourceName}{data.sourceYear ? ` · ${data.sourceYear}` : ''}
-            </p>
-          )}
-          <div className="mt-6 flex"><BinProgressBar done={data.progress.rated} total={data.progress.total} /></div>
-          <p className="m-0 mt-2.5 text-[13px] font-medium text-(--c-57534e)">
-            <span className="font-bold text-(--c-1c1917)">{data.progress.rated}</span> of {data.progress.total} rated
-          </p>
+      <div className="mx-auto w-full max-w-[1600px] px-6 md:px-12 pt-8">
+        {/* Centred under the fan: the bare Pressd mark, the title, your progress. */}
+        <div className="mx-auto mb-10 flex max-w-3xl flex-col items-center text-center">
+          {data.kind === 'curated' && <span className="mb-1" title="A Pressd bin"><PressdMark size={48} /></span>}
+          <h1 className="m-0 font-display text-[40px] md:text-[52px] leading-[1.05] font-black text-(--c-1c1917)">{data.title}</h1>
+          <div className="mt-7 w-full text-left">
+            <BinProgress entries={data.entries} />
+          </div>
           {error && <p className="m-0 mt-3 text-[13px] text-(--c-b91c1c)">{error}</p>}
-        </aside>
-
+        </div>
+      <div className="flex flex-col">
         <section className="min-w-0 flex-1">
           {/* Searching squeezes the sort down to its icon, and that icon folds
               search away again: the sort's words collapse while the field

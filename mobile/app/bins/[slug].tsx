@@ -1,8 +1,8 @@
 // One bin — the Apple Music 100 Best Albums, say. A banner across the top of
-// the screen projects the bin's 2×2 collage, darkened and faded, with the
-// bin's title over it in cream — dark enough that the cream reads whatever the
-// page is — under the Pressd-verified badge on Pressd's bins. Everything else
-// sits below it: the source, your progress, the sort, and the records.
+// the screen fans out the bin's first three records over a blur of the first,
+// ending in a hard edge. Below it, centred, the bare Pressd mark on Pressd's bins and
+// the title; then your progress — a cell per record, in the list's order — the
+// sort, and the records.
 //
 // Its records in the list's
 // order (or by the Pressd average, or by your predicted score once picks are
@@ -13,9 +13,8 @@
 // copy's id when you have one, otherwise by name, which handles a record
 // nobody on Pressd has rated yet.
 import { useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Alert, FlatList, LayoutAnimation, Pressable, RefreshControl, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { AccessibilityInfo, Alert, FlatList, LayoutAnimation, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { LinearGradient } from 'expo-linear-gradient'
 import { StatusBar } from 'expo-status-bar'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -27,16 +26,20 @@ import AnchoredMenu from '../../components/AnchoredMenu'
 import { useAuth } from '../../lib/auth'
 import { selection, success } from '../../lib/haptics'
 import { scrollToTop } from '../../lib/scrollToTop'
-import { BinProgressBar } from '../../components/BinCard'
+import BinProgress from '../../components/BinProgress'
 import CoverImage from '../../components/CoverImage'
-import PressdBinBadge from '../../components/PressdBinBadge'
+import { Image } from 'expo-image'
 import VinylSpinner from '../../components/VinylSpinner'
-import { colors, fonts, NUM_SCALE_CAP, radii, scoreColor, spacing, useColors, usePageRgb } from '../../theme/tokens'
+import { colors, fonts, NUM_SCALE_CAP, radii, scoreColor, spacing, useColors } from '../../theme/tokens'
 
 const COVER = 120
-// The banner's height below the status bar, and the fade into the page at its foot.
-const BANNER = 280
-const FADE = 56
+// The banner's height below the status bar. It ends in a hard edge, no fade
+// into the page (Jack's call).
+const BANNER = 230
+// The fan of three covers on the banner.
+const FAN_FRONT = 156
+const FAN_SIDE = 122
+const FAN_SPREAD = 96
 // The title's cream, whatever the appearance: the banner under it is always dark.
 const CREAM = '#f9f8f6'
 
@@ -94,8 +97,6 @@ export default function BinPage() {
   const tc = useColors()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { width } = useWindowDimensions()
-  const pageRgb = usePageRgb()
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const { slug } = useLocalSearchParams<{ slug: string }>()
@@ -225,56 +226,52 @@ export default function BinPage() {
   }
 
   const bannerH = BANNER + insets.top
+  // The fan: the list's first three records, its first in front.
+  const [front, left, right] = [data.covers[0], data.covers[1], data.covers[2]]
   const header = (
     <View>
-      {/* The banner: the collage, scaled to the screen's width and centred,
-          held low under a dark wash, fading into the page at its foot. */}
+      {/* The banner: the lead record blurred into a wash, and over it the
+          first three records fanned out, the first in front. It ends in a
+          hard edge (Jack's call). */}
       <View style={[styles.banner, { height: bannerH }]}>
-        <View style={[styles.collage, { width, height: width, top: (bannerH - width) / 2 }]}>
-          {[0, 1, 2, 3].map((i) =>
-            data.covers[i] ? (
-              <CoverImage key={i} url={data.covers[i]} displayPx={Math.ceil(width / 2)} style={{ width: width / 2, height: width / 2 }} />
-            ) : (
-              <View key={i} style={{ width: width / 2, height: width / 2 }} />
-            ),
+        {front && (
+          <CoverImage url={front} displayPx={200} blurRadius={40} style={StyleSheet.absoluteFill} />
+        )}
+        <View style={[StyleSheet.absoluteFill, styles.wash]} />
+        <View style={[styles.fan, { top: insets.top + 34 }]}>
+          {left && (
+            <View style={[styles.fanCard, styles.fanSide, { transform: [{ translateX: -FAN_SPREAD }, { rotate: '-8deg' }] }]}>
+              <CoverImage url={left} displayPx={FAN_SIDE} style={styles.fanSideImg} />
+            </View>
+          )}
+          {right && (
+            <View style={[styles.fanCard, styles.fanSide, { transform: [{ translateX: FAN_SPREAD }, { rotate: '8deg' }] }]}>
+              <CoverImage url={right} displayPx={FAN_SIDE} style={styles.fanSideImg} />
+            </View>
+          )}
+          {front && (
+            <View style={[styles.fanCard, styles.fanFront]}>
+              <CoverImage url={front} displayPx={FAN_FRONT} style={styles.fanFrontImg} />
+            </View>
           )}
         </View>
-        <View style={[StyleSheet.absoluteFill, styles.wash]} />
-        <LinearGradient
-          colors={[`rgba(${pageRgb},0)`, `rgba(${pageRgb},1)`]}
-          style={[styles.fade, { height: FADE }]}
-          pointerEvents="none"
-        />
-        <View style={[styles.titleBlock, { bottom: FADE - 4 }]}>
-          {data.kind === 'curated' && <PressdBinBadge width={56} />}
+      </View>
+
+      <View style={styles.head}>
+        <View style={styles.titleBlock}>
+          {data.kind === 'curated' && (
+            <Image source={require('../../assets/pressd-mark.png')} style={styles.mark} contentFit="contain" accessibilityLabel="A Pressd bin" />
+          )}
           <Text
             style={styles.title}
             onPress={() => scrollToTop(list)}
             accessibilityRole="header"
             accessibilityHint="Scrolls to the top"
-            numberOfLines={3}
           >
             {data.title}
           </Text>
         </View>
-      </View>
-
-      <View style={styles.head}>
-        <View style={styles.about}>
-          <View style={styles.aboutText}>
-            {data.sourceName && (
-              <Text style={styles.source} numberOfLines={1}>
-                {data.sourceName}{data.sourceYear ? ` · ${data.sourceYear}` : ''}
-              </Text>
-            )}
-            <View style={styles.progressRow}>
-              <BinProgressBar done={data.progress.rated} total={data.progress.total} />
-            </View>
-            <Text style={styles.progressText} maxFontSizeMultiplier={NUM_SCALE_CAP}>
-              <Text style={styles.progressStrong}>{data.progress.rated}</Text> of {data.progress.total} rated
-            </Text>
-          </View>
-        </View>
+        <BinProgress entries={data.entries} />
       <View style={styles.controls}>
         {/* Searching squeezes the sort down to its icon, and that icon folds
             search away again. One pressable either way, so the change
@@ -443,27 +440,26 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(12,10,8,0.42)',
   },
   banner: { overflow: 'hidden', backgroundColor: '#171615' },
-  collage: { position: 'absolute', left: 0, flexDirection: 'row', flexWrap: 'wrap', opacity: 0.9 },
-  // Low exposure: the covers stay legible as covers, but nothing in them is
-  // bright enough to fight the cream title.
-  wash: { backgroundColor: 'rgba(14,12,10,0.6)' },
-  fade: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  // Held down a little so the fan stands out of its own blurred colour.
+  wash: { backgroundColor: 'rgba(14,12,10,0.28)' },
+  fan: { position: 'absolute', left: 0, right: 0, height: FAN_FRONT, alignItems: 'center', justifyContent: 'center' },
+  fanCard: {
+    position: 'absolute', borderRadius: radii.md, backgroundColor: '#171615',
+    shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 8 },
+  },
+  fanFront: { width: FAN_FRONT, height: FAN_FRONT },
+  fanFrontImg: { width: FAN_FRONT, height: FAN_FRONT, borderRadius: radii.md },
+  fanSide: { width: FAN_SIDE, height: FAN_SIDE },
+  fanSideImg: { width: FAN_SIDE, height: FAN_SIDE, borderRadius: radii.md },
   topBar: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xs },
   state: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   stateText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary },
 
-  head: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.lg },
-  titleBlock: { position: 'absolute', left: spacing.lg, right: spacing.lg, alignItems: 'flex-start', gap: spacing.md },
-  title: {
-    fontFamily: fonts.display, fontSize: 34, lineHeight: 40, color: CREAM,
-    textShadowColor: 'rgba(0,0,0,0.35)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 2 },
-  },
-  about: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
-  aboutText: { flex: 1, minWidth: 0 },
-  source: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.inkSecondary },
-  progressRow: { flexDirection: 'row', marginTop: spacing.md },
-  progressText: { marginTop: spacing.sm, fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkSecondary },
-  progressStrong: { fontFamily: fonts.bodyBold, color: colors.ink },
+  head: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.lg },
+  titleBlock: { alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg },
+  // The bare mark on the page, no chip behind it (Jack's call).
+  mark: { width: 40, height: 40 * (126 / 232) },
+  title: { fontFamily: fonts.displayBlack, fontSize: 32, lineHeight: 38, color: colors.ink, textAlign: 'center' },
   controls: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg },
   // Open, the field takes the rest of the row from the squished sort.
   search: { flex: 1 },
