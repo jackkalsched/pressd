@@ -1,33 +1,20 @@
-// The Pressd-verified badge for a bin Pressd made: the Pressd mark traced as an
-// outline — its two legs (open toward the record), the record and the label as
-// lines, nothing filled — left-aligned above the bin's title: white on the bin
-// page's dark banner, the ink colour (`color`) on a bin's card. The geometry is
-// PressdMark's own (lib/pressdMark.ts); mobile's components/PressdBinBadge.tsx
-// copies it, so change both.
-import { DISC_CX, DISC_CY, LEG_OUTLINES } from '../lib/pressdMark'
+// The Pressd-verified badge for a bin Pressd made: the full-colour Pressd mark
+// on a cream chip. Above the title on the bin page's banner, and in the lower
+// right of the collage on a bin's card. Cream whatever the appearance: it sits
+// on album art or the dark banner, never on the page. Mobile's
+// components/PressdBinBadge.tsx draws the same chip.
+import PressdMark from './PressdMark'
 
-// The mark's extent once rotated, so the outline fills its box.
-const VIEW = { x: -25, y: 43, w: 220, h: 120 }
-
-export default function PressdBinBadge({ width = 72, stroke = 1.6, color = '#fff' }: { width?: number; stroke?: number; color?: string }) {
-  const sw = (stroke * VIEW.w) / width // the line's thickness in the mark's own units
+export default function PressdBinBadge({ width = 72, className = '' }: { width?: number; className?: string }) {
   return (
-    <svg
-      viewBox={`${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}`}
-      width={width}
-      height={(width * VIEW.h) / VIEW.w}
+    <span
+      className={`flex items-center justify-center overflow-hidden bg-[#f9f8f6] shadow-[0_1px_5px_rgba(0,0,0,0.3)] ${className}`}
+      style={{ width, height: width * 0.6, borderRadius: width * 0.18 }}
+      title="A Pressd bin"
       role="img"
       aria-label="A Pressd bin"
-      className="block overflow-visible"
     >
-      <title>A Pressd bin</title>
-      <g transform={`rotate(45 ${DISC_CX} ${DISC_CY})`} fill="none" stroke={color} strokeWidth={sw} strokeLinejoin="round" strokeLinecap="round">
-        <path d={LEG_OUTLINES[0]} />
-        <path d={LEG_OUTLINES[1]} />
-        <circle cx={DISC_CX} cy={DISC_CY} r="50" />
-        <circle cx={DISC_CX} cy={DISC_CY} r="13.5" />
-        <circle cx={DISC_CX} cy={DISC_CY} r="3.3" />
-      </g>
-    </svg>
+      <PressdMark size={width * 0.95} />
+    </span>
   )
 }

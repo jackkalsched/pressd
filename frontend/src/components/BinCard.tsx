@@ -7,7 +7,7 @@
 import { Link } from 'react-router-dom'
 import type { BinCard as Bin } from '../api'
 import CoverImg from './CoverImg'
-import PressdMark from './PressdMark'
+import PressdBinBadge from './PressdBinBadge'
 
 /** The 2×2 of a bin's first four covers. `pressd` adds the official chip: the
  *  full-colour Pressd mark on cream in the lower-right corner. */
@@ -25,16 +25,7 @@ export function BinMosaic({ covers, size, pressd = false }: { covers: string[]; 
           ),
         )}
       </div>
-      {pressd && (
-        // Cream whatever the appearance: it sits on album art, not on the page.
-        <span
-          className="absolute bottom-1 right-1 flex items-center justify-center overflow-hidden bg-[#f9f8f6] shadow-[0_1px_5px_rgba(0,0,0,0.3)]"
-          style={{ width: chip, height: chip * 0.6, borderRadius: chip * 0.18 }}
-          title="A Pressd bin"
-        >
-          <PressdMark size={chip * 0.95} />
-        </span>
-      )}
+      {pressd && <PressdBinBadge width={chip} className="absolute bottom-1 right-1" />}
     </div>
   )
 }

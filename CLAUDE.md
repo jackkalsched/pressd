@@ -630,9 +630,9 @@ menu has slid away), `app/bins/index.tsx` and
 up and centred, under a dark wash (literal colours — it is dark in either appearance)
 and fading into the page at its foot, with the title over it in cream Playfair. Over the
 title, left-aligned, every Pressd bin (`kind` curated) carries the **Pressd-verified badge**
-(`PressdBinBadge`, one per platform) on its page: the Pressd mark traced as a white outline, nothing
-filled, its legs left open where they face the record (`LEG_OUTLINES`), from the mark's own geometry (web `lib/pressdMark.ts`, which `PressdMark` now
-reads too; mobile copies the paths — change both). Below the banner (no second collage): the
+(`PressdBinBadge`, one per platform): the full-colour Pressd mark on a cream chip — the same
+chip its card puts in the collage's corner (`BinMosaic`'s `pressd` draws it). It was a white
+outline of the mark for a day; that went, and with it the outline geometry. Below the banner (no second collage): the
 source as plain text (no link to the list, Jack's call), progress, Sort by, the records.
 On iPhone the back button floats on a dark disc and the status bar is light.
 A row always opens the record's Pressd page (the community view — through your copy's id

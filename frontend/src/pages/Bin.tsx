@@ -177,7 +177,7 @@ export default function Bin() {
         </button>
         <div className="absolute inset-x-0 bottom-20">
           <div className="mx-auto w-full max-w-[1600px] px-6 md:px-12">
-            {data.kind === 'curated' && <div className="mb-4"><PressdBinBadge width={72} /></div>}
+            {data.kind === 'curated' && <PressdBinBadge width={72} className="mb-4" />}
             <h1 className="m-0 max-w-[900px] font-display text-[40px] md:text-[56px] leading-[1.05] font-bold text-[#f9f8f6] [text-shadow:0_2px_14px_rgba(0,0,0,0.35)]">
               {data.title}
             </h1>

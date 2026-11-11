@@ -7,7 +7,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { BinCard as Bin } from '../lib/api'
 import { colors, fonts, NUM_SCALE_CAP, radii, spacing, useColors } from '../theme/tokens'
 import CoverImage from './CoverImage'
-import { Image } from 'expo-image'
+import PressdBinBadge from './PressdBinBadge'
 
 const MOSAIC = 84
 
@@ -27,15 +27,7 @@ export function BinMosaic({ covers, size, pressd = false }: { covers: string[]; 
           ),
         )}
       </View>
-      {pressd && (
-        <View
-          style={[styles.chip, { width: chip, height: chip * 0.6, borderRadius: chip * 0.18, right: 4, bottom: 4 }]}
-          accessible
-          accessibilityLabel="A Pressd bin"
-        >
-          <Image source={require('../assets/pressd-mark.png')} style={styles.chipMark} contentFit="contain" />
-        </View>
-      )}
+      {pressd && <PressdBinBadge width={chip} style={styles.chip} />}
     </View>
   )
 }
@@ -82,12 +74,7 @@ const styles = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   mosaic: { flexDirection: 'row', flexWrap: 'wrap', borderRadius: radii.md, overflow: 'hidden' },
   text: { flex: 1, minWidth: 0 },
-  // Cream whatever the appearance: it sits on album art, not on the page.
-  chip: {
-    position: 'absolute', backgroundColor: '#f9f8f6', padding: 3,
-    shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 1 },
-  },
-  chipMark: { width: '100%', height: '100%' },
+  chip: { position: 'absolute', right: 4, bottom: 4 },
   title: { fontFamily: fonts.display, fontSize: 18, lineHeight: 23, color: colors.ink },
   source: { marginTop: 2, fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkSecondary },
   progressRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },

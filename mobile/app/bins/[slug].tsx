@@ -236,7 +236,7 @@ export default function BinPage() {
           pointerEvents="none"
         />
         <View style={[styles.titleBlock, { bottom: FADE - 4 }]}>
-          {data.kind === 'curated' && <PressdBinBadge width={48} />}
+          {data.kind === 'curated' && <PressdBinBadge width={56} />}
           <Text
             style={styles.title}
             onPress={() => scrollToTop(list)}
