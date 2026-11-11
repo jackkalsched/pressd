@@ -473,55 +473,66 @@ def _queue_genre_tagging(
 
     Fills only what's empty: a catalog genre stays, and the tagger adds the
     subgenres under it."""
-    import threading, sys, pathlib
+    import threading
+    threading.Thread(
+        target=tag_genre, args=(album_id, artist, album_name, year, qualifier), daemon=True,
+    ).start()
+
+
+def tag_genre(
+    album_id: int, artist: str, album_name: str, year: int | None = None,
+    qualifier: str | None = None,
+) -> None:
+    """The genre tagger itself, run in the caller's thread: _queue_genre_tagging
+    gives one album a thread of its own, and a bin's bulk add (routers/bins.py)
+    runs many through one thread, one after another."""
+    import sys, pathlib
     sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent))
-    def _run():
+    try:
+        from ..database import engine
+        from sqlmodel import Session
+
+        # Its own try: a failed call has to reach the Last.fm fallback. It
+        # used to fall straight through to the outer except, so when the
+        # SDK began rejecting `temperature` (October 2026) every album
+        # silently came away with nothing.
         try:
-            from ..database import engine
-            from sqlmodel import Session
-
-            # Its own try: a failed call has to reach the Last.fm fallback. It
-            # used to fall straight through to the outer except, so when the
-            # SDK began rejecting `temperature` (October 2026) every album
-            # silently came away with nothing.
-            try:
-                genre, subgenres = _classify_genre_claude(artist, album_name, year, qualifier)
-            except Exception as e:
-                print(f"[genre_tagger] Claude failed for album {album_id}: {e}")
-                genre, subgenres = None, []
-
-            # fallback: if Claude didn't return a valid genre, try Last.fm
-            if not genre:
-                try:
-                    from generate_genres_lastfm import get_tags_for_album, infer_genres
-                    tags = get_tags_for_album(album_id, artist, album_name)
-                    genre, lf_subs = infer_genres(tags)
-                    genre = canonical_genre(genre)
-                    if not subgenres:
-                        subgenres = [x for t in lf_subs if (x := canonical_subgenre(t, genre))][:3]
-                except Exception as e:
-                    print(f"[genre_tagger] Last.fm failed for album {album_id}: {e}")
-
-            if not genre and not subgenres:
-                return
-
-            with Session(engine) as s:
-                alb = s.get(Album, album_id)
-                if alb:
-                    if genre and (not alb.genre or genre_qualifier(alb.genre)):
-                        alb.genre = genre
-                    if len(subgenres) > 0 and not alb.sub_genre1:
-                        alb.sub_genre1 = subgenres[0]
-                    if len(subgenres) > 1 and not alb.sub_genre2:
-                        alb.sub_genre2 = subgenres[1]
-                    if len(subgenres) > 2 and not alb.sub_genre3:
-                        alb.sub_genre3 = subgenres[2]
-                    s.add(alb)
-                    s.commit()
-                    print(f"[genre_tagger] {artist} – {album_name}: genre={genre} subs={subgenres}")
+            genre, subgenres = _classify_genre_claude(artist, album_name, year, qualifier)
         except Exception as e:
-            print(f"[_queue_genre_tagging] failed for album {album_id}: {e}")
-    threading.Thread(target=_run, daemon=True).start()
+            print(f"[genre_tagger] Claude failed for album {album_id}: {e}")
+            genre, subgenres = None, []
+
+        # fallback: if Claude didn't return a valid genre, try Last.fm
+        if not genre:
+            try:
+                from generate_genres_lastfm import get_tags_for_album, infer_genres
+                tags = get_tags_for_album(album_id, artist, album_name)
+                genre, lf_subs = infer_genres(tags)
+                genre = canonical_genre(genre)
+                if not subgenres:
+                    subgenres = [x for t in lf_subs if (x := canonical_subgenre(t, genre))][:3]
+            except Exception as e:
+                print(f"[genre_tagger] Last.fm failed for album {album_id}: {e}")
+
+        if not genre and not subgenres:
+            return
+
+        with Session(engine) as s:
+            alb = s.get(Album, album_id)
+            if alb:
+                if genre and (not alb.genre or genre_qualifier(alb.genre)):
+                    alb.genre = genre
+                if len(subgenres) > 0 and not alb.sub_genre1:
+                    alb.sub_genre1 = subgenres[0]
+                if len(subgenres) > 1 and not alb.sub_genre2:
+                    alb.sub_genre2 = subgenres[1]
+                if len(subgenres) > 2 and not alb.sub_genre3:
+                    alb.sub_genre3 = subgenres[2]
+                s.add(alb)
+                s.commit()
+                print(f"[genre_tagger] {artist} – {album_name}: genre={genre} subs={subgenres}")
+    except Exception as e:
+        print(f"[_queue_genre_tagging] failed for album {album_id}: {e}")
 
 
 def _queue_song_repredictions(user_id: int):
@@ -584,6 +595,29 @@ def import_album(
         if existing:
             return _return_existing(existing)
 
+    album = create_copy(session, user_id, data)
+
+    if album.status == "to_listen":
+        _queue_predictions(album.id)
+
+    if _needs_genre_tagging(album):
+        _queue_genre_tagging(album.id, album.artist, album.album_name, album.year,
+                             genre_qualifier(data.get("genre")))
+
+    if not album.album_art_url:
+        _queue_cover_fill(album.id)
+
+    return {
+        **album.model_dump(),
+        "songs": [s.model_dump() for s in album.songs],
+        "already_existed": False,
+    }
+
+
+def create_copy(session: Session, user_id: int, data: dict) -> Album:
+    """Insert a user's copy of a record from a resolved album (/search/resolve's
+    shape), its songs, and its global track links. Nothing in the background:
+    import_album and a bin's add (routers/bins.py) queue their own follow-ups."""
     extra = data.get("extra_artists")
     album = Album(
         album_name=data["album_name"],
@@ -602,7 +636,7 @@ def import_album(
     session.flush()
 
     for t in data.get("tracks", []):
-        song = Song(
+        session.add(Song(
             title=str(t["title"]),
             track_number=t.get("track_number"),
             duration_ms=t.get("duration_ms"),
@@ -610,29 +644,12 @@ def import_album(
             spotify_id=t.get("spotify_id"),
             artist=t.get("artist", data["artist"]),
             album_id=album.id,
-        )
-        session.add(song)
+        ))
 
     session.commit()
     session.refresh(album)
-
     _link_tracks(session, album.id)
-
-    if album.status == "to_listen":
-        _queue_predictions(album.id)
-
-    if _needs_genre_tagging(album):
-        _queue_genre_tagging(album.id, album.artist, album.album_name, album.year,
-                             genre_qualifier(data.get("genre")))
-
-    if not album.album_art_url:
-        _queue_cover_fill(album.id)
-
-    return {
-        **album.model_dump(),
-        "songs": [s.model_dump() for s in album.songs],
-        "already_existed": False,
-    }
+    return album
 
 
 def _queue_cover_fill(album_id: int) -> None:

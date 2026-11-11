@@ -7,11 +7,12 @@ import { ActivityIndicator, Animated, Dimensions, Pressable, RefreshControl, Scr
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { ArrowRight, CalendarDays, ChevronDown, MessageCircle, Search, Triangle } from 'lucide-react-native'
+import { ArrowRight, CalendarDays, ChevronDown, Menu, MessageCircle, Search, Triangle } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchPredictedPicks,
   fetchAlbums,
+  fetchBins,
   fetchNewReleases,
   fetchTrending,
   fetchTopReviews,
@@ -27,8 +28,11 @@ import AnchoredMenu from '../../components/AnchoredMenu'
 import RecommendationBanner from '../../components/RecommendationBanner'
 import PassItOnCell from '../../components/PassItOnCell'
 import { scrollToTop, useCompactBar } from '../../lib/scrollToTop'
+import { selection } from '../../lib/haptics'
 import { useOpenProfile } from '../../lib/useOpenProfile'
 import SpotlightCard from '../../components/SpotlightCard'
+import BinCard from '../../components/BinCard'
+import SideMenu from '../../components/SideMenu'
 import RecommendSheet from '../../components/RecommendSheet'
 import HeatedDiscussions from '../../components/HeatedDiscussions'
 import LikeButton from '../../components/LikeButton'
@@ -115,6 +119,12 @@ export default function ForYou() {
   const [trendPickerOpen, setTrendPickerOpen] = useState(false)
   const trendChipRef = useRef<View>(null)
   const [trendBlockY, setTrendBlockY] = useState(0)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const { data: bins = [] } = useQuery({
+    queryKey: ['bins', userId],
+    queryFn: fetchBins,
+    enabled: userId > 0,
+  })
 
   const { data: listening = [], refetch: refetchListening } = useQuery({
     queryKey: ['albums', 'listening', userId],
@@ -380,15 +390,26 @@ export default function ForYou() {
         <Animated.View style={{ opacity: mastheadOpacity, transform: [{ translateY: mastheadShift }] }}>
           <View style={styles.masthead}>
             <Text style={styles.title} onPress={() => scrollToTop(scrollRef)}>For You</Text>
-            <Pressable
-              onPress={() => router.push('/search')}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Search"
-              style={({ pressed }) => [styles.searchBtn, pressed && { opacity: 0.5 }]}
-            >
-              <Search size={22} color={tc.ink} strokeWidth={2.2} />
-            </Pressable>
+            <View style={styles.mastheadIcons}>
+              <Pressable
+                onPress={() => router.push('/search')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Search"
+                style={({ pressed }) => [styles.searchBtn, pressed && { opacity: 0.5 }]}
+              >
+                <Search size={22} color={tc.ink} strokeWidth={2.2} />
+              </Pressable>
+              <Pressable
+                onPress={() => { selection(); setMenuOpen(true) }}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Menu"
+                style={({ pressed }) => [styles.searchBtn, pressed && { opacity: 0.5 }]}
+              >
+                <Menu size={24} color={tc.ink} strokeWidth={2.2} />
+              </Pressable>
+            </View>
           </View>
           <Text style={styles.sub}>
             {greeting()}{firstName ? ` ${firstName}` : ''}, here&rsquo;s what&rsquo;s moving this week.
@@ -565,6 +586,32 @@ export default function ForYou() {
           </View>
         )}
 
+        {/* Bins — Pressd's themed collections, and how far through each you are. */}
+        {bins.length > 0 && (
+          <View style={styles.block}>
+            <SectionHead
+              label="BINS"
+              action={
+                <Pressable
+                  onPress={() => router.push('/bins')}
+                  hitSlop={10}
+                  style={styles.upcomingLink}
+                  accessibilityRole="button"
+                  accessibilityLabel="All bins"
+                >
+                  <Text style={styles.upcomingLinkText}>See all</Text>
+                  <ArrowRight size={14} color={tc.green} />
+                </Pressable>
+              }
+            />
+            <View style={styles.bins}>
+              {bins.slice(0, 3).map((b) => (
+                <BinCard key={b.slug} bin={b} onPress={() => router.push({ pathname: '/bins/[slug]', params: { slug: b.slug } })} />
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Pressd Trending — bubbly cells that pop in as they scroll into view */}
         {trending.length > 0 && (
           <View style={styles.block} onLayout={(e) => setTrendBlockY(e.nativeEvent.layout.y)}>
@@ -639,6 +686,7 @@ export default function ForYou() {
         onSelect={(v) => setTrendMode(v as 'week' | 'top')}
         onClose={() => setTrendPickerOpen(false)}
       />
+      <SideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />
     </SafeAreaView>
   )
 }
@@ -847,6 +895,8 @@ const styles = StyleSheet.create({
   predictLabel: { fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 0.8, color: colors.inkMuted, marginTop: 1 },
   suggestCta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.md },
   textCtaLabel: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
+  mastheadIcons: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
+  bins: { gap: spacing.lg },
   upcomingLink: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   upcomingLinkText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
 

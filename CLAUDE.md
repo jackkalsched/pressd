@@ -61,7 +61,8 @@ frontend/         React 19 + Vite SPA        → Vercel
 mobile/           Expo SDK 57 iOS app        → TestFlight
 worker/           nightly ML pipeline        → GitHub Actions, 02:30 PT
 ops/launchd/      nightly audio ingest       → launchd on the Mac, from a deploy clone of main
-tests/            pytest, backend-only: taste overlap, the audio ingest's scheduler, upcoming releases (no DB connection)
+tests/            pytest, backend-only: taste overlap, the audio ingest's scheduler, upcoming releases, bins (no DB connection)
+data/bins/        curated bins' source lists: <slug>.csv (the list as printed) + <slug>.json (title, source, overrides)
 shared/           @pressd/shared — TS source consumed by frontend + mobile, no build
 theme_predictor/  LLM album analysis; imported by the worker AND the web service
 song_score_model.py  LightGBM per-song model (1,211 lines) — train + inference
@@ -72,14 +73,14 @@ PLAN_*.md         gitignored design docs; code cites them by section
 
 | Area | Role | LOC |
 |---|---|---|
-| `backend/main.py` | CORS, 16 routers, `init_db()` on startup, `/health` | 46 |
+| `backend/main.py` | CORS, 17 routers, `init_db()` on startup, `/health` | 46 |
 | `backend/database.py` | engine + **the entire migration system** (§3) | 274 |
-| `backend/models.py` | 29 SQLModel tables | 722 |
+| `backend/models.py` | 31 SQLModel tables | 722 |
 | `backend/deps.py` | `current_user`, `viewable_user_id`, `thread_access` — the auth invariant | 148 |
 | `backend/scoring.py` | framework 1: the user's own album score | 267 |
 | `backend/global_rating.py` | framework 2: the userbase-pooled rating | 155 |
 | `backend/trackkeys.py` | normalization keys; pure stdlib, imported everywhere | 163 |
-| `backend/routers/` | 16 routers, **121 endpoints** | 8,357 |
+| `backend/routers/` | 17 routers, **125 endpoints** | 8,357 |
 | `worker/` | `nightly_predict`, `catalog_predict`, `artist_clusters`, `audio_ingest`, `refresh_new_releases`, `taste_nightly`, `taste_health`, … | 3,449 |
 | `theme_predictor/` | `predict_single`, `personalize`, `global_factors`, `corpus`, … | 1,896 |
 | `shared/src/api.ts` | the single API client, 111 exported functions | 2,147 |
@@ -140,6 +141,9 @@ python song_score_model.py                   # retrain → song_score_model.pkl
 python -m worker.fill_covers [--dry-run]    # look again for every album copy with no cover (also daily in CI, fill-covers.yml)
 python -m worker.refresh_upcoming_releases [--dry-run]  # rebuild the upcoming-releases list (daily in CI, upcoming-releases.yml)
 python -m worker.set_cover ID URL [--dry-run]  # a cover by hand, for a record no catalog has: every copy gets it
+python -m worker.import_bin data/bins/<slug>.csv [--dry-run] [--set RANK DEEZER_ID]
+                                             # a list file into a curated bin, matched on Deezer (iTunes fallback);
+                                             # the dry run lists doubtful rows; --set pins one, kept in the JSON
 python -m worker.taste_evaluate --out PATH   # taste overlap: factorization vs layered baseline on held-out
                                              # song scores; reads production only; names users, keep it local
                                              # (--pairs 1:84,1:12: eye-test pairs by user id; default user 1's)
@@ -262,7 +266,7 @@ logs and runs again on the next boot.
           ┌──────────────────────┼───────────────────────────┐
           ▼                      ▼                           ▼
    routers/ (16)           scoring.py                trackkeys.py
-   121 endpoints           global_rating.py          (normalization —
+   125 endpoints           global_rating.py          (normalization —
                                  │                    imported by web,
                                  ▼                    worker, and scripts)
                           Postgres (Supabase)
@@ -483,7 +487,7 @@ spend a request on every open.
 
 ## 5. Module reference
 
-**`backend/models.py`** — 29 tables (five for the taste overlap: `TasteItem`, `TasteUser`, `TasteOverlap`, `OverlapSheet`, `OverlapEvent`; the first three written nightly by `worker/taste_nightly.py` and for one caller by the live path, all five served by `routers/overlap.py`). `Album` is a **per-user copy**, not a record
+**`backend/models.py`** — 31 tables (`Bin` and `BinEntry` for bins, §5; five for the taste overlap: `TasteItem`, `TasteUser`, `TasteOverlap`, `OverlapSheet`, `OverlapEvent`; the first three written nightly by `worker/taste_nightly.py` and for one caller by the live path, all five served by `routers/overlap.py`). `Album` is a **per-user copy**, not a record
 (`:89`); anything "global" must pool copies. `Song` carries `track_id` into the global
 `Track`, so audio is analyzed once and shared (`:258-260`) — that split is what makes
 the ML affordable. A mapper event keeps `Album.subject_key` in step with artist+name on
@@ -575,6 +579,60 @@ and never back to the source. It used to be an opt-in "Use it" button gated to �
 sources, and that gate blocked every real match there was (12 *Showgirl* songs from
 *The Encore*, all full-album sources); the gate also counted the source's scored songs,
 not its tracks.
+
+**Bins (`backend/bins.py`, `backend/routers/bins.py`, November 2026)** — themed collections
+of records; spec `docs/superpowers/specs/2026-11-11-bins-design.md`. v1 is Pressd's
+**curated** bins, the first the *Apple Music 100 Best Albums* (2024, credited and linked;
+no Apple artwork or blurbs — rank, title, artist, year). `Bin` (slug, kind `curated` |
+`user`, `owner_id` null for Pressd's, `item_type` album | song, source name / link / date,
+`visibility`, `sort_order`) and `BinEntry` (position, the source's `rank`, the matched
+catalog's **primary artist** with the **list's own title** — so *Purple Rain* is Prince's,
+and *Abbey Road* isn't "(2019 Mix)" — `subject_key`, Deezer id, cover, and the resolved
+album as `tracklist_json`, /search/resolve's shape). An entry is a **record, never a
+copy**: a caller's progress and per-row state join their copies on `subject_key`, so any
+edition counts (rated = done; listening, To Listen shown as such). Written only by
+`worker/import_bin.py` from `data/bins/<slug>.csv` + `.json` — reusable for every list;
+matching is `bins.pick_release` (`same_album`, then the exact artist — a substring credit
+let "The Beatles Complete On Ukulele" pass for *Revolver* — then album or EP over
+compilation, the standard edition over deluxe / edited / anniversary, the list's year
+within one, fewest tracks; never a single). Two Apple rows are pinned by hand
+(`overrides`: *Exile on Main St.*, *The Velvet Underground & Nico*); three are doubtful only
+because the credit differs (Ms. Lauryn Hill, Prince, Jimi Hendrix). An unmatched row is
+kept in place with nothing to add. Endpoints, all behind `current_user`: `GET /bins`
+(cards: the first four covers as a 2×2, the caller's `progress`), `GET /bins/{slug}`
+(each entry with `mine` `{id, status, score}`, `pressd_avg` / `pressd_raters` — the plain
+mean of rated copies, the community page's number — and `predicted_score` only when
+`predictions_unlocked`), and `POST /bins/{slug}/entries/{id}/add` `{status: listening |
+to_listen}` (Rate now / Add; returns the copy already held, in any edition, instead).
+There is **no "add the whole bin"** — Jack removed it (November 2026); records go in one at
+a time. A copy comes from the stored tracklist through `albums.create_copy` — the same
+insert as an import, no outbound call — and **doesn't remember the bin** (Jack's call).
+
+⚠️ **Rule (Jack, November 2026): every album in a bin must be considered for every user's
+picks predictions** — the nightly `catalog_predict` must score bin records into
+`albumprediction` whether or not anyone has added them, so a bin's For you order and
+`/discover/picks` can offer them. **Not met yet:** the catalog is built from album copies
+with analysed audio (`catalog_albums`), and on 2026-11-11 only 43 of the Apple 100 had a
+copy anywhere. Meeting it means making a bin entry a catalog record: `Track` rows for its
+stored tracklist through `tracklink` (so the audio ingest fetches them), its Claude
+`albumfactors` by `album_key`, and `catalog_albums` reading bin entries beside copies. A private bin
+will be a 404 to anyone but its owner; `delete_own_account` deletes a user's bins.
+Surfaces: For You's **BINS** section (up to three `BinCard`s, "See all →") on both
+platforms; web's sidebar **Bins** (`/bins`, `/bins/:slug`: a sticky column with the 2×2,
+title, source link and progress, the list beside it, two columns at `2xl`);
+iPhone's **side menu** (`components/SideMenu.tsx`, the ≡ beside For You's search icon,
+sliding in from the left; Bins is its only entry so far), `app/bins/index.tsx` and
+`app/bins/[slug].tsx`. A row opens your copy, else the community view by name. A **Sort by**
+dropdown (iPhone: `AnchoredMenu`, which gained `divider`; web: its own menu) picks the
+source's order, Pressd's order (the average), Your rating, or Not yet rated (unrated
+records first, best predicted first, then rated ones by your score), and Ascending /
+Descending; choosing an order resets the direction to its own (the list 1 → 100, scores
+high → low), and a record with no number stays last either way. The rules are
+`shared/src/binSort.ts`, once for both. A change of order slides each row to its new place
+— `LayoutAnimation` on iPhone, a FLIP on web (`useSlideRows` in `pages/Bin.tsx`) — and
+nothing moves under Reduce Motion. Each row carries year · genre: the genre its copies on Pressd
+carry most, else the catalog's from the stored resolve. Later phases (spec §7): song bins (Rolling Stone's 200 rock songs), user
+bins with Library → Bins (own bins only), then following and "where Pressd disagrees".
 
 **`backend/routers/search_all.py`** (November 2026) — the single search box. `GET /search/all?q=&group=&limit=`
 returns `people`, `albums`, `artists`, `songs` (one key with `group`; `limit` 4, capped at 25; `q` under two
@@ -1871,7 +1929,7 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   card's geometry lives in both `ShareCard.tsx` files by the same rule — every mobile
   measurement is the web pixel value passed through `u()`.
 - **Verification is the taste-overlap tests plus typecheck + lint + running it.** Tests:
-  `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3.13 -m pytest tests -q -p no:warnings` (144
+  `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3.13 -m pytest tests -q -p no:warnings` (161
   pass; none open a database connection, so they say nothing about production data —
   new taste-overlap code gets a test beside the others). Web:
   `cd frontend && npm run typecheck`. Mobile: `cd mobile && npm run typecheck`. Backend:

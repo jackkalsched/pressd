@@ -739,6 +739,10 @@ def delete_own_account(
     run("DELETE FROM overlapevent WHERE user_id = :u OR target_user_id = :u")
     run("DELETE FROM overlapsheet WHERE user_id = :u")
 
+    # Bins they made, and everything in them. Pressd's own have no owner.
+    run("DELETE FROM binentry WHERE bin_id IN (SELECT id FROM bin WHERE owner_id = :u)")
+    run("DELETE FROM bin WHERE owner_id = :u")
+
     # The uploaded pictures hang off the user row by foreign key too.
     run("DELETE FROM useravatar WHERE user_id = :u")
     run("DELETE FROM userbanner WHERE user_id = :u")

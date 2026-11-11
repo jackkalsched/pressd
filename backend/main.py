@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db
-from .routers import albums, songs, stats, search, aoty, util, audio, users, auth, social, comments, discover, public, discussions, overlap, search_all
+from .routers import albums, songs, stats, search, aoty, util, audio, users, auth, social, comments, discover, public, discussions, overlap, search_all, bins
 
 app = FastAPI(title="Pressd API")
 
@@ -39,6 +39,7 @@ app.include_router(comments.router)
 app.include_router(discussions.router)
 app.include_router(discover.router)
 app.include_router(overlap.router)
+app.include_router(bins.router)
 app.include_router(public.router)  # unauthenticated: marketing-site charts
 
 

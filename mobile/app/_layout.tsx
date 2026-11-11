@@ -170,6 +170,8 @@ function RootNavigator() {
         <Stack.Screen name="add" options={{ presentation: 'modal' }} />
         <Stack.Screen name="search" />
         <Stack.Screen name="upcoming" />
+        <Stack.Screen name="bins/index" />
+        <Stack.Screen name="bins/[slug]" />
         <Stack.Screen name="first-album" options={{ presentation: 'modal' }} />
         <Stack.Screen name="rate/[id]" />
         <Stack.Screen name="album/[id]" />

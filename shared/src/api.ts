@@ -658,6 +658,124 @@ export async function fetchUpcomingReleases(params?: {
   }
 }
 
+// ── Bins: themed collections of records ──────────────────────────────────────
+// Pressd's curated bins (the Apple Music 100 Best Albums first). An entry is a
+// record, not anyone's copy: `mine` is the caller's copy in any edition.
+
+export interface BinProgress {
+  rated: number
+  listening: number
+  toListen: number
+  total: number
+}
+
+export interface BinCard {
+  slug: string
+  title: string
+  kind: 'curated' | 'user'
+  itemType: 'album' | 'song'
+  ranked: boolean
+  sourceName: string | null
+  sourceUrl: string | null
+  sourceYear: number | null
+  entryCount: number
+  /** The first four entries' covers, for a 2×2. */
+  covers: string[]
+  progress: BinProgress
+}
+
+export interface BinEntry {
+  id: number
+  position: number
+  rank: number | null
+  artist: string
+  albumName: string
+  year: number | null
+  genre: string | null
+  coverUrl: string | null
+  deezerId: number | null
+  /** Matched to a catalog, so Rate now / Add can make a copy. */
+  addable: boolean
+  mine: { id: number; status: 'rated' | 'listening' | 'to_listen'; score: number | null } | null
+  pressdAvg: number | null
+  pressdRaters: number
+  /** Only once the caller's predictions are unlocked. */
+  predictedScore: number | null
+}
+
+export interface BinDetail extends BinCard {
+  description: string | null
+  sourcePublished: string | null
+  entries: BinEntry[]
+}
+
+function transformBinCard(d: Record<string, unknown>): BinCard {
+  const p = (d.progress ?? {}) as Record<string, number>
+  return {
+    slug: d.slug as string,
+    title: d.title as string,
+    kind: d.kind as BinCard['kind'],
+    itemType: d.item_type as BinCard['itemType'],
+    ranked: !!d.ranked,
+    sourceName: (d.source_name as string | null) ?? null,
+    sourceUrl: (d.source_url as string | null) ?? null,
+    sourceYear: (d.source_year as number | null) ?? null,
+    entryCount: (d.entry_count as number) ?? 0,
+    covers: (d.covers as string[] | undefined) ?? [],
+    progress: { rated: p.rated ?? 0, listening: p.listening ?? 0, toListen: p.to_listen ?? 0, total: p.total ?? 0 },
+  }
+}
+
+export async function fetchBins(): Promise<BinCard[]> {
+  const res = await apiFetch(`${BASE()}/bins`)
+  if (!res.ok) throw new Error('Failed to load bins')
+  return ((await res.json()) as Record<string, unknown>[]).map(transformBinCard)
+}
+
+export async function fetchBin(slug: string): Promise<BinDetail> {
+  const res = await apiFetch(`${BASE()}/bins/${encodeURIComponent(slug)}`)
+  if (!res.ok) throw new Error('Failed to load bin')
+  const d = await res.json()
+  return {
+    ...transformBinCard(d),
+    description: (d.description as string | null) ?? null,
+    sourcePublished: (d.source_published as string | null) ?? null,
+    entries: ((d.entries ?? []) as Record<string, unknown>[]).map((e) => ({
+      id: e.id as number,
+      position: e.position as number,
+      rank: (e.rank as number | null) ?? null,
+      artist: e.artist as string,
+      albumName: e.album_name as string,
+      year: (e.year as number | null) ?? null,
+      genre: (e.genre as string | null) ?? null,
+      coverUrl: (e.cover_url as string | null) ?? null,
+      deezerId: (e.deezer_id as number | null) ?? null,
+      addable: !!e.addable,
+      mine: (e.mine as BinEntry['mine']) ?? null,
+      pressdAvg: (e.pressd_avg as number | null) ?? null,
+      pressdRaters: (e.pressd_raters as number) ?? 0,
+      predictedScore: (e.predicted_score as number | null) ?? null,
+    })),
+  }
+}
+
+/** Rate now (`listening`) or Add to To Listen (`to_listen`) for one entry.
+ *  A copy the caller already holds, in any edition, comes back instead. */
+export async function addBinEntry(
+  slug: string,
+  entryId: number,
+  status: 'listening' | 'to_listen',
+): Promise<{ albumId: number; status: string; alreadyExisted: boolean }> {
+  const res = await apiFetch(`${BASE()}/bins/${encodeURIComponent(slug)}/entries/${entryId}/add`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  })
+  if (!res.ok) throw new Error('Could not add that record')
+  const d = await res.json()
+  return { albumId: d.album_id, status: d.status, alreadyExisted: !!d.already_existed }
+}
+
 // Popular albums across the whole userbase (grouped over per-user copies).
 export interface TrendingAlbum {
   album_id: number

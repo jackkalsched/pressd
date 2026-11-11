@@ -733,3 +733,69 @@ class OverlapEvent(SQLModel, table=True):
     action: str
     target_user_id: Optional[int] = None
     created_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
+
+
+class Bin(SQLModel, table=True):
+    """A themed collection of records or songs (docs/superpowers/specs/2026-11-11-bins-design.md).
+
+    Curated bins are Pressd's, made from a published list by worker/import_bin.py
+    and never written through the API: `owner_id` is null and the source is
+    credited by name and link. User bins (owner set, private / unlisted /
+    published) arrive in a later phase on these same tables.
+
+    A bin points at records, never at anyone's copy: an entry is keyed on
+    `subject_key`, so every edition a person owns counts toward their progress,
+    and adding a record from a bin makes an ordinary copy that doesn't remember
+    where it came from.
+
+    New tables, so create_all builds them and the last migration turns RLS on;
+    no migration strings.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    slug: str = Field(unique=True, index=True)
+    kind: str = Field(default="curated", index=True)       # curated | user
+    owner_id: Optional[int] = Field(default=None, foreign_key="pressuser.id", index=True)
+    item_type: str = Field(default="album")                 # album | song
+    title: str
+    description: Optional[str] = None
+    ranked: bool = Field(default=True)
+    visibility: str = Field(default="published", index=True)  # private | unlisted | published
+    source_name: Optional[str] = None
+    source_url: Optional[str] = None
+    source_published: Optional[date] = None
+    entry_count: int = Field(default=0)
+    # Where it sits among Pressd's bins on For You and the index, lowest first.
+    sort_order: int = Field(default=0)
+    hidden_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    created_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
+    updated_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
+
+
+class BinEntry(SQLModel, table=True):
+    """One record (or, in a song bin, one song) in a bin.
+
+    `artist` is the matched catalog's primary credit, which every key is built
+    on — Apple prints "Prince and the Revolution", Deezer files *Purple Rain*
+    under Prince — and `album_name` the list's own title, since editions fold
+    into one `subject_key` either way. `tracklist_json` is the resolved album
+    in /search/resolve's shape, so adding an entry to a library makes no
+    outbound call; the copy takes the entry's artist and title. An unmatched
+    entry is kept in its place with no tracklist, so a list of 100 stays 100.
+    """
+    __table_args__ = (UniqueConstraint("bin_id", "position"),)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    bin_id: int = Field(foreign_key="bin.id", index=True)
+    position: int                                   # 0-based order in the bin
+    rank: Optional[int] = None                      # the source's printed rank
+    note: Optional[str] = None
+    artist: str
+    album_name: str
+    year: Optional[int] = None
+    subject_key: str = Field(index=True)
+    deezer_id: Optional[int] = None
+    cover_url: Optional[str] = None
+    tracklist_json: Optional[str] = None
+    match_status: str = Field(default="matched")    # matched | unmatched | manual
+    # Song bins (a later phase): the song, and its Track once one exists.
+    song_title: Optional[str] = None
+    track_id: Optional[int] = Field(default=None, foreign_key="track.id")

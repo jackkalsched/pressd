@@ -1,0 +1,13 @@
+{
+  "slug": "apple-music-100-best-albums",
+  "title": "Apple Music 100 Best Albums",
+  "item_type": "album",
+  "source_name": "Apple Music",
+  "source_url": "https://100best.music.apple.com/us",
+  "source_published": "2024-05-22",
+  "sort_order": 0,
+  "overrides": {
+    "53": 543353,
+    "60": 6004996
+  }
+}

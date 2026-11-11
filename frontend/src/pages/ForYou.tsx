@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Search } from 'lucide-react'
-import { fetchAlbum, fetchAlbums, fetchFeed, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion } from '../api'
+import { fetchAlbum, fetchAlbums, fetchFeed, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion, fetchBins } from '../api'
 import type { NewRelease, PredictedPick, RecommendSuggestion, TopReview } from '../api'
 import { MIN_RATED_ALBUMS, songScoreColor } from '../types'
 import { Cover, ScorePill, hueFromString, coverGradient, scoreTint } from '../components/covers'
@@ -14,6 +14,7 @@ import RecommendModal from '../components/RecommendModal'
 import { markPassItOnEmpty, markPassItOnShown, passItOnRecent, usePassItOnDue, usePassItOnOpen } from '../lib/passItOn'
 import { useUser } from '../context/UserContext'
 import VinylSpinner from '../components/VinylSpinner'
+import BinCard from '../components/BinCard'
 
 // ── small helpers ─────────────────────────────────────────────────────────────
 
@@ -72,6 +73,11 @@ export default function ForYou() {
   const { activeUser } = useUser()
   const userId = activeUser?.id ?? 0
 
+  const { data: bins = [] } = useQuery({
+    queryKey: ['bins', userId],
+    queryFn: fetchBins,
+    enabled: userId > 0,
+  })
   const { data: listening = [] } = useQuery({
     queryKey: ['albums', 'listening', userId],
     queryFn: () => fetchAlbums({ status: 'listening', userId }),
@@ -463,6 +469,19 @@ export default function ForYou() {
                     }}
                   />
                 ))}
+              </div>
+            </section>
+          )}
+
+          {/* Bins — Pressd's themed collections, and how far through each you are. */}
+          {bins.length > 0 && (
+            <section className="mb-9">
+              <div className="flex items-baseline justify-between mb-4">
+                <h2 className={SECTION_LABEL}>Bins</h2>
+                <button onClick={() => navigate('/bins')} className="text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) flex items-center gap-1">See all <ArrowRight size={12} /></button>
+              </div>
+              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {bins.slice(0, 3).map((b) => <BinCard key={b.slug} bin={b} />)}
               </div>
             </section>
           )}

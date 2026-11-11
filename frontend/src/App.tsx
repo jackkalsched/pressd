@@ -27,6 +27,8 @@ import Username from './pages/Username'
 import TagBoard from './pages/TagBoard'
 import CommunityAlbum from './pages/CommunityAlbum'
 import GlobalSearch from './pages/GlobalSearch'
+import Bins from './pages/Bins'
+import Bin from './pages/Bin'
 
 function PublicHome() {
   const { activeUser } = useUser()
@@ -84,6 +86,8 @@ function ProtectedRoutes() {
         <Route path="/" element={<Navigate to="/for-you" replace />} />
         <Route path="/for-you" element={<ForYou />} />
         <Route path="/search" element={<GlobalSearch />} />
+        <Route path="/bins" element={<Bins />} />
+        <Route path="/bins/:slug" element={<Bin />} />
         <Route path="/library" element={<Library />} />
         <Route path="/ratings" element={<Ratings />} />
         <Route path="/stats" element={<Stats />} />

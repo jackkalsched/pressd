@@ -1,0 +1,204 @@
+"""Bins — themed collections of records (docs/superpowers/specs/2026-11-11-bins-design.md).
+
+v1 serves Pressd's curated bins, written only by worker/import_bin.py. Every
+route is behind a signed-in caller, as the rest of the app is, and what it
+says about the caller — progress, their copy, their predicted score — is
+theirs alone. Other people appear only as an average and a rater count.
+
+A bin points at records by `subject_key`, so a copy of any edition counts.
+Adding from a bin makes an ordinary copy, through the same insert as an
+import (albums.create_copy), from the tracklist the import tool stored on the
+entry — no outbound call — and the copy doesn't remember the bin.
+"""
+import json
+import threading
+from collections import Counter
+
+from fastapi import APIRouter, Body, Depends, HTTPException
+from sqlalchemy import func
+from sqlmodel import Session, select
+
+from .. import bins as binlib
+from ..database import get_session
+from ..deps import current_user
+from ..genres import canonical_genre
+from ..models import Album, AlbumPrediction, Bin, BinEntry, PressUser
+from ..scoring import predictions_unlocked
+from ..trackkeys import album_key
+from .albums import create_copy, tag_genre
+
+router = APIRouter(prefix="/bins", tags=["bins"])
+
+# How many entry covers a bin card shows: its first four, as a 2×2.
+CARD_COVERS = 4
+
+
+def _visible(session: Session, slug: str, user: PressUser) -> Bin:
+    b = session.exec(select(Bin).where(Bin.slug == slug)).first()
+    # Only Pressd's published bins exist yet. A private bin will answer 404 to
+    # anyone but its owner, so it doesn't even say it exists.
+    if b is None or b.hidden_at is not None or not (
+        (b.kind == "curated" and b.visibility == "published") or b.owner_id == user.id
+    ):
+        raise HTTPException(status_code=404, detail="Bin not found")
+    return b
+
+
+def _mine(session: Session, user_id: int, keys: set[str]) -> dict[str, dict]:
+    if not keys:
+        return {}
+    rows = session.exec(
+        select(Album.id, Album.subject_key, Album.status, Album.score)
+        .where(Album.user_id == user_id, Album.subject_key.in_(keys))
+    ).all()
+    return binlib.best_copies(rows)
+
+
+def _card(b: Bin, entries: list[BinEntry], mine: dict[str, dict]) -> dict:
+    return {
+        "slug": b.slug,
+        "title": b.title,
+        "kind": b.kind,
+        "item_type": b.item_type,
+        "ranked": b.ranked,
+        "source_name": b.source_name,
+        "source_url": b.source_url,
+        "source_year": b.source_published.year if b.source_published else None,
+        "entry_count": b.entry_count,
+        "covers": [e.cover_url for e in entries if e.cover_url][:CARD_COVERS],
+        "progress": binlib.progress([e.subject_key for e in entries], mine),
+    }
+
+
+@router.get("")
+def list_bins(
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Pressd's bins, as cards: cover, title, source, and the caller's progress."""
+    bins = session.exec(
+        select(Bin).where(Bin.kind == "curated", Bin.visibility == "published", Bin.hidden_at.is_(None))
+        .order_by(Bin.sort_order, Bin.id)
+    ).all()
+    if not bins:
+        return []
+    entries = session.exec(
+        select(BinEntry).where(BinEntry.bin_id.in_([b.id for b in bins])).order_by(BinEntry.position)
+    ).all()
+    by_bin: dict[int, list[BinEntry]] = {}
+    for e in entries:
+        by_bin.setdefault(e.bin_id, []).append(e)
+    mine = _mine(session, user.id, {e.subject_key for e in entries})
+    return [_card(b, by_bin.get(b.id, []), mine) for b in bins]
+
+
+@router.get("/{slug}")
+def get_bin(
+    slug: str,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """A bin and its entries, each with the caller's copy (any edition), the
+    Pressd average over everyone's rated copies and how many people rated it,
+    and the caller's predicted score once predictions are unlocked."""
+    b = _visible(session, slug, user)
+    entries = session.exec(select(BinEntry).where(BinEntry.bin_id == b.id).order_by(BinEntry.position)).all()
+    keys = {e.subject_key for e in entries}
+    mine = _mine(session, user.id, keys)
+
+    # The plain mean of rated copies — the community page's PRESSD AVG.
+    pressd = {}
+    if keys:
+        for key, avg, raters in session.exec(
+            select(Album.subject_key, func.avg(Album.score), func.count(func.distinct(Album.user_id)))
+            .where(Album.subject_key.in_(keys), Album.status == "rated", Album.score.is_not(None))
+            .group_by(Album.subject_key)
+        ).all():
+            pressd[key] = (round(float(avg), 2), int(raters))
+
+    # The record's genre: the one its copies on Pressd carry most (the tagger's,
+    # where it has run), else the catalog's from the stored resolve.
+    genres: dict[str, Counter] = {}
+    if keys:
+        for key, g in session.exec(
+            select(Album.subject_key, Album.genre).where(Album.subject_key.in_(keys), Album.genre.is_not(None))
+        ).all():
+            genres.setdefault(key, Counter())[g] += 1
+
+    def genre_of(e: BinEntry) -> str | None:
+        tagged = genres.get(e.subject_key)
+        if tagged:
+            return tagged.most_common(1)[0][0]
+        return canonical_genre(json.loads(e.tracklist_json).get("genre")) if e.tracklist_json else None
+
+    predicted: dict[str, float] = {}
+    if keys and predictions_unlocked(session, user.id):
+        akeys = {album_key(e.artist, e.album_name): e.subject_key for e in entries}
+        for akey, score in session.exec(
+            select(AlbumPrediction.album_key, AlbumPrediction.predicted_score)
+            .where(AlbumPrediction.user_id == user.id, AlbumPrediction.album_key.in_(akeys.keys()))
+        ).all():
+            if score is not None:
+                predicted[akeys[akey]] = round(float(score), 2)
+
+    return {
+        **_card(b, entries, mine),
+        "description": b.description,
+        "source_published": b.source_published.isoformat() if b.source_published else None,
+        "entries": [
+            {
+                "genre": genre_of(e),
+                "id": e.id,
+                "position": e.position,
+                "rank": e.rank,
+                "artist": e.artist,
+                "album_name": e.album_name,
+                "year": e.year,
+                "cover_url": e.cover_url,
+                "deezer_id": e.deezer_id,
+                "addable": e.tracklist_json is not None,
+                "mine": mine.get(e.subject_key),
+                "pressd_avg": pressd.get(e.subject_key, (None, 0))[0],
+                "pressd_raters": pressd.get(e.subject_key, (None, 0))[1],
+                "predicted_score": predicted.get(e.subject_key),
+            }
+            for e in entries
+        ],
+    }
+
+
+def _tag_later(album: Album) -> None:
+    """Genre tagging for a copy a bin added, as an import queues it."""
+    if not album.genre or not album.sub_genre1:
+        threading.Thread(
+            target=tag_genre, args=(album.id, album.artist, album.album_name, album.year), daemon=True,
+        ).start()
+
+
+@router.post("/{slug}/entries/{entry_id}/add")
+def add_entry(
+    slug: str,
+    entry_id: int,
+    body: dict = Body(...),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Rate now (`listening`) or Add to To Listen (`to_listen`) for one entry.
+    A copy the caller already holds, in any edition, is returned instead."""
+    status = body.get("status")
+    if status not in ("listening", "to_listen"):
+        raise HTTPException(status_code=422, detail="status must be listening or to_listen")
+    b = _visible(session, slug, user)
+    e = session.get(BinEntry, entry_id)
+    if e is None or e.bin_id != b.id:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    have = _mine(session, user.id, {e.subject_key}).get(e.subject_key)
+    if have:
+        return {"album_id": have["id"], "status": have["status"], "already_existed": True}
+    if not e.tracklist_json:
+        raise HTTPException(status_code=409, detail="This record isn't in the catalogs yet")
+    # Linked in the request (create_copy does): Rate now opens the rating flow,
+    # whose carried-over scores read the songs' track links.
+    album = create_copy(session, user.id, binlib.copy_data(e, status))
+    _tag_later(album)
+    return {"album_id": album.id, "status": album.status, "already_existed": False}

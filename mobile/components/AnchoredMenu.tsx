@@ -28,6 +28,8 @@ export interface MenuOption {
   label: string
   value: string | number
   selected: boolean
+  /** A hairline above this row, to set a group of choices apart. */
+  divider?: boolean
 }
 
 // Gap between the chip and the menu below it, and the margin the menu keeps
@@ -118,7 +120,11 @@ export default function AnchoredMenu({
           {options.map((o) => (
             <Pressable
               key={o.key}
-              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+              style={({ pressed }) => [
+                styles.row,
+                o.divider && [styles.divider, { borderTopColor: tc.border }],
+                pressed && styles.rowPressed,
+              ]}
               onPress={() => {
                 onSelect(o.value)
                 onClose()
@@ -162,6 +168,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   rowPressed: { backgroundColor: colors.inset },
+  divider: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.xs },
   label: { flex: 1, minWidth: 0, fontFamily: fonts.bodyMedium, fontSize: 14.5, color: colors.ink },
   labelOn: { fontFamily: fonts.bodySemiBold, color: colors.green },
 })

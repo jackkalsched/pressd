@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Library, BarChart2, List, Mail, X, MessageCircle, Users, Plus, Sparkles, TrendingUp, ChevronDown } from 'lucide-react'
+import { Library, BarChart2, List, Mail, X, MessageCircle, Users, Plus, Sparkles, TrendingUp, ChevronDown, Package } from 'lucide-react'
 import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
 import { fetchFriends, getInviteLink, removeFriend } from '../api'
@@ -47,6 +47,8 @@ const nav = [
   // already Stats — this board is about movement, not your own distribution.
   { to: '/charts', label: 'Charts', icon: TrendingUp },
   { to: '/library', label: 'Library', icon: Library },
+  // Pressd's themed collections; iPhone reaches them from For You's side menu.
+  { to: '/bins', label: 'Bins', icon: Package },
   { to: '/ratings', label: 'Rankings', icon: List },
   { to: '/stats', label: 'Stats', icon: BarChart2 },
   { to: '/social', label: 'Social', icon: Users },
