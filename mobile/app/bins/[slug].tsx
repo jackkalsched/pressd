@@ -21,7 +21,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ArrowUpDown, Bookmark, ChevronDown, Star } from 'lucide-react-native'
 import { addBinEntry, fetchBin, type BinEntry } from '../../lib/api'
-import { BIN_SORT_DIR, binSortLabel, sortBinEntries, type BinSort, type BinSortDir } from '@pressd/shared/binSort'
+import { BIN_SORT_DIR, binEntryMatches, binSortLabel, sortBinEntries, type BinSort, type BinSortDir } from '@pressd/shared/binSort'
+import BinSearch from '../../components/BinSearch'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import { useAuth } from '../../lib/auth'
 import { selection, success } from '../../lib/haptics'
@@ -111,10 +112,19 @@ export default function BinPage() {
     enabled: !!user && !!slug,
   })
 
+  const [query, setQuery] = useState('')
+  const [searching, setSearching] = useState(false)
+  // Opening search squeezes the sort to its icon; folding it lets the sort
+  // back out. Animated as one layout change, so the two trade the row.
+  function toggleSearch(open: boolean) {
+    if (!reduceMotion) LayoutAnimation.configureNext(LayoutAnimation.create(260, 'easeInEaseOut', 'scaleXY'))
+    if (!open) setQuery('')
+    setSearching(open)
+  }
   const rows = useMemo(() => {
-    const es = data?.entries ?? []
+    const es = (data?.entries ?? []).filter((e) => binEntryMatches(e, query))
     return sortBinEntries(es, sort, dir)
-  }, [data, sort, dir])
+  }, [data, sort, dir, query])
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['bin', slug] })
@@ -266,20 +276,48 @@ export default function BinPage() {
           </View>
         </View>
       <View style={styles.controls}>
+        {/* Searching squeezes the sort down to its icon, and that icon folds
+            search away again. One pressable either way, so the change
+            animates as a squish rather than a swap. */}
         <Pressable
           ref={sortRef}
-          onPress={() => { selection(); setSortOpen(true) }}
-          style={({ pressed }) => [styles.sortBtn, { borderColor: tc.border }, pressed && { opacity: 0.7 }]}
+          onPress={() => {
+            selection()
+            if (searching) toggleSearch(false)
+            else setSortOpen(true)
+          }}
+          style={({ pressed }) => [
+            styles.sortBtn,
+            searching && styles.sortBtnSquished,
+            { borderColor: tc.border },
+            pressed && { opacity: 0.7 },
+          ]}
           accessibilityRole="button"
-          accessibilityLabel={`Sort by ${binSortLabel(sort, data.sourceName)}, ${dir === 'asc' ? 'ascending' : 'descending'}`}
+          accessibilityLabel={
+            searching
+              ? 'Close search'
+              : `Sort by ${binSortLabel(sort, data.sourceName)}, ${dir === 'asc' ? 'ascending' : 'descending'}`
+          }
         >
           <ArrowUpDown size={14} color={tc.green} strokeWidth={2.4} />
-          <Text style={styles.sortLabel} numberOfLines={1}>
-            Sort by <Text style={[styles.sortValue, { color: tc.green }]}>{binSortLabel(sort, data.sourceName)}</Text>
-            {` · ${dir === 'asc' ? 'Ascending' : 'Descending'}`}
-          </Text>
-          <ChevronDown size={14} color={tc.inkSecondary} />
+          {!searching && (
+            <>
+              <Text style={styles.sortLabel} numberOfLines={1}>
+                Sort by <Text style={[styles.sortValue, { color: tc.green }]}>{binSortLabel(sort, data.sourceName)}</Text>
+                {` · ${dir === 'asc' ? 'Ascending' : 'Descending'}`}
+              </Text>
+              <ChevronDown size={14} color={tc.inkSecondary} />
+            </>
+          )}
         </Pressable>
+        <BinSearch
+          value={query}
+          onChange={setQuery}
+          open={searching}
+          onOpenChange={toggleSearch}
+          placeholder={data.itemType === 'song' ? 'Search songs, artists, albums' : 'Search albums, artists'}
+          fieldStyle={styles.search}
+        />
       </View>
       </View>
     </View>
@@ -293,6 +331,9 @@ export default function BinPage() {
         data={rows}
         keyExtractor={(e) => String(e.id)}
         ListHeaderComponent={header}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        ListEmptyComponent={query ? <Text style={styles.empty}>Nothing in this bin matches “{query.trim()}”.</Text> : null}
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl }}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={tc.green} />}
         ItemSeparatorComponent={RankRule}
@@ -423,11 +464,15 @@ const styles = StyleSheet.create({
   progressRow: { flexDirection: 'row', marginTop: spacing.md },
   progressText: { marginTop: spacing.sm, fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkSecondary },
   progressStrong: { fontFamily: fonts.bodyBold, color: colors.ink },
-  controls: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg },
+  controls: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg },
+  // Open, the field takes the rest of the row from the squished sort.
+  search: { flex: 1 },
+  empty: { paddingHorizontal: spacing.lg, paddingVertical: spacing.xl, fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary },
   sortBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-    paddingHorizontal: 13, paddingVertical: 8, borderRadius: radii.pill, borderWidth: 1,
+    flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, overflow: 'hidden',
+    height: 36, paddingHorizontal: 13, borderRadius: radii.pill, borderWidth: 1,
   },
+  sortBtnSquished: { width: 36, paddingHorizontal: 0, justifyContent: 'center', flexShrink: 0 },
   sortLabel: { flexShrink: 1, fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkSecondary },
   sortValue: { fontFamily: fonts.bodyBold },
 

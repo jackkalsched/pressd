@@ -644,7 +644,16 @@ source's order, Pressd's order (the average), Most rated (raters on Pressd), You
 records first, best predicted first, then rated ones by your score), and Ascending /
 Descending; choosing an order resets the direction to its own (the list 1 → 100, scores
 high → low), and a record with no number stays last either way. The rules are
-`shared/src/binSort.ts`, once for both. A change of order slides each row to its new place
+`shared/src/binSort.ts`, once for both. **Search** (`BinSearch`, one per platform) is a round
+magnifier beside Sort by on a bin's page and beside the title on the Bins page; a tap opens
+the field, focused, and ✕ (or Escape, or leaving it empty) folds it. On a bin's page opening it
+squishes Sort by down to its ⇅ icon on the left while the field grows across the row, and
+tapping that icon folds the search away and lets the sort back out — the page holds the open
+state (`open` / `onOpenChange`); iPhone animates it as one `LayoutAnimation`, web as width
+transitions on one element each. It filters the bin's
+records by title, song, artist, album, year or genre — or the bins by title and source —
+ignoring case, accents and punctuation, every word typed required (`binEntryMatches`,
+`binCardMatches`). A change of order slides each row to its new place
 — `LayoutAnimation` on iPhone, a FLIP on web (`useSlideRows` in `pages/Bin.tsx`) — and
 nothing moves under Reduce Motion. A row (taller since November 2026, faint hairlines between) starts with a large cover
 at the page's left edge (120pt iPhone, 152px web), the rank printed on it in white

@@ -10,7 +10,7 @@
 // "Not yet rated" puts the records you haven't rated first — best predicted
 // first, so it reads as a to-do list — and then the ones you have, by your
 // score. "Most rated" counts the people who've rated the record on Pressd.
-import type { BinEntry } from './api'
+import type { BinCard, BinEntry } from './api'
 
 export type BinSort = 'list' | 'pressd' | 'raters' | 'yours' | 'unrated'
 export type BinSortDir = 'asc' | 'desc'
@@ -59,4 +59,30 @@ export function sortBinEntries(entries: BinEntry[], sort: BinSort, dir: BinSortD
     if (y == null) return -1
     return sign * (x - y) || a.position - b.position
   })
+}
+
+// ── Search ────────────────────────────────────────────────────────────────────
+// A bin page's search box and the Bins page's. Case, accents and punctuation
+// don't count ("beyonce" finds Beyoncé, "mr brightside" finds "Mr. Brightside"),
+// and every word typed must appear somewhere in the row.
+
+function fold(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+function matches(fields: (string | null | undefined)[], query: string): boolean {
+  const words = fold(query).split(' ').filter(Boolean)
+  if (!words.length) return true
+  const hay = ` ${fold(fields.filter(Boolean).join(' '))} `
+  return words.every((w) => hay.includes(w))
+}
+
+/** A record (or song) in a bin, by its title, artist, album or year. */
+export function binEntryMatches(e: BinEntry, query: string): boolean {
+  return matches([e.songTitle, e.albumName, e.artist, e.year != null ? String(e.year) : null, e.genre], query)
+}
+
+/** A bin on the Bins page, by its title or source. */
+export function binCardMatches(b: BinCard, query: string): boolean {
+  return matches([b.title, b.sourceName, b.sourceYear != null ? String(b.sourceYear) : null], query)
 }

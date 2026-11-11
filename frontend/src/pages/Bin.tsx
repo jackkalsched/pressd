@@ -16,7 +16,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ArrowUpDown, Bookmark, Check, ChevronDown, Star } from 'lucide-react'
 import { addBinEntry, fetchBin } from '../api'
 import type { BinEntry } from '../api'
-import { BIN_SORT_DIR, binSortLabel, sortBinEntries, type BinSort, type BinSortDir } from '@pressd/shared/binSort'
+import { BIN_SORT_DIR, binEntryMatches, binSortLabel, sortBinEntries, type BinSort, type BinSortDir } from '@pressd/shared/binSort'
+import BinSearch from '../components/BinSearch'
 import { songScoreColor } from '../types'
 import CoverImg from '../components/CoverImg'
 import PressdBinBadge from '../components/PressdBinBadge'
@@ -98,10 +99,17 @@ export default function Bin() {
     enabled: !!activeUser && !!slug,
   })
 
+  const [query, setQuery] = useState('')
+  const [searching, setSearching] = useState(false)
+  function toggleSearch(open: boolean) {
+    if (!open) setQuery('')
+    setSortOpen(false)
+    setSearching(open)
+  }
   const rows = useMemo(() => {
-    const es = data?.entries ?? []
+    const es = (data?.entries ?? []).filter((e) => binEntryMatches(e, query))
     return sortBinEntries(es, sort, dir)
-  }, [data, sort, dir])
+  }, [data, sort, dir, query])
   const listRef = useSlideRows(rows.map((e) => e.id).join(','))
   // A song's scores are one decimal; an album's two.
   const places = data?.itemType === 'song' ? 1 : 2
@@ -202,17 +210,28 @@ export default function Bin() {
         </aside>
 
         <section className="min-w-0 flex-1">
-          <div ref={sortMenu} className="relative mb-5 inline-block">
+          {/* Searching squeezes the sort down to its icon, and that icon folds
+              search away again: the sort's words collapse while the field
+              grows across the row, both on width transitions. */}
+          <div className="mb-5 flex w-full items-center gap-3">
+          <div ref={sortMenu} className="relative shrink-0">
             <button
-              onClick={() => setSortOpen((v) => !v)}
-              aria-haspopup="menu"
-              aria-expanded={sortOpen}
-              className="inline-flex items-center gap-2 rounded-full border border-(--c-e2dbd0) px-4 py-2 text-[13px] font-medium text-(--c-57534e) hover:border-(--c-2d6a4f)"
+              onClick={() => (searching ? toggleSearch(false) : setSortOpen((v) => !v))}
+              aria-haspopup={searching ? undefined : 'menu'}
+              aria-expanded={searching ? undefined : sortOpen}
+              aria-label={searching ? 'Close search' : undefined}
+              className="inline-flex h-9 items-center rounded-full border border-(--c-e2dbd0) px-[10px] text-[13px] font-medium text-(--c-57534e) hover:border-(--c-2d6a4f)"
             >
-              <ArrowUpDown size={14} className="text-(--c-2d6a4f)" />
-              Sort by <span className="font-bold text-(--c-2d6a4f)">{binSortLabel(sort, data.sourceName)}</span>
-              <span>· {dir === 'asc' ? 'Ascending' : 'Descending'}</span>
-              <ChevronDown size={14} />
+              <ArrowUpDown size={14} className="shrink-0 text-(--c-2d6a4f)" />
+              <span
+                className={`flex items-center gap-2 overflow-hidden whitespace-nowrap transition-[max-width,opacity,padding] duration-300 ease-out motion-reduce:transition-none ${
+                  searching ? 'max-w-0 pl-0 opacity-0' : 'max-w-[30rem] pl-2 pr-1 opacity-100'
+                }`}
+              >
+                <span>Sort by <span className="font-bold text-(--c-2d6a4f)">{binSortLabel(sort, data.sourceName)}</span></span>
+                <span>· {dir === 'asc' ? 'Ascending' : 'Descending'}</span>
+                <ChevronDown size={14} className="shrink-0" />
+              </span>
             </button>
             {sortOpen && (
               <div role="menu" className="menu-in absolute left-0 top-full z-20 mt-1.5 w-60 overflow-hidden rounded-xl border border-(--c-e2dbd0) bg-(--c-fff) py-1 shadow-lg" style={{ transformOrigin: 'top left' }}>
@@ -225,6 +244,18 @@ export default function Bin() {
               </div>
             )}
           </div>
+          <BinSearch
+            value={query}
+            onChange={setQuery}
+            open={searching}
+            onOpenChange={toggleSearch}
+            placeholder={data.itemType === 'song' ? 'Search songs, artists, albums' : 'Search albums, artists'}
+            className="w-[calc(100%-3rem)]"
+          />
+          </div>
+          {rows.length === 0 && query && (
+            <p className="m-0 py-10 text-[14px] text-(--c-57534e)">Nothing in this bin matches “{query.trim()}”.</p>
+          )}
           <ol ref={listRef} className="m-0 grid list-none gap-x-12 p-0 2xl:grid-cols-2">
             {rows.map((e) => {
               const rated = e.mine?.status === 'rated' && e.mine.score != null
