@@ -9,7 +9,11 @@ list as its source prints it) and the sibling <slug>.json (the bin's title,
 source, link and date) stay in the repo as the bin's record of where it came
 from. Lists are typed in once and checked, never scraped while the app runs.
 
-Each row is matched on Deezer (backend.bins.pick_release: `same_album`, then
+A song list (`item_type` "song" in the JSON) matches each row to the song's
+release instead — Deezer track search, the studio take on the album it came out
+on (backend.bins.pick_song_release) — and stores that album's tracklist.
+
+Each album row is matched on Deezer (backend.bins.pick_release: `same_album`, then
 an album over a compilation, the standard edition over a deluxe, the list's
 year, the fewest tracks), falling back to iTunes, and resolved the way
 /search/resolve resolves a pick, so the stored tracklist is exactly what an
@@ -25,12 +29,13 @@ import argparse
 import asyncio
 import json
 import pathlib
+import re
 import sys
 from datetime import datetime, timezone
 
 import httpx
 
-from backend.bins import ListRow, parse_list_csv, parse_list_meta, pick_release
+from backend.bins import ListRow, parse_list_csv, parse_list_meta, pick_release, pick_song_release
 from backend.new_releases import DEEZER_BASE, UA, _Pacer
 from backend.trackkeys import subject_key_album
 
@@ -94,17 +99,65 @@ async def itunes_hits(client, pacer, row: ListRow) -> list[dict]:
     } for a in body.get("results", []) if a.get("collectionId")]
 
 
-async def match_rows(rows: list[ListRow], overrides: dict[int, int]) -> list[dict]:
-    """Each row with what it matched: source, id, the resolved album, status."""
+async def deezer_song_hits(client, pacer, row: ListRow, albums: dict[int, dict]) -> list[dict]:
+    """Deezer track hits for a song row, each with its album's type, size and
+    year (fetched once per album, kept in `albums`) — the song's release is
+    chosen by them (bins.pick_song_release)."""
+    from backend.trackkeys import artist_matches, match_title
+
+    # The list prints guests and backing bands ("Willow feat. Travis Barker",
+    # "Neil Young and Crazy Horse"); the catalog may file the song under the
+    # lead alone, so that is searched too.
+    lead = re.split(r"\s+(?:feat\.?|featuring|with|and|&)\s+", row.artist, maxsplit=1)[0]
+    queries = [f'artist:"{row.artist}" track:"{row.title}"', f"{row.artist} {row.title}"]
+    if lead != row.artist:
+        queries += [f'artist:"{lead}" track:"{row.title}"', f"{lead} {row.title}"]
+    seen, hits = set(), []
+    for q in queries:
+        for t in (await _deezer(client, pacer, "/search/track", q=q, limit=50)).get("data", []):
+            a = t.get("album") or {}
+            if not a.get("id") or t.get("id") in seen:
+                continue
+            seen.add(t["id"])
+            hits.append({
+                "track_title": t.get("title") or "", "artist": (t.get("artist") or {}).get("name") or "",
+                "album_id": a["id"], "album_title": a.get("title") or "",
+            })
+    want = match_title(row.title)
+    for h in hits:
+        if not ((artist_matches(row.artist, h["artist"]) or artist_matches(lead, h["artist"]))
+                and match_title(h["track_title"]) == want):
+            continue
+        if h["album_id"] not in albums:
+            d = await _deezer(client, pacer, f"/album/{h['album_id']}")
+            albums[h["album_id"]] = {"record_type": d.get("record_type"), "nb_tracks": d.get("nb_tracks"),
+                                     "year": _year(d.get("release_date")),
+                                     "album_artist": (d.get("artist") or {}).get("name")}
+        h.update(albums[h["album_id"]])
+    return hits
+
+
+async def match_rows(rows: list[ListRow], overrides: dict[int, int], item_type: str = "album") -> list[dict]:
+    """Each row with what it matched: source, id (the album's), the resolved
+    album, status, and for a song bin the catalog's title for the song."""
     from backend.routers.search import resolve_album
 
     dz, it = _Pacer(DEEZER_PER_SECOND), _Pacer(ITUNES_PER_SECOND)
+    album_info: dict[int, dict] = {}
     out = []
     async with httpx.AsyncClient(timeout=20, headers={"User-Agent": UA}) as client:
         for row in rows:
             source, hit, status = "deezer", None, "unmatched"
             if row.rank in overrides:
                 hit, status = {"id": overrides[row.rank]}, "manual"
+            elif item_type == "song":
+                hits = await deezer_song_hits(client, dz, row, album_info)
+                hit, status = pick_song_release(row.title, row.artist, row.year, hits)
+                if hit is None:
+                    lead = re.split(r"\s+(?:feat\.?|featuring|with|and|&)\s+", row.artist, maxsplit=1)[0]
+                    hit, status = pick_song_release(row.title, lead, row.year, hits)
+                if hit is not None:
+                    hit = {**hit, "id": hit["album_id"]}
             else:
                 hit, status = pick_release(row.title, row.artist, row.year, await deezer_hits(client, dz, row))
                 if hit is None:
@@ -122,11 +175,14 @@ async def match_rows(rows: list[ListRow], overrides: dict[int, int]) -> list[dic
             if resolved is None:
                 status = "unmatched"
             out.append({"row": row, "source": source, "id": hit["id"] if hit else None,
-                        "resolved": resolved, "status": status})
+                        "resolved": resolved, "status": status,
+                        "song": (hit or {}).get("track_title") if item_type == "song" else None})
             r = resolved or {}
             mark = {"matched": " ", "manual": "=", "doubtful": "?", "unmatched": "✗"}[status]
             print(f"{mark} #{row.rank:>3} {row.artist} – {row.title} ({row.year})"
-                  + (f"  →  {source} {hit['id']}: {r.get('artist')} – {r.get('album_name')} "
+                  + (f"  →  {source} {hit['id']}: {r.get('artist')} – "
+                     + (f"“{hit.get('track_title') or row.title}” on " if item_type == "song" else "")
+                     + f"{r.get('album_name')} "
                      f"({r.get('year')}, {len(r.get('tracks') or [])} tracks)" if resolved else ""),
                   flush=True)
     return out
@@ -160,9 +216,14 @@ def write(meta, matched: list[dict]) -> int:
             # imported, since editions fold into one subject key.
             artist = r["artist"] if r else row.artist
             name = row.title
+            song = None
+            if meta.item_type == "song":
+                # A song bin's entry is the song (the list's title for it) on
+                # the album it came out on, as the catalog names that album.
+                song, name = row.title, (r["album_name"] if r else "")
             s.add(BinEntry(
                 bin_id=b.id, position=pos, rank=row.rank,
-                artist=artist, album_name=name, year=row.year,
+                artist=artist, album_name=name, year=row.year, song_title=song,
                 subject_key=subject_key_album(artist, name),
                 deezer_id=int(m["id"]) if r and m["source"] == "deezer" else None,
                 cover_url=r.get("cover_url") if r else None,
@@ -192,7 +253,7 @@ def main() -> int:
     rows = parse_list_csv(args.csv.read_text())
 
     print(f"[import_bin] {meta.slug}: {len(rows)} rows")
-    matched = asyncio.run(match_rows(rows, overrides))
+    matched = asyncio.run(match_rows(rows, overrides, meta.item_type))
     counts = {k: sum(1 for m in matched if m["status"] == k) for k in ("matched", "manual", "doubtful", "unmatched")}
     print(f"[import_bin] {counts}")
     for k in ("doubtful", "unmatched"):

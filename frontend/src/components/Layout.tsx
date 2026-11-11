@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Library, BarChart2, List, Mail, X, MessageCircle, Users, Plus, Sparkles, TrendingUp, ChevronDown, Package } from 'lucide-react'
@@ -141,6 +141,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { activeUser, viewingUser, setViewingUser, isViewingFriend } = useUser()
   const navigate = useNavigate()
   const location = useLocation()
+  // The page scrolls inside <main>. Clicking the nav link for the page you're
+  // already on takes it back to the top, as tapping the current tab does on
+  // iPhone; the window too, for a layout where it is the one scrolling.
+  const mainRef = useRef<HTMLElement>(null)
+  function onNav(to: string) {
+    if (isViewingFriend) returnToSelf()
+    if (location.pathname !== to) return
+    const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+    mainRef.current?.scrollTo({ top: 0, behavior })
+    window.scrollTo({ top: 0, behavior })
+  }
   const queryClient = useQueryClient()
   const [showInvite, setShowInvite] = useState(false)
   const [showAddAlbum, setShowAddAlbum] = useState(false)
@@ -194,7 +205,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <NavLink
               key={to}
               to={to}
-              onClick={() => { if (isViewingFriend) returnToSelf() }}
+              onClick={() => onNav(to)}
               className={({ isActive }) =>
                 clsx(
                   'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
@@ -296,7 +307,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
+      <main ref={mainRef} className="flex-1 overflow-y-auto pb-16 md:pb-0">
         {/* Keyed on the path so each new page settles in rather than cutting.
             The search string is left out: a filter or sort change on the same
             page shouldn't replay the entrance. */}
@@ -312,7 +323,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <NavLink
             key={to}
             to={to}
-            onClick={() => { if (isViewingFriend) returnToSelf() }}
+            onClick={() => onNav(to)}
             className={({ isActive }) =>
               clsx(
                 'flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors',

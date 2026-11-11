@@ -27,12 +27,13 @@ import { MIN_RATED_ALBUMS, type Album } from '@pressd/shared/types'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import RecommendationBanner from '../../components/RecommendationBanner'
 import PassItOnCell from '../../components/PassItOnCell'
-import { scrollToTop, useCompactBar } from '../../lib/scrollToTop'
+import { scrollToTop, useCompactBar, useTabScrollToTop } from '../../lib/scrollToTop'
 import { selection } from '../../lib/haptics'
 import { useOpenProfile } from '../../lib/useOpenProfile'
 import SpotlightCard from '../../components/SpotlightCard'
 import BinCard from '../../components/BinCard'
 import SideMenu from '../../components/SideMenu'
+import SettingsSheet from '../../components/SettingsSheet'
 import RecommendSheet from '../../components/RecommendSheet'
 import HeatedDiscussions from '../../components/HeatedDiscussions'
 import LikeButton from '../../components/LikeButton'
@@ -120,6 +121,18 @@ export default function ForYou() {
   const trendChipRef = useRef<View>(null)
   const [trendBlockY, setTrendBlockY] = useState(0)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  // Where the ≡ sits on screen, so the menu can put its own ≡ in the same
+  // place: open and close without moving your finger.
+  const menuBtn = useRef<View>(null)
+  const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+  function openMenu() {
+    selection()
+    menuBtn.current?.measureInWindow((x, y, width, height) => {
+      setMenuAnchor({ x, y, width, height })
+      setMenuOpen(true)
+    })
+  }
   const { data: bins = [] } = useQuery({
     queryKey: ['bins', userId],
     queryFn: fetchBins,
@@ -367,6 +380,7 @@ export default function ForYou() {
   const mastheadShift = scrollY.interpolate({ inputRange: [0, 96], outputRange: [0, -24], extrapolate: 'clamp' })
   const compactOpacity = scrollY.interpolate({ inputRange: [60, 118], outputRange: [0, 1], extrapolate: 'clamp' })
   const scrollRef = useRef<ScrollView>(null)
+  useTabScrollToTop(scrollRef)
   const bar = useCompactBar(60)
 
   return (
@@ -401,7 +415,8 @@ export default function ForYou() {
                 <Search size={22} color={tc.ink} strokeWidth={2.2} />
               </Pressable>
               <Pressable
-                onPress={() => { selection(); setMenuOpen(true) }}
+                ref={menuBtn}
+                onPress={openMenu}
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="Menu"
@@ -686,7 +701,8 @@ export default function ForYou() {
         onSelect={(v) => setTrendMode(v as 'week' | 'top')}
         onClose={() => setTrendPickerOpen(false)}
       />
-      <SideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />
+      <SideMenu visible={menuOpen} anchor={menuAnchor} onClose={() => setMenuOpen(false)} onSettings={() => setSettingsOpen(true)} />
+      <SettingsSheet visible={settingsOpen} mode="settings" onClose={() => setSettingsOpen(false)} />
     </SafeAreaView>
   )
 }

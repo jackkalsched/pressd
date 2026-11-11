@@ -618,23 +618,27 @@ stored tracklist through `tracklink` (so the audio ingest fetches them), its Cla
 `albumfactors` by `album_key`, and `catalog_albums` reading bin entries beside copies. A private bin
 will be a 404 to anyone but its owner; `delete_own_account` deletes a user's bins.
 Surfaces: For You's **BINS** section (up to three `BinCard`s, "See all →") on both
-platforms; web's sidebar **Bins** (`/bins`, `/bins/:slug`: the banner, then a sticky column with the 2×2,
+platforms — a Pressd bin's card carries the full-colour Pressd mark on a cream chip in
+the collage's lower-right corner (`BinMosaic`'s `pressd`); web's sidebar **Bins** (`/bins`, `/bins/:slug`: the banner, then a sticky column with the
 source and progress, the list beside it, two columns at `2xl`);
 iPhone's **side menu** (`components/SideMenu.tsx`, the ≡ beside For You's search icon,
-sliding in from the left; Bins is its only entry so far), `app/bins/index.tsx` and
+sliding in from the right, the button's side, with its own ≡ landing exactly where the
+masthead's was — measured on the tap — so the same finger closes it; the header is the Pressd mark and wordmark on the ≡'s line; entries: Bins, and Settings —
+the profile's `SettingsSheet` in `settings` mode, which For You mounts too, opened once the
+menu has slid away), `app/bins/index.tsx` and
 `app/bins/[slug].tsx`. The bin page opens on a **banner** the width of the screen: the 2×2 collage scaled
 up and centred, under a dark wash (literal colours — it is dark in either appearance)
 and fading into the page at its foot, with the title over it in cream Playfair. Over the
 title, left-aligned, every Pressd bin (`kind` curated) carries the **Pressd-verified badge**
-(`PressdBinBadge`, one per platform) — on its page, and above its title on every card,
-in the ink colour there: the Pressd mark traced as an outline (white on the banner), nothing
+(`PressdBinBadge`, one per platform) on its page: the Pressd mark traced as a white outline, nothing
 filled, its legs left open where they face the record (`LEG_OUTLINES`), from the mark's own geometry (web `lib/pressdMark.ts`, which `PressdMark` now
-reads too; mobile copies the paths — change both). Below the banner: the small 2×2, the
+reads too; mobile copies the paths — change both). Below the banner (no second collage): the
 source as plain text (no link to the list, Jack's call), progress, Sort by, the records.
 On iPhone the back button floats on a dark disc and the status bar is light.
-A row opens your copy, else the community view by name. A **Sort by**
+A row always opens the record's Pressd page (the community view — through your copy's id
+when you hold one, else by name), never anyone's own rating. A **Sort by**
 dropdown (iPhone: `AnchoredMenu`, which gained `divider`; web: its own menu) picks the
-source's order, Pressd's order (the average), Your rating, or Not yet rated (unrated
+source's order, Pressd's order (the average), Most rated (raters on Pressd), Your rating, or Not yet rated (unrated
 records first, best predicted first, then rated ones by your score), and Ascending /
 Descending; choosing an order resets the direction to its own (the list 1 → 100, scores
 high → low), and a record with no number stays last either way. The rules are
@@ -644,11 +648,26 @@ nothing moves under Reduce Motion. A row (taller since November 2026, faint hair
 at the page's left edge (120pt iPhone, 152px web), the rank printed on it in white
 Playfair Black, lower left; beside it the title, artist and year · genre, then the
 figures — YOU (once you've rated it) leading, PRESSD (the average) smaller in grey; in
-Pressd's order the other way round — and, while you haven't,
+Pressd's order the other way round, and in Most rated a RATINGS count leads with both
+scores grey — and, while you haven't,
 a star (Rate now; continues your copy if you hold one) and a bookmark (save to your
 library, filled once it's there). Each row carries year · genre: the genre its copies on Pressd
-carry most, else the catalog's from the stored resolve. Later phases (spec §7): song bins (Rolling Stone's 200 rock songs), user
-bins with Library → Bins (own bins only), then following and "where Pressd disagrees".
+carry most, else the catalog's from the stored resolve. **Song bins** (November 2026, `item_type` song): the second Pressd bin is Rolling Stone's
+*The 200 Greatest Rock Songs of the 21st Century So Far* (published 2026-10-27; ranks, artists,
+titles and years read once from the article's own list data into
+`data/bins/rolling-stone-200-greatest-rock-songs-21st-century.csv`). The import tool matches a
+song row by Deezer track search (`bins.pick_song_release`: the track's and the album's artist —
+never a various-artists sampler — the title by `match_title`, then the studio take, a
+non-collection album over hits / best-of / Christmas sets, the album over the single, the
+list's year, the earliest) and stores the album it came out on: `BinEntry.song_title` is the
+song (the list's spelling), `album_name` / `subject_key` / `tracklist_json` the album. A song
+entry has no track of its own; `bins.song_states` finds it on everyone's copies of the album
+by `match_title`: your score once given (status rated), else the album's place in your
+library; the PRESSD figure is the plain mean of everyone's scores for it, one decimal as song
+scores are; `track_id` when any copy holds it, so a tap opens the album's Pressd page with the
+song highlighted (`track`). Progress counts scored songs. Rate now / Add act on the album.
+Later phases (spec §7): user bins with Library → Bins (own bins only), then following and
+"where Pressd disagrees".
 
 **`backend/routers/search_all.py`** (November 2026) — the single search box. `GET /search/all?q=&group=&limit=`
 returns `people`, `albums`, `artists`, `songs` (one key with `group`; `limit` 4, capped at 25; `q` under two
@@ -1617,10 +1636,11 @@ for editing a review later, and both paths post into the thread through
    only for search's artist rows), October
    2026. Web has mobile's three scopes, as pills and `?mode=` in the URL: *mine*, *Pressd
    avg* (`population=global`: every copy pooled, ranked site-wide, with the popularity
-   ranks) and *Compare* (`both`: the two song averages side by side, *Where you split*,
+   ranks) and *Compare* (`both`: the two song averages side by side, then straight into
    both distributions as curves, and `fetchSimilarArtistComparisons`), drawn from
-   [artistCompare.tsx](frontend/src/components/artistCompare.tsx). Mobile's full splits
-   page is an inline "See all" there. Your own scope lists exactly your rated copies, one row each. In the
+   [artistCompare.tsx](frontend/src/components/artistCompare.tsx). *Where you split* (the
+   song-gap list) was removed from both apps in November 2026 (Jack's call); mobile's
+   `app/splits/[name].tsx` and web's `SongGapChart` are now unreachable — kept, not deleted. Your own scope lists exactly your rated copies, one row each. In the
    Pressd scope an album row is one record rated by anyone,
    pooled across copies (`stats._artist_album_rows`, keyed on `_clean_album` of the title alone, scored as
    the plain mean of copies — the community page's own PRESSD AVG), so both clients
@@ -1934,7 +1954,10 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   thread, the artist page, artist splits and both album views. A compact bar that takes taps
   gets its `pointerEvents` from `useCompactBar(at)`, `at` being where its fade begins: a
   transparent bar still catches taps, and would block the masthead's own back and search
-  controls under it. A new page with a title wires it the same way.
+  controls under it. A new page with a title wires it the same way. **Tapping the tab you're
+  already on does the same** for the four tab pages (`useTabScrollToTop(scrollRef)`, on the
+  tab navigator's `tabPress` while focused), and on web clicking the sidebar or bottom-bar
+  link of the page you're on scrolls `<main>` to the top (`Layout`'s `onNav`).
 - **Mobile device preferences live in `mobile/lib/prefs.ts`** (Keychain, loaded before
   the app is ready): haptics on/off, which shelf Library opens on, and appearance
   (System / Light / Dark, Settings → Preferences). Every buzz goes

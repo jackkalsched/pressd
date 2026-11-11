@@ -9,16 +9,17 @@
 //
 // "Not yet rated" puts the records you haven't rated first — best predicted
 // first, so it reads as a to-do list — and then the ones you have, by your
-// score.
+// score. "Most rated" counts the people who've rated the record on Pressd.
 import type { BinEntry } from './api'
 
-export type BinSort = 'list' | 'pressd' | 'yours' | 'unrated'
+export type BinSort = 'list' | 'pressd' | 'raters' | 'yours' | 'unrated'
 export type BinSortDir = 'asc' | 'desc'
 
 /** Each order's own direction, which choosing it resets to. */
 export const BIN_SORT_DIR: Record<BinSort, BinSortDir> = {
   list: 'asc',
   pressd: 'desc',
+  raters: 'desc',
   yours: 'desc',
   unrated: 'desc',
 }
@@ -27,6 +28,7 @@ export function binSortLabel(sort: BinSort, sourceName: string | null): string {
   switch (sort) {
     case 'list': return sourceName ? `${sourceName}’s order` : 'The list’s order'
     case 'pressd': return 'Pressd’s order'
+    case 'raters': return 'Most rated'
     case 'yours': return 'Your rating'
     case 'unrated': return 'Not yet rated'
   }
@@ -38,6 +40,7 @@ function value(e: BinEntry, sort: BinSort): number | null {
   switch (sort) {
     case 'list': return e.position
     case 'pressd': return e.pressdAvg
+    case 'raters': return e.pressdRaters
     case 'yours': return rated(e) ? e.mine!.score : null
     case 'unrated': return rated(e) ? e.mine!.score : e.predictedScore
   }

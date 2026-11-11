@@ -50,7 +50,7 @@ import {
 import { avatarColor } from '@pressd/shared/types'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
-import { scrollToTop, useCompactBar } from '../../lib/scrollToTop'
+import { scrollToTop, useCompactBar, useTabScrollToTop } from '../../lib/scrollToTop'
 
 const DOWN = '#c0392b'
 const CONTENT_W = Dimensions.get('window').width - spacing.lg * 2
@@ -219,6 +219,7 @@ export default function Social() {
   // The titles take you back to the top (lib/scrollToTop); the compact bar
   // takes taps only while it shows.
   const scrollRef = useRef<unknown>(null)
+  useTabScrollToTop(scrollRef)
   const bar = useCompactBar(36)
   const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true, listener: bar.track })
   function selectTab(t: Tab) {

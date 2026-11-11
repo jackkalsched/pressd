@@ -22,7 +22,7 @@ from .. import bins as binlib
 from ..database import get_session
 from ..deps import current_user
 from ..genres import canonical_genre
-from ..models import Album, AlbumPrediction, Bin, BinEntry, PressUser
+from ..models import Album, AlbumPrediction, Bin, BinEntry, PressUser, Song
 from ..scoring import predictions_unlocked
 from ..trackkeys import album_key
 from .albums import create_copy, tag_genre
@@ -54,7 +54,32 @@ def _mine(session: Session, user_id: int, keys: set[str]) -> dict[str, dict]:
     return binlib.best_copies(rows)
 
 
-def _card(b: Bin, entries: list[BinEntry], mine: dict[str, dict]) -> dict:
+def _song_rows(session: Session, keys: set[str], only_user: int | None = None):
+    """Every copy's songs on these albums — or one user's — for a song bin."""
+    if not keys:
+        return []
+    q = (
+        select(Album.user_id, Song.album_id, Album.subject_key, Album.status, Song.title, Song.score, Song.track_id)
+        .join(Album, Album.id == Song.album_id)
+        .where(Album.subject_key.in_(keys))
+    )
+    if only_user is not None:
+        q = q.where(Album.user_id == only_user)
+    return session.exec(q).all()
+
+
+def _states(session: Session, user_id: int, b: Bin, entries: list[BinEntry], *, everyone: bool) -> list[dict]:
+    """Each entry's `mine` (and for a song bin its Pressd figures too): an album
+    bin by the caller's copies of the record, a song bin by the song on them."""
+    keys = {e.subject_key for e in entries}
+    if b.item_type == "song":
+        rows = _song_rows(session, keys, None if everyone else user_id)
+        return binlib.song_states(entries, rows, user_id)
+    mine = _mine(session, user_id, keys)
+    return [{"mine": mine.get(e.subject_key)} for e in entries]
+
+
+def _card(b: Bin, entries: list[BinEntry], states: list[dict]) -> dict:
     return {
         "slug": b.slug,
         "title": b.title,
@@ -66,7 +91,7 @@ def _card(b: Bin, entries: list[BinEntry], mine: dict[str, dict]) -> dict:
         "source_year": b.source_published.year if b.source_published else None,
         "entry_count": b.entry_count,
         "covers": [e.cover_url for e in entries if e.cover_url][:CARD_COVERS],
-        "progress": binlib.progress([e.subject_key for e in entries], mine),
+        "progress": binlib.progress([s["mine"] for s in states]),
     }
 
 
@@ -88,8 +113,11 @@ def list_bins(
     by_bin: dict[int, list[BinEntry]] = {}
     for e in entries:
         by_bin.setdefault(e.bin_id, []).append(e)
-    mine = _mine(session, user.id, {e.subject_key for e in entries})
-    return [_card(b, by_bin.get(b.id, []), mine) for b in bins]
+    cards = []
+    for b in bins:
+        es = by_bin.get(b.id, [])
+        cards.append(_card(b, es, _states(session, user.id, b, es, everyone=False)))
+    return cards
 
 
 @router.get("/{slug}")
@@ -104,11 +132,13 @@ def get_bin(
     b = _visible(session, slug, user)
     entries = session.exec(select(BinEntry).where(BinEntry.bin_id == b.id).order_by(BinEntry.position)).all()
     keys = {e.subject_key for e in entries}
-    mine = _mine(session, user.id, keys)
+    states = _states(session, user.id, b, entries, everyone=True)
+    songs = b.item_type == "song"
 
-    # The plain mean of rated copies — the community page's PRESSD AVG.
+    # The plain mean of rated copies — the community page's PRESSD AVG. A song
+    # bin's comes per song, with its states.
     pressd = {}
-    if keys:
+    if keys and not songs:
         for key, avg, raters in session.exec(
             select(Album.subject_key, func.avg(Album.score), func.count(func.distinct(Album.user_id)))
             .where(Album.subject_key.in_(keys), Album.status == "rated", Album.score.is_not(None))
@@ -132,7 +162,7 @@ def get_bin(
         return canonical_genre(json.loads(e.tracklist_json).get("genre")) if e.tracklist_json else None
 
     predicted: dict[str, float] = {}
-    if keys and predictions_unlocked(session, user.id):
+    if keys and not songs and predictions_unlocked(session, user.id):
         akeys = {album_key(e.artist, e.album_name): e.subject_key for e in entries}
         for akey, score in session.exec(
             select(AlbumPrediction.album_key, AlbumPrediction.predicted_score)
@@ -142,7 +172,7 @@ def get_bin(
                 predicted[akeys[akey]] = round(float(score), 2)
 
     return {
-        **_card(b, entries, mine),
+        **_card(b, entries, states),
         "description": b.description,
         "source_published": b.source_published.isoformat() if b.source_published else None,
         "entries": [
@@ -153,16 +183,18 @@ def get_bin(
                 "rank": e.rank,
                 "artist": e.artist,
                 "album_name": e.album_name,
+                "song_title": e.song_title,
+                "track_id": st.get("track_id"),
                 "year": e.year,
                 "cover_url": e.cover_url,
                 "deezer_id": e.deezer_id,
                 "addable": e.tracklist_json is not None,
-                "mine": mine.get(e.subject_key),
-                "pressd_avg": pressd.get(e.subject_key, (None, 0))[0],
-                "pressd_raters": pressd.get(e.subject_key, (None, 0))[1],
+                "mine": st["mine"],
+                "pressd_avg": st["pressd_avg"] if songs else pressd.get(e.subject_key, (None, 0))[0],
+                "pressd_raters": st["pressd_raters"] if songs else pressd.get(e.subject_key, (None, 0))[1],
                 "predicted_score": predicted.get(e.subject_key),
             }
-            for e in entries
+            for e, st in zip(entries, states)
         ],
     }
 

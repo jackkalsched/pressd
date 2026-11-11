@@ -3,12 +3,13 @@
 // darkened and faded into the page, with the title over it in cream — dark
 // enough that the cream reads on a cream page — under the Pressd-verified
 // badge on Pressd's bins. Below it, as the album pages are: a sticky column
-// with the bin's icon, source and your progress, and its records filling the rest, in the
+// with the source and your progress, and its records filling the rest, in the
 // order the Sort by menu picks (shared/src/binSort.ts). Each record shows your
 // score or where it sits in your library, or Rate / Add.
 //
-// A record opens as your copy when you have one (any edition), otherwise as
-// its community page by name, which handles a record nobody has rated yet.
+// A record always opens as its Pressd page (the community view): through your
+// copy's id when you have one, otherwise by name, which handles a record
+// nobody has rated yet.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -20,10 +21,10 @@ import { songScoreColor } from '../types'
 import CoverImg from '../components/CoverImg'
 import PressdBinBadge from '../components/PressdBinBadge'
 import VinylSpinner from '../components/VinylSpinner'
-import { BinMosaic, BinProgressBar } from '../components/BinCard'
+import { BinProgressBar } from '../components/BinCard'
 import { useUser } from '../context/UserContext'
 
-const SORTS: BinSort[] = ['list', 'pressd', 'yours', 'unrated']
+const SORTS: BinSort[] = ['list', 'pressd', 'raters', 'yours', 'unrated']
 
 /** When the order changes, each row slides from where it was to where it now
  *  is (FLIP: measure, reorder, play the difference back). Positions are taken
@@ -60,15 +61,22 @@ function useSlideRows(order: string) {
 
 const raters = (e: BinEntry) => `${e.pressdRaters} ${e.pressdRaters === 1 ? 'rating' : 'ratings'}`
 
-/** "1998 · Pop" */
+/** "1998 · Pop" for a record; "from Fever to Tell · 2003" for a song. */
 function details(e: BinEntry): string {
+  if (e.songTitle) return [e.albumName ? `from ${e.albumName}` : null, e.year].filter(Boolean).join(' · ')
   return [e.year, e.genre].filter(Boolean).join(' · ')
 }
 
+// Always the record's Pressd page — the average and everyone's ratings — never
+// one person's copy, yours included: a bin is about the record.
 function entryHref(e: BinEntry): string {
-  if (e.mine) return `/album/${e.mine.id}`
+  // A song opens its album's page with the song highlighted, when Pressd knows
+  // its track.
+  const track = e.trackId != null ? `track=${e.trackId}` : ''
+  if (e.mine) return `/album/${e.mine.id}/community${track ? `?${track}` : ''}`
   const p = new URLSearchParams({ name: e.albumName, artist: e.artist })
   if (e.deezerId) p.set('deezer', String(e.deezerId))
+  if (e.trackId != null) p.set('track', String(e.trackId))
   return `/album/community?${p}`
 }
 
@@ -95,6 +103,8 @@ export default function Bin() {
     return sortBinEntries(es, sort, dir)
   }, [data, sort, dir])
   const listRef = useSlideRows(rows.map((e) => e.id).join(','))
+  // A song's scores are one decimal; an album's two.
+  const places = data?.itemType === 'song' ? 1 : 2
   // The prediction that orders the unrated half of "Not yet rated".
   const showPredicted = (e: BinEntry) => sort === 'unrated' && e.mine?.status !== 'rated' && e.predictedScore != null
 
@@ -179,9 +189,8 @@ export default function Bin() {
       <div className="flex flex-col gap-10 lg:flex-row lg:items-start">
         {/* The bin, pinned while its records scroll. */}
         <aside className="lg:sticky lg:top-8 lg:w-[340px] shrink-0">
-          <BinMosaic covers={data.covers} size={140} />
           {data.sourceName && (
-            <p className="m-0 mt-6 text-[14px] font-semibold text-(--c-57534e)">
+            <p className="m-0 text-[14px] font-semibold text-(--c-57534e)">
               {data.sourceName}{data.sourceYear ? ` · ${data.sourceYear}` : ''}
             </p>
           )}
@@ -229,7 +238,7 @@ export default function Bin() {
                         <CoverImg url={e.coverUrl} displayPx={152} alt="" className="block h-38 w-38 rounded-xl object-cover" />
                       ) : (
                         <div className="flex h-38 w-38 items-center justify-center rounded-xl bg-(--c-efe9e0) font-display text-4xl text-(--c-78716c)">
-                          {e.albumName[0]?.toUpperCase()}
+                          {(e.songTitle ?? e.albumName)[0]?.toUpperCase()}
                         </div>
                       )}
                       {data.ranked && (
@@ -243,7 +252,7 @@ export default function Bin() {
 
                     <div className="min-w-0 flex-1">
                       <Link to={entryHref(e)} className="group block">
-                        <p className="m-0 line-clamp-2 text-[17px] font-bold leading-snug text-(--c-1c1917) group-hover:underline">{e.albumName}</p>
+                        <p className="m-0 line-clamp-2 text-[17px] font-bold leading-snug text-(--c-1c1917) group-hover:underline">{e.songTitle ?? e.albumName}</p>
                         <p className="m-0 mt-1 truncate text-[14px] text-(--c-57534e)">{e.artist}</p>
                         {details(e) && <p className="m-0 mt-0.5 truncate text-[12.5px] text-(--c-8a7f72)">{details(e)}</p>}
                       </Link>
@@ -252,16 +261,22 @@ export default function Bin() {
                         {/* Pressd's order leads with the Pressd average and greys
                             yours; every other order leads with yours. */}
                         <div className="flex items-end gap-7">
-                          {sort === 'pressd' ? (
+                          {sort === 'raters' ? (
                             <>
-                              {e.pressdAvg != null && <Figure label="PRESSD" value={e.pressdAvg} title={raters(e)} />}
-                              {rated && <Figure label="YOU" value={e.mine!.score!} muted />}
+                              <Figure label="RATINGS" value={e.pressdRaters} count />
+                              {e.pressdAvg != null && <Figure label="PRESSD" value={e.pressdAvg} places={places} muted />}
+                              {rated && <Figure label="YOU" value={e.mine!.score!} places={places} muted />}
+                            </>
+                          ) : sort === 'pressd' ? (
+                            <>
+                              {e.pressdAvg != null && <Figure label="PRESSD" value={e.pressdAvg} places={places} title={raters(e)} />}
+                              {rated && <Figure label="YOU" value={e.mine!.score!} places={places} muted />}
                             </>
                           ) : (
                             <>
-                              {rated && <Figure label="YOU" value={e.mine!.score!} />}
-                              {!rated && showPredicted(e) && <Figure label="PREDICTED" value={e.predictedScore!} />}
-                              {e.pressdAvg != null && <Figure label="PRESSD" value={e.pressdAvg} title={raters(e)} muted />}
+                              {rated && <Figure label="YOU" value={e.mine!.score!} places={places} />}
+                              {!rated && showPredicted(e) && <Figure label="PREDICTED" value={e.predictedScore!} places={places} />}
+                              {e.pressdAvg != null && <Figure label="PRESSD" value={e.pressdAvg} places={places} title={raters(e)} muted />}
                             </>
                           )}
                         </div>
@@ -272,7 +287,7 @@ export default function Bin() {
                                 onClick={() => (e.mine ? navigate(`/rate/${e.mine.id}`) : add(e, 'listening'))}
                                 className="flex h-10 w-10 items-center justify-center rounded-full border border-(--c-e2dbd0) text-(--c-1c1917) hover:border-(--c-2d6a4f) hover:text-(--c-2d6a4f)"
                                 title="Rate now"
-                                aria-label={`Rate ${e.albumName} now`}
+                                aria-label={`Rate ${e.songTitle ?? e.albumName} now`}
                               >
                                 <Star size={18} />
                               </button>
@@ -319,17 +334,26 @@ function MenuRow({ on, onClick, children }: { on: boolean; onClick: () => void; 
   )
 }
 
-/** A labelled score under a record: the Pressd average, yours, or your
- *  predicted. `muted` is the one the order isn't about — smaller, in grey. */
-function Figure({ label, value, title, muted = false }: { label: string; value: number; title?: string; muted?: boolean }) {
+/** A labelled number under a record: the Pressd average, yours, your
+ *  predicted, or (`count`) how many people rated it. `muted` is the one the
+ *  order isn't about — smaller, in grey. */
+function Figure({ label, value, title, muted = false, count = false, places = 2 }: {
+  label: string
+  value: number
+  title?: string
+  muted?: boolean
+  count?: boolean
+  /** Two for an album's score, one for a song's. */
+  places?: number
+}) {
   return (
     <div title={title}>
       <p className="m-0 text-[10px] font-semibold tracking-[0.12em] text-(--c-a8998a)">{label}</p>
       {muted ? (
-        <p className="m-0 mt-1 font-display text-[15px] font-bold leading-none tabular-nums text-(--c-8a7f72)">{value.toFixed(2)}</p>
+        <p className="m-0 mt-1 font-display text-[15px] font-bold leading-none tabular-nums text-(--c-8a7f72)">{count ? value : value.toFixed(places)}</p>
       ) : (
-        <p className="m-0 mt-0.5 font-display text-[22px] font-bold leading-none tabular-nums" style={{ color: songScoreColor(value) }}>
-          {value.toFixed(2)}
+        <p className="m-0 mt-0.5 font-display text-[22px] font-bold leading-none tabular-nums" style={{ color: count ? 'var(--c-1c1917)' : songScoreColor(value) }}>
+          {count ? value : value.toFixed(places)}
         </p>
       )}
     </div>

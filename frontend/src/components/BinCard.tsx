@@ -1,23 +1,39 @@
 // A bin as a card — For You's Bins section and the Bins page. Its cover is a
-// 2×2 of the bin's first four records, never the source's artwork; then the
-// title, the source, and how far through it you are. Mobile's
+// 2×2 of the bin's first four records, never the source's artwork — on a bin
+// Pressd made, with the full-colour Pressd mark on a cream chip in its
+// lower-right corner — then the title, the source, and how far through it you
+// are. Mobile's
 // components/BinCard.tsx, laid out for a wider screen.
 import { Link } from 'react-router-dom'
 import type { BinCard as Bin } from '../api'
 import CoverImg from './CoverImg'
-import PressdBinBadge from './PressdBinBadge'
+import PressdMark from './PressdMark'
 
-/** The 2×2 of a bin's first four covers. */
-export function BinMosaic({ covers, size }: { covers: string[]; size: number }) {
+/** The 2×2 of a bin's first four covers. `pressd` adds the official chip: the
+ *  full-colour Pressd mark on cream in the lower-right corner. */
+export function BinMosaic({ covers, size, pressd = false }: { covers: string[]; size: number; pressd?: boolean }) {
   const cell = size / 2
+  const chip = Math.max(32, size * 0.38)
   return (
-    <div className="grid grid-cols-2 overflow-hidden rounded-[14px] shrink-0" style={{ width: size, height: size }}>
-      {[0, 1, 2, 3].map((i) =>
-        covers[i] ? (
-          <CoverImg key={i} url={covers[i]} displayPx={Math.ceil(cell)} alt="" className="block h-full w-full object-cover" />
-        ) : (
-          <div key={i} className="bg-(--c-efe9e0)" />
-        ),
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <div className="grid h-full w-full grid-cols-2 overflow-hidden rounded-[14px]">
+        {[0, 1, 2, 3].map((i) =>
+          covers[i] ? (
+            <CoverImg key={i} url={covers[i]} displayPx={Math.ceil(cell)} alt="" className="block h-full w-full object-cover" />
+          ) : (
+            <div key={i} className="bg-(--c-efe9e0)" />
+          ),
+        )}
+      </div>
+      {pressd && (
+        // Cream whatever the appearance: it sits on album art, not on the page.
+        <span
+          className="absolute bottom-1 right-1 flex items-center justify-center overflow-hidden bg-[#f9f8f6] shadow-[0_1px_5px_rgba(0,0,0,0.3)]"
+          style={{ width: chip, height: chip * 0.6, borderRadius: chip * 0.18 }}
+          title="A Pressd bin"
+        >
+          <PressdMark size={chip * 0.95} />
+        </span>
       )}
     </div>
   )
@@ -39,9 +55,8 @@ export default function BinCard({ bin, size = 104 }: { bin: Bin; size?: number }
       to={`/bins/${bin.slug}`}
       className="group flex items-center gap-4 rounded-2xl p-2 -m-2 hover:bg-(--c-efe9e0)/50 transition-colors"
     >
-      <BinMosaic covers={bin.covers} size={size} />
+      <BinMosaic covers={bin.covers} size={size} pressd={bin.kind === 'curated'} />
       <div className="min-w-0 flex-1">
-        {bin.kind === 'curated' && <div className="mb-1.5"><PressdBinBadge width={38} stroke={1.3} color="var(--c-1c1917)" /></div>}
         <p className="m-0 font-display text-[20px] leading-tight font-bold text-(--c-1c1917)">{bin.title}</p>
         {bin.sourceName && (
           <p className="m-0 mt-1 text-[13px] font-medium text-(--c-57534e)">

@@ -690,6 +690,10 @@ export interface BinEntry {
   rank: number | null
   artist: string
   albumName: string
+  /** In a song bin: the song (and `albumName` the album it came out on). */
+  songTitle: string | null
+  /** In a song bin: the song's track, once anyone on Pressd holds the album. */
+  trackId: number | null
   year: number | null
   genre: string | null
   coverUrl: string | null
@@ -746,6 +750,8 @@ export async function fetchBin(slug: string): Promise<BinDetail> {
       rank: (e.rank as number | null) ?? null,
       artist: e.artist as string,
       albumName: e.album_name as string,
+      songTitle: (e.song_title as string | null) ?? null,
+      trackId: (e.track_id as number | null) ?? null,
       year: (e.year as number | null) ?? null,
       genre: (e.genre as string | null) ?? null,
       coverUrl: (e.cover_url as string | null) ?? null,

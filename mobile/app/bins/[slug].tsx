@@ -2,17 +2,16 @@
 // the screen projects the bin's 2×2 collage, darkened and faded, with the
 // bin's title over it in cream — dark enough that the cream reads whatever the
 // page is — under the Pressd-verified badge on Pressd's bins. Everything else
-// sits below it: the bin's icon, the source, your progress, the sort, and the
-// records.
+// sits below it: the source, your progress, the sort, and the records.
 //
 // Its records in the list's
 // order (or by the Pressd average, or by your predicted score once picks are
 // unlocked), each with your score or where it sits in your library, or Rate
 // now / Add. The header holds how far through it you are.
 //
-// A record is opened as your copy when you have one (any edition), and
-// otherwise as the community view by name, which handles a record nobody on
-// Pressd has rated yet.
+// A record always opens as its Pressd page (the community view): through your
+// copy's id when you have one, otherwise by name, which handles a record
+// nobody on Pressd has rated yet.
 import { useMemo, useRef, useState } from 'react'
 import { AccessibilityInfo, Alert, FlatList, LayoutAnimation, Pressable, RefreshControl, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -27,7 +26,7 @@ import AnchoredMenu from '../../components/AnchoredMenu'
 import { useAuth } from '../../lib/auth'
 import { selection, success } from '../../lib/haptics'
 import { scrollToTop } from '../../lib/scrollToTop'
-import { BinMosaic, BinProgressBar } from '../../components/BinCard'
+import { BinProgressBar } from '../../components/BinCard'
 import CoverImage from '../../components/CoverImage'
 import PressdBinBadge from '../../components/PressdBinBadge'
 import VinylSpinner from '../../components/VinylSpinner'
@@ -60,24 +59,33 @@ function RankRule() {
   return <View style={styles.rule} />
 }
 
-/** A labelled score under a record: the Pressd average, yours, or your
- *  predicted. `muted` is the one the order isn't about — smaller, in grey. */
-function Figure({ label, value, muted = false }: { label: string; value: number; muted?: boolean }) {
+/** A labelled number under a record: the Pressd average, yours, your
+ *  predicted, or (`count`) how many people rated it. `muted` is the one the
+ *  order isn't about — smaller, in grey. */
+function Figure({ label, value, muted = false, count = false, places = 2 }: {
+  label: string
+  value: number
+  muted?: boolean
+  count?: boolean
+  /** Two for an album's score, one for a song's. */
+  places?: number
+}) {
   return (
     <View style={styles.figure}>
       <Text style={styles.figureLabel} maxFontSizeMultiplier={NUM_SCALE_CAP}>{label}</Text>
       <Text
-        style={muted ? styles.figureMuted : [styles.figureValue, { color: scoreColor(value) }]}
+        style={muted ? styles.figureMuted : [styles.figureValue, { color: count ? colors.ink : scoreColor(value) }]}
         maxFontSizeMultiplier={NUM_SCALE_CAP}
       >
-        {value.toFixed(2)}
+        {count ? value : value.toFixed(places)}
       </Text>
     </View>
   )
 }
 
-/** "1998 · Pop" */
+/** "1998 · Pop" for a record; "from Fever to Tell · 2003" for a song. */
 function details(e: BinEntry): string {
+  if (e.songTitle) return [e.albumName ? `from ${e.albumName}` : null, e.year].filter(Boolean).join(' · ')
   return [e.year, e.genre].filter(Boolean).join(' · ')
 }
 
@@ -114,10 +122,15 @@ export default function BinPage() {
     queryClient.invalidateQueries({ queryKey: ['albums'] })
   }
 
+  // Always the record's Pressd page — the average and everyone's ratings — never
+  // one person's copy, yours included: a bin is about the record.
   function open(e: BinEntry) {
     selection()
+    // A song opens its album's page with the song highlighted, when Pressd
+    // knows its track.
+    const track = e.trackId != null ? { track: String(e.trackId) } : {}
     if (e.mine) {
-      router.push({ pathname: '/album/[id]', params: { id: String(e.mine.id) } })
+      router.push({ pathname: '/album/[id]', params: { id: String(e.mine.id), community: '1', ...track } })
       return
     }
     router.push({
@@ -127,6 +140,7 @@ export default function BinPage() {
         name: e.albumName,
         artist: e.artist,
         ...(e.deezerId ? { deezer: String(e.deezerId) } : {}),
+        ...track,
       },
     })
   }
@@ -184,7 +198,9 @@ export default function BinPage() {
     )
   }
 
-  const SORTS: BinSort[] = ['list', 'pressd', 'yours', 'unrated']
+  const SORTS: BinSort[] = ['list', 'pressd', 'raters', 'yours', 'unrated']
+  // A song's scores are one decimal; an album's two.
+  const places = data.itemType === 'song' ? 1 : 2
   // The prediction that orders the unrated half of "Not yet rated".
   const showPredicted = (e: BinEntry) => sort === 'unrated' && e.mine?.status !== 'rated' && e.predictedScore != null
 
@@ -235,7 +251,6 @@ export default function BinPage() {
 
       <View style={styles.head}>
         <View style={styles.about}>
-          <BinMosaic covers={data.covers} size={76} />
           <View style={styles.aboutText}>
             {data.sourceName && (
               <Text style={styles.source} numberOfLines={1}>
@@ -292,7 +307,7 @@ export default function BinPage() {
                   <CoverImage url={e.coverUrl} displayPx={COVER} style={styles.cover} />
                 ) : (
                   <View style={[styles.cover, styles.coverEmpty]}>
-                    <Text style={styles.coverInitial}>{e.albumName[0]?.toUpperCase()}</Text>
+                    <Text style={styles.coverInitial}>{(e.songTitle ?? e.albumName)[0]?.toUpperCase()}</Text>
                   </View>
                 )}
                 {data.ranked && (
@@ -301,24 +316,31 @@ export default function BinPage() {
               </View>
 
               <View style={styles.rowText}>
-                <Text style={styles.rowTitle} numberOfLines={2}>{e.albumName}</Text>
+                <Text style={styles.rowTitle} numberOfLines={2}>{e.songTitle ?? e.albumName}</Text>
                 <Text style={styles.rowArtist} numberOfLines={1}>{e.artist}</Text>
                 {details(e) !== '' && <Text style={styles.rowDetails} numberOfLines={1}>{details(e)}</Text>}
 
                 <View style={styles.rowFoot}>
                   <View style={styles.figures}>
                     {/* Pressd's order leads with the Pressd average and greys
-                        yours; every other order leads with yours. */}
-                    {sort === 'pressd' ? (
+                        yours; Most rated leads with the count; every other
+                        order leads with yours. */}
+                    {sort === 'raters' ? (
                       <>
-                        {e.pressdAvg != null && <Figure label="PRESSD" value={e.pressdAvg} />}
-                        {rated && <Figure label="YOU" value={e.mine!.score!} muted />}
+                        <Figure label="RATINGS" value={e.pressdRaters} count />
+                        {e.pressdAvg != null && <Figure label="PRESSD" value={e.pressdAvg} places={places} muted />}
+                        {rated && <Figure label="YOU" value={e.mine!.score!} places={places} muted />}
+                      </>
+                    ) : sort === 'pressd' ? (
+                      <>
+                        {e.pressdAvg != null && <Figure label="PRESSD" value={e.pressdAvg} places={places} />}
+                        {rated && <Figure label="YOU" value={e.mine!.score!} places={places} muted />}
                       </>
                     ) : (
                       <>
-                        {rated && <Figure label="YOU" value={e.mine!.score!} />}
-                        {!rated && showPredicted(e) && <Figure label="PREDICTED" value={e.predictedScore!} />}
-                        {e.pressdAvg != null && <Figure label="PRESSD" value={e.pressdAvg} muted />}
+                        {rated && <Figure label="YOU" value={e.mine!.score!} places={places} />}
+                        {!rated && showPredicted(e) && <Figure label="PREDICTED" value={e.predictedScore!} places={places} />}
+                        {e.pressdAvg != null && <Figure label="PRESSD" value={e.pressdAvg} places={places} muted />}
                       </>
                     )}
                   </View>
@@ -330,7 +352,7 @@ export default function BinPage() {
                           hitSlop={8}
                           style={({ pressed }) => [styles.iconBtn, { borderColor: tc.border }, pressed && { opacity: 0.6 }]}
                           accessibilityRole="button"
-                          accessibilityLabel={`Rate ${e.albumName} now`}
+                          accessibilityLabel={`Rate ${e.songTitle ?? e.albumName} now`}
                         >
                           <Star size={19} color={tc.ink} strokeWidth={2} />
                         </Pressable>

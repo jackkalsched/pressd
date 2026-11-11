@@ -9,7 +9,11 @@
 // gives the bar its pointerEvents from the same scroll event that drives the
 // fade (the genre page's pattern, made shared), and moves state only when the
 // answer changes, since it runs every frame.
-import { useCallback, useRef, useState, type RefObject } from 'react'
+//
+// The tab bar does the same: tapping the tab you're already on scrolls that
+// page to the top (`useTabScrollToTop`), on each of the four main pages.
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { useNavigation } from 'expo-router'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { selection } from './haptics'
 
@@ -42,4 +46,20 @@ export function useCompactBar(at: number) {
     }
   }, [at])
   return { live, track, pointerEvents: (live ? 'box-none' : 'none') as 'box-none' | 'none' }
+}
+
+/** On a tab's root page: tapping its own tab while already on it scrolls the
+ *  page to the top. The tab press reaches the page before the tab switches, so
+ *  "already focused" means the tap was on the tab you were looking at. */
+export function useTabScrollToTop(ref: RefObject<unknown>): void {
+  const navigation = useNavigation()
+  useEffect(() => {
+    const nav = navigation as unknown as {
+      addListener: (event: string, cb: () => void) => () => void
+      isFocused: () => boolean
+    }
+    return nav.addListener('tabPress', () => {
+      if (nav.isFocused()) scrollToTop(ref)
+    })
+  }, [navigation, ref])
 }

@@ -16,7 +16,6 @@ import { fetchArtistDetail, fetchAlbumColor, fetchArtistImage, fetchSimilarArtis
 import type { ArtistPopulation } from '@pressd/shared/api'
 import { useAuth } from '../../lib/auth'
 import ScoreHistogram from '../../components/ScoreHistogram'
-import SongGapChart from '../../components/SongGapChart'
 import ScoreKdeCompare from '../../components/ScoreKdeCompare'
 import SimilarArtistComparisons from '../../components/SimilarArtistComparisons'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, usePageRgb, useScoreColor, scoreColor, useColors } from '../../theme/tokens'
@@ -365,26 +364,10 @@ export default function ArtistPage() {
             <ScoreVersus mine={data.avg_song_score} theirs={data.global?.avg_song_score ?? null} />
           )}
 
-          {/* Compare answers one question — which songs do I hear differently
-              — and the percentile bars answered a different one badly: seven
-              metrics, each a placement in a league table, none of them a track
-              you could name. The gap chart replaces them here. The other two
-              modes keep the bars, where they aren't pretending to compare. */}
-          {mode === 'compare' ? (
-            <>
-              <Text style={[styles.sectionLabel, styles.sectionSolo]}>WHERE YOU SPLIT</Text>
-              <SongGapChart
-                gaps={data.song_gaps ?? []}
-                artist={data.artist}
-                onSeeAll={() =>
-                  router.push({
-                    pathname: '/splits/[name]',
-                    params: { name: encodeURIComponent(data.artist) },
-                  })
-                }
-              />
-            </>
-          ) : (
+          {/* Compare goes from the two song averages straight into the two
+              score distributions; it has no percentile bars, and no "Where
+              you split" list since November 2026 (Jack's call). */}
+          {mode !== 'compare' && (
             <>
               <View style={styles.sectionHead}>
                 <Text style={styles.sectionLabel}>PERCENTILE RANKINGS</Text>
