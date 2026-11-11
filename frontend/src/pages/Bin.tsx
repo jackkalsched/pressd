@@ -1,6 +1,9 @@
 // One bin — the Apple Music 100 Best Albums, say. Mobile's app/bins/[slug].tsx
-// laid out wide, as the album pages are: a sticky column with the bin's cover,
-// title, source and your progress, and its records filling the rest, in the
+// laid out wide. A banner across the top projects the bin's 2×2 collage,
+// darkened and faded into the page, with the title over it in cream — dark
+// enough that the cream reads on a cream page — under the Pressd-verified
+// badge on Pressd's bins. Below it, as the album pages are: a sticky column
+// with the bin's icon, source and your progress, and its records filling the rest, in the
 // order the Sort by menu picks (shared/src/binSort.ts). Each record shows your
 // score or where it sits in your library, or Rate / Add.
 //
@@ -9,17 +12,17 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ArrowUpDown, Check, ChevronDown } from 'lucide-react'
+import { ArrowLeft, ArrowUpDown, Bookmark, Check, ChevronDown, Star } from 'lucide-react'
 import { addBinEntry, fetchBin } from '../api'
 import type { BinEntry } from '../api'
 import { BIN_SORT_DIR, binSortLabel, sortBinEntries, type BinSort, type BinSortDir } from '@pressd/shared/binSort'
 import { songScoreColor } from '../types'
 import CoverImg from '../components/CoverImg'
+import PressdBinBadge from '../components/PressdBinBadge'
 import VinylSpinner from '../components/VinylSpinner'
 import { BinMosaic, BinProgressBar } from '../components/BinCard'
 import { useUser } from '../context/UserContext'
 
-const STATUS_LABEL: Record<string, string> = { listening: 'Listening', to_listen: 'To Listen' }
 const SORTS: BinSort[] = ['list', 'pressd', 'yours', 'unrated']
 
 /** When the order changes, each row slides from where it was to where it now
@@ -54,6 +57,8 @@ function useSlideRows(order: string) {
   }, [order])
   return list
 }
+
+const raters = (e: BinEntry) => `${e.pressdRaters} ${e.pressdRaters === 1 ? 'rating' : 'ratings'}`
 
 /** "1998 · Pop" */
 function details(e: BinEntry): string {
@@ -137,26 +142,48 @@ export default function Bin() {
 
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-6 md:px-12 py-8 pb-24">
-      <button
-        onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/bins'))}
-        className="mb-6 inline-flex items-center gap-1.5 text-[13px] font-semibold text-(--c-57534e) hover:text-(--c-1c1917)"
-      >
-        <ArrowLeft size={16} /> Back
-      </button>
+    <div className="pb-24">
+      {/* The banner: the collage across the full width, centred, held low under
+          a dark wash and fading into the page at its foot. Its colours are
+          literal — the banner is dark in either appearance. */}
+      <header className="relative h-[340px] overflow-hidden bg-[#171615]">
+        <div className="absolute inset-x-0 top-1/2 grid aspect-square -translate-y-1/2 grid-cols-2 opacity-90">
+          {[0, 1, 2, 3].map((i) =>
+            data.covers[i] ? (
+              <CoverImg key={i} url={data.covers[i]} displayPx={1000} alt="" className="block h-full w-full object-cover" />
+            ) : (
+              <div key={i} />
+            ),
+          )}
+        </div>
+        <div className="absolute inset-0 bg-[rgba(14,12,10,0.6)]" />
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-linear-to-b from-transparent to-(--c-f9f8f6)" />
+        <button
+          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/bins'))}
+          className="absolute left-6 top-6 md:left-12 flex h-9 w-9 items-center justify-center rounded-full bg-[rgba(12,10,8,0.42)] text-[#f9f8f6] hover:bg-[rgba(12,10,8,0.6)]"
+          aria-label="Back"
+        >
+          <ArrowLeft size={18} />
+        </button>
+        <div className="absolute inset-x-0 bottom-20">
+          <div className="mx-auto w-full max-w-[1600px] px-6 md:px-12">
+            {data.kind === 'curated' && <div className="mb-4"><PressdBinBadge width={72} /></div>}
+            <h1 className="m-0 max-w-[900px] font-display text-[40px] md:text-[56px] leading-[1.05] font-bold text-[#f9f8f6] [text-shadow:0_2px_14px_rgba(0,0,0,0.35)]">
+              {data.title}
+            </h1>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto w-full max-w-[1600px] px-6 md:px-12 pt-2">
       <div className="flex flex-col gap-10 lg:flex-row lg:items-start">
         {/* The bin, pinned while its records scroll. */}
         <aside className="lg:sticky lg:top-8 lg:w-[340px] shrink-0">
-          <BinMosaic covers={data.covers} size={240} />
-          <h1 className="m-0 mt-6 font-display text-[34px] leading-[1.1] font-bold text-(--c-1c1917)">{data.title}</h1>
+          <BinMosaic covers={data.covers} size={140} />
           {data.sourceName && (
-            data.sourceUrl ? (
-              <a href={data.sourceUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[14px] font-semibold text-(--c-2d6a4f) hover:underline">
-                {data.sourceName}{data.sourceYear ? ` · ${data.sourceYear}` : ''}
-              </a>
-            ) : (
-              <p className="m-0 mt-2 text-[14px] font-semibold text-(--c-57534e)">{data.sourceName}</p>
-            )
+            <p className="m-0 mt-6 text-[14px] font-semibold text-(--c-57534e)">
+              {data.sourceName}{data.sourceYear ? ` · ${data.sourceYear}` : ''}
+            </p>
           )}
           <div className="mt-6 flex"><BinProgressBar done={data.progress.rated} total={data.progress.total} /></div>
           <p className="m-0 mt-2.5 text-[13px] font-medium text-(--c-57534e)">
@@ -189,66 +216,90 @@ export default function Bin() {
               </div>
             )}
           </div>
-          <ol ref={listRef} className="m-0 grid list-none gap-x-10 p-0 2xl:grid-cols-2">
-            {rows.map((e) => (
-              <li key={e.id} data-id={e.id} className="flex items-center gap-5 border-b border-(--c-e8e2d9) bg-(--c-f9f8f6) py-3.5">
-                {data.ranked && (
-                  <span className="w-11 shrink-0 text-right font-display text-[26px] font-bold tabular-nums text-(--c-1c1917)">{e.rank ?? e.position + 1}</span>
-                )}
-                <Link to={entryHref(e)} className="flex min-w-0 flex-1 items-center gap-4 group">
-                  {e.coverUrl ? (
-                    <CoverImg url={e.coverUrl} displayPx={80} alt="" className="h-20 w-20 shrink-0 rounded-[10px] object-cover" />
-                  ) : (
-                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[10px] bg-(--c-efe9e0) font-display text-2xl text-(--c-78716c)">
-                      {e.albumName[0]?.toUpperCase()}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <p className="m-0 truncate text-[16px] font-semibold text-(--c-1c1917) group-hover:underline">{e.albumName}</p>
-                    <p className="m-0 mt-0.5 truncate text-[14px] text-(--c-57534e)">{e.artist}</p>
-                    {details(e) && <p className="m-0 mt-1 truncate text-[12.5px] text-(--c-8a7f72)">{details(e)}</p>}
-                  </div>
-                </Link>
-                <div className="hidden sm:flex shrink-0 items-center gap-5 text-[10.5px] font-semibold tracking-[0.08em] text-(--c-a8998a)">
-                  {showPredicted(e) && e.predictedScore != null && (
-                    <span>PREDICTED <span className="font-display text-[16px] tracking-normal" style={{ color: songScoreColor(e.predictedScore) }}>{e.predictedScore.toFixed(2)}</span></span>
-                  )}
-                  {e.pressdAvg != null && (
-                    <span title={`${e.pressdRaters} ${e.pressdRaters === 1 ? 'rating' : 'ratings'}`}>
-                      PRESSD <span className="font-display text-[16px] tracking-normal" style={{ color: songScoreColor(e.pressdAvg) }}>{e.pressdAvg.toFixed(2)}</span>
-                    </span>
-                  )}
-                </div>
-                <div className="flex w-[124px] shrink-0 justify-end">
-                  {e.mine?.status === 'rated' && e.mine.score != null ? (
-                    <span className="font-display text-[24px] font-bold tabular-nums" style={{ color: songScoreColor(e.mine.score) }}>{e.mine.score.toFixed(2)}</span>
-                  ) : e.mine ? (
-                    <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-(--c-57534e)">
-                      <Check size={13} /> {STATUS_LABEL[e.mine.status] ?? 'Rated'}
-                    </span>
-                  ) : e.addable ? (
-                    busy === e.id ? <VinylSpinner size={22} /> : (
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => add(e, 'listening')}
-                          className="rounded-full bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) px-3 py-1.5 text-[12px] font-bold text-white"
-                        >
-                          Rate
-                        </button>
-                        <button
-                          onClick={() => add(e, 'to_listen')}
-                          className="rounded-full border border-(--c-e2dbd0) px-3 py-1.5 text-[12px] font-bold text-(--c-1c1917) hover:border-(--c-2d6a4f)"
-                        >
-                          Add
-                        </button>
+          <ol ref={listRef} className="m-0 grid list-none gap-x-12 p-0 2xl:grid-cols-2">
+            {rows.map((e) => {
+              const rated = e.mine?.status === 'rated' && e.mine.score != null
+              const saved = !!e.mine && !rated
+              return (
+                <li key={e.id} data-id={e.id} className="border-b border-(--c-e8e2d9)/60 bg-(--c-f9f8f6)">
+                  <div className="flex items-center gap-6 py-5">
+                    {/* The cover, with the list's number in its corner. */}
+                    <Link to={entryHref(e)} className="relative block shrink-0">
+                      {e.coverUrl ? (
+                        <CoverImg url={e.coverUrl} displayPx={152} alt="" className="block h-38 w-38 rounded-xl object-cover" />
+                      ) : (
+                        <div className="flex h-38 w-38 items-center justify-center rounded-xl bg-(--c-efe9e0) font-display text-4xl text-(--c-78716c)">
+                          {e.albumName[0]?.toUpperCase()}
+                        </div>
+                      )}
+                      {data.ranked && (
+                        // Printed on the cover's lower left, white with a soft
+                        // shadow so it holds on a pale cover.
+                        <span className="absolute bottom-1 left-2.5 font-display text-[46px] font-black leading-none tabular-nums text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.55)]">
+                          {e.rank ?? e.position + 1}
+                        </span>
+                      )}
+                    </Link>
+
+                    <div className="min-w-0 flex-1">
+                      <Link to={entryHref(e)} className="group block">
+                        <p className="m-0 line-clamp-2 text-[17px] font-bold leading-snug text-(--c-1c1917) group-hover:underline">{e.albumName}</p>
+                        <p className="m-0 mt-1 truncate text-[14px] text-(--c-57534e)">{e.artist}</p>
+                        {details(e) && <p className="m-0 mt-0.5 truncate text-[12.5px] text-(--c-8a7f72)">{details(e)}</p>}
+                      </Link>
+
+                      <div className="mt-3.5 flex items-end justify-between gap-4">
+                        {/* Pressd's order leads with the Pressd average and greys
+                            yours; every other order leads with yours. */}
+                        <div className="flex items-end gap-7">
+                          {sort === 'pressd' ? (
+                            <>
+                              {e.pressdAvg != null && <Figure label="PRESSD" value={e.pressdAvg} title={raters(e)} />}
+                              {rated && <Figure label="YOU" value={e.mine!.score!} muted />}
+                            </>
+                          ) : (
+                            <>
+                              {rated && <Figure label="YOU" value={e.mine!.score!} />}
+                              {!rated && showPredicted(e) && <Figure label="PREDICTED" value={e.predictedScore!} />}
+                              {e.pressdAvg != null && <Figure label="PRESSD" value={e.pressdAvg} title={raters(e)} muted />}
+                            </>
+                          )}
+                        </div>
+                        {!rated && (e.addable || saved) && (
+                          busy === e.id ? <VinylSpinner size={24} /> : (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => (e.mine ? navigate(`/rate/${e.mine.id}`) : add(e, 'listening'))}
+                                className="flex h-10 w-10 items-center justify-center rounded-full border border-(--c-e2dbd0) text-(--c-1c1917) hover:border-(--c-2d6a4f) hover:text-(--c-2d6a4f)"
+                                title="Rate now"
+                                aria-label={`Rate ${e.albumName} now`}
+                              >
+                                <Star size={18} />
+                              </button>
+                              <button
+                                onClick={() => (e.mine ? navigate(entryHref(e)) : add(e, 'to_listen'))}
+                                className={`flex h-10 w-10 items-center justify-center rounded-full border ${
+                                  saved
+                                    ? 'border-(--c-2d6a4f) bg-(--c-2d6a4f)/10 text-(--c-2d6a4f)'
+                                    : 'border-(--c-e2dbd0) text-(--c-1c1917) hover:border-(--c-2d6a4f) hover:text-(--c-2d6a4f)'
+                                }`}
+                                title={saved ? 'In your library' : 'Save to your library'}
+                                aria-label={saved ? `${e.albumName} is in your library` : `Save ${e.albumName} to your library`}
+                              >
+                                <Bookmark size={18} fill={saved ? 'currentColor' : 'none'} />
+                              </button>
+                            </div>
+                          )
+                        )}
                       </div>
-                    )
-                  ) : null}
-                </div>
-              </li>
-            ))}
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
           </ol>
         </section>
+      </div>
       </div>
     </div>
   )
@@ -265,5 +316,22 @@ function MenuRow({ on, onClick, children }: { on: boolean; onClick: () => void; 
       {children}
       {on && <Check size={15} />}
     </button>
+  )
+}
+
+/** A labelled score under a record: the Pressd average, yours, or your
+ *  predicted. `muted` is the one the order isn't about — smaller, in grey. */
+function Figure({ label, value, title, muted = false }: { label: string; value: number; title?: string; muted?: boolean }) {
+  return (
+    <div title={title}>
+      <p className="m-0 text-[10px] font-semibold tracking-[0.12em] text-(--c-a8998a)">{label}</p>
+      {muted ? (
+        <p className="m-0 mt-1 font-display text-[15px] font-bold leading-none tabular-nums text-(--c-8a7f72)">{value.toFixed(2)}</p>
+      ) : (
+        <p className="m-0 mt-0.5 font-display text-[22px] font-bold leading-none tabular-nums" style={{ color: songScoreColor(value) }}>
+          {value.toFixed(2)}
+        </p>
+      )}
+    </div>
   )
 }

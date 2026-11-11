@@ -582,7 +582,7 @@ not its tracks.
 
 **Bins (`backend/bins.py`, `backend/routers/bins.py`, November 2026)** — themed collections
 of records; spec `docs/superpowers/specs/2026-11-11-bins-design.md`. v1 is Pressd's
-**curated** bins, the first the *Apple Music 100 Best Albums* (2024, credited and linked;
+**curated** bins, the first the *Apple Music 100 Best Albums* (2024, credited by name, not linked;
 no Apple artwork or blurbs — rank, title, artist, year). `Bin` (slug, kind `curated` |
 `user`, `owner_id` null for Pressd's, `item_type` album | song, source name / link / date,
 `visibility`, `sort_order`) and `BinEntry` (position, the source's `rank`, the matched
@@ -618,11 +618,21 @@ stored tracklist through `tracklink` (so the audio ingest fetches them), its Cla
 `albumfactors` by `album_key`, and `catalog_albums` reading bin entries beside copies. A private bin
 will be a 404 to anyone but its owner; `delete_own_account` deletes a user's bins.
 Surfaces: For You's **BINS** section (up to three `BinCard`s, "See all →") on both
-platforms; web's sidebar **Bins** (`/bins`, `/bins/:slug`: a sticky column with the 2×2,
-title, source link and progress, the list beside it, two columns at `2xl`);
+platforms; web's sidebar **Bins** (`/bins`, `/bins/:slug`: the banner, then a sticky column with the 2×2,
+source and progress, the list beside it, two columns at `2xl`);
 iPhone's **side menu** (`components/SideMenu.tsx`, the ≡ beside For You's search icon,
 sliding in from the left; Bins is its only entry so far), `app/bins/index.tsx` and
-`app/bins/[slug].tsx`. A row opens your copy, else the community view by name. A **Sort by**
+`app/bins/[slug].tsx`. The bin page opens on a **banner** the width of the screen: the 2×2 collage scaled
+up and centred, under a dark wash (literal colours — it is dark in either appearance)
+and fading into the page at its foot, with the title over it in cream Playfair. Over the
+title, left-aligned, every Pressd bin (`kind` curated) carries the **Pressd-verified badge**
+(`PressdBinBadge`, one per platform) — on its page, and above its title on every card,
+in the ink colour there: the Pressd mark traced as an outline (white on the banner), nothing
+filled, its legs left open where they face the record (`LEG_OUTLINES`), from the mark's own geometry (web `lib/pressdMark.ts`, which `PressdMark` now
+reads too; mobile copies the paths — change both). Below the banner: the small 2×2, the
+source as plain text (no link to the list, Jack's call), progress, Sort by, the records.
+On iPhone the back button floats on a dark disc and the status bar is light.
+A row opens your copy, else the community view by name. A **Sort by**
 dropdown (iPhone: `AnchoredMenu`, which gained `divider`; web: its own menu) picks the
 source's order, Pressd's order (the average), Your rating, or Not yet rated (unrated
 records first, best predicted first, then rated ones by your score), and Ascending /
@@ -630,7 +640,13 @@ Descending; choosing an order resets the direction to its own (the list 1 → 10
 high → low), and a record with no number stays last either way. The rules are
 `shared/src/binSort.ts`, once for both. A change of order slides each row to its new place
 — `LayoutAnimation` on iPhone, a FLIP on web (`useSlideRows` in `pages/Bin.tsx`) — and
-nothing moves under Reduce Motion. Each row carries year · genre: the genre its copies on Pressd
+nothing moves under Reduce Motion. A row (taller since November 2026, faint hairlines between) starts with a large cover
+at the page's left edge (120pt iPhone, 152px web), the rank printed on it in white
+Playfair Black, lower left; beside it the title, artist and year · genre, then the
+figures — YOU (once you've rated it) leading, PRESSD (the average) smaller in grey; in
+Pressd's order the other way round — and, while you haven't,
+a star (Rate now; continues your copy if you hold one) and a bookmark (save to your
+library, filled once it's there). Each row carries year · genre: the genre its copies on Pressd
 carry most, else the catalog's from the stored resolve. Later phases (spec §7): song bins (Rolling Stone's 200 rock songs), user
 bins with Library → Bins (own bins only), then following and "where Pressd disagrees".
 

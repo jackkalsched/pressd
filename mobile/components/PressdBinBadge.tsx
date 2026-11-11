@@ -1,0 +1,37 @@
+// The Pressd-verified badge for a bin Pressd made: the Pressd mark traced as an
+// outline — its two legs (open toward the record), the record and the label as
+// lines, nothing filled — left-aligned above the bin's title: white on the bin
+// page's dark banner, the ink colour (`color`, a plain string from useColors)
+// on a bin's card. The geometry is web's frontend/src/lib/pressdMark.ts
+// (LEG_OUTLINES, the disc at 85,103); change both.
+import Svg, { Circle, G, Path } from 'react-native-svg'
+
+const LEGS = [
+  'M122.00 59.64 L122 19 Q122 14 127 14 L141 14 Q146 14 146 19 L146.00 80.56 L146.65 84.06 L147.10 87.57 L147.36 91.07 L147.42 94.55 L147.30 98.00 L147.00 101.41 L146.52 104.78 L145.86 108.09 L145.03 111.33 L144.04 114.50 L142.89 117.59 L141.59 120.59 L140.15 123.50 L138.57 126.30 L136.86 129.01 L135.04 131.61 L133.11 134.10 L131.11 136.50',
+  'M48.00 146.36 L48 187 Q48 192 43 192 L29 192 Q24 192 24 187 L24.00 125.44 L23.35 121.94 L22.90 118.43 L22.64 114.93 L22.58 111.45 L22.70 108.00 L23.00 104.59 L23.48 101.22 L24.14 97.91 L24.97 94.67 L25.96 91.50 L27.11 88.41 L28.41 85.41 L29.85 82.50 L31.43 79.70 L33.14 76.99 L34.96 74.39 L36.89 71.90 L38.89 69.50',
+]
+const CX = 85
+const CY = 103
+// The mark's extent once rotated, so the outline fills its box.
+const VIEW = { x: -25, y: 43, w: 220, h: 120 }
+
+export default function PressdBinBadge({ width = 48, stroke = 1.3, color = '#ffffff' }: { width?: number; stroke?: number; color?: string }) {
+  const sw = (stroke * VIEW.w) / width // the line's thickness in the mark's own units
+  return (
+    <Svg
+      viewBox={`${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}`}
+      width={width}
+      height={(width * VIEW.h) / VIEW.w}
+      accessible
+      accessibilityLabel="A Pressd bin"
+    >
+      <G rotation={45} origin={`${CX}, ${CY}`} fill="none" stroke={color} strokeWidth={sw} strokeLinejoin="round" strokeLinecap="round">
+        <Path d={LEGS[0]} />
+        <Path d={LEGS[1]} />
+        <Circle cx={CX} cy={CY} r={50} />
+        <Circle cx={CX} cy={CY} r={13.5} />
+        <Circle cx={CX} cy={CY} r={3.3} />
+      </G>
+    </Svg>
+  )
+}

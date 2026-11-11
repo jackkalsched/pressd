@@ -5,7 +5,9 @@
 import { Link } from 'react-router-dom'
 import type { BinCard as Bin } from '../api'
 import CoverImg from './CoverImg'
+import PressdBinBadge from './PressdBinBadge'
 
+/** The 2×2 of a bin's first four covers. */
 export function BinMosaic({ covers, size }: { covers: string[]; size: number }) {
   const cell = size / 2
   return (
@@ -39,6 +41,7 @@ export default function BinCard({ bin, size = 104 }: { bin: Bin; size?: number }
     >
       <BinMosaic covers={bin.covers} size={size} />
       <div className="min-w-0 flex-1">
+        {bin.kind === 'curated' && <div className="mb-1.5"><PressdBinBadge width={38} stroke={1.3} color="var(--c-1c1917)" /></div>}
         <p className="m-0 font-display text-[20px] leading-tight font-bold text-(--c-1c1917)">{bin.title}</p>
         {bin.sourceName && (
           <p className="m-0 mt-1 text-[13px] font-medium text-(--c-57534e)">

@@ -10,7 +10,7 @@ A **bin** is an ordered collection of records **or** songs — never both in one
 kinds share one model:
 
 - **Curated** — made by Pressd from a published list. No owner. Credited to its source
-  ("Apple Music · 2024", linking out), shown under the source's own title. No artwork,
+  ("Apple Music · 2024", not linked), shown under the source's own title. No artwork,
   logos or editorial blurbs copied from the source: rank, title, artist and year only.
 - **User** — made by a person (v2): "for her", "My fall collection". Private, unlisted or
   published; optionally ranked; a note per entry.
@@ -118,7 +118,7 @@ Wikipedia's table. Never scraped at runtime.
   first entry (*my call*: a menu built to take more entries later; v1 holds Bins only).
 - **Bins index:** web `/bins`, mobile `app/bins/index.tsx` — the bin cards.
 - **Bin page:** web `/bins/:slug`, mobile `app/bins/[slug].tsx`.
-  - Header: cover, title in Playfair, the source line linking out, progress bar and
+  - Header: cover, title in Playfair, the source line, progress bar and
     "34 of 100 rated".
   - Sort pills **List / Pressd / For you** (For you only when predictions are unlocked;
     records without a prediction sort last) and **All / Not rated**.

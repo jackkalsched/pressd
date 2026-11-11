@@ -1,4 +1,11 @@
-// One bin — the Apple Music 100 Best Albums, say. Its records in the list's
+// One bin — the Apple Music 100 Best Albums, say. A banner across the top of
+// the screen projects the bin's 2×2 collage, darkened and faded, with the
+// bin's title over it in cream — dark enough that the cream reads whatever the
+// page is — under the Pressd-verified badge on Pressd's bins. Everything else
+// sits below it: the bin's icon, the source, your progress, the sort, and the
+// records.
+//
+// Its records in the list's
 // order (or by the Pressd average, or by your predicted score once picks are
 // unlocked), each with your score or where it sits in your library, or Rate
 // now / Add. The header holds how far through it you are.
@@ -7,11 +14,13 @@
 // otherwise as the community view by name, which handles a record nobody on
 // Pressd has rated yet.
 import { useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Alert, FlatList, LayoutAnimation, Linking, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { AccessibilityInfo, Alert, FlatList, LayoutAnimation, Pressable, RefreshControl, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { LinearGradient } from 'expo-linear-gradient'
+import { StatusBar } from 'expo-status-bar'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ArrowUpDown, ChevronDown } from 'lucide-react-native'
+import { ArrowLeft, ArrowUpDown, Bookmark, ChevronDown, Star } from 'lucide-react-native'
 import { addBinEntry, fetchBin, type BinEntry } from '../../lib/api'
 import { BIN_SORT_DIR, binSortLabel, sortBinEntries, type BinSort, type BinSortDir } from '@pressd/shared/binSort'
 import AnchoredMenu from '../../components/AnchoredMenu'
@@ -20,10 +29,16 @@ import { selection, success } from '../../lib/haptics'
 import { scrollToTop } from '../../lib/scrollToTop'
 import { BinMosaic, BinProgressBar } from '../../components/BinCard'
 import CoverImage from '../../components/CoverImage'
+import PressdBinBadge from '../../components/PressdBinBadge'
 import VinylSpinner from '../../components/VinylSpinner'
-import { colors, fonts, NUM_SCALE_CAP, radii, scoreColor, spacing, useColors } from '../../theme/tokens'
+import { colors, fonts, NUM_SCALE_CAP, radii, scoreColor, spacing, useColors, usePageRgb } from '../../theme/tokens'
 
-const COVER = 68
+const COVER = 120
+// The banner's height below the status bar, and the fade into the page at its foot.
+const BANNER = 280
+const FADE = 56
+// The title's cream, whatever the appearance: the banner under it is always dark.
+const CREAM = '#f9f8f6'
 
 // Reordering slides each row from its old place to its new one. Skipped under
 // Reduce Motion, where the list just changes.
@@ -39,7 +54,27 @@ function slideRows() {
   })
 }
 
-const STATUS_LABEL = { listening: 'Listening', to_listen: 'To Listen' } as const
+/** The faint hairline between two ranks. A fill, not a border, so it can take
+ *  the dynamic colour (borders can't, on iOS). */
+function RankRule() {
+  return <View style={styles.rule} />
+}
+
+/** A labelled score under a record: the Pressd average, yours, or your
+ *  predicted. `muted` is the one the order isn't about — smaller, in grey. */
+function Figure({ label, value, muted = false }: { label: string; value: number; muted?: boolean }) {
+  return (
+    <View style={styles.figure}>
+      <Text style={styles.figureLabel} maxFontSizeMultiplier={NUM_SCALE_CAP}>{label}</Text>
+      <Text
+        style={muted ? styles.figureMuted : [styles.figureValue, { color: scoreColor(value) }]}
+        maxFontSizeMultiplier={NUM_SCALE_CAP}
+      >
+        {value.toFixed(2)}
+      </Text>
+    </View>
+  )
+}
 
 /** "1998 · Pop" */
 function details(e: BinEntry): string {
@@ -50,6 +85,8 @@ export default function BinPage() {
   const tc = useColors()
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { width } = useWindowDimensions()
+  const pageRgb = usePageRgb()
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const { slug } = useLocalSearchParams<{ slug: string }>()
@@ -94,6 +131,11 @@ export default function BinPage() {
     })
   }
 
+  function openRate(albumId: number) {
+    selection()
+    router.push({ pathname: '/rate/[id]', params: { id: String(albumId) } })
+  }
+
   async function add(e: BinEntry, status: 'listening' | 'to_listen') {
     if (busy != null) return
     selection()
@@ -116,6 +158,19 @@ export default function BinPage() {
         <ArrowLeft size={22} color={tc.ink} />
       </Pressable>
     </View>
+  )
+  // Over the banner, and over the list once it scrolls: a dark disc keeps the
+  // cream arrow readable on either.
+  const floatingBack = (
+    <Pressable
+      onPress={() => router.back()}
+      hitSlop={10}
+      style={[styles.floatBack, { top: insets.top + 6 }]}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+    >
+      <ArrowLeft size={20} color={CREAM} />
+    </Pressable>
   )
 
   if (isLoading || isError || !data) {
@@ -143,26 +198,58 @@ export default function BinPage() {
     }
   }
 
+  const bannerH = BANNER + insets.top
   const header = (
-    <View style={styles.head}>
-      <BinMosaic covers={data.covers} size={132} />
-      <Text style={styles.title} onPress={() => scrollToTop(list)} accessibilityRole="button" accessibilityHint="Scrolls to the top">
-        {data.title}
-      </Text>
-      {data.sourceName && (
-        <Text
-          style={[styles.source, data.sourceUrl ? { color: tc.green } : null]}
-          onPress={data.sourceUrl ? () => Linking.openURL(data.sourceUrl!) : undefined}
-        >
-          {data.sourceName}{data.sourceYear ? ` · ${data.sourceYear}` : ''}
-        </Text>
-      )}
-      <View style={styles.progressRow}>
-        <BinProgressBar done={data.progress.rated} total={data.progress.total} />
+    <View>
+      {/* The banner: the collage, scaled to the screen's width and centred,
+          held low under a dark wash, fading into the page at its foot. */}
+      <View style={[styles.banner, { height: bannerH }]}>
+        <View style={[styles.collage, { width, height: width, top: (bannerH - width) / 2 }]}>
+          {[0, 1, 2, 3].map((i) =>
+            data.covers[i] ? (
+              <CoverImage key={i} url={data.covers[i]} displayPx={Math.ceil(width / 2)} style={{ width: width / 2, height: width / 2 }} />
+            ) : (
+              <View key={i} style={{ width: width / 2, height: width / 2 }} />
+            ),
+          )}
+        </View>
+        <View style={[StyleSheet.absoluteFill, styles.wash]} />
+        <LinearGradient
+          colors={[`rgba(${pageRgb},0)`, `rgba(${pageRgb},1)`]}
+          style={[styles.fade, { height: FADE }]}
+          pointerEvents="none"
+        />
+        <View style={[styles.titleBlock, { bottom: FADE - 4 }]}>
+          {data.kind === 'curated' && <PressdBinBadge width={48} />}
+          <Text
+            style={styles.title}
+            onPress={() => scrollToTop(list)}
+            accessibilityRole="header"
+            accessibilityHint="Scrolls to the top"
+            numberOfLines={3}
+          >
+            {data.title}
+          </Text>
+        </View>
       </View>
-      <Text style={styles.progressText} maxFontSizeMultiplier={NUM_SCALE_CAP}>
-        <Text style={styles.progressStrong}>{data.progress.rated}</Text> of {data.progress.total} rated
-      </Text>
+
+      <View style={styles.head}>
+        <View style={styles.about}>
+          <BinMosaic covers={data.covers} size={76} />
+          <View style={styles.aboutText}>
+            {data.sourceName && (
+              <Text style={styles.source} numberOfLines={1}>
+                {data.sourceName}{data.sourceYear ? ` · ${data.sourceYear}` : ''}
+              </Text>
+            )}
+            <View style={styles.progressRow}>
+              <BinProgressBar done={data.progress.rated} total={data.progress.total} />
+            </View>
+            <Text style={styles.progressText} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+              <Text style={styles.progressStrong}>{data.progress.rated}</Text> of {data.progress.total} rated
+            </Text>
+          </View>
+        </View>
       <View style={styles.controls}>
         <Pressable
           ref={sortRef}
@@ -179,12 +266,13 @@ export default function BinPage() {
           <ChevronDown size={14} color={tc.inkSecondary} />
         </Pressable>
       </View>
+      </View>
     </View>
   )
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      {back}
+    <View style={styles.screen}>
+      <StatusBar style="light" />
       <FlatList
         ref={list}
         data={rows}
@@ -192,65 +280,84 @@ export default function BinPage() {
         ListHeaderComponent={header}
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl }}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={tc.green} />}
-        renderItem={({ item: e }) => (
-          <Pressable onPress={() => open(e)} style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}>
-            {data.ranked && (
-              <Text style={styles.rank} maxFontSizeMultiplier={NUM_SCALE_CAP}>{e.rank ?? e.position + 1}</Text>
-            )}
-            {e.coverUrl ? (
-              <CoverImage url={e.coverUrl} displayPx={COVER} style={styles.cover} />
-            ) : (
-              <View style={[styles.cover, styles.coverEmpty]}>
-                <Text style={styles.coverInitial}>{e.albumName[0]?.toUpperCase()}</Text>
+        ItemSeparatorComponent={RankRule}
+        renderItem={({ item: e }) => {
+          const rated = e.mine?.status === 'rated' && e.mine.score != null
+          const saved = !!e.mine && !rated
+          return (
+            <Pressable onPress={() => open(e)} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
+              {/* The cover, with the list's number in its corner. */}
+              <View style={styles.coverWrap}>
+                {e.coverUrl ? (
+                  <CoverImage url={e.coverUrl} displayPx={COVER} style={styles.cover} />
+                ) : (
+                  <View style={[styles.cover, styles.coverEmpty]}>
+                    <Text style={styles.coverInitial}>{e.albumName[0]?.toUpperCase()}</Text>
+                  </View>
+                )}
+                {data.ranked && (
+                  <Text style={styles.rankText} maxFontSizeMultiplier={NUM_SCALE_CAP}>{e.rank ?? e.position + 1}</Text>
+                )}
               </View>
-            )}
-            <View style={styles.rowText}>
-              <Text style={styles.rowTitle} numberOfLines={1}>{e.albumName}</Text>
-              <Text style={styles.rowArtist} numberOfLines={1}>{e.artist}</Text>
-              {details(e) !== '' && <Text style={styles.rowDetails} numberOfLines={1}>{details(e)}</Text>}
-              {(e.pressdAvg != null || showPredicted(e)) && (
-                <Text style={styles.rowMeta} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>
-                  {e.pressdAvg != null && (
-                    <>PRESSD <Text style={[styles.rowMetaNum, { color: scoreColor(e.pressdAvg) }]}>{e.pressdAvg.toFixed(2)}</Text></>
+
+              <View style={styles.rowText}>
+                <Text style={styles.rowTitle} numberOfLines={2}>{e.albumName}</Text>
+                <Text style={styles.rowArtist} numberOfLines={1}>{e.artist}</Text>
+                {details(e) !== '' && <Text style={styles.rowDetails} numberOfLines={1}>{details(e)}</Text>}
+
+                <View style={styles.rowFoot}>
+                  <View style={styles.figures}>
+                    {/* Pressd's order leads with the Pressd average and greys
+                        yours; every other order leads with yours. */}
+                    {sort === 'pressd' ? (
+                      <>
+                        {e.pressdAvg != null && <Figure label="PRESSD" value={e.pressdAvg} />}
+                        {rated && <Figure label="YOU" value={e.mine!.score!} muted />}
+                      </>
+                    ) : (
+                      <>
+                        {rated && <Figure label="YOU" value={e.mine!.score!} />}
+                        {!rated && showPredicted(e) && <Figure label="PREDICTED" value={e.predictedScore!} />}
+                        {e.pressdAvg != null && <Figure label="PRESSD" value={e.pressdAvg} muted />}
+                      </>
+                    )}
+                  </View>
+                  {!rated && (e.addable || saved) && (
+                    busy === e.id ? <VinylSpinner size={24} /> : (
+                      <View style={styles.actions}>
+                        <Pressable
+                          onPress={() => (e.mine ? openRate(e.mine.id) : add(e, 'listening'))}
+                          hitSlop={8}
+                          style={({ pressed }) => [styles.iconBtn, { borderColor: tc.border }, pressed && { opacity: 0.6 }]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Rate ${e.albumName} now`}
+                        >
+                          <Star size={19} color={tc.ink} strokeWidth={2} />
+                        </Pressable>
+                        <Pressable
+                          onPress={() => (e.mine ? open(e) : add(e, 'to_listen'))}
+                          hitSlop={8}
+                          style={({ pressed }) => [
+                            styles.iconBtn,
+                            { borderColor: saved ? tc.green : tc.border },
+                            saved && { backgroundColor: tc.greenSoft },
+                            pressed && { opacity: 0.6 },
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel={saved ? `${e.albumName} is in your library` : `Save ${e.albumName} to your library`}
+                        >
+                          <Bookmark size={19} color={saved ? tc.green : tc.ink} fill={saved ? tc.green : 'none'} strokeWidth={2} />
+                        </Pressable>
+                      </View>
+                    )
                   )}
-                  {e.pressdAvg != null && showPredicted(e) && '   '}
-                  {showPredicted(e) && e.predictedScore != null && (
-                    <>PREDICTED <Text style={[styles.rowMetaNum, { color: scoreColor(e.predictedScore) }]}>{e.predictedScore.toFixed(2)}</Text></>
-                  )}
-                </Text>
-              )}
-            </View>
-            {e.mine?.status === 'rated' && e.mine.score != null ? (
-              <Text style={[styles.score, { color: scoreColor(e.mine.score) }]} maxFontSizeMultiplier={NUM_SCALE_CAP}>
-                {e.mine.score.toFixed(2)}
-              </Text>
-            ) : e.mine ? (
-              <Text style={styles.status}>{STATUS_LABEL[e.mine.status as keyof typeof STATUS_LABEL] ?? 'Rated'}</Text>
-            ) : e.addable ? (
-              busy === e.id ? <VinylSpinner size={22} /> : (
-                <View style={styles.actions}>
-                  <Pressable
-                    onPress={() => add(e, 'listening')}
-                    hitSlop={6}
-                    style={[styles.actBtn, { backgroundColor: tc.greenFill }]}
-                    accessibilityLabel={`Rate ${e.albumName} now`}
-                  >
-                    <Text style={styles.actPrimary}>Rate</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => add(e, 'to_listen')}
-                    hitSlop={6}
-                    style={[styles.actBtn, { borderColor: tc.border, borderWidth: StyleSheet.hairlineWidth * 2 }]}
-                    accessibilityLabel={`Add ${e.albumName} to To Listen`}
-                  >
-                    <Text style={[styles.actSecondary, { color: tc.ink }]}>Add</Text>
-                  </Pressable>
                 </View>
-              )
-            ) : null}
-          </Pressable>
-        )}
+              </View>
+            </Pressable>
+          )
+        }}
       />
+      {floatingBack}
       <AnchoredMenu
         visible={sortOpen}
         anchorRef={sortRef}
@@ -268,14 +375,30 @@ export default function BinPage() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
+  floatBack: {
+    position: 'absolute', left: spacing.lg, width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(12,10,8,0.42)',
+  },
+  banner: { overflow: 'hidden', backgroundColor: '#171615' },
+  collage: { position: 'absolute', left: 0, flexDirection: 'row', flexWrap: 'wrap', opacity: 0.9 },
+  // Low exposure: the covers stay legible as covers, but nothing in them is
+  // bright enough to fight the cream title.
+  wash: { backgroundColor: 'rgba(14,12,10,0.6)' },
+  fade: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   topBar: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xs },
   state: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   stateText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary },
 
-  head: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.lg },
-  title: { marginTop: spacing.lg, fontFamily: fonts.display, fontSize: 30, lineHeight: 36, color: colors.ink },
-  source: { marginTop: 4, fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.inkSecondary },
-  progressRow: { flexDirection: 'row', marginTop: spacing.lg },
+  head: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.lg },
+  titleBlock: { position: 'absolute', left: spacing.lg, right: spacing.lg, alignItems: 'flex-start', gap: spacing.md },
+  title: {
+    fontFamily: fonts.display, fontSize: 34, lineHeight: 40, color: CREAM,
+    textShadowColor: 'rgba(0,0,0,0.35)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 2 },
+  },
+  about: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  aboutText: { flex: 1, minWidth: 0 },
+  source: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.inkSecondary },
+  progressRow: { flexDirection: 'row', marginTop: spacing.md },
   progressText: { marginTop: spacing.sm, fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkSecondary },
   progressStrong: { fontFamily: fonts.bodyBold, color: colors.ink },
   controls: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg },
@@ -286,21 +409,29 @@ const styles = StyleSheet.create({
   sortLabel: { flexShrink: 1, fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkSecondary },
   sortValue: { fontFamily: fonts.bodyBold },
 
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: 10 },
-  rank: { width: 36, textAlign: 'right', fontFamily: fonts.display, fontSize: 22, color: colors.ink, fontVariant: ['tabular-nums'] },
-  cover: { width: COVER, height: COVER, borderRadius: radii.sm },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, paddingHorizontal: spacing.lg, paddingVertical: 14 },
+  coverWrap: { width: COVER, height: COVER },
+  rule: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg, backgroundColor: colors.hairline, opacity: 0.6 },
+  cover: { width: COVER, height: COVER, borderRadius: radii.md },
   coverEmpty: { backgroundColor: colors.inset, alignItems: 'center', justifyContent: 'center' },
-  coverInitial: { fontFamily: fonts.display, fontSize: 20, color: colors.inkTertiary },
-  rowText: { flex: 1, minWidth: 0 },
-  rowTitle: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.ink },
-  rowArtist: { marginTop: 2, fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary },
+  coverInitial: { fontFamily: fonts.display, fontSize: 28, color: colors.inkTertiary },
+  // The number printed on the cover's lower left, white with a soft shadow so
+  // it holds on a pale cover — literal colours, since it sits on the art.
+  rankText: {
+    position: 'absolute', left: 8, bottom: 2, fontFamily: fonts.displayBlack, fontSize: 38, lineHeight: 44,
+    color: '#ffffff', fontVariant: ['tabular-nums'],
+    textShadowColor: 'rgba(0,0,0,0.55)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 1 },
+  },
+  rowText: { flex: 1, minWidth: 0, alignSelf: 'stretch', justifyContent: 'center' },
+  rowTitle: { fontFamily: fonts.bodyBold, fontSize: 17, lineHeight: 21, color: colors.ink },
+  rowArtist: { marginTop: 3, fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary },
   rowDetails: { marginTop: 2, fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.inkTertiary },
-  rowMeta: { marginTop: 4, fontFamily: fonts.bodySemiBold, fontSize: 10.5, letterSpacing: 0.5, color: colors.inkTertiary },
-  rowMetaNum: { fontFamily: fonts.display, fontSize: 13, letterSpacing: 0 },
-  score: { fontFamily: fonts.display, fontSize: 23, fontVariant: ['tabular-nums'] },
-  status: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.inkSecondary },
-  actions: { flexDirection: 'row', gap: 6 },
-  actBtn: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: radii.pill },
-  actPrimary: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.onGreen },
-  actSecondary: { fontFamily: fonts.bodyBold, fontSize: 12.5 },
+  rowFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginTop: spacing.md },
+  figures: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.lg, flexShrink: 1 },
+  figure: { minWidth: 44 },
+  figureLabel: { fontFamily: fonts.bodySemiBold, fontSize: 9.5, letterSpacing: 0.8, color: colors.inkTertiary },
+  figureValue: { marginTop: 1, fontFamily: fonts.display, fontSize: 20, fontVariant: ['tabular-nums'] },
+  figureMuted: { marginTop: 2, fontFamily: fonts.display, fontSize: 14, color: colors.inkTertiary, fontVariant: ['tabular-nums'] },
+  actions: { flexDirection: 'row', gap: spacing.sm },
+  iconBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 })
