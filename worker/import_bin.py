@@ -40,6 +40,8 @@ from backend.new_releases import DEEZER_BASE, UA, _Pacer
 from backend.trackkeys import subject_key_album
 
 DEEZER_PER_SECOND = 6
+# Resolves that failed for want of a network, counted across the run.
+NETWORK_FAILURES = [0]
 ITUNES_PER_SECOND = 0.3
 ITUNES_SEARCH = "https://itunes.apple.com/search"
 
@@ -50,11 +52,15 @@ async def _deezer(client: httpx.AsyncClient, pacer: _Pacer, path: str, **params)
         try:
             resp = await client.get(f"{DEEZER_BASE}{path}", params=params)
             body = resp.json() if resp.is_success else {"error": resp.status_code}
-        except (httpx.HTTPError, ValueError):
+        except httpx.TransportError:
             body = {"error": "network"}
+        except (httpx.HTTPError, ValueError):
+            body = {"error": "bad response"}
         if not body.get("error"):  # rate limiting arrives as HTTP 200 with an error body
             return body
         await asyncio.sleep(2 * (attempt + 1))
+    if body.get("error") == "network":
+        NETWORK_FAILURES[0] += 1
     return {}
 
 
@@ -145,6 +151,7 @@ async def match_rows(rows: list[ListRow], overrides: dict[int, int], item_type: 
     dz, it = _Pacer(DEEZER_PER_SECOND), _Pacer(ITUNES_PER_SECOND)
     album_info: dict[int, dict] = {}
     out = []
+    network_failures = NETWORK_FAILURES
     async with httpx.AsyncClient(timeout=20, headers={"User-Agent": UA}) as client:
         for row in rows:
             source, hit, status = "deezer", None, "unmatched"
@@ -167,6 +174,11 @@ async def match_rows(rows: list[ListRow], overrides: dict[int, int], item_type: 
             if hit is not None:
                 try:
                     resolved = await resolve_album(source=source, id=str(hit["id"]))
+                except httpx.TransportError as e:
+                    # The network, not the record: a run that loses it mid-way
+                    # must not store a list of holes (main refuses to write).
+                    print(f"  #{row.rank} resolve failed: {type(e).__name__}: {e}")
+                    status, network_failures[0] = "unmatched", network_failures[0] + 1
                 except Exception as e:  # noqa: BLE001 — a failed resolve is an unmatched row, said so
                     print(f"  #{row.rank} resolve failed: {type(e).__name__}: {e}")
                     status = "unmatched"
@@ -263,6 +275,9 @@ def main() -> int:
     if args.dry_run:
         print("[import_bin] dry run: nothing written")
         return 0
+    if NETWORK_FAILURES[0]:
+        print(f"[import_bin] {NETWORK_FAILURES[0]} lookups lost the network: nothing written; run it again")
+        return 1
     bin_id = write(meta, matched)
     print(f"[import_bin] wrote bin {bin_id} ({meta.slug}), {len(matched)} entries")
     return 0

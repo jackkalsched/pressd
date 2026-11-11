@@ -598,7 +598,9 @@ compilation, the standard edition over deluxe / edited / anniversary, the list's
 within one, fewest tracks; never a single). Two Apple rows are pinned by hand
 (`overrides`: *Exile on Main St.*, *The Velvet Underground & Nico*); three are doubtful only
 because the credit differs (Ms. Lauryn Hill, Prince, Jimi Hendrix). An unmatched row is
-kept in place with nothing to add. Endpoints, all behind `current_user`: `GET /bins`
+kept in place with nothing to add. A run that loses the network for any lookup writes nothing
+and exits 1 (`NETWORK_FAILURES`): on 2026-11-11 a dropped connection mid-run stored the
+Rolling Stone bin with 134 holes until it was run again. Endpoints, all behind `current_user`: `GET /bins`
 (cards: the first four covers as a 2×2, the caller's `progress`), `GET /bins/{slug}`
 (each entry with `mine` `{id, status, score}`, `pressd_avg` / `pressd_raters` — the plain
 mean of rated copies, the community page's number — and `predicted_score` only when
