@@ -141,6 +141,10 @@ python song_score_model.py                   # retrain → song_score_model.pkl
 python -m worker.fill_covers [--dry-run]    # look again for every album copy with no cover (also daily in CI, fill-covers.yml)
 python -m worker.refresh_upcoming_releases [--dry-run]  # rebuild the upcoming-releases list (daily in CI, upcoming-releases.yml)
 python -m worker.set_cover ID URL [--dry-run]  # a cover by hand, for a record no catalog has: every copy gets it
+python -m worker.deep_stats ID|"name" [--user 1] [--out DIR] [--html]
+                                             # a 1080×1920 "deeper stats" PNG of one rated album, for the end of a
+                                             # review video; outside both apps, read-only, drawn by headless Chrome
+                                             # (default folder export/deep-stats/)
 python -m worker.import_bin data/bins/<slug>.csv [--dry-run] [--set RANK DEEZER_ID]
                                              # a list file into a curated bin, matched on Deezer (iTunes fallback);
                                              # the dry run lists doubtful rows; --set pins one, kept in the JSON
@@ -157,6 +161,21 @@ python -m worker.taste_health --dry-run      # taste overlap's health row, read-
 ops/launchd/install.sh [--ref B] [--uninstall]  # 00:30 local + at login; preflights *under launchd* first
 python -m worker.audio_health                # the check GitHub runs: exit 1 if stale or failed
 ```
+
+**The deeper-stats card (`worker/deep_stats.py`)** is Jack's end card for album-review
+videos — a creator tool, deliberately in neither app. Run it from the repo root (it needs
+`.env`, Google Chrome in `/Applications`, and a connection for the fonts and cover):
+`python3.13 -m worker.deep_stats "kid a"` searches user 1's rated albums by name (a name
+matching several lists them with ids and exits 1; pass the id instead), and prints the
+PNG's path, `export/deep-stats/<album>.png` (`export/` is untracked). The card: cover,
+title, bang and skip rates (AlbumDetail's figures) and the score; every track as a bar
+with its score and a BANG/SKIP tag in a right-aligned column (`BANG`/`SKIP` restate
+`shared/src/types.ts`'s thresholds — change both), a green ▲ on the favourite
+(`top_song_id`, else the first top score) and a red ▼ on the least, and a dashed line at
+the owner's song average over their whole library; the album's percentile on a density
+curve of the owner's album scores, the share below shaded; and the four factors as
+histograms of the owner's values with this album's marked. Distributions leave out
+singles, as the library does. Playfair's own old-style numerals are kept on purpose.
 
 **The nightly job runs from a deploy clone, not this working copy.** macOS privacy
 protection (TCC) denies launchd jobs access to `~/Desktop` — `Operation not permitted`,
