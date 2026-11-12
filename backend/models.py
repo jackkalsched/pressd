@@ -799,3 +799,8 @@ class BinEntry(SQLModel, table=True):
     # Song bins (a later phase): the song, and its Track once one exists.
     song_title: Optional[str] = None
     track_id: Optional[int] = Field(default=None, foreign_key="track.id")
+
+
+# One set of genre tags per record, across every copy (backend/genre_sync.py):
+# registered here so every session that can write an Album carries the rule.
+from . import genre_sync  # noqa: E402,F401
