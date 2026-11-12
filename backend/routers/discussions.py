@@ -34,6 +34,7 @@ from ..threads import display_for, get_or_create_thread, thread_summary
 from ..push import send_push, tokens_for_user
 from ..trackkeys import subject_key_album
 from ..threads import SPOILER_FLAGS_TO_BLUR
+from ..blocks import BLOCKED_SQL, is_blocked
 
 router = APIRouter(tags=["discussions"])
 
@@ -209,7 +210,7 @@ def list_posts(
     # Keyset for newest, offset for the two ranked sorts: a rank is not
     # monotonic, so a cursor on it drifts between pages. These are top-of-thread
     # views that are rarely deep-paged, and correctness of page 1 matters more.
-    where_extra, params = "", {"t": thread_id, "lim": PAGE_SIZE + 1}
+    where_extra, params = "", {"t": thread_id, "lim": PAGE_SIZE + 1, "blk_me": user.id}
     offset = 0
     if sort == "newest" and cursor:
         try:
@@ -232,7 +233,7 @@ def list_posts(
                  WHERE pr.post_id = p.id AND pr.reason = 'spoiler') AS spoiler_flags
         FROM post p
         LEFT JOIN pressuser u ON u.id = p.user_id
-        WHERE p.thread_id = :t AND p.parent_id IS NULL{where_extra}
+        WHERE p.thread_id = :t AND p.parent_id IS NULL{where_extra}{BLOCKED_SQL.format(col="p.user_id")}
           -- Hidden once enough distinct people report it, and always hidden
           -- from anyone who reported it themselves (§4.3).
           AND (SELECT COUNT(*) FROM postreport pr WHERE pr.post_id = p.id
@@ -340,7 +341,7 @@ def create_reply(
     # Tokens are read here, while the session is open; the send runs after the
     # response so a slow call to Google cannot hold up the reply, and a failed
     # one cannot fail it.
-    if root.user_id is not None and root.user_id != user.id:
+    if root.user_id is not None and root.user_id != user.id and not is_blocked(session, root.user_id, user.id):
         tokens = tokens_for_user(session, root.user_id, "reply")
         if tokens:
             background.add_task(
@@ -380,8 +381,8 @@ def list_replies(
                (SELECT COUNT(*) FROM postreport pr WHERE pr.post_id = p.id
                   AND pr.reason = 'spoiler') AS spoiler_flags
         FROM post p LEFT JOIN pressuser u ON u.id = p.user_id
-        WHERE p.parent_id = :p ORDER BY p.created_at ASC
-    """), {"p": post_id}).fetchall()
+        WHERE p.parent_id = :p""" + BLOCKED_SQL.format(col="p.user_id") + """ ORDER BY p.created_at ASC
+    """), {"p": post_id, "blk_me": user.id}).fetchall()
     authors = [r[1] for r in rows if r[1] is not None]
     scores = _author_scores(session, thread, authors)
     votes: dict[int, int] = {}
@@ -644,7 +645,7 @@ def discussion_feed(
         WHERE status = 'accepted' AND (user_id_a = :me OR user_id_b = :me)
     """), {"me": user.id}).fetchall()]
 
-    params: dict = {"me": user.id, "lim": limit + 1}
+    params: dict = {"me": user.id, "lim": limit + 1, "blk_me": user.id}
     # An empty IN () is a syntax error, so the friends branch drops out entirely
     # for someone with no friends rather than being handed an empty tuple.
     friends_clause = ""
@@ -671,7 +672,7 @@ def discussion_feed(
         JOIN pressuser u ON u.id = p.user_id
         LEFT JOIN post parent ON parent.id = p.parent_id
         WHERE p.deleted_at IS NULL AND p.kind <> 'system' AND p.user_id <> :me
-          AND ({friends_clause}parent.user_id = :me)
+          AND ({friends_clause}parent.user_id = :me){BLOCKED_SQL.format(col="p.user_id")}
           {where_extra}
         ORDER BY p.id DESC
         LIMIT :lim

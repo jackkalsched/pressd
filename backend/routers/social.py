@@ -7,6 +7,7 @@ from ..database import get_session
 from ..deps import current_user
 from ..models import Album, Comment, Friendship, Like, PressUser, Song
 from ..scoring import top_bottom_songs
+from ..blocks import blocked_ids
 
 router = APIRouter(prefix="/social", tags=["social"])
 
@@ -141,7 +142,10 @@ def get_feed(
         .order_by(Album.recommended_at.desc())
         .limit(50)
     ).all()
+    hidden = blocked_ids(session, user_id)
     for album in recommended:
+        if album.recommended_by in hidden:
+            continue
         recommender = session.get(PressUser, album.recommended_by)
         if not recommender:
             continue
@@ -267,6 +271,9 @@ def get_top_reviews(
         .order_by(Album.review_at.desc())
         .limit(300)
     ).all()
+    # Not anyone blocked either way with the caller (backend/blocks.py).
+    hidden = blocked_ids(session, user.id)
+    reviewed = [a for a in reviewed if a.user_id not in hidden]
     if not reviewed:
         return {"day": None, "reviews": []}
 

@@ -50,6 +50,7 @@ class FakeStore:
     rollbacks: int = 0
     friends: dict = field(default_factory=dict)             # uid -> accepted friend ids
     rels: dict = field(default_factory=dict)                # other uid -> friends / sent / received
+    blocks: dict = field(default_factory=dict)              # uid -> ids blocked either way
 
     def owed_sheets(self, me):
         return [s for s in self.sheets if s.user_id == me and s.status == "owed"]
@@ -59,6 +60,9 @@ class FakeStore:
 
     def album(self, album_id):
         return self.albums.get(album_id)
+
+    def blocked(self, me):
+        return set(self.blocks.get(me, ()))
 
     def friends_or_pending(self, me):
         return set(self.excluded)
@@ -213,6 +217,13 @@ def test_no_sheet_when_nobody_else_rated_it():
     assert store.refreshed == []
 
 
+def test_no_sheet_when_only_someone_blocked_rated_it():
+    # Blocked either way: the pair never meet on the people sheet.
+    store = FakeStore(sheets=[sheet(1, 10, hours_ago=1)], albums={10: album(10, 1), 20: album(20, 2)},
+                      blocks={1: {2}})
+    assert serve_sheet(store, 1, NOW, random.Random(0)) is None
+
+
 def test_no_sheet_when_only_friends_rated_it():
     store = FakeStore(sheets=[sheet(1, 10, hours_ago=1)], albums={10: album(10, 1), 20: album(20, 2)},
                       excluded={2})
@@ -295,6 +306,11 @@ def test_friends_list_is_the_viewers_overlap_highest_first():
 def test_own_friends_list():
     store = FakeStore(friends={1: [7, 8]}, percents={8: 70.0})
     assert [(r["user"]["id"], r["percent"]) for r in friends_overlap(store, 1, 1)] == [(8, 70), (7, 50)]
+
+
+def test_a_friends_list_leaves_out_anyone_blocked():
+    store = FakeStore(friends={2: [7, 8]}, blocks={1: {8}})
+    assert [r["user"]["id"] for r in friends_overlap(store, 1, 2)] == [7]
 
 
 def test_ties_break_on_name_and_no_friends_touches_nothing():

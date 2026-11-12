@@ -46,6 +46,7 @@ from sqlalchemy import or_, update
 from sqlmodel import Session, select
 
 from ..database import get_session
+from ..blocks import blocked_ids
 from ..deps import authorize_view, current_user, public_user
 from ..models import Album, Friendship, OverlapEvent, OverlapSheet, PressUser, Song, TasteOverlap
 from ..scoring import top_bottom_songs
@@ -140,7 +141,8 @@ def serve_sheet(store, me: int, now: datetime, rng: random.Random) -> dict | Non
 
 
 def build_sheet(store, me: int, sheet, album, rng: random.Random) -> dict | None:
-    excluded = store.friends_or_pending(me)
+    # Never a friend, a pending request, or anyone blocked either way.
+    excluded = set(store.friends_or_pending(me)) | store.blocked(me)
     raters = store.record_raters(album.subject_key, me) if album.subject_key else {}
     people = _eligible(sorted(raters), excluded, me)
     if not people:
@@ -205,7 +207,8 @@ def friends_overlap(store, me: int, owner: int) -> list[dict]:
     Each row also says where the viewer stands with that friend
     (`relationship`: self / friends / sent / received / none), so someone
     else's list can offer Add, Requested or Accept beside each person."""
-    ids = store.friend_ids(owner)
+    hidden = store.blocked(me)
+    ids = [u for u in store.friend_ids(owner) if u not in hidden]
     others = [u for u in ids if u != me]
     if others:
         _refresh(store, me, set(others), mark_fresh=False)
@@ -243,6 +246,10 @@ class Store:
 
     def album(self, album_id: int) -> Album | None:
         return self.session.get(Album, album_id)
+
+    def blocked(self, me: int) -> set[int]:
+        """Everyone blocked either way with `me` (backend/blocks.py)."""
+        return blocked_ids(self.session, me)
 
     def friends_or_pending(self, me: int) -> set[int]:
         rows = self.session.exec(select(Friendship.user_id_a, Friendship.user_id_b).where(

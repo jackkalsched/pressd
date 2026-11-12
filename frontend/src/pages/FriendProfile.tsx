@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, Clock, Link2, MapPin, MoreHorizontal, Pencil, Settings, UserMinus, UserPlus } from 'lucide-react'
-import { acceptFriendRequest, addFriend, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, fetchOverlap, getInviteLink, removeFriend } from '../api'
+import { ArrowLeft, Ban, Check, Clock, Link2, MapPin, MoreHorizontal, Pencil, Settings, UserMinus, UserPlus } from 'lucide-react'
+import { acceptFriendRequest, addFriend, blockUser, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, fetchOverlap, getInviteLink, removeFriend, unblockUser } from '../api'
 import { useUser } from '../context/UserContext'
 import Library from './Library'
 import { stagger } from '../lib/format'
@@ -47,6 +47,23 @@ export default function FriendProfile() {
   const [sheet, setSheet] = useState<SettingsMode | null>(null)
   const [shared, setShared] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  async function toggleBlock() {
+    const name = profile?.name ?? 'this person'
+    const blocking = !profile?.blocked_by_me
+    if (blocking && !window.confirm(`Block ${name}? You won’t see each other’s reviews or activity, and you won’t be friends anymore. You can unblock them in Settings.`)) return
+    try {
+      await (blocking ? blockUser(fid) : unblockUser(fid))
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['profile', fid] }),
+        queryClient.invalidateQueries({ queryKey: ['blocked'] }),
+        queryClient.invalidateQueries({ queryKey: ['friends'] }),
+        queryClient.invalidateQueries({ queryKey: ['friend-requests'] }),
+        queryClient.invalidateQueries({ queryKey: ['feed'] }),
+      ])
+    } catch {
+      window.alert('That didn’t go through. Check your connection and try again.')
+    }
+  }
   // Removing a friend always asks first, from the Friends button or the menu.
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
@@ -384,6 +401,15 @@ export default function FriendProfile() {
                     <div className="menu-in absolute right-0 top-14 z-30 min-w-[200px] overflow-hidden rounded-2xl border border-(--c-ece5da) bg-(--c-fff) py-1.5 shadow-[0_18px_40px_-18px_rgba(40,25,10,0.45)]">
                       <button onClick={copyProfileLink} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[14px] font-medium text-(--c-1c1917) hover:bg-(--c-f5f0e8)">
                         <Link2 size={16} className="text-(--c-8a7f72)" /> Copy profile link
+                      </button>
+                      {/* Block / Unblock (backend/blocks.py): the two stop seeing
+                          each other's reviews and social activity, and any
+                          friendship ends. Ratings still count. */}
+                      <button
+                        onClick={() => { setMenuOpen(false); toggleBlock() }}
+                        className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[14px] font-medium text-(--c-b1542f) hover:bg-(--c-f5f0e8)"
+                      >
+                        <Ban size={16} /> {profile?.blocked_by_me ? 'Unblock' : 'Block'}
                       </button>
                       {isFriend && (
                         <button

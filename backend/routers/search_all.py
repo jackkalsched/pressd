@@ -24,6 +24,7 @@ from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from ..database import get_session
+from ..blocks import blocked_ids
 from ..deps import current_user
 from ..models import Album, PressUser, Song, Track
 from ..search_rank import (
@@ -138,7 +139,8 @@ def search_all(
             .limit(PEOPLE_CAP)
         ).all()
         rel = users._relationships(session, me.id)
-        out["people"] = people_group(q, [users._with_relationship(u, rel) for u in found], limit)
+        hidden = blocked_ids(session, me.id)
+        out["people"] = people_group(q, [users._with_relationship(u, rel) for u in found if u.id not in hidden], limit)
 
     if "albums" in wanted or "artists" in wanted:
         where = or_(

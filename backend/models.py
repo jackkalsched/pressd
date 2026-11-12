@@ -801,6 +801,19 @@ class BinEntry(SQLModel, table=True):
     track_id: Optional[int] = Field(default=None, foreign_key="track.id")
 
 
+
+class Block(SQLModel, table=True):
+    """One person blocking another (backend/blocks.py). Either way round, the
+    two stop seeing each other's reviews and social activity — feeds, threads,
+    search, the people sheet — and can't friend or recommend to each other.
+    Their ratings still count everywhere: charts, averages, the Pressd scores.
+    A new table, so create_all builds it and the last migration turns RLS on."""
+    __table_args__ = (UniqueConstraint("blocker_id", "blocked_id"),)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    blocker_id: int = Field(foreign_key="pressuser.id", index=True)
+    blocked_id: int = Field(foreign_key="pressuser.id", index=True)
+    created_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
+
 # One set of genre tags per record, across every copy (backend/genre_sync.py):
 # registered here so every session that can write an Album carries the rule.
 from . import genre_sync  # noqa: E402,F401

@@ -20,7 +20,9 @@ from ..usernames import USERNAME_RE, USERNAME_RULE
 from ..phone import PhoneNotConfigured, PhoneTokenInvalid, phone_hash, verified_number
 from ..push import send_push, tokens_for_user
 from ..deps import current_user, optional_user, authorize_view, auth_response, own_user, public_user
+from ..blocks import blocked_ids, is_blocked
 from ..models import (
+    Block,
     PressUser,
     PushToken,
     Invite,
@@ -284,7 +286,8 @@ def match_contacts(
         )
     ).all()
     rel = _relationships(session, current.id)
-    rows = [{**_with_relationship(u, rel), "phone_index": by_hash[u.phone_hash]} for u in found]
+    hidden = blocked_ids(session, current.id)
+    rows = [{**_with_relationship(u, rel), "phone_index": by_hash[u.phone_hash]} for u in found if u.id not in hidden]
     # People you can still act on first: requests to answer, then new faces,
     # then the ones already sent or already friends.
     order = lambda r: (not r["request_received"], r["already_friends"] or r["request_sent"], r["name"].lower())
@@ -309,7 +312,8 @@ def search_users(
     ).all()
 
     rel = _relationships(session, exclude_user_id)
-    return [_with_relationship(u, rel) for u in users]
+    hidden = blocked_ids(session, exclude_user_id)
+    return [_with_relationship(u, rel) for u in users if u.id not in hidden]
 
 
 @router.post("/")
@@ -739,6 +743,9 @@ def delete_own_account(
     run("DELETE FROM overlapevent WHERE user_id = :u OR target_user_id = :u")
     run("DELETE FROM overlapsheet WHERE user_id = :u")
 
+    # Blocks either way round.
+    run("DELETE FROM block WHERE blocker_id = :u OR blocked_id = :u")
+
     # Bins they made, and everything in them. Pressd's own have no owner.
     run("DELETE FROM binentry WHERE bin_id IN (SELECT id FROM bin WHERE owner_id = :u)")
     run("DELETE FROM bin WHERE owner_id = :u")
@@ -1046,6 +1053,63 @@ def delete_banner(
     return {"ok": True}
 
 
+@router.get("/me/blocked")
+def list_blocked(
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """The people the caller has blocked, most recent first, for Settings'
+    Blocked users list. Only those the caller blocked — never who blocked them."""
+    rows = session.exec(
+        select(Block, PressUser)
+        .join(PressUser, PressUser.id == Block.blocked_id)
+        .where(Block.blocker_id == user.id)
+        .order_by(Block.created_at.desc())
+    ).all()
+    return [{**public_user(u), "blocked_at": b.created_at.isoformat() if b.created_at else None} for b, u in rows]
+
+
+@router.post("/{user_id}/block")
+def block_user(
+    user_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Block someone (backend/blocks.py): the two stop seeing each other's
+    reviews and social activity, and any friendship or request between them
+    ends. Their ratings keep counting everywhere."""
+    if user_id == user.id:
+        raise HTTPException(status_code=400, detail="You can't block yourself")
+    if not session.get(PressUser, user_id):
+        raise HTTPException(status_code=404, detail="User not found")
+    exists = session.exec(
+        select(Block.id).where(Block.blocker_id == user.id, Block.blocked_id == user_id)
+    ).first()
+    if exists is None:
+        session.add(Block(blocker_id=user.id, blocked_id=user_id))
+    a, b = min(user.id, user_id), max(user.id, user_id)
+    for f in session.exec(select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)).all():
+        session.delete(f)
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()  # a double tap raced itself; the block is there
+    return {"ok": True, "blocked": True}
+
+
+@router.delete("/{user_id}/block")
+def unblock_user(
+    user_id: int,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Lift a block the caller placed. A friendship it ended stays ended."""
+    for b in session.exec(select(Block).where(Block.blocker_id == user.id, Block.blocked_id == user_id)).all():
+        session.delete(b)
+    session.commit()
+    return {"ok": True, "blocked": False}
+
+
 @router.get("/{user_id}/profile")
 def get_profile(
     user_id: int,
@@ -1061,7 +1125,12 @@ def get_profile(
     user = session.get(PressUser, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return _profile_payload(session, user)
+    # Whether the caller has blocked them, so the page offers Unblock rather
+    # than Block; never whether they've blocked the caller.
+    blocked = session.exec(
+        select(Block.id).where(Block.blocker_id == current.id, Block.blocked_id == user_id)
+    ).first() is not None
+    return {**_profile_payload(session, user), "blocked_by_me": blocked}
 
 
 @router.get("/{user_id}/friends")
@@ -1081,7 +1150,8 @@ def list_friends(
         (f.user_id_b if f.user_id_a == user_id else f.user_id_a)
         for f in friendships
     ]
-    friends = [session.get(PressUser, fid) for fid in friend_ids]
+    hidden = blocked_ids(session, user.id)
+    friends = [session.get(PressUser, fid) for fid in friend_ids if fid not in hidden]
     return [{"id": u.id, "name": u.name, "avatar_url": u.avatar_url, "bio": u.bio}
             for u in friends if u]
 
@@ -1120,6 +1190,8 @@ def add_friend(
     for uid in [user_id, friend_id]:
         if not session.get(PressUser, uid):
             raise HTTPException(status_code=404, detail="User not found")
+    if is_blocked(session, user_id, friend_id):
+        raise HTTPException(status_code=403, detail="You can't add this person")
     a, b = min(user_id, friend_id), max(user_id, friend_id)
     existing = session.exec(
         select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)

@@ -1673,6 +1673,8 @@ export interface Profile {
   shelf: (ProfileAlbumPick | null)[]
   favorite_album: ProfileAlbumPick | null
   favorite_song: ProfileSongPick | null
+  /** Whether you've blocked them (never whether they've blocked you). */
+  blocked_by_me?: boolean
 }
 
 /** How many albums a shelf holds (SHELF_SIZE in backend/routers/users.py). */
@@ -1826,6 +1828,41 @@ export async function deleteBanner(userId: number): Promise<void> {
 /** Permanently erase the signed-in account and everything attached to it.
  *  Irreversible — callers must confirm with the user first. The session token
  *  is dead the moment this returns, so sign out immediately after. */
+// ── Blocking ──────────────────────────────────────────────────────────────────
+// Blocking someone stops the two of you seeing each other's reviews and social
+// activity, and ends any friendship between you; ratings still count everywhere
+// (backend/blocks.py).
+
+export interface BlockedUser {
+  id: number
+  name: string
+  avatarUrl: string | null
+  bio: string | null
+  blockedAt: string | null
+}
+
+export async function fetchBlockedUsers(): Promise<BlockedUser[]> {
+  const res = await apiFetch(`${BASE()}/users/me/blocked`)
+  if (!res.ok) throw new Error('Failed to load blocked users')
+  return ((await res.json()) as Record<string, unknown>[]).map((u) => ({
+    id: u.id as number,
+    name: u.name as string,
+    avatarUrl: (u.avatar_url as string | null) ?? null,
+    bio: (u.bio as string | null) ?? null,
+    blockedAt: (u.blocked_at as string | null) ?? null,
+  }))
+}
+
+export async function blockUser(userId: number): Promise<void> {
+  const res = await apiFetch(`${BASE()}/users/${userId}/block`, { method: 'POST' })
+  if (!res.ok) throw new Error('Could not block')
+}
+
+export async function unblockUser(userId: number): Promise<void> {
+  const res = await apiFetch(`${BASE()}/users/${userId}/block`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Could not unblock')
+}
+
 export async function deleteOwnAccount(): Promise<void> {
   const res = await apiFetch(`${BASE()}/users/me`, { method: 'DELETE' })
   if (!res.ok) {

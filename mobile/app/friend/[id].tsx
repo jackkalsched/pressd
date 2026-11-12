@@ -7,6 +7,7 @@
 // the profile endpoint. Web's FriendProfile.tsx does the same.
 import { useMemo, useRef, useState } from 'react'
 import {
+  ActionSheetIOS,
   Alert,
   Animated,
   FlatList,
@@ -21,7 +22,7 @@ import FriendsSheet from '../../components/FriendsSheet'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, ChevronDown, Clock, Search, UserPlus, X } from 'lucide-react-native'
+import { ArrowLeft, Check, ChevronDown, Clock, MoreHorizontal, Search, UserPlus, X } from 'lucide-react-native'
 import {
   fetchFriends,
   fetchFriendRequests,
@@ -34,6 +35,8 @@ import {
   fetchArtistStats,
   fetchScatterData,
   fetchOverlap,
+  blockUser,
+  unblockUser,
 } from '../../lib/api'
 import { songScoreColor, type Album } from '@pressd/shared/types'
 import { useAuth } from '../../lib/auth'
@@ -221,6 +224,46 @@ export default function FriendProfile() {
     }
   }
 
+  // Block / Unblock (backend/blocks.py): the two stop seeing each other's
+  // reviews and social activity, and any friendship ends. Ratings still count.
+  const blocked = !!profile?.blocked_by_me
+  function onMore() {
+    if (!person) return
+    const label = blocked ? `Unblock ${person.name}` : `Block ${person.name}`
+    ActionSheetIOS.showActionSheetWithOptions(
+      { options: [label, 'Cancel'], destructiveButtonIndex: blocked ? undefined : 0, cancelButtonIndex: 1 },
+      (i) => {
+        if (i !== 0) return
+        if (blocked) {
+          changeBlock(() => unblockUser(fid))
+          return
+        }
+        Alert.alert(
+          `Block ${person.name}?`,
+          'You won’t see each other’s reviews or activity, and you won’t be friends anymore. You can unblock them in Settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Block', style: 'destructive', onPress: () => changeBlock(() => blockUser(fid)) },
+          ],
+        )
+      },
+    )
+  }
+  async function changeBlock(change: () => Promise<unknown>) {
+    try {
+      await change()
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['profile', fid] }),
+        queryClient.invalidateQueries({ queryKey: ['blocked'] }),
+        queryClient.invalidateQueries({ queryKey: ['friends'] }),
+        queryClient.invalidateQueries({ queryKey: ['friend-requests'] }),
+        queryClient.invalidateQueries({ queryKey: ['feed'] }),
+      ])
+    } catch {
+      Alert.alert('That didn\u2019t go through', 'Check your connection and try again.')
+    }
+  }
+
   function openArtist(name: string) {
     router.push({ pathname: '/artist/[name]', params: { name, userId: String(fid) } })
   }
@@ -344,6 +387,11 @@ export default function FriendProfile() {
                 <OverlapPill overlap={overlap} me={user} />
               ) : undefined}
               profile={profile}
+              bannerAction={isSelf ? undefined : (
+                <Pressable onPress={onMore} hitSlop={8} style={styles.moreBtn} accessibilityLabel="More options">
+                  <MoreHorizontal size={18} color={tc.ink} />
+                </Pressable>
+              )}
               action={
                 isSelf ? undefined : (
                   // Adding someone is what this page should invite, so it gets
@@ -618,4 +666,10 @@ const styles = StyleSheet.create({
   ratingScore: { fontFamily: fonts.bodyBold, fontSize: 17 },
 
   empty: { fontFamily: fonts.body, fontSize: 14, color: colors.inkTertiary, textAlign: 'center', marginTop: spacing.xxl },
+  // The banner's corner button, as your own profile's pencil and gear are:
+  // backed in the page colour so it reads on any picture.
+  moreBtn: {
+    width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.bg,
+  },
 })
