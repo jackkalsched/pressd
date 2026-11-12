@@ -19,6 +19,8 @@ import Thread from './pages/Thread'
 import Join from './pages/Join'
 import LandingPage from './pages/LandingPage'
 import Privacy from './pages/Privacy'
+import Terms from './pages/Terms'
+import Guidelines from './pages/Guidelines'
 import PublicCharts from './pages/PublicCharts'
 import Charts from './pages/Charts'
 import HowItWorks from './pages/HowItWorks'
@@ -122,6 +124,8 @@ export default function App() {
               reviewers can open while signed out. Must stay above the catch-all,
               which sends everything else through ProtectedRoutes. */}
           <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/guidelines" element={<Guidelines />} />
           {/* Reachable from the landing page without an account. Must stay
               above the catch-all, or ProtectedRoutes bounces visitors home. */}
           <Route path="/charts" element={<ChartsRoute />} />

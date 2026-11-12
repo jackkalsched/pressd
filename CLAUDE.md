@@ -75,12 +75,12 @@ PLAN_*.md         gitignored design docs; code cites them by section
 |---|---|---|
 | `backend/main.py` | CORS, 17 routers, `init_db()` on startup, `/health` | 46 |
 | `backend/database.py` | engine + **the entire migration system** (§3) | 274 |
-| `backend/models.py` | 31 SQLModel tables | 722 |
+| `backend/models.py` | 32 SQLModel tables | 722 |
 | `backend/deps.py` | `current_user`, `viewable_user_id`, `thread_access` — the auth invariant | 148 |
 | `backend/scoring.py` | framework 1: the user's own album score | 267 |
 | `backend/global_rating.py` | framework 2: the userbase-pooled rating | 155 |
 | `backend/trackkeys.py` | normalization keys; pure stdlib, imported everywhere | 163 |
-| `backend/routers/` | 17 routers, **125 endpoints** | 8,357 |
+| `backend/routers/` | 17 routers, **128 endpoints** | 8,357 |
 | `worker/` | `nightly_predict`, `catalog_predict`, `artist_clusters`, `audio_ingest`, `refresh_new_releases`, `taste_nightly`, `taste_health`, … | 3,449 |
 | `theme_predictor/` | `predict_single`, `personalize`, `global_factors`, `corpus`, … | 1,896 |
 | `shared/src/api.ts` | the single API client, 111 exported functions | 2,147 |
@@ -506,7 +506,7 @@ spend a request on every open.
 
 ## 5. Module reference
 
-**`backend/models.py`** — 31 tables (`Bin` and `BinEntry` for bins, §5; five for the taste overlap: `TasteItem`, `TasteUser`, `TasteOverlap`, `OverlapSheet`, `OverlapEvent`; the first three written nightly by `worker/taste_nightly.py` and for one caller by the live path, all five served by `routers/overlap.py`). `Album` is a **per-user copy**, not a record
+**`backend/models.py`** — 32 tables (`Block` for blocking, §5; `Bin` and `BinEntry` for bins, §5; five for the taste overlap: `TasteItem`, `TasteUser`, `TasteOverlap`, `OverlapSheet`, `OverlapEvent`; the first three written nightly by `worker/taste_nightly.py` and for one caller by the live path, all five served by `routers/overlap.py`). `Album` is a **per-user copy**, not a record
 (`:89`); anything "global" must pool copies. `Song` carries `track_id` into the global
 `Track`, so audio is analyzed once and shared (`:258-260`) — that split is what makes
 the ML affordable. A mapper event keeps `Album.subject_key` in step with artist+name on
@@ -644,7 +644,7 @@ the collage's lower-right corner (`BinMosaic`'s `pressd`); web's sidebar **Bins*
 list, two columns at `2xl`);
 iPhone's **side menu** (`components/SideMenu.tsx`, the ≡ beside For You's search icon,
 sliding in from the right, the button's side, with its own ≡ landing exactly where the
-masthead's was — measured on the tap — so the same finger closes it; the header is the Pressd mark and wordmark on the ≡'s line; entries: Bins, and Settings —
+masthead's was — measured on the tap — so the same finger closes it; the header is the Pressd mark and wordmark on the ≡'s line; entries: Bins, Getting Started (the first-run tutorial with `replay: '1'`, as Settings → *How Pressd works* opens it), and Settings —
 the profile's `SettingsSheet` in `settings` mode, which For You mounts too, opened once the
 menu has slid away), `app/bins/index.tsx` and
 `app/bins/[slug].tsx`. The bin page opens on a **banner** the width of the screen: the lead record's cover blurred
@@ -701,6 +701,36 @@ scores are; `track_id` when any copy holds it, so a tap opens the album's Pressd
 song highlighted (`track`). Progress counts scored songs. Rate now / Add act on the album.
 Later phases (spec §7): user bins with Library → Bins (own bins only), then following and
 "where Pressd disagrees".
+
+**Blocking (`backend/blocks.py`, `Block`, November 2026).** Blocking someone — the "…" on their
+profile, both platforms (iPhone's round button in the banner's corner opens an action sheet; web's
+profile menu) — means **neither sees the other's reviews or social activity**, and any friendship
+or request between them ends (`POST /users/{id}/block`; `DELETE` lifts it, without restoring the
+friendship). Ratings still count everywhere: charts, averages, Pressd scores (Jack's rule). One
+definition, checked at each surface: `blocked_ids` (either direction) for ORM reads, `BLOCKED_SQL`
+for raw post SQL, `is_blocked` for a pair. Applied to For You's userbase reviews, recommendations in
+the feed, a thread's posts and replies and the discussions feed, people search (`/users/search`,
+`/search/all`) and contact matching, the people sheet and a profile's friends list
+(`Store.blocked`), friend requests (refused) and reply notifications; friends-only surfaces drop the
+person because the friendship is gone. `GET /users/{id}/profile` adds `blocked_by_me` (never whether
+they blocked you). **Settings → Blocked users** (both platforms) lists `GET /users/me/blocked`,
+newest first, each with Unblock. `delete_own_account` deletes blocks either way. Apple's guideline
+1.2 wants report *and* block for apps with user content; Pressd had only report.
+
+**Settings, both platforms (November 2026).** iPhone (`SettingsSheet`, `settings` mode):
+Notifications (its dropdown shows an up chevron while open), Preferences, Sign-in methods, Account
+(email, phone, **Blocked users** — a page inside the sheet with a back chevron), **About** (How
+Pressd works, **Rate Pressd** — `itms-apps://…/id6796907083?action=write-review`, the listing in
+`frontend/src/lib/iosApp.ts` — Contact support, Privacy policy, **Terms of use**, **Community
+guidelines**), then Sign out and **Delete account** last. Web's `SettingsDialog` now carries the same
+sections less what only a phone has (notifications, haptics, Library's start shelf): sign-in methods
+(`fetchLinkedProviders`; Google connect / disconnect, Apple shown but connectable only on iPhone,
+the last method never disconnectable), phone, Blocked users, Appearance, the same About links, Sign
+out and **Delete account** (a confirm dialog, then `deleteOwnAccount`) — so a web-only user can
+delete their account. Support mail goes to **pressdmusicapp@gmail.com** (both apps and the privacy
+policy). The public legal pages — `/privacy`, `/terms`, `/guidelines` (`pages/Privacy.tsx`,
+`Terms.tsx`, `Guidelines.tsx`) — share `components/LegalPage.tsx`; the terms and guidelines describe
+blocking, reports and deletion as built, so change them with the product.
 
 **`backend/routers/search_all.py`** (November 2026) — the single search box. `GET /search/all?q=&group=&limit=`
 returns `people`, `albums`, `artists`, `songs` (one key with `group`; `limit` 4, capped at 25; `q` under two
@@ -1633,16 +1663,17 @@ for editing a review later, and both paths post into the thread through
    rater on one 5–10 line, then each score and review; the title opens your own copy.
    Still mobile-only: `fetchRankedSongs`. The split charts reached web in October 2026
    on the artist page's Compare view (item 6).
-3. **Account management.** `deleteOwnAccount`, `signInWithApple`/`linkApple`,
-   `fetchLinkedProviders`/`unlinkProvider`, `deleteAvatar`. On mobile, every Sign in with
+3. **Account management.** Mostly closed, November 2026: web's `SettingsDialog` now has
+   `deleteOwnAccount`, `fetchLinkedProviders` / `unlinkProvider` (Google connect and disconnect),
+   Blocked users and the About links (§5, "Settings, both platforms"). Still mobile-only:
+   `signInWithApple` / `linkApple` (no Sign in with Apple on web) and `deleteAvatar`. On mobile, every Sign in with
    Apple attempt goes through `mobile/lib/appleSignIn.ts`. App Review rejected build 5
    (October 2026) because the button seemed to do nothing. On a device with no Apple
    Account, iOS sends the person to Settings and the original request returns error 1000;
    the next tap works. Every failure now shows a line saying what to do, and the module's
    error code doesn't reach JS in Release, so failures are classified by message. Mobile's `SettingsSheet`
    (808 LOC) has Account / Sign-in methods / Notifications / Danger zone; web's whole
-   settings surface is the Edit Profile modal in `Layout.tsx`. Account deletion being
-   mobile-only is the one with a compliance edge to it.
+   settings surface was the Edit Profile modal in `Layout.tsx` until the November 2026 parity.
    App Review rejected build 6 (October 2026, Guideline 5.1.1(v)) without finding the
    delete, then at the foot of Settings under About. It is now **Delete account**, directly
    under Sign out in Settings → Account, and ends on an "Account deleted" alert, since

@@ -1,9 +1,9 @@
 // The side menu — opened by the ≡ beside the search icon in For You's
 // masthead, sliding in from the right (the side the button is on) over a
-// dimmed page. Bins is its first entry; it is built to take more. Tapping
-// outside, swiping it back to the right, or tapping its own ≡ — drawn exactly
-// where the masthead's was (`anchor`, measured on the tap), so the same finger
-// opens and closes it — closes it.
+// dimmed page. Its entries: Bins, Getting Started (the tutorial, replayed) and
+// Settings. Tapping outside, swiping it back to the right, or tapping its own
+// ≡ — drawn exactly where the masthead's was (`anchor`, measured on the tap),
+// so the same finger opens and closes it — closes it.
 import { useState } from 'react'
 import {
   Animated,
@@ -19,7 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useRouter, type Href } from 'expo-router'
-import { ChevronRight, Menu, Package, Settings, type LucideIcon } from 'lucide-react-native'
+import { ChevronRight, Compass, Menu, Package, Settings, type LucideIcon } from 'lucide-react-native'
 import { selection } from '../lib/haptics'
 import { colors, fonts, spacing, useColors } from '../theme/tokens'
 
@@ -29,6 +29,9 @@ type Item = { label: string; icon: LucideIcon } & ({ href: Href } | { action: 's
 
 const ITEMS: Item[] = [
   { label: 'Bins', icon: Package, href: '/bins' },
+  // The first-run tutorial, replayed: `replay` records nothing and goes
+  // back to For You when done, as Settings → How Pressd works opens it.
+  { label: 'Getting Started', icon: Compass, href: { pathname: '/tutorial', params: { replay: '1' } } },
   { label: 'Settings', icon: Settings, action: 'settings' },
 ]
 

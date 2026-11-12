@@ -32,14 +32,16 @@ import Constants from 'expo-constants'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Apple, Check, ChevronDown, ChevronRight, LogOut, Trash2, X } from 'lucide-react-native'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, LogOut, Trash2, X } from 'lucide-react-native'
 import { fetchLinkedProviders, unlinkProvider, deleteOwnAccount, uploadBanner, deleteBanner, type Profile } from '../lib/api'
-import { SHELF_SIZE, fetchNotificationPrefs, updateNotificationPrefs, type NotificationPrefs } from '@pressd/shared/api'
+import { SHELF_SIZE, fetchBlockedUsers, fetchNotificationPrefs, unblockUser, updateNotificationPrefs, type NotificationPrefs } from '@pressd/shared/api'
+import Avatar from './Avatar'
 import { cleanUsername, type AlbumStatus } from '@pressd/shared/types'
 import { setPref, usePrefs, type AppearancePref } from '../lib/prefs'
 import { currentPushToken, enablePush, pushPermissionStatus } from '../lib/push'
 import { useAuth } from '../lib/auth'
 import { requestAppleCredential } from '../lib/appleSignIn'
+import AppleLogo from './AppleLogo'
 import PhoneSheet from './PhoneSheet'
 import { profileKey, useProfile } from '../lib/picks'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors } from '../theme/tokens'
@@ -55,10 +57,14 @@ const AVATAR_UPLOAD_QUALITY = 0.8
 // quality rather than the rougher one a blurred-only banner could afford.
 const BANNER_UPLOAD_QUALITY = 0.8
 
-// The published privacy policy (frontend/src/pages/Privacy.tsx) and the
-// contact address it gives — support reaches the same inbox.
+// The published pages (frontend/src/pages/Privacy.tsx, Terms.tsx,
+// Guidelines.tsx), the support inbox, and the App Store's write-a-review page
+// for this listing (frontend/src/lib/iosApp.ts has the same id).
 const PRIVACY_URL = 'https://pressdmusic.com/privacy'
-const SUPPORT_EMAIL = 'jackkalsched@gmail.com'
+const TERMS_URL = 'https://pressdmusic.com/terms'
+const GUIDELINES_URL = 'https://pressdmusic.com/guidelines'
+const SUPPORT_EMAIL = 'pressdmusicapp@gmail.com'
+const RATE_URL = 'itms-apps://apps.apple.com/app/id6796907083?action=write-review'
 
 const NOTIFY_ROWS: { key: keyof NotificationPrefs; label: string }[] = [
   { key: 'recommendations', label: 'Recommendations' },
@@ -114,7 +120,10 @@ export type SheetMode = 'profile' | 'settings'
 export default function SettingsSheet({ visible, mode, onClose }: { visible: boolean; mode: SheetMode; onClose: () => void }) {
   const tc = useColors()
   const editing = mode === 'profile'
-  const title = editing ? 'Edit profile' : 'Settings'
+  // Blocked users opens as a page inside the sheet, with a way back.
+  const [blockedOpen, setBlockedOpen] = useState(false)
+  const title = editing ? 'Edit profile' : blockedOpen ? 'Blocked users' : 'Settings'
+  const close = () => { setBlockedOpen(false); onClose() }
   const { user, signOut, linkGoogleToken, linkAppleToken, updateProfile, uploadAvatarImage, removeAvatar, removePhoneNumber } = useAuth()
   const [phoneOpen, setPhoneOpen] = useState(false)
   const [phoneBusy, setPhoneBusy] = useState(false)
@@ -528,7 +537,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
     <Modal visible={mounted} transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Animated.View style={[styles.dim, { opacity: progress }]}>
-          <Pressable style={styles.fill} onPress={onClose} accessibilityLabel={`Close ${title.toLowerCase()}`} />
+          <Pressable style={styles.fill} onPress={close} accessibilityLabel={`Close ${title.toLowerCase()}`} />
         </Animated.View>
         <Animated.View
           style={{
@@ -537,8 +546,13 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
         >
         <Pressable style={styles.sheet}>
           <View style={styles.sheetHead}>
-            <Text style={styles.sheetTitle}>{title}</Text>
-            <Pressable onPress={onClose} hitSlop={12} accessibilityLabel={`Close ${title.toLowerCase()}`}>
+            {blockedOpen && !editing ? (
+              <Pressable onPress={() => setBlockedOpen(false)} hitSlop={12} style={styles.backBtn} accessibilityLabel="Back to Settings">
+                <ChevronLeft size={22} color={tc.ink} />
+              </Pressable>
+            ) : null}
+            <Text style={[styles.sheetTitle, { flex: 1 }]}>{title}</Text>
+            <Pressable onPress={close} hitSlop={12} accessibilityLabel={`Close ${title.toLowerCase()}`}>
               <X size={20} color={tc.inkTertiary} />
             </Pressable>
           </View>
@@ -763,7 +777,9 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
 
             </>)}
 
-            {!editing && (<>
+            {!editing && blockedOpen && <BlockedList />}
+
+            {!editing && !blockedOpen && (<>
             <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
             <Text style={styles.sectionHint}>
               Get told when a friend sends you a record. iOS only asks once, so if you
@@ -793,11 +809,8 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
                   <Text style={styles.linkAction}>Turn on</Text>
                 </Pressable>
               ) : pushState === 'granted' && notifyPrefs ? (
-                <ChevronDown
-                  size={18}
-                  color={tc.inkTertiary}
-                  style={{ transform: [{ rotate: notifyOpen ? '180deg' : '0deg' }] }}
-                />
+                // Up while open, to fold the switches away again.
+                notifyOpen ? <ChevronUp size={18} color={tc.inkTertiary} /> : <ChevronDown size={18} color={tc.inkTertiary} />
               ) : null}
             </Pressable>
             {__DEV__ && pushToken ? (
@@ -880,7 +893,7 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             ) : (
               <>
                 <ProviderRow
-                  icon={<Apple size={19} color={tc.ink} fill={tc.ink} />}
+                  icon={<AppleLogo size={19} color={tc.ink} />}
                   label="Apple"
                   linked={!!providers?.apple}
                   busy={busy === 'apple'}
@@ -951,6 +964,23 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
               )}
             </View>
             <PhoneSheet visible={phoneOpen} mode="settings" onClose={() => setPhoneOpen(false)} />
+            <LinkRow label="Blocked users" onPress={() => setBlockedOpen(true)} />
+
+            <Text style={styles.sectionLabel}>ABOUT</Text>
+            <LinkRow label="How Pressd works" onPress={openTutorial} />
+            <LinkRow label="Rate Pressd" onPress={() => Linking.openURL(RATE_URL).catch(() => {})} />
+            <LinkRow
+              label="Contact support"
+              onPress={() =>
+                Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Pressd support')}`).catch(() =>
+                  setError(`Write to ${SUPPORT_EMAIL}`),
+                )
+              }
+            />
+            <LinkRow label="Privacy policy" onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL).catch(() => {})} />
+            {/* The last links before Sign out and Delete account, by request. */}
+            <LinkRow label="Terms of use" onPress={() => WebBrowser.openBrowserAsync(TERMS_URL).catch(() => {})} />
+            <LinkRow label="Community guidelines" onPress={() => WebBrowser.openBrowserAsync(GUIDELINES_URL).catch(() => {})} />
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -977,17 +1007,6 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
               )}
             </Pressable>
 
-            <Text style={styles.sectionLabel}>ABOUT</Text>
-            <LinkRow label="How Pressd works" onPress={openTutorial} />
-            <LinkRow label="Privacy policy" onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL).catch(() => {})} />
-            <LinkRow
-              label="Contact support"
-              onPress={() =>
-                Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Pressd support')}`).catch(() =>
-                  setError(`Write to ${SUPPORT_EMAIL}`),
-                )
-              }
-            />
             {version ? (
               <Text style={styles.versionLine}>
                 Pressd {version}{build ? ` (${build})` : ''}
@@ -1001,6 +1020,49 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
         </Animated.View>
       </View>
     </Modal>
+  )
+}
+
+/** Settings → Blocked users: everyone you've blocked, newest first, each with
+ *  Unblock. Unblocking doesn't bring back a friendship the block ended. */
+function BlockedList() {
+  const tc = useColors()
+  const qc = useQueryClient()
+  const [busy, setBusy] = useState<number | null>(null)
+  const { data, isLoading, isError } = useQuery({ queryKey: ['blocked'], queryFn: fetchBlockedUsers })
+
+  async function unblock(id: number) {
+    setBusy(id)
+    try {
+      await unblockUser(id)
+      qc.invalidateQueries({ queryKey: ['blocked'] })
+      qc.invalidateQueries({ queryKey: ['profile', id] })
+    } catch {
+      Alert.alert('Couldn’t unblock', 'Try again in a moment.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  if (isLoading) return <VinylSpinner size={32} style={{ marginVertical: spacing.xl }} />
+  if (isError) return <Text style={styles.blockedEmpty}>Couldn’t load blocked users.</Text>
+  if (!data?.length) return <Text style={styles.blockedEmpty}>You haven’t blocked anyone.</Text>
+  return (
+    <View style={{ marginTop: spacing.sm }}>
+      {data.map((u) => (
+        <View key={u.id} style={[styles.settingRow, { borderColor: tc.border }]}>
+          <Avatar name={u.name} avatarUrl={u.avatarUrl} size={36} />
+          <Text style={[styles.providerLabel, { flex: 1, marginLeft: spacing.md }]} numberOfLines={1}>{u.name}</Text>
+          {busy === u.id ? (
+            <VinylSpinner color={tc.green} />
+          ) : (
+            <Pressable style={styles.connectBtn} onPress={() => unblock(u.id)} accessibilityLabel={`Unblock ${u.name}`}>
+              <Text style={styles.connectBtnText}>Unblock</Text>
+            </Pressable>
+          )}
+        </View>
+      ))}
+    </View>
   )
 }
 
@@ -1189,6 +1251,8 @@ const styles = StyleSheet.create({
   shelfOn: { backgroundColor: colors.greenSoft },
   shelfText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.inkTertiary },
   shelfTextOn: { fontFamily: fonts.bodySemiBold, color: colors.green },
+  backBtn: { marginRight: spacing.sm },
+  blockedEmpty: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary, textAlign: 'center', marginVertical: spacing.xl },
   versionLine: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted, marginTop: spacing.md, textAlign: 'center' },
   nameInput: {
     fontFamily: fonts.body,
