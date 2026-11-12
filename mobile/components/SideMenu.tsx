@@ -30,7 +30,8 @@ import { colors, fonts, spacing, useColors } from '../theme/tokens'
 // An entry switches to a tab (`tab`), goes to a page (`href`), or does
 // something its host or the phone owns (`action`): Settings is the profile's
 // SettingsSheet, which For You mounts too; Contact support opens a mail to
-// the address Settings → About uses.
+// the address Settings → About uses, or, with no mail app, Settings scrolled
+// to that row.
 type Item = { label: string; icon: LucideIcon } & (
   | { tab: 'index' | 'profile' | 'social' | 'charts' }
   | { href: Href }
@@ -73,8 +74,9 @@ export default function SideMenu({ visible, anchor, onClose, onSettings }: {
   visible: boolean
   anchor?: Anchor | null
   onClose: () => void
-  /** Opens Settings once the menu has slid away. */
-  onSettings: () => void
+  /** Opens Settings once the menu has slid away; with `contact`, scrolled to
+   *  its Contact support row (the fallback when there's no mail app). */
+  onSettings: (focus?: 'contact') => void
 }) {
   const tc = useColors()
   const router = useRouter()
@@ -120,7 +122,11 @@ export default function SideMenu({ visible, anchor, onClose, onSettings }: {
         if (item.tab !== 'index') router.navigate(`/${item.tab}` as Href)
       } else if ('href' in item) router.push(item.href)
       else if (item.action === 'settings') onSettings()
-      else Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Pressd support')}`).catch(() => {})
+      // openURL rejects when nothing handles mailto: (no Mail app, or the
+      // simulator). canOpenURL isn't asked first: it answers truthfully only
+      // for schemes in Info.plist's LSApplicationQueriesSchemes, which would
+      // take a native rebuild.
+      else Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Pressd support')}`).catch(() => onSettings('contact'))
     })
   }
 

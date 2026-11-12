@@ -117,7 +117,14 @@ function GoogleConnectButton({
 
 export type SheetMode = 'profile' | 'settings'
 
-export default function SettingsSheet({ visible, mode, onClose }: { visible: boolean; mode: SheetMode; onClose: () => void }) {
+export default function SettingsSheet({ visible, mode, onClose, focus }: {
+  visible: boolean
+  mode: SheetMode
+  onClose: () => void
+  /** Opens scrolled to that row, which takes a brief green wash: the side
+   *  menu's Contact support lands here when the phone has no mail app. */
+  focus?: 'contact'
+}) {
   const tc = useColors()
   const editing = mode === 'profile'
   // Blocked users opens as a page inside the sheet, with a way back.
@@ -239,6 +246,26 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
   // Sized to the device rather than a fixed height: a constant cap pushed the
   // foot of the sheet below the fold on every phone.
   const { height: screenH } = useWindowDimensions()
+
+  // Where Contact support sits in the scroll content, and the sizes that cap
+  // how far down the sheet can scroll (iOS doesn't clamp a scrollTo itself).
+  const scrollRef = useRef<ScrollView>(null)
+  const contactY = useRef<number | null>(null)
+  const contentH = useRef(0)
+  const viewH = useRef(0)
+  const [contactLit, setContactLit] = useState(0) // bumped to replay the wash
+  useEffect(() => {
+    if (!visible || focus !== 'contact' || editing) return
+    // After the sheet's 320ms slide, so the scroll is seen landing.
+    const t = setTimeout(() => {
+      const y = contactY.current
+      if (y == null) return
+      const max = Math.max(0, contentH.current - viewH.current)
+      scrollRef.current?.scrollTo({ y: Math.min(Math.max(0, y - spacing.lg), max), animated: true })
+      setContactLit((n) => n + 1)
+    }, 360)
+    return () => clearTimeout(t)
+  }, [visible, focus, editing])
 
   useEffect(() => {
     if (Platform.OS === 'ios') AppleAuthentication.isAvailableAsync().then(setAppleAvailable).catch(() => {})
@@ -557,7 +584,13 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             </Pressable>
           </View>
 
-          <ScrollView style={{ maxHeight: screenH * 0.68 }} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            ref={scrollRef}
+            style={{ maxHeight: screenH * 0.68 }}
+            showsVerticalScrollIndicator={false}
+            onLayout={(e) => { viewH.current = e.nativeEvent.layout.height }}
+            onContentSizeChange={(_, h) => { contentH.current = h }}
+          >
             {editing && (<>
             <Text style={styles.sectionLabel}>PROFILE</Text>
 
@@ -971,6 +1004,8 @@ export default function SettingsSheet({ visible, mode, onClose }: { visible: boo
             <LinkRow label="Rate Pressd" onPress={() => Linking.openURL(RATE_URL).catch(() => {})} />
             <LinkRow
               label="Contact support"
+              onLayout={(y) => { contactY.current = y }}
+              flash={contactLit}
               onPress={() =>
                 Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Pressd support')}`).catch(() =>
                   setError(`Write to ${SUPPORT_EMAIL}`),
@@ -1083,14 +1118,41 @@ function ToggleRow({ label, value, onChange }: { label: string; value: boolean; 
 }
 
 /** A row that goes somewhere: a label and a chevron. */
-function LinkRow({ label, onPress }: { label: string; onPress: () => void }) {
+function LinkRow({ label, onPress, onLayout, flash = 0 }: {
+  label: string
+  onPress: () => void
+  /** The row's offset in the scroll content. */
+  onLayout?: (y: number) => void
+  /** A change replays a green wash over the row (0: none yet). */
+  flash?: number
+}) {
   const tc = useColors()
   return (
-    <Pressable style={[styles.settingRow, { borderColor: tc.border }]} onPress={onPress} accessibilityRole="button">
+    <Pressable
+      style={[styles.settingRow, { borderColor: tc.border }]}
+      onPress={onPress}
+      onLayout={onLayout ? (e) => onLayout(e.nativeEvent.layout.y) : undefined}
+      accessibilityRole="button"
+    >
+      {flash ? <RowWash key={flash} /> : null}
       <Text style={[styles.providerLabel, { flex: 1 }]} numberOfLines={1}>{label}</Text>
       <ChevronRight size={17} color={tc.inkMuted} />
     </Pressable>
   )
+}
+
+/** The album page's track highlight, on a settings row: green, fading over 1.5s. */
+function RowWash() {
+  const [fade] = useState(() => new Animated.Value(1))
+  useEffect(() => {
+    const run = Animated.sequence([
+      Animated.delay(500),
+      Animated.timing(fade, { toValue: 0, duration: 1500, useNativeDriver: true }),
+    ])
+    run.start()
+    return () => run.stop()
+  }, [fade])
+  return <Animated.View pointerEvents="none" style={[styles.rowWash, { opacity: fade }]} />
 }
 
 /** One pick, showing what's currently set and opening its picker. The picks
@@ -1234,6 +1296,7 @@ const styles = StyleSheet.create({
   },
 
   // Profile rows share the provider row's card so the sheet reads as one list.
+  rowWash: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderRadius: radii.md, backgroundColor: colors.greenSoft },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',

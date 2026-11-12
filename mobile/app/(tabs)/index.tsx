@@ -123,6 +123,7 @@ export default function ForYou() {
   const [trendBlockY, setTrendBlockY] = useState(0)
   const [menuOpen, setMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsFocus, setSettingsFocus] = useState<'contact' | undefined>()
   // Where the ≡ sits on screen, so the menu can put its own ≡ in the same
   // place: open and close without moving your finger.
   const menuBtn = useRef<View>(null)
@@ -698,8 +699,8 @@ export default function ForYou() {
         onSelect={(v) => setTrendMode(v as 'week' | 'top')}
         onClose={() => setTrendPickerOpen(false)}
       />
-      <SideMenu visible={menuOpen} anchor={menuAnchor} onClose={() => setMenuOpen(false)} onSettings={() => setSettingsOpen(true)} />
-      <SettingsSheet visible={settingsOpen} mode="settings" onClose={() => setSettingsOpen(false)} />
+      <SideMenu visible={menuOpen} anchor={menuAnchor} onClose={() => setMenuOpen(false)} onSettings={(focus) => { setSettingsFocus(focus); setSettingsOpen(true) }} />
+      <SettingsSheet visible={settingsOpen} mode="settings" focus={settingsFocus} onClose={() => setSettingsOpen(false)} />
     </SafeAreaView>
   )
 }
