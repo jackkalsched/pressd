@@ -8,7 +8,8 @@
 // cover of its biggest one (by the artist's Last.fm listeners), its date in the
 // corner and "+N" for the rest. Clicking it scrolls to that day in the list,
 // which runs through the month's release days, each day's records biggest
-// first. Laid out wide: the calendar pinned on the left, the list beside it.
+// first. The calendar runs the page's full width, its days wider than tall so
+// a month fits on screen, and the list sits below it.
 // A record opens its community page by name and artist (Deezer's id when the
 // list has one), carrying the release date and cover: there's nothing to rate
 // yet, but it can go on To Listen.
@@ -36,6 +37,10 @@ const byListeners = (a: UpcomingRelease, b: UpcomingRelease) =>
   (b.artistListeners ?? 0) - (a.artistListeners ?? 0) || a.artist.localeCompare(b.artist)
 
 type Day = { date: string; releases: UpcomingRelease[] }
+
+// A day's box: square on a phone, wider than tall once the calendar spans a
+// desktop, so six weeks still fit on one screen. A cover fills it, cropped.
+const CELL = 'aspect-square sm:aspect-[4/3] xl:aspect-[16/9]'
 
 export default function Upcoming() {
   const { activeUser } = useUser()
@@ -110,9 +115,9 @@ export default function Upcoming() {
     <div className="mx-auto w-full max-w-[1600px] px-6 md:px-12 py-8 pb-24">
       {heading}
 
-      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)] xl:grid-cols-[minmax(0,600px)_minmax(0,1fr)] xl:gap-16">
+      <div className="mt-8 flex flex-col gap-10">
         {/* ── The month, as a wall calendar ─────────────────────────── */}
-        <section className="lg:sticky lg:top-8 lg:self-start">
+        <section>
           <div className="mb-4 flex items-center justify-between">
             <button
               onClick={() => step(-1)}
@@ -135,17 +140,17 @@ export default function Upcoming() {
             </button>
           </div>
 
-          <div className="grid grid-cols-7 gap-1.5">
+          <div className="grid grid-cols-7 gap-1.5 lg:gap-2">
             {WEEKDAYS.map((w) => (
               <p key={w} className="m-0 pb-1.5 text-center text-[11.5px] font-semibold text-(--c-8a7f72)">{w}</p>
             ))}
             {cells.map((n, i) => {
-              if (n == null) return <div key={`b${i}`} className="aspect-square" />
+              if (n == null) return <div key={`b${i}`} className={CELL} />
               const iso = `${current}-${String(n).padStart(2, '0')}`
               const d = byDate.get(iso)
               if (!d) {
                 return (
-                  <div key={iso} className="flex aspect-square items-center justify-center text-[14px] font-medium text-(--c-b5aa9c) tabular-nums">
+                  <div key={iso} className={`${CELL} flex items-center justify-center text-[14px] font-medium text-(--c-b5aa9c) tabular-nums`}>
                     {n}
                   </div>
                 )
@@ -158,7 +163,7 @@ export default function Upcoming() {
                   onClick={() => jumpTo(iso)}
                   title={`${lead.title} — ${lead.artist}${more > 0 ? ` and ${more} more` : ''}`}
                   aria-label={`${DAY_HEAD.format(localDay(iso))}: ${d.releases.length} release${d.releases.length === 1 ? '' : 's'}`}
-                  className="group relative aspect-square overflow-hidden rounded-xl bg-(--c-efebe5) rise-in"
+                  className={`${CELL} group relative overflow-hidden rounded-xl bg-(--c-efebe5) rise-in`}
                   style={stagger(i)}
                 >
                   {lead.coverUrl && (
@@ -195,7 +200,7 @@ export default function Upcoming() {
               className="scroll-mt-6"
             >
               <h3 className="m-0 pb-2 pt-6 text-[16px] font-bold text-(--c-1c1917)">{DAY_HEAD.format(localDay(d.date))}</h3>
-              <div className="-mx-3 grid sm:grid-cols-2 2xl:grid-cols-3">
+              <div className="-mx-3 grid sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                 {d.releases.map((r, i) => (
                   <Link
                     key={r.key}

@@ -454,10 +454,12 @@ genre column is mostly blank and the fallbacks were too thin to be worth a chip.
 out wide. Reached from the sidebar's **Upcoming** (lucide `CalendarDays`, right after Bins, as in
 iPhone's side menu; also in the small-screen bottom bar) and from "Upcoming →" at the end of For
 You's New & Popular heading. Same query (`['upcoming', userId]`: notable albums and EPs, 180 days).
-At `lg` the calendar sits pinned on the left (7-column grid of square tiles: the biggest record's
-cover, the date top-left in white, "+N" bottom-right; other days grey numbers; ‹ › step between
-months that have releases) and the list beside it: "N releases scheduled", then each release day's
-records biggest first, two or three across at `sm` / `2xl` — cover, title, artist, "in N days".
+The calendar runs the page's full width (Jack's call, November 2026; it was pinned beside the
+list): a 7-column grid whose day boxes are square on a phone, 4:3 at `sm` and 16:9 at `xl` (`CELL`),
+so six weeks fit on one screen — the biggest record's cover filling the box (cropped), the date
+top-left in white, "+N" bottom-right; other days grey numbers; ‹ › step between months that have
+releases. The list sits below it: "N releases scheduled", then each release day's records biggest
+first, two / three / four across at `sm` / `lg` / `2xl` — cover, title, artist, "in N days".
 A tile scrolls its day into view in `<main>`. A record is a link to `CommunityAlbum` by name —
 `/album/community?name=&artist=&deezer=&release=&cover=` (`lib/upcoming.ts`'s
 `upcomingAlbumPath`, beside `localDay` / `untilText` / `outLine`, which restate mobile's wording;
