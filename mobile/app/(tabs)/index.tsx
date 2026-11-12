@@ -32,6 +32,7 @@ import { selection } from '../../lib/haptics'
 import { useOpenProfile } from '../../lib/useOpenProfile'
 import SpotlightCard from '../../components/SpotlightCard'
 import BinCard from '../../components/BinCard'
+import PredictedScore from '../../components/PredictedScore'
 import SideMenu from '../../components/SideMenu'
 import SettingsSheet from '../../components/SettingsSheet'
 import RecommendSheet from '../../components/RecommendSheet'
@@ -518,9 +519,7 @@ export default function ForYou() {
                   </Text>
                 </View>
                 <View style={styles.predict}>
-                  <Text style={[styles.predictScore, { color: scoreColor(pick.predictedScore) }]}>
-                    {pick.predictedScore.toFixed(2)}
-                  </Text>
+                  <PredictedScore value={pick.predictedScore} style={styles.predictScore} />
                   <Text style={styles.predictLabel}>PREDICTED</Text>
                 </View>
               </View>
@@ -549,9 +548,7 @@ export default function ForYou() {
                 </View>
                 {suggestion.predictedScore != null && (
                   <View style={styles.predict}>
-                    <Text style={[styles.predictScore, { color: scoreColor(suggestion.predictedScore) }]}>
-                      {suggestion.predictedScore.toFixed(2)}
-                    </Text>
+                    <PredictedScore value={suggestion.predictedScore} style={styles.predictScore} />
                     <Text style={styles.predictLabel}>PREDICTED</Text>
                   </View>
                 )}

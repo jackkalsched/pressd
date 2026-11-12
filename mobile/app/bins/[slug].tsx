@@ -22,6 +22,7 @@ import { ArrowLeft, ArrowUpDown, Bookmark, ChevronDown, Star } from 'lucide-reac
 import { addBinEntry, fetchBin, type BinEntry } from '../../lib/api'
 import { BIN_SORT_DIR, binEntryMatches, binSortLabel, sortBinEntries, type BinSort, type BinSortDir } from '@pressd/shared/binSort'
 import BinSearch from '../../components/BinSearch'
+import PredictedScore from '../../components/PredictedScore'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import { useAuth } from '../../lib/auth'
 import { selection, success } from '../../lib/haptics'
@@ -77,12 +78,16 @@ function Figure({ label, value, muted = false, count = false, places = 2 }: {
   return (
     <View style={styles.figure}>
       <Text style={styles.figureLabel} maxFontSizeMultiplier={NUM_SCALE_CAP}>{label}</Text>
+      {label === 'PREDICTED' && !muted ? (
+        <PredictedScore value={value} places={places} style={styles.figureValue} maxFontSizeMultiplier={NUM_SCALE_CAP} />
+      ) : (
       <Text
         style={muted ? styles.figureMuted : [styles.figureValue, { color: count ? colors.ink : scoreColor(value) }]}
         maxFontSizeMultiplier={NUM_SCALE_CAP}
       >
         {count ? value : value.toFixed(places)}
       </Text>
+      )}
     </View>
   )
 }
