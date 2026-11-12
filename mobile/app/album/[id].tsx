@@ -16,12 +16,12 @@ import {
   View,
 } from 'react-native'
 import VinylSpinner from '../../components/VinylSpinner'
+import PredictedScore from '../../components/PredictedScore'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as haptics from '../../lib/haptics'
-import Svg, { Text as SvgText } from 'react-native-svg'
 import { ArrowLeft, Check, ChevronRight, Heart, Pencil, Share2, Star, Trash2 } from 'lucide-react-native'
 import {
   fetchAlbum,
@@ -38,7 +38,9 @@ import {
   type CommunityAlbum as CommunityAlbumData,
   type CommunityTrack,
 } from '../../lib/api'
-import { avatarColor, EP_MAX_TRACKS, type Album, type Song } from '@pressd/shared/types'
+import { avatarColor, EP_MAX_TRACKS, isUnreleased, type Album, type Song } from '@pressd/shared/types'
+import type { SpotifyAlbumResult } from '@pressd/shared/api'
+import { useTracklistFill } from '../../lib/useTracklistFill'
 import { useAuth } from '../../lib/auth'
 import { useProfile } from '../../lib/picks'
 import { useOpenProfile } from '../../lib/useOpenProfile'
@@ -136,42 +138,29 @@ function CompareVerdict({
   )
 }
 
-/** The prediction drawn hollow: the same face and size as the real score, but
- *  stroked rather than filled, so the pair reads as measured-vs-estimated
- *  without needing a second colour or a dial. React Native text has no stroke
- *  property, so this goes through SVG. */
-function OutlineScore({ value, size = SCORE_SIZE }: { value: number; size?: number }) {
-  const tc = useColors()
-  const w = size * 2.6
-  // Matches the filled numeral's line box exactly, so both columns' labels sit
-  // on the same line beneath them.
-  const h = SCORE_LINE
+/** The prediction at the real score's face and size, filled with the drifting
+ *  predicted gradient rather than flat green, so the pair reads as
+ *  measured-vs-estimated. Same box as the filled numeral, so both columns'
+ *  labels sit on the same line beneath them. */
+function PredictedHero({ value, size = SCORE_SIZE }: { value: number; size?: number }) {
   return (
-    <Svg width={w} height={h}>
-      <SvgText
-        x={w / 2}
-        y={size * 0.86}
-        textAnchor="middle"
-        fontFamily={fonts.display}
-        fontSize={size}
-        fill="none"
-        stroke={tc.green}
-        strokeWidth={1.6}
-      >
-        {value.toFixed(2)}
-      </SvgText>
-    </Svg>
+    <View style={{ width: size * 2.6, height: SCORE_LINE, alignItems: 'center' }}>
+      <PredictedScore value={value} size={size} style={styles.bigScore} />
+    </View>
   )
 }
 
 export default function AlbumDetail() {
   const tc = useColors()
-  const { id, community, name, artist, deezer, compare, track } = useLocalSearchParams<{
+  const { id, community, name, artist, deezer, compare, track, release, cover } = useLocalSearchParams<{
     id: string
     community?: string
     name?: string
     artist?: string
     deezer?: string
+    /** From Upcoming: the day it comes out, and the list's cover. */
+    release?: string
+    cover?: string
     compare?: string
     /** A track id from search: scroll to that song and light it up briefly. */
     track?: string
@@ -185,6 +174,9 @@ export default function AlbumDetail() {
   const byName = !!name && !!artist
   const isCommunity = community === '1' || byName
   const deezerId = deezer ? Number(deezer) : null
+  // Opened from Upcoming before the record is out: nothing to rate yet, but it
+  // can go on To Listen, with or without a tracklist.
+  const upcoming = byName && isUnreleased(release)
   const router = useRouter()
   // Onboarding reaches this screen with an empty stack: welcome replaces itself
   // with the rating flow, which replaces itself with this page, so a new user
@@ -291,6 +283,10 @@ export default function AlbumDetail() {
     onDeleted: leave,
   })
 
+  // Your own copy that may be short — added from Upcoming before it was out,
+  // recently out, or songless — is topped up the first time it's opened.
+  const { filling } = useTracklistFill(album, !!album && album.userId === user?.id)
+
   // Above the early returns for the same reason useDeleteAlbum is.
   const [sharing, setSharing] = useState(false)
   const [recommending, setRecommending] = useState(false)
@@ -312,7 +308,7 @@ export default function AlbumDetail() {
       return <LoadFailed onBack={leave} />
     }
     // Fill in from the resolved release when Pressd has no copy of it yet.
-    const shown: CommunityAlbumData = resolvedAlbum
+    const filled: CommunityAlbumData = resolvedAlbum
       ? {
           ...communityData,
           year: communityData.year ?? resolvedAlbum.year,
@@ -326,10 +322,19 @@ export default function AlbumDetail() {
           })),
         }
       : communityData
+    // Then from what Upcoming carried, for a record no catalog has much on yet.
+    const shown: CommunityAlbumData = {
+      ...filled,
+      album_art_url: filled.album_art_url ?? cover ?? null,
+      year: filled.year ?? (release ? Number(release.slice(0, 4)) : null),
+    }
 
     return (
       <CommunityAlbum
         data={shown}
+        // Opened from Upcoming, or by a copy of a record that isn't out yet: the
+        // server sends the latest release date any copy of it carries.
+        upcomingDate={upcoming ? release! : isUnreleased(shown.release_date) ? shown.release_date! : null}
         // Arriving from a personal copy's Compare button opens straight on the
         // breakdown rather than the averaged view.
         initialComparing={compare === '1'}
@@ -418,6 +423,29 @@ export default function AlbumDetail() {
       const copy = await copyAlbumToLibrary(data.album_id, status)
       queryClient.invalidateQueries({ queryKey: ['albums'] })
       return copy.id
+    }
+    // Not out yet: a To Listen copy with whatever the catalog lists so far —
+    // often just the singles, sometimes nothing. Each later open, and the daily
+    // worker, merges in the rest (useTracklistFill, backend/tracklist_fill.py),
+    // and a single already rated carries its score over. Named as Upcoming
+    // named it, so this page finds it again.
+    if (upcoming) {
+      const shell: SpotifyAlbumResult = {
+        ...(resolvedAlbum ?? {}),
+        spotify_id: null,
+        album_name: name!,
+        artist: artist!,
+        year: data.year ?? null,
+        cover_url: data.album_art_url ?? null,
+        total_tracks: resolvedAlbum?.total_tracks ?? 0,
+        tracks: resolvedAlbum?.tracks ?? [],
+        genre: resolvedAlbum?.genre ?? null,
+        release_date: release,
+        upcoming: true,
+      }
+      const imported = await importAlbum(shell, 'to_listen', user?.id ?? 1)
+      queryClient.invalidateQueries({ queryKey: ['albums'] })
+      return imported.id
     }
     // Reuse the tracklist the page already resolved; only re-fetch if the user
     // hit Rate now before that query settled.
@@ -589,6 +617,7 @@ export default function AlbumDetail() {
             ))}
             {album.year ? ` · ${album.year}` : ''}
           </Text>
+          {isUnreleased(album.releaseDate) && <Text style={styles.releaseLine}>{outLine(album.releaseDate!)}</Text>}
           {album.genre && <Text style={styles.genre}>{album.genre}</Text>}
           {(() => {
             const subs = [album.subGenre1, album.subGenre2, album.subGenre3].filter(Boolean)
@@ -599,16 +628,18 @@ export default function AlbumDetail() {
         </View>
 
         <View style={styles.scoreBlock}>
-          {/* A prediction is drawn hollow and a settled score filled, so the two
-              are never mistaken for each other.
+          {/* A prediction is drawn in the drifting predicted gradient and a
+              settled score in flat green, so the two are never mistaken for
+              each other.
 
               This used to be a dial here and a stroked numeral on the userbase
-              view, which meant the same album's prediction changed shape
-              depending on which copy you opened — the one place the encoding
-              most needs to hold still. The stroke wins because it can sit
-              beside a real score at the same size and baseline; a ring cannot. */}
+              view, then a stroked numeral on both, so the same album's
+              prediction keeps one look whichever copy you opened — the one
+              place the encoding most needs to hold still. A numeral wins
+              because it can sit beside a real score at the same size and
+              baseline; a ring cannot. */}
           {scoreIsPredicted && showScore != null ? (
-            <OutlineScore value={showScore} />
+            <PredictedHero value={showScore} />
           ) : (
             <Text
               style={[styles.bigScore, { color: showScore != null ? colors.green : colors.inkMuted }]}
@@ -689,7 +720,14 @@ export default function AlbumDetail() {
             rating too, and an ungated CTA offered to "edit" it — the server
             refuses the write, so nothing could be overwritten, but you'd have
             re-rated the whole record before finding that out. */}
-        {isMine && (
+        {/* Not out yet, or no songs yet — added before release, or a shell —
+            there's nothing to score until it's out with a tracklist. */}
+        {isMine && album.songs.length === 0 && filling && (
+          <View style={styles.cta}>
+            <VinylSpinner color="#fff" />
+          </View>
+        )}
+        {isMine && album.songs.length > 0 && !isUnreleased(album.releaseDate) && (
           <Pressable
             style={({ pressed }) => [styles.cta, pressed && { backgroundColor: colors.greenPressed }]}
             onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(albumId) } })}
@@ -784,7 +822,7 @@ export default function AlbumDetail() {
           onWriteReview={() => setReviewEditing(true)}
         />
 
-        <Text style={styles.sectionLabel}>TRACKS</Text>
+        {sorted.length > 0 && <Text style={styles.sectionLabel}>TRACKS</Text>}
         {sorted.map((s) => {
           // Only once rated: an unfinished copy's songs still unlock in order, and
           // a search must not point past where the listener has reached.
@@ -850,8 +888,12 @@ function CommunityAlbum({
   highlightTrack = null,
   onOpenYours,
   onDeleted,
+  upcomingDate = null,
 }: {
   data: CommunityAlbumData
+  /** The release date when the record isn't out yet: no Rate now, and Add puts
+   *  it on To Listen. */
+  upcomingDate?: string | null
   highlightTrack?: number | null
   onBack: () => void
   onOpenArtist: (name: string) => void
@@ -1101,6 +1143,7 @@ function CommunityAlbum({
               <Text style={styles.artistLink} onPress={() => onOpenArtist(data.artist)}>{data.artist}</Text>
               {data.year ? ` · ${data.year}` : ''}
             </Text>
+            {upcomingDate && <Text style={styles.releaseLine}>{outLine(upcomingDate)}</Text>}
             {data.genre && <Text style={styles.genre}>{data.genre}</Text>}
             {subs.length > 0 && <Text style={styles.subGenres}>{subs.join(' · ')}</Text>}
           </View>
@@ -1129,7 +1172,7 @@ function CommunityAlbum({
               <>
                 <View style={styles.scoreDivider} />
                 <View style={styles.scoreCol}>
-                  <OutlineScore value={data.predicted_score} />
+                  <PredictedHero value={data.predicted_score} />
                   <View style={styles.forYouRow}>
                     <Star size={11} color={tc.green} fill={tc.green} strokeWidth={0} />
                     <Text style={styles.scoreLabel}>FOR YOU</Text>
@@ -1180,7 +1223,37 @@ function CommunityAlbum({
               alternatives, not a primary with an afterthought under it. Each
               takes an equal share of the row, and a lone one spans the width on
               its own. Queueing only means anything for albums you don't hold. */}
-          {(notRated || !inLibrary) && (
+          {upcomingDate ? (
+            <View style={styles.ctaRow}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cta,
+                  styles.ctaInRow,
+                  (queued || inLibrary) && styles.ctaDone,
+                  pressed && !(queued || inLibrary) && { backgroundColor: colors.greenPressed },
+                ]}
+                onPress={async () => {
+                  if (queuing || queued || inLibrary) return
+                  setQueuing(true)
+                  try {
+                    await onQueue()
+                    setQueued(true)
+                  } finally {
+                    setQueuing(false)
+                  }
+                }}
+                disabled={queuing || queued || inLibrary}
+              >
+                {queuing ? (
+                  <VinylSpinner color="#fff" />
+                ) : (
+                  <Text style={styles.ctaText} numberOfLines={1}>
+                    {queued || inLibrary ? 'In Library' : 'Add to Library'}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          ) : (notRated || !inLibrary) && (
             <View style={styles.ctaRow}>
               {notRated && (
                 <Pressable
@@ -1238,7 +1311,7 @@ function CommunityAlbum({
             </View>
           )}
 
-          <Text style={styles.sectionLabel}>TRACKS</Text>
+          {data.tracks.length > 0 && <Text style={styles.sectionLabel}>TRACKS</Text>}
           {data.tracks.map((t, i) => {
             const lit = highlightTrack != null && t.track_id === highlightTrack
             return (
@@ -1701,6 +1774,19 @@ function ReviewSection({
   )
 }
 
+// "Out Friday, November 14 · in 2 days" for a record whose release date is
+// still ahead (YYYY-MM-DD, read as a local date so it can't slip a day).
+function outLine(date: string): string {
+  const [y, m, d] = date.slice(0, 10).split('-').map(Number)
+  const day = new Date(y, m - 1, d)
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const n = Math.round((day.getTime() - today.getTime()) / 86400000)
+  const when = day.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+  const rel = n <= 0 ? 'today' : n === 1 ? 'tomorrow' : `in ${n} days`
+  return `Out ${when} · ${rel}`
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   screen: { flex: 1, backgroundColor: 'transparent' },
@@ -1840,6 +1926,13 @@ const styles = StyleSheet.create({
     color: colors.green,
     marginTop: spacing.sm,
     textTransform: 'uppercase',
+  },
+  releaseLine: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: colors.green,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
   subGenres: {
     fontFamily: fonts.bodyMedium,

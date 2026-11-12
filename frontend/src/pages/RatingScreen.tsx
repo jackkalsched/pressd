@@ -23,7 +23,7 @@ import {
 } from '../api'
 import {
   computeAlbumScore, songScoreColor, tiedTopSongs, libraryPercentileLabel,
-  BANG_THRESHOLD, SKIP_THRESHOLD, EP_MAX_TRACKS,
+  BANG_THRESHOLD, SKIP_THRESHOLD, EP_MAX_TRACKS, isUnreleased,
 } from '../types'
 import type { Song, Album } from '../types'
 import ShareCardModal from '../components/ShareCard'
@@ -35,6 +35,8 @@ import CoverImg from '../components/CoverImg'
 import { coverUrl } from '@pressd/shared/covers'
 import { seedDrafts, firstOpenIndex, canJumpTo, nextTrackIndex } from '@pressd/shared/rating'
 import VinylSpinner from '../components/VinylSpinner'
+import { useTracklistFill } from '../lib/useTracklistFill'
+import { localDay } from '../lib/upcoming'
 
 const DANGER = 'var(--c-b91c1c)'
 
@@ -147,6 +149,9 @@ export default function RatingScreen() {
     queryKey: ['album', albumId],
     queryFn: () => fetchAlbum(albumId),
   })
+  // A copy with no songs — added from Upcoming before release — gets them here
+  // once it's out, the same as on its album page.
+  const { filling } = useTracklistFill(album, !!album && album.userId === userId)
   const { data: factorStats } = useQuery({
     queryKey: ['factor-stats'],
     queryFn: fetchFactorStats,
@@ -198,8 +203,9 @@ export default function RatingScreen() {
 
   // Seed once the album arrives, carried scores included, and resume at the
   // first track that genuinely needs a score. The rules are shared with mobile
-  // (shared/src/rating.ts).
-  if (album && !initialized) {
+  // (shared/src/rating.ts). Not before there are songs: a songless copy seeds
+  // once useTracklistFill brings them.
+  if (album && !initialized && album.songs.length > 0) {
     const seed = seedDrafts(sortedSongs)
     setDrafts(seed.drafts)
     setCarried(seed.carried)
@@ -513,6 +519,36 @@ export default function RatingScreen() {
         </p>
         <button
           onClick={() => navigate(-1)}
+          className="mt-5 px-5 py-2 rounded-full bg-(--c-2d6a4f)/10 text-(--c-2d6a4f) text-sm font-semibold hover:bg-(--c-2d6a4f)/15"
+        >
+          Go back
+        </button>
+      </div>
+    )
+  }
+
+  // Nothing to score before the record is out, whatever songs it has so far
+  // (often only the singles), nor without a tracklist. Songs arrive by merge
+  // when it's opened (useTracklistFill) and from the daily worker.
+  const out = isUnreleased(album.releaseDate)
+  if (out || album.songs.length === 0) {
+    if (!out && filling) {
+      return (
+        <div className="min-h-screen bg-(--c-f9f8f6) flex items-center justify-center">
+          <VinylSpinner size={64} />
+        </div>
+      )
+    }
+    return (
+      <div className="min-h-screen bg-(--c-f9f8f6) flex flex-col items-center justify-center text-center px-6">
+        <p className="font-display text-2xl font-bold text-(--c-1c1917) m-0">{out ? 'Not out yet' : 'No tracklist yet'}</p>
+        <p className="text-sm text-(--c-78716c) mt-2 max-w-sm leading-relaxed">
+          {out
+            ? `${album.albumName} comes out ${localDay(album.releaseDate!).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}. It's on your To Listen, ready to rate once it's out.`
+            : `Pressd couldn't find the songs on ${album.albumName} yet. Try again once the catalogs list it.`}
+        </p>
+        <button
+          onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate(`/album/${album.id}`))}
           className="mt-5 px-5 py-2 rounded-full bg-(--c-2d6a4f)/10 text-(--c-2d6a4f) text-sm font-semibold hover:bg-(--c-2d6a4f)/15"
         >
           Go back

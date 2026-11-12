@@ -38,6 +38,7 @@ import {
   BANG_THRESHOLD,
   SKIP_THRESHOLD,
   EP_MAX_TRACKS,
+  isUnreleased,
   tiedTopSongs,
   libraryPercentileLabel,
   type Album,
@@ -51,6 +52,7 @@ import TopSongTiebreak from '../../components/TopSongTiebreak'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
 import CoverImage from '../../components/CoverImage'
 import { useDeleteAlbum } from '../../lib/useDeleteAlbum'
+import { useTracklistFill } from '../../lib/useTracklistFill'
 import { useRecalibrationMessage } from '@pressd/shared/hooks/useRecalibration'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, pageAlpha, scoreColor } from '../../theme/tokens'
 
@@ -147,6 +149,7 @@ export default function RatingScreen() {
     albumName: album?.albumName ?? 'This album',
     onDeleted: () => router.replace('/(tabs)'),
   })
+  const { filling } = useTracklistFill(album, !!album && album.userId === user?.id)
   const { data: factorStats } = useQuery({
     queryKey: ['factor-stats'],
     queryFn: fetchFactorStats,
@@ -195,7 +198,10 @@ export default function RatingScreen() {
   // Seed once the album arrives, carried scores included, and resume at the
   // first track that genuinely needs a score. The rules are shared with web
   // (shared/src/rating.ts).
-  if (album && !initialized) {
+  // Not before the tracklist is settled: a copy added from Upcoming has only
+  // what the catalog listed until it's out, and seeding a partial list would
+  // leave the flow without drafts for the songs useTracklistFill then merges in.
+  if (album && !initialized && album.songs.length > 0 && !isUnreleased(album.releaseDate) && !filling) {
     const seed = seedDrafts(sortedSongs)
     setDrafts(seed.drafts)
     setCarried(seed.carried)
@@ -572,6 +578,34 @@ export default function RatingScreen() {
         <Text style={styles.notYoursTitle}>This isn’t your rating</Text>
         <Text style={styles.notYoursBody}>
           You can read {album.albumName} on its album page, but only its owner can score it.
+        </Text>
+        <Pressable style={styles.notYoursBtn} onPress={() => router.back()}>
+          <Text style={styles.notYoursBtnText}>Go back</Text>
+        </Pressable>
+      </SafeAreaView>
+    )
+  }
+
+  // Nothing to score until the record is out with a tracklist. One added from
+  // Upcoming may hold its singles already, but the first pass is the whole
+  // record front to back, so it waits for release day; its songs are topped up
+  // on open (useTracklistFill) and nightly.
+  const out = isUnreleased(album.releaseDate)
+  if (!out && filling && !initialized) {
+    return (
+      <SafeAreaView style={[styles.screen, styles.center]}>
+        <VinylSpinner size={64} />
+      </SafeAreaView>
+    )
+  }
+  if (album.songs.length === 0 || out) {
+    return (
+      <SafeAreaView style={[styles.screen, styles.center]}>
+        <Text style={styles.notYoursTitle}>{out ? 'Not out yet' : 'No tracklist yet'}</Text>
+        <Text style={styles.notYoursBody}>
+          {out
+            ? `${album.albumName} comes out ${new Date(`${album.releaseDate!.slice(0, 10)}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}. It's on your To Listen, ready to rate once it's out.`
+            : `Pressd couldn't find the songs on ${album.albumName} yet. Try again once the catalogs list it.`}
         </Text>
         <Pressable style={styles.notYoursBtn} onPress={() => router.back()}>
           <Text style={styles.notYoursBtnText}>Go back</Text>

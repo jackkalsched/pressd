@@ -3,7 +3,7 @@ import re
 import threading
 from collections import defaultdict
 from typing import Optional
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query
 from sqlmodel import Session, select
 from sqlalchemy import func, text as _sql
 from sqlalchemy.orm import selectinload
@@ -249,6 +249,9 @@ def get_album(
         # public, so the owner needn't be anyone in the viewer's friends list.
         "owner": public_user(owner) if (owner := session.get(PressUser, album.user_id)) else None,
         "songs": songs,
+        # Whether the tracklist is final (backend/tracklist_fill.py): the apps
+        # ask for a top-up only while it isn't.
+        "tracklist_settled": album.tracklist_settled_at is not None,
     }
 
 
@@ -267,6 +270,7 @@ def create_album(
     album.predicted_replay = None
     album.predicted_song_mean = None
     album.created_at = datetime.utcnow()
+    album.tracklist_settled_at = None   # settled by songs, never by the body
     session.add(album)
     session.commit()
     session.refresh(album)
@@ -597,7 +601,10 @@ def import_album(
 
     album = create_copy(session, user_id, data)
 
-    if album.status == "to_listen":
+    # An announced record (the Upcoming page) carries what the catalog lists so
+    # far, often nothing; with no songs there is nothing to predict from until
+    # a merge (backend/tracklist_fill.py) gives it some.
+    if album.status == "to_listen" and album.songs:
         _queue_predictions(album.id)
 
     if _needs_genre_tagging(album):
@@ -635,21 +642,28 @@ def create_copy(session: Session, user_id: int, data: dict) -> Album:
     session.add(album)
     session.flush()
 
-    for t in data.get("tracks", []):
+    _add_songs(session, album, data.get("tracks", []))
+
+    session.commit()
+    session.refresh(album)
+    _link_tracks(session, album.id)
+    return album
+
+
+def _add_songs(session: Session, album: Album, tracks: list[dict]) -> int:
+    """A resolved tracklist's songs onto a new copy, unlinked (`_link_tracks`
+    after the commit). A later top-up goes through backend/tracklist_fill.py."""
+    for t in tracks:
         session.add(Song(
             title=str(t["title"]),
             track_number=t.get("track_number"),
             duration_ms=t.get("duration_ms"),
             explicit=t.get("explicit", False),
             spotify_id=t.get("spotify_id"),
-            artist=t.get("artist", data["artist"]),
+            artist=t.get("artist", album.artist),
             album_id=album.id,
         ))
-
-    session.commit()
-    session.refresh(album)
-    _link_tracks(session, album.id)
-    return album
+    return len(tracks)
 
 
 def _queue_cover_fill(album_id: int) -> None:
@@ -1202,11 +1216,14 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
     ]
 
     mine = next((c for c in copies if c.user_id == user.id), None)
+    every_copy = _record_copies(session, album_name, artist)
     # Your copy at any status — an unrated one still supplies the id to rate
     # and the per-user prediction, neither of which live on the averages.
-    mine_any = mine or next(
-        (a for a in _record_copies(session, album_name, artist)
-         if a.user_id == user.id), None)
+    mine_any = mine or next((a for a in every_copy if a.user_id == user.id), None)
+    # The latest any copy knows, so a page opened by a copy's id (not from
+    # Upcoming, which carries the date) can tell the record isn't out yet and
+    # offer no Rate now. Rated copies rarely carry one; To Listen ones do.
+    release_dates = [c.release_date for c in [*every_copy, *([source] if source else [])] if c.release_date]
     ref = source or mine_any or (copies[0] if copies else None)
     pick = lambda attr: next(
         (getattr(c, attr) for c in copies if getattr(c, attr)),
@@ -1223,6 +1240,7 @@ def _community_payload(session: Session, user: PressUser, album_name: str, artis
         "sub_genre1": pick("sub_genre1"),
         "sub_genre2": pick("sub_genre2"),
         "sub_genre3": pick("sub_genre3"),
+        "release_date": max(release_dates).isoformat() if release_dates else None,
         "rater_count": len({c.user_id for c in copies if c.user_id is not None}),
         # Everyone but you. rater_count includes your own copy, so on a record
         # only you have rated it reads 1 and the pooled average is your own
@@ -1310,6 +1328,64 @@ def copy_album(
     if _needs_genre_tagging(new_album):
         _queue_genre_tagging(new_album.id, new_album.artist, new_album.album_name, new_album.year)
     return {**new_album.model_dump(), "songs": [s.model_dump() for s in new_album.songs], "already_existed": False}
+
+
+@router.post("/{album_id}/tracklist")
+def fill_tracklist(
+    album_id: int,
+    data: Optional[dict] = Body(None),
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Top up a copy of yours whose tracklist isn't settled: the merge in
+    backend/tracklist_fill.py.
+
+    A record added from Upcoming before it was out carries only what the catalog
+    listed then — often just the singles, or nothing. The app calls this when the
+    owner opens an unrated copy that isn't settled. The copy takes the songs of a
+    longer copy of its own edition (once it's out, only a settled one), then the
+    body — a release the client resolved (/search/resolve's shape, with
+    `album_name`) — matched by recording identity; songs are only ever added.
+    Before release that is a top-up and may happen again; on or after release
+    day it is the copy's one pull, and the copy is settled whatever it added
+    (if it has songs). A settled or rated copy comes back untouched. Only the
+    caller's own copy is written. Returns the copy with its songs,
+    `tracklist_settled` and `tracks_added`."""
+    from .. import tracklist_fill as tf
+
+    album = session.exec(
+        select(Album).where(Album.id == album_id).options(selectinload(Album.songs))
+    ).first()
+    if not album:
+        raise HTTPException(status_code=404, detail="Album not found")
+    if album.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not your album")
+
+    before = len(album.songs)
+    if album.status != "rated" and not tf.is_settled(album):
+        out = tf.is_out(album)
+        donor = tf.donor_for(album, tf.record_copies(session, album), released=out)
+        if donor is not None:
+            tf.merge_copy(session, album, tf.from_copy(donor), f"copy:{donor.id}")
+        incoming = tf.from_tracks((data or {}).get("tracks") or [])
+        if incoming and tf.takes_catalog(album, (data or {}).get("album_name")):
+            tf.merge_copy(session, album, incoming, "client")
+            if not album.album_art_url and (data or {}).get("cover_url"):
+                album.album_art_url = data["cover_url"]
+                session.add(album)
+                session.commit()
+        if out:
+            tf.settle(session, album)
+        if len(album.songs) != before and album.status == "to_listen":
+            _queue_predictions(album.id)
+        session.refresh(album)
+
+    return {
+        **album.model_dump(),
+        "songs": [s.model_dump() for s in album.songs],
+        "tracklist_settled": album.tracklist_settled_at is not None,
+        "tracks_added": len(album.songs) - before,
+    }
 
 
 MAX_REVIEW_LEN = 20000

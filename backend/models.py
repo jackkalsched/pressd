@@ -216,6 +216,12 @@ class Album(SQLModel, table=True):
     # results carried the date and the import dropped it, and it cannot be
     # recovered without re-fetching, so old rows simply never read as new.
     release_date: Optional[date] = None
+    # When this copy's tracklist stopped changing (backend/tracklist_settle.py,
+    # backend/tracklist_fill.py): set when it gets songs while its record is
+    # out — an import, a clone — or by its one merge on or after release day.
+    # Until then a pre-release copy's partial list may be topped up; after, it
+    # is never adjusted again.
+    tracklist_settled_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
 
     date_added: Optional[date] = Field(default_factory=date.today)
     date_rated: Optional[date] = None
@@ -817,3 +823,6 @@ class Block(SQLModel, table=True):
 # One set of genre tags per record, across every copy (backend/genre_sync.py):
 # registered here so every session that can write an Album carries the rule.
 from . import genre_sync  # noqa: E402,F401
+# A copy's tracklist settles once it has songs and its record is out
+# (backend/tracklist_settle.py), registered here for the same reason.
+from . import tracklist_settle  # noqa: E402,F401

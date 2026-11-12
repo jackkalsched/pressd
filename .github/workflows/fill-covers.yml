@@ -1,8 +1,11 @@
 name: Fill covers
 
-# Looks again for a cover for every album copy saved without one
-# (worker/fill_covers.py, backend/covers.py). A record added on its release day
-# often has no art in any catalog yet; this picks it up once one publishes it.
+# Tops up every album copy whose tracklist is missing or short
+# (worker/fill_tracklists.py, backend/tracklist_fill.py), then looks again for a
+# cover for every copy saved without one (worker/fill_covers.py,
+# backend/covers.py). Tracklists first, so a copy that gains its songs tonight
+# can gain its cover in the same run. A record added before or on its release
+# day often has neither in full yet; this picks them up once a catalog lists them.
 
 on:
   schedule:
@@ -27,7 +30,13 @@ jobs:
 
       - run: pip install -r requirements-worker.txt
 
+      - name: Top up missing and short tracklists
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m worker.fill_tracklists
+
       - name: Fill in missing album covers
+        if: ${{ !cancelled() }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m worker.fill_covers

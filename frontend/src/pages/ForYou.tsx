@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Search } from 'lucide-react'
+import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Search, CalendarDays } from 'lucide-react'
 import { fetchAlbum, fetchAlbums, fetchFeed, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion, fetchBins } from '../api'
 import type { NewRelease, PredictedPick, RecommendSuggestion, TopReview } from '../api'
 import { MIN_RATED_ALBUMS, songScoreColor } from '../types'
@@ -411,6 +411,7 @@ export default function ForYou() {
             <section className="mb-9">
               <div className="flex items-baseline justify-between mb-4">
                 <h2 className={SECTION_LABEL}>New &amp; Popular</h2>
+                <button onClick={() => navigate('/upcoming')} className="text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) flex items-center gap-1"><CalendarDays size={13} /> Upcoming <ArrowRight size={12} /></button>
               </div>
               <div className="flex gap-4 overflow-x-auto pb-3.5 pt-1" style={{ scrollSnapType: 'x mandatory' }}>
                 {newReleases.map((r) => (

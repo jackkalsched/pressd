@@ -9,7 +9,9 @@
 //                                      your To Listen, Compare on your rating)
 //   /album/community?name=&artist=   — by name, for a record that may not be in
 //                                      Pressd yet (new releases); &deezer= carries
-//                                      the release's id for its tracklist
+//                                      the release's id for its tracklist;
+//                                      Upcoming adds &release= (YYYY-MM-DD) and
+//                                      &cover= for a record not out yet
 // Entry points that aren't tied to a person land here rather than on whoever's
 // copy happened to rank. That copy is friends-only, so linking to it failed for
 // anyone who wasn't that user's friend.
@@ -30,8 +32,9 @@ import {
   copyAlbumToLibrary, deleteAlbum, fetchCommunityAlbum, fetchCommunityAlbumByName, importAlbum,
   resolveDeezerAlbum, resolveReleaseByName,
 } from '../api'
-import type { CommunityAlbum as CommunityAlbumData, CommunityTrack } from '../api'
-import { songScoreColor } from '../types'
+import type { CommunityAlbum as CommunityAlbumData, CommunityTrack, SpotifyAlbumResult } from '../api'
+import { isUnreleased, songScoreColor } from '../types'
+import { outLine } from '../lib/upcoming'
 import { Cover } from '../components/covers'
 import RecommendModal from '../components/RecommendModal'
 import ThreadPreview from '../components/ThreadPreview'
@@ -54,6 +57,11 @@ export default function CommunityAlbum() {
   const byName = !!name && !!artistParam
   const deezerId = params.get('deezer') ? Number(params.get('deezer')) : null
   const albumId = Number(id)
+  // From Upcoming: the day it comes out, and the list's cover. Before that day
+  // there's nothing to rate, but it can go on To Listen.
+  const release = params.get('release')
+  const coverParam = params.get('cover')
+  const upcoming = byName && isUnreleased(release)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: byName ? ['community-by-name', name, artistParam] : ['album', albumId, 'community'],
@@ -100,7 +108,7 @@ export default function CommunityAlbum() {
   }
 
   // Fill in from the resolved release when Pressd has no copy of it yet.
-  const shown: CommunityAlbumData = resolved && data.tracks.length === 0
+  const filled: CommunityAlbumData = resolved && data.tracks.length === 0
     ? {
         ...data,
         year: data.year ?? resolved.year,
@@ -110,7 +118,16 @@ export default function CommunityAlbum() {
         })),
       }
     : data
+  // Then from what Upcoming carried, for a record no catalog has much on yet.
+  const shown: CommunityAlbumData = {
+    ...filled,
+    album_art_url: filled.album_art_url ?? coverParam ?? null,
+    year: filled.year ?? (release ? Number(release.slice(0, 4)) : null),
+  }
 
+  // Not out yet: from Upcoming's date, or, opened by a copy's id, the latest
+  // release date any copy of the record carries. No Rate now either way.
+  const outDate = upcoming ? release : isUnreleased(shown.release_date) ? shown.release_date! : null
   const notRated = shown.your_status !== 'rated'
   const inLibrary = shown.your_album_id != null
   // Someone other than you has to have rated it, or "compare" would hold your
@@ -128,6 +145,31 @@ export default function CommunityAlbum() {
       const copy = await copyAlbumToLibrary(shown.album_id, status)
       queryClient.invalidateQueries({ queryKey: ['albums'] })
       return copy.id
+    }
+    // Not out yet: a To Listen copy with whatever the catalog lists now — often
+    // just the lead singles — or no songs at all when it lists nothing. The
+    // rest arrive by merge (useTracklistFill when you open it, and the daily
+    // worker). Named as Upcoming named it, so this page finds it again.
+    if (upcoming) {
+      const listing = resolved ?? (await (deezerId != null
+        ? resolveDeezerAlbum(deezerId)
+        : resolveReleaseByName(name!, artistParam!)).catch(() => null))
+      const shell: SpotifyAlbumResult = {
+        ...(listing ?? {}),
+        spotify_id: null,
+        album_name: name!,
+        artist: artistParam!,
+        year: shown.year ?? null,
+        cover_url: shown.album_art_url ?? null,
+        total_tracks: listing?.total_tracks ?? 0,
+        tracks: listing?.tracks ?? [],
+        genre: listing?.genre ?? null,
+        release_date: release,
+        upcoming: true,
+      }
+      const imported = await importAlbum(shell, 'to_listen', activeUser?.id ?? 0)
+      queryClient.invalidateQueries({ queryKey: ['albums'] })
+      return imported.id
     }
     const full = resolved ?? (deezerId != null
       ? await resolveDeezerAlbum(deezerId)
@@ -234,6 +276,9 @@ export default function CommunityAlbum() {
                 </Link>
                 {shown.year ? ` · ${shown.year}` : ''}
               </p>
+              {outDate && (
+                <p className="m-0 mt-1.5 text-[14px] font-semibold text-(--c-2d6a4f)">{outLine(outDate)}</p>
+              )}
               {(shown.genre || subs.length > 0) && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {shown.genre && (
@@ -262,6 +307,7 @@ export default function CommunityAlbum() {
                 notRated={notRated}
                 inLibrary={inLibrary}
                 noOneElse={noOneElse}
+                upcoming={outDate != null}
                 busy={busy}
                 queued={queued}
                 onRate={rate}
@@ -279,13 +325,16 @@ export default function CommunityAlbum() {
 // ── The averaged view ─────────────────────────────────────────────────────────
 
 function AveragedView({
-  data, litTrack, notRated, inLibrary, noOneElse, busy, queued, onRate, onQueue,
+  data, litTrack, notRated, inLibrary, noOneElse, upcoming, busy, queued, onRate, onQueue,
 }: {
   data: CommunityAlbumData
   litTrack: number | null
   notRated: boolean
   inLibrary: boolean
   noOneElse: boolean
+  /** Not out yet: no Rate now, and Add puts it on To Listen with the songs
+   *  the catalog lists so far. */
+  upcoming: boolean
   busy: 'rate' | 'queue' | 'delete' | null
   queued: boolean
   onRate: () => void
@@ -343,7 +392,7 @@ function AveragedView({
 
       {/* Nobody but you has rated it: no comparison to draw yet, so offer the
           thing that would create one. */}
-      {noOneElse && recommendFrom != null && (
+      {noOneElse && recommendFrom != null && !upcoming && (
         <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3 rise-in" style={stagger(1)}>
           <p className="m-0 text-[14.5px] text-(--c-57534e)">
             {data.you?.score != null
@@ -389,7 +438,22 @@ function AveragedView({
       {/* The two ways in sit side by side — alternatives, not a primary with an
           afterthought under it. Queueing only means anything for albums you
           don't hold. */}
-      {(notRated || !inLibrary) && (
+      {upcoming ? (
+        <div className="mt-5 flex gap-2.5">
+          <button
+            onClick={onQueue}
+            disabled={busy === 'queue' || queued || inLibrary}
+            className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-xl text-[15px] font-semibold ${
+              queued || inLibrary
+                ? 'bg-(--c-2d6a4f)/10 text-(--c-2d6a4f)'
+                : 'bg-(--c-green-fill) text-white hover:bg-(--c-green-fill-hover) disabled:opacity-70'
+            }`}
+          >
+            {busy === 'queue' ? <VinylSpinner size={18} /> : queued || inLibrary ? <Check size={16} className={queued ? 'pop' : ''} /> : <Plus size={16} />}
+            {queued || inLibrary ? 'In Library' : 'Add to Library'}
+          </button>
+        </div>
+      ) : (notRated || !inLibrary) && (
         <div className="mt-5 flex gap-2.5">
           {notRated && (
             <button
@@ -416,7 +480,7 @@ function AveragedView({
         </div>
       )}
 
-      <p className={`${SECTION_LABEL} mb-2 mt-9`}>TRACKS</p>
+      {data.tracks.length > 0 && <p className={`${SECTION_LABEL} mb-2 mt-9`}>TRACKS</p>}
       <ol className="m-0 -mx-4 list-none p-0">
         {data.tracks.map((t, i) => (
           <RevealRow key={`${t.title}-${i}`} index={i}>

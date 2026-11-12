@@ -8,8 +8,9 @@
 // cover of its biggest one (by the artist's Last.fm listeners), its date in the
 // corner and "+N" for the rest. Tapping it scrolls down to that day in the
 // list below, which runs through the month's release days, each day's records
-// biggest first. Nothing here is out yet, so there's nothing to rate: a record
-// opens its artist's page.
+// biggest first. A record opens its album page by name and artist (Deezer's id
+// when the list has one), carrying the release date and cover: there's nothing
+// to rate yet, but it can go on To Listen.
 import { useMemo, useRef, useState } from 'react'
 import {
   Pressable,
@@ -124,7 +125,19 @@ export default function Upcoming() {
 
   function open(r: UpcomingRelease) {
     selection()
-    router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent(r.artist), mode: 'pressd' } })
+    const deezer = r.deezerId != null ? String(r.deezerId) : null
+    router.push({
+      pathname: '/album/[id]',
+      params: {
+        // The id segment goes unused once name+artist are present.
+        id: deezer ?? '0',
+        name: r.title,
+        artist: r.artist,
+        release: r.releaseDate,
+        ...(deezer ? { deezer } : {}),
+        ...(r.coverUrl ? { cover: r.coverUrl } : {}),
+      },
+    })
   }
 
   const header = (

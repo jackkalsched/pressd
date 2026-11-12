@@ -48,6 +48,13 @@ export interface Album {
   extraArtists: string[]
   albumArtUrl: string | null
   totalTracks: number | null
+  /** The day it comes out ("YYYY-MM-DD"), when the catalog gave one. A copy
+   *  added from Upcoming before that day has no songs until it does. */
+  releaseDate: string | null
+  /** Whether the tracklist is final: it had its one pull on or after release
+   *  day (backend/tracklist_fill.py) and is never adjusted again. null when the
+   *  server predates the stamp. */
+  tracklistSettled: boolean | null
   spotifyId: string | null
   dateAdded: string
   dateRated: string | null
@@ -120,6 +127,14 @@ export function libraryPercentileLabel(score: number, others: number[]): string 
 // Short releases (≤6 tracks) skip the factor ratings and score as the song
 // mean; they show everywhere with a tag so they read differently from LPs
 export const EP_MAX_TRACKS = 6
+
+/** Whether a release date ("YYYY-MM-DD") is still ahead, as a local calendar
+ *  day: a record out today is out. No date reads as out. */
+export function isUnreleased(releaseDate: string | null | undefined, now: Date = new Date()): boolean {
+  if (!releaseDate) return false
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  return releaseDate.slice(0, 10) > today
+}
 
 /** Every track sharing the album's highest score, in track order. One entry
  *  means no tie; two or more is what the tie-break dialog asks about. Mirrors

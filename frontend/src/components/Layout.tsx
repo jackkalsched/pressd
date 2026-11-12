@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Library, BarChart2, List, Mail, X, MessageCircle, Users, Plus, Sparkles, TrendingUp, ChevronDown, Package } from 'lucide-react'
+import { CircleUser, ChartPie, BarChart3, List, ListMusic, Mail, X, MessageCircle, Users, Plus, ChevronDown, Package, CalendarDays } from 'lucide-react'
 import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
 import { fetchFriends, getInviteLink, removeFriend } from '../api'
@@ -42,15 +42,18 @@ function Avatar({ user, size = 28 }: { user: Pick<UserInfo, 'name' | 'avatarUrl'
 }
 
 const nav = [
-  { to: '/for-you', label: 'For You', icon: Sparkles },
-  // Sits right after For You, where the mobile app puts it. BarChart2 is
-  // already Stats — this board is about movement, not your own distribution.
-  { to: '/charts', label: 'Charts', icon: TrendingUp },
-  { to: '/library', label: 'Library', icon: Library },
+  // The pages iPhone's tab bar and side menu also show take its icons
+  // (mobile/components/TabBar.tsx, SideMenu.tsx). Charts sits right after
+  // For You, as on the phone; Stats is a pie so it can't pass for Charts' bars.
+  { to: '/for-you', label: 'For You', icon: ListMusic },
+  { to: '/charts', label: 'Charts', icon: BarChart3 },
+  { to: '/library', label: 'Library', icon: CircleUser },
   // Pressd's themed collections; iPhone reaches them from For You's side menu.
   { to: '/bins', label: 'Bins', icon: Package },
+  // Records announced and dated, a month at a time (iPhone: the side menu).
+  { to: '/upcoming', label: 'Upcoming', icon: CalendarDays },
   { to: '/ratings', label: 'Rankings', icon: List },
-  { to: '/stats', label: 'Stats', icon: BarChart2 },
+  { to: '/stats', label: 'Stats', icon: ChartPie },
   { to: '/social', label: 'Social', icon: Users },
 ]
 

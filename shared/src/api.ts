@@ -98,6 +98,15 @@ function transformAlbum(a: Record<string, unknown>): Album {
     extraArtists: (() => { try { const v = JSON.parse(a.extra_artists as string); return Array.isArray(v) ? v : [] } catch { return [] } })(),
     albumArtUrl: a.album_art_url as string | null,
     totalTracks: a.total_tracks as number | null,
+    releaseDate: (a.release_date as string | null | undefined) ?? null,
+    // GET /albums/{id} sends the flag; every other album row carries the stamp.
+    // null: a server from before the stamp existed, which can't say.
+    tracklistSettled:
+      typeof a.tracklist_settled === 'boolean'
+        ? a.tracklist_settled
+        : a.tracklist_settled_at !== undefined
+          ? a.tracklist_settled_at != null
+          : null,
     dateAdded: a.date_added as string,
     dateRated: a.date_rated as string | null,
     predictedTheme: a.predicted_theme as number | null ?? null,
@@ -407,6 +416,10 @@ export interface CommunityAlbum {
   /** From your own copy — who sent you this album and what they said. */
   recommended_by_name: string | null
   recommendation_note: string | null
+  /** The latest release date ("YYYY-MM-DD") any copy of the record carries,
+   *  so a page opened by a copy's id knows a record that isn't out yet.
+   *  Absent from servers before November 2026. */
+  release_date?: string | null
   you: {
     album_id: number
     score: number | null
@@ -441,6 +454,26 @@ export async function copyAlbumToLibrary(
   if (!res.ok) throw new Error('Failed to add album')
   const raw = await res.json()
   return { ...transformAlbum(raw), alreadyExisted: raw.already_existed ?? false }
+}
+
+/** Top up a copy of yours whose tracklist isn't settled — one added from
+ *  Upcoming before it was out. The server merges (backend/tracklist_fill.py):
+ *  songs from a longer copy of the same edition, then `release` (a resolved
+ *  album), adding only what the copy lacks; nothing is deleted or re-scored. On
+ *  or after release day this is the copy's one pull and settles it; a settled
+ *  copy comes back untouched. `tracksAdded` is how many songs it gained. */
+export async function fillTracklist(
+  albumId: number,
+  release?: SpotifyAlbumResult | null,
+): Promise<Album & { tracksAdded: number }> {
+  const res = await apiFetch(`${BASE()}/albums/${albumId}/tracklist`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(release ? { tracks: release.tracks, cover_url: release.cover_url, album_name: release.album_name } : {}),
+  })
+  if (!res.ok) throw new Error('Could not load the tracklist')
+  const raw = await res.json()
+  return { ...transformAlbum(raw), tracksAdded: (raw.tracks_added as number | undefined) ?? 0 }
 }
 
 export async function backfillCovers(): Promise<{ updated: number; skipped: number; failed: number }> {
@@ -705,6 +738,8 @@ export interface BinEntry {
   pressdRaters: number
   /** Only once the caller's predictions are unlocked. */
   predictedScore: number | null
+  /** A sentence about the record (or song), Pressd's own (worker/bin_blurbs.py). */
+  blurb: string | null
 }
 
 export interface BinDetail extends BinCard {
@@ -761,6 +796,7 @@ export async function fetchBin(slug: string): Promise<BinDetail> {
       pressdAvg: (e.pressd_avg as number | null) ?? null,
       pressdRaters: (e.pressd_raters as number) ?? 0,
       predictedScore: (e.predicted_score as number | null) ?? null,
+      blurb: (e.blurb as string | null) ?? null,
     })),
   }
 }
@@ -2202,6 +2238,51 @@ export async function fetchThreadPosts(
       : null,
     posts: (d.posts as Record<string, unknown>[]).map(transformPost),
     nextCursor: d.next_cursor ?? null,
+  }
+}
+
+/** A locked room's three most popular reviews, clipped on the server, plus
+ *  what its Rate now needs — see discussions.thread_preview. */
+export interface ThreadPreviewPost {
+  id: number
+  body: string
+  truncated: boolean
+  createdAt: string | null
+  author: { id: number; name: string; avatarUrl: string | null; score: number | null }
+}
+
+export interface ThreadPreview {
+  posts: ThreadPreviewPost[]
+  /** Your copy of the record in any edition; null when you have none. */
+  yourCopy: { id: number; status: string; canRate: boolean } | null
+  /** The copy Rate now / Add clones when you have none. */
+  source: { albumId: number; canRate: boolean } | null
+}
+
+export async function fetchThreadPreview(ref: SubjectRef): Promise<ThreadPreview> {
+  const res = await apiFetch(`${BASE()}/threads/preview?${subjectQuery(ref)}`)
+  if (!res.ok) throw new Error('Failed to load the preview')
+  const d = await res.json()
+  const yc = d.your_copy as Record<string, unknown> | null
+  const src = d.source as Record<string, unknown> | null
+  return {
+    posts: ((d.posts as Record<string, unknown>[] | undefined) ?? []).map((p) => {
+      const a = p.author as Record<string, unknown>
+      return {
+        id: p.id as number,
+        body: (p.body as string) ?? '',
+        truncated: !!p.truncated,
+        createdAt: (p.created_at as string | null) ?? null,
+        author: {
+          id: a.id as number,
+          name: (a.name as string) ?? 'Unknown',
+          avatarUrl: (a.avatar_url as string | null) ?? null,
+          score: (a.score as number | null) ?? null,
+        },
+      }
+    }),
+    yourCopy: yc ? { id: yc.id as number, status: yc.status as string, canRate: !!yc.can_rate } : null,
+    source: src ? { albumId: src.album_id as number, canRate: !!src.can_rate } : null,
   }
 }
 

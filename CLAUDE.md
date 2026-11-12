@@ -61,8 +61,9 @@ frontend/         React 19 + Vite SPA        → Vercel
 mobile/           Expo SDK 57 iOS app        → TestFlight
 worker/           nightly ML pipeline        → GitHub Actions, 02:30 PT
 ops/launchd/      nightly audio ingest       → launchd on the Mac, from a deploy clone of main
-tests/            pytest, backend-only: taste overlap, the audio ingest's scheduler, upcoming releases, bins (no DB connection)
+tests/            pytest, backend-only: taste overlap, the audio ingest's scheduler, upcoming releases, bins, the locked thread's preview (no DB connection)
 data/bins/        curated bins' source lists: <slug>.csv (the list as printed) + <slug>.json (title, source, overrides)
+                  + <slug>.blurbs.json (Pressd's one-sentence blurbs by rank, worker/bin_blurbs.py)
 shared/           @pressd/shared — TS source consumed by frontend + mobile, no build
 theme_predictor/  LLM album analysis; imported by the worker AND the web service
 song_score_model.py  LightGBM per-song model (1,211 lines) — train + inference
@@ -80,7 +81,7 @@ PLAN_*.md         gitignored design docs; code cites them by section
 | `backend/scoring.py` | framework 1: the user's own album score | 267 |
 | `backend/global_rating.py` | framework 2: the userbase-pooled rating | 155 |
 | `backend/trackkeys.py` | normalization keys; pure stdlib, imported everywhere | 163 |
-| `backend/routers/` | 17 routers, **128 endpoints** | 8,357 |
+| `backend/routers/` | 17 routers, **130 endpoints** | 8,357 |
 | `worker/` | `nightly_predict`, `catalog_predict`, `artist_clusters`, `audio_ingest`, `refresh_new_releases`, `taste_nightly`, `taste_health`, … | 3,449 |
 | `theme_predictor/` | `predict_single`, `personalize`, `global_factors`, `corpus`, … | 1,896 |
 | `shared/src/api.ts` | the single API client, 111 exported functions | 2,147 |
@@ -103,7 +104,7 @@ snake_case on the wire, camelCase at the client boundary.
 overlap: its matrix, baseline, live path, nightly stage, health check, router and the
 schema's delete order), plus the audio ingest's download scheduler and the upcoming-releases
 build's parsing, merge and filter
-(`tests/test_audio_queue.py`). Nothing else is covered — no vitest, nothing for scoring
+(`tests/test_audio_queue.py`). Plus the tracklist merge's pure core (`tests/test_tracklist_fill.py`). Nothing else is covered — no vitest, nothing for scoring
 or the other routers — so for everything else verification is typecheck + lint +
 running it. Tests never open a database connection (`tests/conftest.py`).
 
@@ -138,6 +139,9 @@ python -m worker.nightly_predict             # all eligible users
 python -m worker.nightly_predict --user 1 --skip-llm --force
 python -m worker.catalog_predict --dry-run
 python song_score_model.py                   # retrain → song_score_model.pkl
+python -m worker.fill_tracklists [--dry-run] [--limit N]  # top up unsettled copies: songless, not out yet, or out
+                                             # but not yet pulled (merge, backend/tracklist_fill.py; daily in CI,
+                                             # fill-covers.yml, before covers)
 python -m worker.fill_covers [--dry-run]    # look again for every album copy with no cover (also daily in CI, fill-covers.yml)
 python -m worker.refresh_upcoming_releases [--dry-run]  # rebuild the upcoming-releases list (daily in CI, upcoming-releases.yml)
 python -m worker.set_cover ID URL [--dry-run]  # a cover by hand, for a record no catalog has: every copy gets it
@@ -148,6 +152,10 @@ python -m worker.deep_stats ID|"name" [--user 1] [--out DIR] [--html]
 python -m worker.import_bin data/bins/<slug>.csv [--dry-run] [--set RANK DEEZER_ID]
                                              # a list file into a curated bin, matched on Deezer (iTunes fallback);
                                              # the dry run lists doubtful rows; --set pins one, kept in the JSON
+python -m worker.bin_blurbs <slug> [--dry-run] [--force]
+                                             # a one-sentence blurb per bin entry from Claude (claude-opus-5-5, effort
+                                             # low, 20 a request) into data/bins/<slug>.blurbs.json and BinEntry.note;
+                                             # asks only for ranks the file lacks; edit the file and re-run to correct one
 python -m worker.taste_evaluate --out PATH   # taste overlap: factorization vs layered baseline on held-out
                                              # song scores; reads production only; names users, keep it local
                                              # (--pairs 1:84,1:12: eye-test pairs by user id; default user 1's)
@@ -348,7 +356,7 @@ there for the biggest records MusicBrainz hasn't listed yet (Swift's *The Encore
 week). ListenBrainz's own `listen_count` is 0 for fresh releases, so it cannot rank.
 The page never waits on an outside source.
 
-### Journey: upcoming releases (November 2026; on iPhone, web's page not built yet)
+### Journey: upcoming releases (November 2026; iPhone and web)
 
 ```
 daily, GitHub Actions 04:40 UTC     .github/workflows/upcoming-releases.yml
@@ -387,8 +395,86 @@ its biggest record's cover (by the artist's Last.fm listeners) with the date in 
 "+N" for the rest; other days are grey numbers; arrows step between this month and the last
 with releases. Under it, "N releases scheduled" for the month, then each release day's
 records biggest first — cover, title, artist, "in N days". A tile scrolls to its day; a record
-opens its artist's page (nothing is out yet to rate). No genre, by decision: Wikipedia's
+opens its **album page** — `album/[id]` by name and artist, with `deezer` when the row has one and
+`release` / `cover` from the list — the community view, filled from the catalog when it can be
+(cover, year, a tracklist if Deezer already lists one) and from the list's cover and date when not.
+While `isUnreleased(release)` (`shared/src/types.ts`) it reads "Out {day} · in N days" under the
+artist, has no Rate now, and its one button is **Add to Library** (then *In Library*; the copy goes on the To Listen shelf). That adds
+a To Listen copy carrying **whatever tracklist the catalog lists now** — often only the lead
+singles, none → a songless copy — with `release_date`, the cover and the list's own name and artist
+(so the page finds it again); an import with no songs queues no prediction. A copy with no songs
+isn't a single, so it shows in the library. **Rating waits for release whatever songs a copy has**:
+your copy's page has no Rate now (and no TRACKS heading without songs) while `isUnreleased(releaseDate)`
+or it has no songs, and the rating screen says "Not out yet" (or "No tracklist yet") with Go back,
+seeding no drafts until the tracklist has settled. A community page opened by a copy's id knows the
+date too: `_community_payload` sends `release_date`, the latest any copy of the record carries, and
+both apps drop Rate now while it's ahead.
+
+The rest arrives by **merge** (`backend/tracklist_fill.py`, November 2026): songs are only added,
+matched to what the copy holds by recording identity (`recording_key` on the album's own artists,
+`tracklink`'s two-songs-one-copy rule, or `track_id` from another copy — never a bare title), numbered
+in the list's order with anything the list lacks kept after it, never deleted or re-scored, and a
+copy the list adds nothing to isn't touched; new songs link through `tracklink.link_album`, so a lead
+single already rated lands on its `Track` and carryover pre-fills it. **Before release a copy may be
+topped up any number of times** (singles as they're announced); **on or after release day it gets
+exactly one pull, and is never adjusted again** (Jack, November 2026). That is
+`Album.tracklist_settled_at`: stamped by the pull, whatever it added, once the copy has songs — and by
+`backend/tracklist_settle.py`, a session hook that stamps any copy given songs while its record is out
+(an import, a clone, a bin's add, a recommendation), so a copy made from a released record is settled
+from birth. The merge opts out of the hook (`MERGING`) and stamps once its pull is done. Songless
+copies, and copies whose release is ahead, stay unsettled. Its migration (a one-shot `DO` block in
+`init_db()`) stamped every copy with songs whose record was out; on 2026-11-12 that was all 1,699.
+Rated and settled copies are left alone. Sources: a longer copy of the record of the **same
+edition** (`_clean` of the names equal, which keeps "(Deluxe)" and "(Taylor's Version)" apart where
+`subject_key` folds them, and every linked song of the short copy on it; most-shared tracklist
+wins; a songless copy may take the standard edition) — for a released copy only a **settled** one,
+whose list is a finished pull, so taking it is the pull — then the catalog (Deezer, then iTunes,
+`same_album`, own edition first, never a single for a non-single). `POST /albums/{id}/tracklist`
+(`albums.fill_tracklist`; owner only) writes the caller's own copy and nothing else — a list a
+client sends can reach someone else's copy only if that copy, unsettled and of the same edition,
+later takes yours as its donor — so a settled or rated copy comes back untouched; otherwise another copy's songs, then the body (a release the client
+resolved, with `album_name`), then, if the record is out, the stamp; a prediction is queued for a To
+Listen copy that changed. It returns the copy, `tracklist_settled` and `tracks_added`; `GET
+/albums/{id}` sends `tracklist_settled` too, and other album rows carry `tracklist_settled_at`
+(shared `Album.tracklistSettled`, null from a server that predates it).
+`mobile/lib/useTracklistFill.ts` (web's is the same hook) calls it when you open your own unrated
+copy that isn't settled — the catalog looked up first by name and sent with it, one request, once
+per copy per session; a released copy with songs whose lookup failed isn't sent, so a dropped
+connection can't spend its one pull. And `worker/fill_tracklists.py` does it daily for every
+unsettled, unrated copy — songless, not out yet, or out but not yet pulled (each record looked up once,
+no connection held across the calls) — in `fill-covers.yml` before the cover fill; a clean catalog
+miss still settles a released copy with songs, an errored lookup settles nothing and is tried the
+next night; `workerrun` job `fill_tracklists`, exit 0 with `network_failures` counted. Its first run
+(2026-11-12, under the earlier top-up-anything rule) added 242 songs to 25 copies (13 from copies, 12
+from the catalog); under this rule it has nothing to do until a record is added before release.
+No genre, by decision: Wikipedia's
 genre column is mostly blank and the fallbacks were too thin to be worth a chip.
+
+**On web** (`frontend/src/pages/Upcoming.tsx` at `/upcoming`, November 2026) — the same page laid
+out wide. Reached from the sidebar's **Upcoming** (lucide `CalendarDays`, right after Bins, as in
+iPhone's side menu; also in the small-screen bottom bar) and from "Upcoming →" at the end of For
+You's New & Popular heading. Same query (`['upcoming', userId]`: notable albums and EPs, 180 days).
+At `lg` the calendar sits pinned on the left (7-column grid of square tiles: the biggest record's
+cover, the date top-left in white, "+N" bottom-right; other days grey numbers; ‹ › step between
+months that have releases) and the list beside it: "N releases scheduled", then each release day's
+records biggest first, two or three across at `sm` / `2xl` — cover, title, artist, "in N days".
+A tile scrolls its day into view in `<main>`. A record is a link to `CommunityAlbum` by name —
+`/album/community?name=&artist=&deezer=&release=&cover=` (`lib/upcoming.ts`'s
+`upcomingAlbumPath`, beside `localDay` / `untilText` / `outLine`, which restate mobile's wording;
+change both). While `isUnreleased(release)` that page reads "Out {Weekday, Month D} · in N days"
+under the artist, has no Rate now and no Recommend, and its one button is **Add to Library** (then
+*In Library*), which imports a To Listen copy with `release_date`, the cover and the list's name and
+artist, carrying **whatever tracklist the catalog lists now** (often only the lead singles; none →
+a songless copy); it falls back to the list's cover and year, and hides TRACKS when there are none.
+Rating waits for release on web whatever songs a copy has: `AlbumDetail` hides Rate / Continue /
+Rate it yourself unless the copy has songs **and** isn't unreleased (it also shows the "Out …" line),
+and `RatingScreen` says "Not out yet" for an unreleased copy and "No tracklist yet" for a released
+one with no songs, with Go back. `frontend/src/lib/useTracklistFill.ts` (mobile's hook, line for
+line) calls `POST /albums/{id}/tracklist` — the **merge** — when the owner opens an unrated copy
+that isn't settled (album page or rating screen): `resolveReleaseByName` first, then one request
+carrying it; once per copy per page load, refetching the album only when its songs or settled
+state changed. Before release that's a top-up; on or after release day it is the copy's one pull.
+The daily `worker/fill_tracklists.py` does the same server-side; this is the fast path. `CommunityAlbum` drops Rate now too when opened by id for a record whose `release_date` is ahead.
 
 ### Journey: the charts
 
@@ -531,7 +617,18 @@ under which a **non-friend's per-song scores** are visible: `GET /posts/{id}/rat
 (`discussions.post_author_rating`) returns a post author's full rating of the thread's
 record — score, factors, every song, review — to anyone past `thread_access`. It is
 keyed on a post, not a user id, so only people who have spoken in the room can be
-looked up, and only for that record, never their library. `public_user` is the only
+looked up, and only for that record, never their library. **One narrow exception
+lets the locked room be seen through the glass** (`GET /threads/preview`,
+`discussions.thread_preview`, November 2026, Jack's request): any signed-in caller gets
+the room's three most popular top-level **reviews** (`kind` review; the thread's
+`popular` order, then all-time standing, then newest), each body clipped server-side to
+`PREVIEW_CHARS` (280) so the rest never leaves the server, authors as `public_user` plus
+their album score. Never replies, votes, per-song scores or a full rating. Spoilers are
+held back harder than inside: a post marked a spoiler by its author, or flagged as one by
+*anyone*, is left out entirely, as are deleted posts, posts hidden by reports or reported
+by the caller, and authors blocked either way (`BLOCKED_SQL`). It also returns the
+caller's copy of the record in any edition (`your_copy`) or the copy Rate now would clone
+(`source`), each with `can_rate` (songs, and out). `public_user` is the only
 shape one user may see of another (id, name, avatar, bio); `own_user` adds the caller's
 private state and backs `auth_response` and `GET /users/me`. Returning a `PressUser`
 row directly hands every column to the caller — email and provider ids included — which
@@ -602,7 +699,7 @@ not its tracks.
 **Bins (`backend/bins.py`, `backend/routers/bins.py`, November 2026)** — themed collections
 of records; spec `docs/superpowers/specs/2026-11-11-bins-design.md`. v1 is Pressd's
 **curated** bins, the first the *Apple Music 100 Best Albums* (2024, credited by name, not linked;
-no Apple artwork or blurbs — rank, title, artist, year). `Bin` (slug, kind `curated` |
+no Apple artwork or blurbs — rank, title, artist, year; the blurb under each row is Pressd's own, below). `Bin` (slug, kind `curated` |
 `user`, `owner_id` null for Pressd's, `item_type` album | song, source name / link / date,
 `visibility`, `sort_order`) and `BinEntry` (position, the source's `rank`, the matched
 catalog's **primary artist** with the **list's own title** — so *Purple Rain* is Prince's,
@@ -644,7 +741,7 @@ the collage's lower-right corner (`BinMosaic`'s `pressd`); web's sidebar **Bins*
 list, two columns at `2xl`);
 iPhone's **side menu** (`components/SideMenu.tsx`, the ≡ beside For You's search icon,
 sliding in from the right, the button's side, with its own ≡ landing exactly where the
-masthead's was — measured on the tap — so the same finger closes it; the header is the Pressd mark and wordmark on the ≡'s line; entries: Bins, Getting Started (the first-run tutorial with `replay: '1'`, as Settings → *How Pressd works* opens it), and Settings —
+masthead's was — measured on the tap — so the same finger closes it; the header is the Pressd mark and wordmark on the ≡'s line; sections split by hairlines: Getting Started (the first-run tutorial with `replay: '1'`, as Settings → *How Pressd works* opens it) on its own at the top; the four tabs in the tab bar's own order, icons and labels (For You, Library, Social, Charts — switched to with `router.navigate`, not pushed; For You just closes the menu); Bins and Upcoming; and, pinned to the foot of the panel, Settings and Contact support (a mail to pressdmusicapp@gmail.com). Web's sidebar uses the same icons for the pages both have (`ListMusic`, `BarChart3`, `CircleUser`, `Users`, `Package`, `CalendarDays`; web's Stats is `ChartPie`). Settings is
 the profile's `SettingsSheet` in `settings` mode, which For You mounts too, opened once the
 menu has slid away), `app/bins/index.tsx` and
 `app/bins/[slug].tsx`. The bin page opens on a **banner** the width of the screen: the lead record's cover blurred
@@ -667,7 +764,7 @@ records first, best predicted first, then rated ones by your score), and Ascendi
 Descending; choosing an order resets the direction to its own (the list 1 → 100, scores
 high → low), and a record with no number stays last either way. The rules are
 `shared/src/binSort.ts`, once for both. **Search** (`BinSearch`, one per platform) is a round
-magnifier beside Sort by on a bin's page and beside the title on the Bins page; a tap opens
+magnifier beside Sort by on a bin's page and on the Bins page beside the title (iPhone) or at the header's far right, opening leftward (web); a tap opens
 the field, focused, and ✕ (or Escape, or leaving it empty) folds it. On a bin's page opening it
 squishes Sort by down to its ⇅ icon on the left while the field grows across the row, and
 tapping that icon folds the search away and lets the sort back out — the page holds the open
@@ -684,7 +781,17 @@ figures — YOU (once you've rated it) leading, PRESSD (the average) smaller in 
 Pressd's order the other way round, and in Most rated a RATINGS count leads with both
 scores grey — and, while you haven't,
 a star (Rate now; continues your copy if you hold one) and a bookmark (save to your
-library, filled once it's there). Each row carries year · genre: the genre its copies on Pressd
+library, filled once it's there). On web the figures and the two buttons are one group at
+the row's right edge, on the words' bottom line, and the middle holds the entry's **blurb**
+(two lines at most, from `md`; below `sm` the group drops under the words, figures left,
+buttons right). iPhone shows no blurb: its rows are already taller than their 120pt cover.
+**Blurbs** are Pressd's own sentence per entry (`BinEntry.note`, served as `blurb`), never
+the source's write-up: `worker/bin_blurbs.py` gives Claude only the facts (artist, title,
+year, genre; a song's album) and asks for one factual line of at most ~22 words — no
+hype words, no quality talk, no "This album". They live in `data/bins/<slug>.blurbs.json`
+by rank, versioned with the list; `import_bin` sets `note` from that file on every
+re-import. On 2026-11-12 all 100 Apple and 200 Rolling Stone entries got one, each read for
+accuracy and about 30 corrected by hand in the file. Each row carries year · genre: the genre its copies on Pressd
 carry most, else the catalog's from the stored resolve. **Song bins** (November 2026, `item_type` song): the second Pressd bin is Rolling Stone's
 *The 200 Greatest Rock Songs of the 21st Century So Far* (published 2026-10-27; ranks, artists,
 titles and years read once from the article's own list data into
@@ -1608,6 +1715,12 @@ backend: `/users/` rows carry only `id`, `name`, `avatar_url`, `bio`.
   copy with `already_existed: True` and only backfills a missing cover (`albums.py:410`).
   There is no refresh endpoint, so when an upstream catalog corrects a tracklist the
   user's only recourse is delete-and-re-add, losing their ratings. Wanted, not intended.
+  **By decision, November 2026, a tracklist is adjusted once after release and never again**
+  (`Album.tracklist_settled_at`, §4 upcoming releases): a copy added before release is topped
+  up as singles appear and gets one pull on or after release day — on open
+  (`POST /albums/{id}/tracklist`) or by the daily `worker/fill_tracklists.py` — adding only the
+  songs it lacks. Every other copy is settled from the moment it has songs. So a catalog's later
+  correction still never reaches a copy; that is now the rule, not a gap.
   `backend/repair_missing_songs.py` is a one-off Excel-sourced script, not a fix.
 
 ### Parity — what web is still missing (audited 2026-09-23)
@@ -1631,6 +1744,15 @@ reply (`FullReviewModal` / `FullReviewSheet`, over `fetchPostAuthorRating`), and
 track's room average under the summary (`ThreadSummary.tracks` from
 `threads.thread_summary`). Web lays the thread out wide — conversation plus a sticky
 record rail — where mobile is one column.
+A thread you haven't rated (both platforms, November 2026) is no longer a bare lock: it
+shows the room's top three reviews from `GET /threads/preview` (avatar, name, score, the
+clipped body held to four lines; read-only — no votes, replies, report or Full review),
+then the lock, `LOCKED_COPY` ("Rate this record to read every review and join the
+conversation.") and one button: **Rate now** / **Continue rating** on your copy of the
+record, else **Rate now** on a copy cloned from `source` as Listening
+(`copyAlbumToLibrary`, the community page's path), or **Add to Library** (To Listen) when
+the record has no songs or isn't out; nothing when Pressd holds no copy. Web sets the
+three side by side at `xl`. The album page's locked `ThreadPreview` line is unchanged.
 ⚠️ `frontend/src/components/CommentThread.tsx` is **not** this — it is review comments
 (`fetchComments`/`postComment`), friend-scoped and about one copy of an album, sharing a
 name with `mobile/components/CommentThread.tsx`.
@@ -1878,7 +2000,8 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   A copy saved without a cover is looked for again (`backend/covers.py`, November 2026):
   another copy of the record, then Deezer, iTunes and MusicBrainz + the Archive, each hit
   checked with `same_album` — in the background right after the import, daily by
-  `worker/fill_covers.py` (`.github/workflows/fill-covers.yml`, 03:40 PT), and by `POST /albums/enrich-covers`
+  `worker/fill_covers.py` (`.github/workflows/fill-covers.yml`, 03:40 PT, right after
+  `worker/fill_tracklists.py` gives unsettled copies their songs, §4), and by `POST /albums/enrich-covers`
   on web's Library. A release-day import is the usual case: *Dream Fatigue* was on
   MusicBrainz with no art anywhere, and the Archive knew its cover before it could serve
   it (a 500 on the image), so the Archive check GETs the image and keeps only a real one.
@@ -1942,6 +2065,23 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   `useRecalibrationMessage` (`shared/src/hooks/useRecalibration.ts`): two status lines,
   then the nudges (`RECALIBRATION_NUDGES` — reviews, friends, recommending, the room,
   the charts, the shelf) shuffled and cycling every 3.6s, never "Almost there…", with no subtext under them.
+- **A predicted score is drawn by `PredictedScore`** (iPhone, November 2026;
+  `mobile/components/PredictedScore.tsx`): the number in its caller's own font and size,
+  filled with a gray → green → red → green → gray gradient that drifts on a 6s ease-in-out
+  loop, and a small white four-point sparkle that flashes at its top-right every 3.4s.
+  A settled score stays flat-coloured, so the two never read alike. The colours are
+  per appearance in the component (`STOPS`; `scheme` forces one on a fixed background). It lays the number out as a plain
+  Text and masks the gradient over it (`@react-native-masked-view/masked-view` +
+  `expo-linear-gradient`, panned by `react-native-reanimated` on the UI thread), so
+  swapping it in moves nothing; it pauses off screen, on an unfocused screen and in
+  the background, and stands still with no sparkle under Reduce Motion. Used on For
+  You's Rate this next, the album page's PREDICTED / FOR YOU figure (replacing the
+  stroked `OutlineScore`) and a bin row's PREDICTED. The library's To Listen badge
+  (`~7.26` on a cover) keeps its plain text, by Jack's choice. A new predicted number
+  goes through it; a number inside a sentence ("We think
+  you'll rate this about 7.26") stays text. Reanimated 4.5.1, worklets 0.10.2 and
+  masked-view 0.3.2 are pinned exactly in `mobile/package.json`; all three were
+  already in the native build through expo-router, so they need no rebuild.
 - **Hover feedback stays small.** `COVER_LIFT` is a 4% lift and a 1° lean on an
   ease-out; it was 13% and 3° on a springy curve and made rows of covers jump. Keep
   new hover scales in that range. The one exception, by request, is the shelf
@@ -2041,7 +2181,7 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   card's geometry lives in both `ShareCard.tsx` files by the same rule — every mobile
   measurement is the web pixel value passed through `u()`.
 - **Verification is the taste-overlap tests plus typecheck + lint + running it.** Tests:
-  `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3.13 -m pytest tests -q -p no:warnings` (161
+  `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3.13 -m pytest tests -q -p no:warnings` (190
   pass; none open a database connection, so they say nothing about production data —
   new taste-overlap code gets a test beside the others). Web:
   `cd frontend && npm run typecheck`. Mobile: `cd mobile && npm run typecheck`. Backend:

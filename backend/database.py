@@ -326,6 +326,24 @@ def init_db():
                      FROM postlike GROUP BY post_id) v
                WHERE post.id = v.post_id AND post.kind = 'review'
                  AND (post.like_count IS DISTINCT FROM v.up OR post.dislike_count IS DISTINCT FROM v.down)""",
+            # ── When a copy's tracklist stopped changing (backend/tracklist_fill.py):
+            #    its first pull on or after release day, or an import with songs
+            #    of a record already out. Added and backfilled in one block that
+            #    acts only while the column is missing, so the stamp happens once:
+            #    a plain UPDATE here would run every boot and settle a copy
+            #    added before release the day it came out, before its one pull.
+            #    Stamped: every copy with songs whose record is out (or undated).
+            #    Left null: songless copies, and ones whose release is ahead.
+            """DO $$ BEGIN
+                 IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                                WHERE table_schema = 'public' AND table_name = 'album'
+                                  AND column_name = 'tracklist_settled_at') THEN
+                   ALTER TABLE album ADD COLUMN tracklist_settled_at TIMESTAMPTZ;
+                   UPDATE album a SET tracklist_settled_at = NOW()
+                   WHERE (a.release_date IS NULL OR a.release_date <= CURRENT_DATE)
+                     AND EXISTS (SELECT 1 FROM song s WHERE s.album_id = a.id);
+                 END IF;
+               END $$""",
             # ── Row-level security on every public table, last so it covers the
             #    tables create_all just made. Supabase serves the public schema
             #    over its REST API to anyone holding the project's publishable

@@ -24,7 +24,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Pencil, Play, Plus, Share2, Star, Trash2 } from 'lucide-react'
 import { fetchAlbum, deleteAlbum, fetchFriendRatings, fetchFriends, importAlbum, saveReview, deleteReview } from '../api'
 import { useUser } from '../context/UserContext'
-import { songScoreColor, BANG_THRESHOLD, SKIP_THRESHOLD, EP_MAX_TRACKS } from '../types'
+import { songScoreColor, BANG_THRESHOLD, SKIP_THRESHOLD, EP_MAX_TRACKS, isUnreleased } from '../types'
 import type { Album } from '../types'
 import RecommendModal from '../components/RecommendModal'
 import CommentThread from '../components/CommentThread'
@@ -39,6 +39,8 @@ import {
 import { useTrackHighlight, trackParam } from '../lib/trackHighlight'
 import { stagger } from '../lib/format'
 import VinylSpinner from '../components/VinylSpinner'
+import { useTracklistFill } from '../lib/useTracklistFill'
+import { outLine } from '../lib/upcoming'
 
 function possessive(name: string): string {
   return name.endsWith('s') ? `${name}’` : `${name}’s`
@@ -193,6 +195,10 @@ export default function AlbumDetail() {
   // stays in order, so an unfinished copy opens with no jump).
   const litTrack = useTrackHighlight(trackParam(params), isOwn && album?.status === 'rated' && !comparing)
 
+  // Your own copy with no songs — added from Upcoming before it was out — takes
+  // its tracklist the first time it's opened after release.
+  const { filling } = useTracklistFill(album, isOwn)
+
   const { data: yourAlbum } = useQuery({
     queryKey: ['album', yourCopy?.id],
     queryFn: () => fetchAlbum(yourCopy!.id),
@@ -249,6 +255,10 @@ export default function AlbumDetail() {
   const sortedSongs = [...album.songs].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0))
   const artists = [album.artist, ...album.extraArtists]
   const isEP = album.songs.length <= EP_MAX_TRACKS
+  const hasSongs = album.songs.length > 0
+  // Nothing is scored before the record is out, whatever songs it already has
+  // (a pre-release listing is often only the singles), nor without songs.
+  const canRate = hasSongs && !isUnreleased(album.releaseDate)
   const subs = [album.subGenre1, album.subGenre2, album.subGenre3].filter(Boolean) as string[]
   // The track this rating rates highest: the tie-break pick when there was one.
   const topSong = album.topSongId != null
@@ -288,6 +298,7 @@ export default function AlbumDetail() {
           artist: album!.artist,
         })),
         genre: album!.genre ?? null,
+        release_date: album!.releaseDate,
       },
       status,
       activeUser!.id,
@@ -374,10 +385,15 @@ export default function AlbumDetail() {
                 <Star size={12} fill={RECOMMEND} strokeWidth={0} /> Recommend
               </button>
             )}
-            {own && (
+            {/* Not out yet, or no songs: nothing to score until it is and they
+                arrive. */}
+            {own && canRate && (
               <button onClick={() => navigate(`/rate/${album.id}`)} className={PILL}>
                 <Pencil size={12} /> {rated ? 'Edit rating' : 'Rate'}
               </button>
+            )}
+            {own && !canRate && !isUnreleased(album.releaseDate) && filling && (
+              <span className={PILL} aria-label="Loading the tracklist"><VinylSpinner size={14} /></span>
             )}
             {own && (
               <button
@@ -419,6 +435,9 @@ export default function AlbumDetail() {
                 ))}
                 {album.year ? ` · ${album.year}` : ''}
               </p>
+              {isUnreleased(album.releaseDate) && (
+                <p className="m-0 mt-1.5 text-[14px] font-semibold text-(--c-2d6a4f)">{outLine(album.releaseDate!)}</p>
+              )}
               {(album.genre || subs.length > 0) && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {album.genre && (
@@ -519,14 +538,14 @@ export default function AlbumDetail() {
             {/* Not in your library at all: the same two ways in as the community page. */}
             {!own && !yourCopy && (
               <div className="mt-7 flex gap-2.5 rise-in" style={stagger(9)}>
-                <button
+                {canRate && <button
                   onClick={rateYourself}
                   disabled={busy === 'rate'}
                   className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-(--c-green-fill) text-[15px] font-semibold text-white hover:bg-(--c-green-fill-hover) disabled:opacity-70"
                 >
                   {busy === 'rate' ? <VinylSpinner size={18} /> : <Play size={14} fill="currentColor" />}
                   Rate it yourself
-                </button>
+                </button>}
                 <button
                   onClick={addToLibrary}
                   disabled={busy === 'queue'}
@@ -537,7 +556,7 @@ export default function AlbumDetail() {
                 </button>
               </div>
             )}
-            {own && album.status === 'listening' && (
+            {own && album.status === 'listening' && canRate && (
               <button
                 onClick={() => navigate(`/rate/${album.id}`)}
                 className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-(--c-green-fill) text-[15px] font-semibold text-white hover:bg-(--c-green-fill-hover) rise-in"
@@ -548,7 +567,7 @@ export default function AlbumDetail() {
             )}
 
             {/* ── Tracks ─────────────────────────────────────────────── */}
-            <p className={`${SECTION_LABEL} mb-2 mt-10`}>TRACKS</p>
+            {hasSongs && <p className={`${SECTION_LABEL} mb-2 mt-10`}>TRACKS</p>}
             <ol className="m-0 -mx-4 list-none p-0">
               {sortedSongs.map((song, i) => {
                 const top = topSong != null && song.id === topSong.id && song.score != null
