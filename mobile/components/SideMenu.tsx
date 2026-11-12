@@ -1,13 +1,17 @@
 // The side menu — opened by the ≡ beside the search icon in For You's
 // masthead, sliding in from the right (the side the button is on) over a
-// dimmed page. Its entries: Bins, Getting Started (the tutorial, replayed) and
-// Settings. Tapping outside, swiping it back to the right, or tapping its own
+// dimmed page. Its entries, in sections split by hairlines: Getting Started
+// (the tutorial, replayed) on its own at the top; the four tabs in the tab
+// bar's order and words (For You, Library, Social, Charts); Bins and Upcoming;
+// and, pinned to the foot of the panel, Settings and Contact support. Tapping
+// outside, swiping it back to the right, or tapping its own
 // ≡ — drawn exactly where the masthead's was (`anchor`, measured on the tap),
 // so the same finger opens and closes it — closes it.
 import { useState } from 'react'
 import {
   Animated,
   Easing,
+  Linking,
   Modal,
   PanResponder,
   Pressable,
@@ -19,20 +23,45 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useRouter, type Href } from 'expo-router'
-import { ChevronRight, Compass, Menu, Package, Settings, type LucideIcon } from 'lucide-react-native'
+import { BarChart3, CalendarDays, ChevronRight, CircleUser, Compass, ListMusic, Mail, Menu, Package, Settings, Users, type LucideIcon } from 'lucide-react-native'
 import { selection } from '../lib/haptics'
 import { colors, fonts, spacing, useColors } from '../theme/tokens'
 
-// An entry goes somewhere (`href`) or opens a sheet its host owns (`action`):
-// Settings is the profile's SettingsSheet, which For You mounts too.
-type Item = { label: string; icon: LucideIcon } & ({ href: Href } | { action: 'settings' })
+// An entry switches to a tab (`tab`), goes to a page (`href`), or does
+// something its host or the phone owns (`action`): Settings is the profile's
+// SettingsSheet, which For You mounts too; Contact support opens a mail to
+// the address Settings → About uses.
+type Item = { label: string; icon: LucideIcon } & (
+  | { tab: 'index' | 'profile' | 'social' | 'charts' }
+  | { href: Href }
+  | { action: 'settings' | 'contact' }
+)
 
-const ITEMS: Item[] = [
-  { label: 'Bins', icon: Package, href: '/bins' },
+const SUPPORT_EMAIL = 'pressdmusicapp@gmail.com'
+
+// Each inner array is a section, hairlines between. The tabs keep the tab
+// bar's own icons, labels and order (components/TabBar.tsx); web's sidebar
+// uses the same icons (frontend/src/components/Layout.tsx).
+const SECTIONS: Item[][] = [
   // The first-run tutorial, replayed: `replay` records nothing and goes
   // back to For You when done, as Settings → How Pressd works opens it.
-  { label: 'Getting Started', icon: Compass, href: { pathname: '/tutorial', params: { replay: '1' } } },
+  [{ label: 'Getting Started', icon: Compass, href: { pathname: '/tutorial', params: { replay: '1' } } }],
+  [
+    { label: 'For You', icon: ListMusic, tab: 'index' },
+    { label: 'Library', icon: CircleUser, tab: 'profile' },
+    { label: 'Social', icon: Users, tab: 'social' },
+    { label: 'Charts', icon: BarChart3, tab: 'charts' },
+  ],
+  [
+    { label: 'Bins', icon: Package, href: '/bins' },
+    { label: 'Upcoming', icon: CalendarDays, href: '/upcoming' },
+  ],
+]
+
+// Pinned to the foot of the panel.
+const FOOT: Item[] = [
   { label: 'Settings', icon: Settings, action: 'settings' },
+  { label: 'Contact support', icon: Mail, action: 'contact' },
 ]
 
 const HEAD_HEIGHT = 36
@@ -82,6 +111,19 @@ export default function SideMenu({ visible, anchor, onClose, onSettings }: {
     }),
   )
 
+  function go(item: Item) {
+    selection()
+    close(() => {
+      // A tab is switched to, not pushed, so the stack doesn't grow; the
+      // menu only opens on For You, so that one just closes.
+      if ('tab' in item) {
+        if (item.tab !== 'index') router.navigate(`/${item.tab}` as Href)
+      } else if ('href' in item) router.push(item.href)
+      else if (item.action === 'settings') onSettings()
+      else Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Pressd support')}`).catch(() => {})
+    })
+  }
+
   const backdrop = x.interpolate({ inputRange: [0, panel], outputRange: [1, 0], extrapolate: 'clamp' })
 
   return (
@@ -118,27 +160,33 @@ export default function SideMenu({ visible, anchor, onClose, onSettings }: {
           </Pressable>
         )}
         <View style={styles.items}>
-          {ITEMS.map((item) => {
-            const { label, icon: Icon } = item
-            return (
-              <Pressable
-                key={label}
-                onPress={() => {
-                  selection()
-                  close(() => ('href' in item ? router.push(item.href) : onSettings()))
-                }}
-                style={({ pressed }) => [styles.item, pressed && { opacity: 0.6 }]}
-                accessibilityRole="button"
-              >
-                <Icon size={22} color={tc.ink} strokeWidth={2} />
-                <Text style={styles.itemText}>{label}</Text>
-                <ChevronRight size={18} color={tc.inkTertiary} />
-              </Pressable>
-            )
-          })}
+          {SECTIONS.map((section, i) => (
+            <View key={i} style={i > 0 && [styles.rule, { borderTopColor: tc.border }]}>
+              {section.map((item) => <Entry key={item.label} item={item} onPress={() => go(item)} />)}
+            </View>
+          ))}
+        </View>
+        <View style={[styles.foot, { borderTopColor: tc.border }]}>
+          {FOOT.map((item) => <Entry key={item.label} item={item} onPress={() => go(item)} />)}
         </View>
       </Animated.View>
     </Modal>
+  )
+}
+
+function Entry({ item, onPress }: { item: Item; onPress: () => void }) {
+  const tc = useColors()
+  const { label, icon: Icon } = item
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.item, pressed && { opacity: 0.6 }]}
+      accessibilityRole="button"
+    >
+      <Icon size={22} color={tc.ink} strokeWidth={2} />
+      <Text style={styles.itemText}>{label}</Text>
+      <ChevronRight size={18} color={tc.inkTertiary} />
+    </Pressable>
   )
 }
 
@@ -153,7 +201,9 @@ const styles = StyleSheet.create({
   head: { position: 'absolute', left: spacing.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   mark: { width: MARK_W, height: MARK_W * (126 / 232) },
   wordmark: { fontFamily: fonts.wordmark, fontSize: 28, lineHeight: 32, color: colors.ink },
-  items: { marginTop: spacing.xl },
+  items: { flex: 1, marginTop: spacing.xl },
+  foot: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: spacing.sm },
   item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  rule: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.sm, paddingTop: spacing.md + spacing.sm },
   itemText: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 17, color: colors.ink },
 })
