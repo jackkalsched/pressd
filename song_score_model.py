@@ -69,7 +69,10 @@ _AUDIO_COLS = [
     "spectral_centroid", "onset_rate", "loudness_lufs", "mfcc",
 ]
 _FEATURE_COLS = _META_COLS[:3] + ["score"] + _META_COLS[3:] + _AUDIO_COLS
-_PREDICT_COLS = _META_COLS + _AUDIO_COLS
+# `track_id` rides along at the end of a prediction frame (never a feature) so
+# the catalog stage can read one recording's prediction back out of it — a
+# song bin's songs (worker/catalog_predict.py).
+_PREDICT_COLS = _META_COLS + _AUDIO_COLS + ["track_id"]
 
 # Audio comes from the shared global track store (trackaudio via song.track_id):
 # one analysis per unique recording, reused across every user's copy.
@@ -115,7 +118,7 @@ _ALBUM_SQL = text(f"""
            a.id AS album_id, a.album_name, a.genre,
            a.sub_genre1, a.sub_genre2, a.sub_genre3, a.year,
            a.theme, a.replay_value, a.production, a.distinctness,
-           {_AF_SELECT}
+           {_AF_SELECT}, s.track_id
     FROM song s
     JOIN album a ON a.id = s.album_id
     JOIN trackaudio af ON af.track_id = s.track_id
@@ -1055,7 +1058,7 @@ _ALBUMS_SQL = text(f"""
            a.id AS album_id, a.album_name, a.genre,
            a.sub_genre1, a.sub_genre2, a.sub_genre3, a.year,
            a.theme, a.replay_value, a.production, a.distinctness,
-           {_AF_SELECT}
+           {_AF_SELECT}, s.track_id
     FROM song s
     JOIN album a ON a.id = s.album_id
     JOIN trackaudio af ON af.track_id = s.track_id
@@ -1086,6 +1089,40 @@ def album_frames(con, album_ids: list[int]) -> pd.DataFrame | None:
     if not rows:
         return None
     df_pred = prepare_frame(pd.DataFrame(rows, columns=_PREDICT_COLS))
+    return None if df_pred.empty else df_pred
+
+
+_BIN_SQL = text(f"""
+    SELECT -bt.id AS song_id, bt.title, e.artist,
+           e.artist AS album_artist,
+           -e.id AS album_id, e.album_name, NULL AS genre,
+           NULL AS sub_genre1, NULL AS sub_genre2, NULL AS sub_genre3, e.year,
+           NULL AS theme, NULL AS replay_value, NULL AS production, NULL AS distinctness,
+           {_AF_SELECT}, bt.track_id
+    FROM bintrack bt
+    JOIN binentry e ON e.id = bt.entry_id
+    JOIN trackaudio af ON af.track_id = bt.track_id
+    WHERE bt.entry_id = ANY(:entry_ids) AND af.bpm IS NOT NULL
+""")
+
+
+def bin_frames(con, records: list[dict]) -> pd.DataFrame | None:
+    """album_frames for bin records nobody holds a copy of (BinTrack rows with
+    audio), shaped like a copy's: the album id is the entry's id negated, so it
+    can't meet a real album, and song ids are negated BinTrack ids. `records`
+    are catalog rows carrying `bin_entry_id`, `genre` and `year`, which fill
+    the meta columns; a record has no factor ratings (nobody rated it), so the
+    album clustering imputes them as it does any unseen album's."""
+    if not records:
+        return None
+    rows = con.execute(_BIN_SQL, {"entry_ids": [r["bin_entry_id"] for r in records]}).fetchall()
+    if not rows:
+        return None
+    df = pd.DataFrame(rows, columns=_PREDICT_COLS)
+    meta = {-r["bin_entry_id"]: r for r in records}
+    df["genre"] = df["album_id"].map(lambda a: meta[a]["genre"])
+    df["year"] = df["album_id"].map(lambda a: meta[a]["year"])
+    df_pred = prepare_frame(df)
     return None if df_pred.empty else df_pred
 
 

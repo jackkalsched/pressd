@@ -1,9 +1,9 @@
 """
 One-time (then incremental) global theme/distinctness backfill.
 
-Scores every distinct album in the userbase into `albumfactors` — copies
-collapse to one call, so this is bounded by the catalog size, not by the
-number of album rows or users. Re-running only picks up what's still missing,
+Scores every distinct album in the userbase, and every record in a bin, into
+`albumfactors` — copies collapse to one call, so this is bounded by the catalog
+size, not by the number of album rows or users. Re-running only picks up what's still missing,
 so it is safe to interrupt and resume.
 
 After the backfill, `--apply` derives each user's own values from the global
@@ -12,6 +12,7 @@ calls, so it is cheap to re-run whenever ratings change.
 
 Usage:
     python -m worker.backfill_factors --dry-run        # what would be scored
+    python -m worker.backfill_factors --bins           # the bins' records only
     python -m worker.backfill_factors --limit 25       # score 25 albums
     python -m worker.backfill_factors                  # score everything missing
     python -m worker.backfill_factors --apply          # derive per-user values
@@ -51,7 +52,7 @@ ABORT_AFTER_CONSECUTIVE_FAILURES = 8
 
 
 def backfill(limit: int | None = None, dry_run: bool = False,
-             workers: int = WORKERS) -> dict:
+             workers: int = WORKERS, only_bins: bool = False) -> dict:
     from theme_predictor.global_factors import (
         albums_missing_factors, analyze_album, store_global_factors,
         _anchor_examples, _corpora_for)
@@ -59,7 +60,9 @@ def backfill(limit: int | None = None, dry_run: bool = False,
     from backend.trackkeys import album_key
 
     with engine.connect() as con:
-        todo = albums_missing_factors(con, limit)
+        todo = albums_missing_factors(con, limit, only_bins=only_bins)
+        if not todo:
+            return {"pending": 0, "scored": 0}
         # The distinctness anchor set is the same for every album of a given
         # genre and costs a full table scan, so it is built once here rather
         # than inside each worker.
@@ -178,6 +181,8 @@ def main():
     ap.add_argument("--apply", action="store_true",
                     help="derive per-user values from the global scores (no LLM)")
     ap.add_argument("--user", type=int, help="with --apply, one user only")
+    ap.add_argument("--bins", action="store_true",
+                    help="only the bins' records (the nightly run does this itself)")
     ap.add_argument("--workers", type=int, default=WORKERS,
                     help=f"concurrent albums (default {WORKERS})")
     args = ap.parse_args()
@@ -189,7 +194,7 @@ def main():
     with engine.connect() as con:
         run_id = runlog.start(con, "backfill_factors", None)
     try:
-        detail = backfill(args.limit, args.dry_run, args.workers)
+        detail = backfill(args.limit, args.dry_run, args.workers, only_bins=args.bins)
         with engine.connect() as con:
             runlog.finish(con, run_id, "ok", **detail)
     except Exception as e:

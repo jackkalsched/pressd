@@ -807,6 +807,44 @@ class BinEntry(SQLModel, table=True):
     track_id: Optional[int] = Field(default=None, foreign_key="track.id")
 
 
+class BinTrack(SQLModel, table=True):
+    """One song of a bin entry's stored tracklist, linked to its global Track
+    (backend/tracklink.py, `link_bin_entries`).
+
+    What makes a bin record a catalog record before anyone owns a copy: the
+    nightly audio ingest finds its tracks through these rows (after every
+    library track, a capped number a night), and catalog_predict scores the
+    record for every user from their audio. The keys are the ones a copy added
+    from the bin would get (the entry's artist and title, the tracklist's
+    songs), so that copy links to these same tracks and their audio. Rebuilt by
+    worker/import_bin.py whenever it rewrites a bin's entries. A new table, so
+    create_all builds it and the last migration turns RLS on."""
+    __table_args__ = (UniqueConstraint("entry_id", "position"),)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    entry_id: int = Field(foreign_key="binentry.id", index=True)
+    position: int                                   # index into tracklist_json's tracks
+    title: str
+    track_number: Optional[int] = None
+    duration_ms: Optional[int] = None
+    track_id: Optional[int] = Field(default=None, foreign_key="track.id", index=True)
+
+
+class SongPrediction(SQLModel, table=True):
+    """One user's predicted score for one recording — written only for the
+    songs of song bins (worker/catalog_predict.py), so a song bin can show
+    each song's own prediction, on the song scale, where an album bin shows
+    the record's. The per-song numbers already exist inside the catalog
+    stage; everything else reads album means. A new table, so create_all
+    builds it and the last migration turns RLS on."""
+    __table_args__ = (UniqueConstraint("user_id", "track_id"),)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="pressuser.id", index=True)
+    track_id: int = Field(foreign_key="track.id")
+    predicted_score: float
+    model_source: Optional[str] = None
+    computed_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
+
+
 
 class Block(SQLModel, table=True):
     """One person blocking another (backend/blocks.py). Either way round, the

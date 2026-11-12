@@ -249,6 +249,74 @@ def predict_replay_all(con, user_id: int, um, clusters=None) -> int:
     return updated
 
 
+def catalog_gap(con, user_id: int, catalog, frame=None) -> int:
+    """How many catalog records (and song bins' songs) this user has no stored
+    prediction for. The skip for a user whose ratings haven't moved used to skip
+    the catalog stage too, so a record that entered the catalog after their last
+    change — a bin's, which nobody need ever add, or another user's import —
+    never reached their picks."""
+    if not catalog:
+        return 0
+    have = {r[0] for r in con.execute(text(
+        "SELECT album_key FROM albumprediction WHERE user_id = :u"), {"u": user_id}).fetchall()}
+    missing = sum(1 for r in catalog if r["album_key"] not in have)
+    # Only songs tonight's frame holds: one the catalog can't reach (its record
+    # stood for by another edition's copy without it) would otherwise send
+    # this user through the catalog stage every night for nothing.
+    in_frame = (set(frame["track_id"].dropna().astype(int))
+                if frame is not None and "track_id" in frame.columns else set())
+    songs = {r[0] for r in con.execute(text("""
+        SELECT DISTINCT e.track_id FROM binentry e
+        JOIN bin b ON b.id = e.bin_id
+        WHERE b.item_type = 'song' AND e.track_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM songprediction sp
+                          WHERE sp.user_id = :u AND sp.track_id = e.track_id)
+    """), {"u": user_id}).fetchall()}
+    return missing + len(songs & in_frame)
+
+
+def catalog_only(user_id: int, gap: int, pooled=None, catalog=None, frame=None,
+                 theme_features=None, pooled_theme=None, clusters=None) -> dict:
+    """Stage 6 alone, for a user whose ratings haven't moved: refit (the same
+    data gives the same model) and score the whole catalog, so the records they
+    were missing get predictions. Logged as a `catalog_predict` run, never as a
+    `nightly_predict` one, whose counts decide the skip."""
+    with engine.connect() as con:
+        run_id = runlog.start(con, "catalog_predict", user_id)
+    try:
+        from song_score_model import fit_for_user
+        from theme_predictor.personalize import FactorPredictor
+        from worker.catalog_predict import predict_catalog_for_user
+        from backend import scoring
+        from backend.models import PressUser
+        from sqlmodel import Session
+
+        detail = {"missing": gap}
+        with engine.connect() as con:
+            um = fit_for_user(con, user_id, pooled=pooled, clusters=clusters)
+        if um is not None and frame is not None:
+            with Session(engine) as session:
+                user = session.get(PressUser, user_id)
+                prior = scoring.get_global_factor_stats(session)
+                with engine.connect() as con:
+                    predictor = FactorPredictor(con, user_id, features=theme_features,
+                                                pooled_theme=pooled_theme)
+                    detail["catalog"] = predict_catalog_for_user(
+                        con, session, user, catalog, frame, um, prior,
+                        predictor=predictor, clusters=clusters)
+            with engine.connect() as con:
+                detail["synced"] = sync_predictions_to_albums(con, user_id)
+        with engine.connect() as con:
+            runlog.finish(con, run_id, "ok", **detail)
+        print(f"[nightly_predict] user {user_id}: unchanged, catalog only — {detail}")
+        return {"user_id": user_id, "status": "catalog_only", **detail}
+    except Exception as e:
+        with engine.connect() as con:
+            runlog.finish(con, run_id, "error", error=str(e))
+        print(f"[nightly_predict] user {user_id}: catalog only FAILED — {e}")
+        return {"user_id": user_id, "status": "error", "error": str(e)}
+
+
 def run_user(user_id: int, skip_llm: bool = False, pooled=None,
              force: bool = False, catalog=None, frame=None,
              theme_features=None, pooled_theme=None, clusters=None) -> dict:
@@ -263,7 +331,9 @@ def run_user(user_id: int, skip_llm: bool = False, pooled=None,
     is skipped: refitting the same library on the same data produces the same
     model. Their album rows are still synced from the catalog predictions
     first, so an album queued since the last run picks up its prediction
-    without anything being refit. `force` overrides the skip.
+    without anything being refit. `force` overrides the skip — and so does a
+    catalog holding records they have no prediction for (catalog_gap), in which
+    case only the catalog stage runs (catalog_only).
     """
     with engine.connect() as con:
         rated_albums, rated_songs = user_counts(con, user_id)
@@ -282,11 +352,20 @@ def run_user(user_id: int, skip_llm: bool = False, pooled=None,
 
         previous = last_run_counts(con, user_id)
         if previous == (rated_albums, rated_songs) and not force:
-            print(f"[nightly_predict] user {user_id}: no new ratings since last run "
-                  f"({rated_albums} albums / {rated_songs} songs) — skipped, "
-                  f"{synced} album rows synced from the catalog")
-            return {"user_id": user_id, "status": "unchanged", "synced": synced}
+            gap = catalog_gap(con, user_id, catalog, frame)
+            if not gap:
+                print(f"[nightly_predict] user {user_id}: no new ratings since last run "
+                      f"({rated_albums} albums / {rated_songs} songs) — skipped, "
+                      f"{synced} album rows synced from the catalog")
+                return {"user_id": user_id, "status": "unchanged", "synced": synced}
+    if previous == (rated_albums, rated_songs) and not force:
+        # Nothing of theirs changed, but the catalog has records they have no
+        # prediction for — a bin's, newly analysed, or anyone's new import.
+        return catalog_only(user_id, gap, pooled=pooled, catalog=catalog, frame=frame,
+                            theme_features=theme_features, pooled_theme=pooled_theme,
+                            clusters=clusters)
 
+    with engine.connect() as con:
         run_id = runlog.start(con, "nightly_predict", user_id)
 
     detail = {"rated_albums": rated_albums, "rated_songs": rated_songs}
@@ -462,9 +541,9 @@ def main():
     pooled, catalog, frame, clusters = None, None, None, None
     theme_features, pooled_theme = None, None
     try:
-        from song_score_model import fit_pooled_model, album_frames
+        from song_score_model import fit_pooled_model
         from worker.artist_clusters import ArtistClusters
-        from worker.catalog_predict import catalog_albums
+        from worker.catalog_predict import catalog_albums, catalog_frame
         from theme_predictor.personalize import _features_by_key, fit_pooled_theme_model
         with engine.connect() as con:
             # Before the pooled model, because every model in this run borrows
@@ -488,7 +567,20 @@ def main():
                     print(f"[nightly_predict] taste overlap FAILED — {e}")
             pooled = fit_pooled_model(con, clusters=clusters)
             catalog = catalog_albums(con)
-            frame = album_frames(con, [r["album_id"] for r in catalog])
+            frame = catalog_frame(con, catalog)
+        # Claude's measurements for the bins' records that have none yet — a
+        # new bin's, mostly; nothing on a normal night. Before the theme
+        # features are read, so tonight's catalog scores use them. Holds a
+        # connection only for each write (CLAUDE.md §7).
+        if not args.skip_llm and not args.user:
+            try:
+                from worker.backfill_factors import backfill
+                got = backfill(only_bins=True)
+                if got["pending"]:
+                    print(f"[nightly_predict] bin records analysed: {got}")
+            except Exception as e:
+                print(f"[nightly_predict] bin records' analysis FAILED — {e}")
+        with engine.connect() as con:
             # The semantic axes and the pooled theme ridge are the same for
             # every user — fitted here, read many times below.
             theme_features = _features_by_key(con)
@@ -508,8 +600,10 @@ def main():
                for uid in user_ids]
     n_ok = sum(1 for r in results if r["status"] == "ok")
     n_skip = sum(1 for r in results if r["status"] == "unchanged")
+    n_cat = sum(1 for r in results if r["status"] == "catalog_only")
     print(f"[nightly_predict] done: {n_ok}/{len(results)} users ok, "
-          f"{n_skip} unchanged since last run")
+          f"{n_skip} unchanged since last run, {n_cat} unchanged but scored "
+          f"over the catalog's new records")
 
 
 if __name__ == "__main__":

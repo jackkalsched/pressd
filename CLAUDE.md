@@ -80,7 +80,7 @@ PLAN_*.md         gitignored design docs; code cites them by section
 |---|---|---|
 | `backend/main.py` | CORS, 17 routers, `init_db()` on startup, `/health` | 46 |
 | `backend/database.py` | engine + **the entire migration system** (§3) | 274 |
-| `backend/models.py` | 32 SQLModel tables | 722 |
+| `backend/models.py` | 34 SQLModel tables | 722 |
 | `backend/deps.py` | `current_user`, `viewable_user_id`, `thread_access` — the auth invariant | 148 |
 | `backend/scoring.py` | framework 1: the user's own album score | 267 |
 | `backend/global_rating.py` | framework 2: the userbase-pooled rating | 155 |
@@ -108,7 +108,7 @@ snake_case on the wire, camelCase at the client boundary.
 overlap: its matrix, baseline, live path, nightly stage, health check, router and the
 schema's delete order), plus the audio ingest's download scheduler and the upcoming-releases
 build's parsing, merge and filter
-(`tests/test_audio_queue.py`). Plus the tracklist merge's pure core (`tests/test_tracklist_fill.py`). Nothing else is covered — no vitest, nothing for scoring
+(`tests/test_audio_queue.py`). Plus the tracklist merge's pure core (`tests/test_tracklist_fill.py`), and bin records' place in the prediction catalog (`tests/test_bin_catalog.py`). Nothing else is covered — no vitest, nothing for scoring
 or the other routers — so for everything else verification is typecheck + lint +
 running it. Tests never open a database connection (`tests/conftest.py`).
 
@@ -155,7 +155,10 @@ python -m worker.deep_stats ID|"name" [--user 1] [--out DIR] [--html]
                                              # (default folder export/deep-stats/)
 python -m worker.import_bin data/bins/<slug>.csv [--dry-run] [--set RANK DEEZER_ID]
                                              # a list file into a curated bin, matched on Deezer (iTunes fallback);
-                                             # the dry run lists doubtful rows; --set pins one, kept in the JSON
+                                             # the dry run lists doubtful rows; --set pins one, kept in the JSON;
+                                             # a write ends by putting the entries' songs on Tracks (link_bin_entries)
+python -m worker.backfill_factors --bins [--dry-run]  # Claude's albumfactors for bin records that lack them
+                                             # (the nightly prediction run does this itself)
 python -m worker.bin_blurbs <slug> [--dry-run] [--force]
                                              # a one-sentence blurb per bin entry from Claude (claude-opus-5-5, effort
                                              # low, 20 a request) into data/bins/<slug>.blurbs.json and BinEntry.note;
@@ -598,7 +601,7 @@ spend a request on every open.
 
 ## 5. Module reference
 
-**`backend/models.py`** — 32 tables (`Block` for blocking, §5; `Bin` and `BinEntry` for bins, §5; five for the taste overlap: `TasteItem`, `TasteUser`, `TasteOverlap`, `OverlapSheet`, `OverlapEvent`; the first three written nightly by `worker/taste_nightly.py` and for one caller by the live path, all five served by `routers/overlap.py`). `Album` is a **per-user copy**, not a record
+**`backend/models.py`** — 34 tables (`Block` for blocking, §5; `Bin`, `BinEntry` and `BinTrack` for bins, §5; `SongPrediction`, a song bin's per-song predictions, §6.3; five for the taste overlap: `TasteItem`, `TasteUser`, `TasteOverlap`, `OverlapSheet`, `OverlapEvent`; the first three written nightly by `worker/taste_nightly.py` and for one caller by the live path, all five served by `routers/overlap.py`). `Album` is a **per-user copy**, not a record
 (`:89`); anything "global" must pool copies. `Song` carries `track_id` into the global
 `Track`, so audio is analyzed once and shared (`:258-260`) — that split is what makes
 the ML affordable. A mapper event keeps `Album.subject_key` in step with artist+name on
@@ -668,7 +671,9 @@ songs on one album copy never share a track** (the second "Karma" on *Midnights 
 Dawn* is `||alt2`, ordered so every copy of the record agrees), and duration is a
 tiebreak only, matched within 10s (59% of songs have none, and copies of one recording
 differ by up to 6s). `link_album` (import, via `albums._link_tracks`) and `link_unlinked`
-(the worker's `build_tracks`) are the only two writers, so they can't drift again.
+(the worker's `build_tracks`) are the only writers for songs, so they can't drift again;
+`link_bin_entries` is the third, for a bin record's tracklist (§5, Bins), on the same
+`copy_keys` and `resolve`.
 Until October 2026 each built its own key on `_clean`, which folded "- Live"/"- Demo"/
 "- Remix" into the studio song, kept "(2012 Remaster)" apart from the original, and keyed
 on the song's full credit string: 58 redundant tracks (The Stone Roses, The Smiths and
@@ -735,11 +740,30 @@ insert as an import, no outbound call — and **doesn't remember the bin** (Jack
 ⚠️ **Rule (Jack, November 2026): every album in a bin must be considered for every user's
 picks predictions** — the nightly `catalog_predict` must score bin records into
 `albumprediction` whether or not anyone has added them, so a bin's For you order and
-`/discover/picks` can offer them. **Not met yet:** the catalog is built from album copies
-with analysed audio (`catalog_albums`), and on 2026-11-11 only 43 of the Apple 100 had a
-copy anywhere. Meeting it means making a bin entry a catalog record: `Track` rows for its
-stored tracklist through `tracklink` (so the audio ingest fetches them), its Claude
-`albumfactors` by `album_key`, and `catalog_albums` reading bin entries beside copies. A private bin
+`/discover/picks` can offer them. **Met since 2026-11-12, as audio arrives:** a bin entry
+is a catalog record. (1) Its stored tracklist is on `Track`s through
+`tracklink.link_bin_entries` — one `BinTrack` row per song (`entry_id`, `position`, title,
+`track_id`), keyed exactly as the copy a bin's Add makes, so that copy (or any edition from
+search) links to the same tracks and their audio; a song entry's `BinEntry.track_id` is its
+song's track (`song_position`: `match_title`, then the letters without spaces, then the one
+title that opens with it). `import_bin` runs it after every write, the nightly ingest as a
+backstop; idempotent. (2) The audio ingest queues those tracks **after every library track,
+at most `BIN_TRACKS_PER_RUN` (700) a night** (`tracks_needing_audio`), searched by the
+entry's artist and title, record by record — capped because predictions start only when
+the ingest ends. (3) Claude's `albumfactors` by the entry's `album_key`
+(`albums_missing_factors` lists bin records after the library's, skipping one a measured
+copy stands for; `backfill_factors --bins`, and the nightly prediction run does the same
+before reading the theme axes, so a new bin is measured on its first night). (4)
+`catalog_albums` adds `bin_records`: one per `subject_key` with analysed audio that no
+catalog copy covers, `album_id` the entry's id negated, genre the catalog's or, for
+"Alternative" (a qualifier), the artist's usual genre on Pressd; `song_score_model.bin_frames`
+builds its songs' frame. A record with no analysed song yet waits: the song model needs
+audio (below). `GET /bins/{slug}`'s `predicted_score` is the record's, by `album_key`, else
+by subject key when another edition's copy stands for it; on a **song bin**, the song's own
+(`SongPrediction`, one decimal, written by the catalog stage for every song bin's track). On
+2026-11-12: 297 entries linked, 3,672 songs on 3,597 tracks (2,770 new, needing audio;
+786 already analysed); 195 of 197 song entries on their track (*Blackstar*'s "★" and an
+R.E.M. compilation that doesn't hold "Imitation of Life" are not). A private bin
 will be a 404 to anyone but its owner; `delete_own_account` deletes a user's bins.
 Surfaces: For You's **BINS** section (up to three `BinCard`s, "See all →") on both
 platforms — a Pressd bin's card carries the full-colour Pressd mark on a cream chip in
@@ -1343,9 +1367,21 @@ person thinks of it is fitted per user.**
    answered (`mates`/`global`/`own`/`genre`); a global-tier value is a much weaker claim.
 5. **Composite** — via `backend.scoring`, the same function that scores a *rated* album,
    so a prediction and its outcome sit on one formula.
-6. **Catalog-wide** — `worker/catalog_predict.py` scores every album anyone has added
-   into `albumprediction`, keyed `(user_id, album_key)` — not just the user's queue.
+6. **Catalog-wide** — `worker/catalog_predict.py` scores every album anyone has added,
+   **and every bin record** (§5, Bins: `bin_records`, `catalog_frame`), into
+   `albumprediction`, keyed `(user_id, album_key)` — not just the user's queue.
    That is what lets `/discover/picks` recommend a record the user has never heard of.
+   A song bin's songs also get their own per-song prediction (`songprediction`,
+   `(user_id, track_id)`), the mean of that recording's rows in the same frame — the
+   frame carries `track_id` for it, never as a feature.
+
+**No audio, no prediction.** The song model's features are the audio and three taste
+features (the user's leave-one-out artist mean, their mean over the artist's cluster-mates
+on the global map, and over the album's cluster — genre, subgenres, decade, audio); a
+record joins the catalog only once one of its songs is analysed. Predicting from metadata
+alone was considered for bin records and refused: the model never trained on a song
+without audio, and imputing every song to the median sound makes every track identical,
+so the "prediction" is the artist taste features dressed as a song score.
 
 `MIN_RATED_ALBUMS = 10` gates all output, defined once in `backend/scoring.py` with its
 rationale. It was 50 (one user in twenty got anything), then 1 (predictions for anyone).
@@ -1364,7 +1400,12 @@ from 2026-08-08); they are hidden, not deleted, and the nightly job overwrites t
 the user reaches 10. Both clients already render a missing prediction as absent.
 
 Users whose rating counts haven't moved are skipped, but their album rows still sync so
-a newly queued album picks up a prediction without refitting. Each user runs in its own
+a newly queued album picks up a prediction without refitting — **unless the catalog holds
+records they have no prediction for** (`catalog_gap`: a bin record newly analysed, anyone's
+new import, a song bin's song), in which case only the catalog stage runs (`catalog_only`,
+logged as a `catalog_predict` run so the skip's counts are untouched). Before November 2026
+the skip skipped the catalog too, so a record added after an inactive user's last rating
+never reached their picks. Each user runs in its own
 try/except and logs to `workerrun`. Before any of it, the job recomputes every stored
 album score against the current userbase prior (`rescore_library_scores`, logged as
 `rescore_scores`); a `--user` run rescores only that user.
@@ -1434,6 +1475,11 @@ November 2026): one row per `Track` without audio, however many people own the r
 so each is downloaded and analyzed once; until then a record two people owned was
 downloaded twice a night. A track's place in line is `COALESCE(audio_failed_at,
 created_at)`, so a failure sends it to the back, behind everything already waiting.
+Behind all of it come the tracks only a bin holds (no copy has the song; `BinTrack`),
+at most `BIN_TRACKS_PER_RUN` (700, about an hour) a night, in the bins' order so a record
+finishes before the next starts; once anyone imports the record its songs link to those
+tracks and move up. The first two bins added 2,770 such tracks on 2026-11-12: about four
+nights at the cap, and a record enters the catalog with its first analysed song.
 **Three downloads run at once** (`DOWNLOADERS`; measured 2026-11-09 at 4.2 tracks/min
 for one, 9.4 for two, 11.9 for three, nothing refused), on threads; Essentia and the
 writes stay on the main thread, one track at a time (`run_queue`). The first download
@@ -2205,7 +2251,7 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   card's geometry lives in both `ShareCard.tsx` files by the same rule — every mobile
   measurement is the web pixel value passed through `u()`.
 - **Verification is the taste-overlap tests plus typecheck + lint + running it.** Tests:
-  `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3.13 -m pytest tests -q -p no:warnings` (190
+  `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3.13 -m pytest tests -q -p no:warnings` (196
   pass; none open a database connection, so they say nothing about production data —
   new taste-overlap code gets a test beside the others). Web:
   `cd frontend && npm run typecheck`. Mobile: `cd mobile && npm run typecheck`. Backend:

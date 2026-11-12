@@ -25,6 +25,10 @@ unmatched row is still stored, in its place, with nothing to add.
 Re-running replaces the bin's entries with the new match; the bin's id and
 slug stay, and each entry's blurb is set again from <slug>.blurbs.json
 (worker/bin_blurbs.py writes it), so a re-import never loses them.
+
+Every write ends by putting the entries' songs on Tracks
+(tracklink.link_bin_entries), which is what makes a bin's records part of the
+catalog every user's picks are scored over (worker/catalog_predict.py).
 """
 import argparse
 import asyncio
@@ -204,7 +208,7 @@ async def match_rows(rows: list[ListRow], overrides: dict[int, int], item_type: 
 def write(meta, matched: list[dict]) -> int:
     from sqlmodel import Session, delete, select
     from backend.database import engine
-    from backend.models import Bin, BinEntry
+    from backend.models import Bin, BinEntry, BinTrack
     from worker.bin_blurbs import load_blurbs
 
     blurbs = load_blurbs(meta.slug)
@@ -219,6 +223,9 @@ def write(meta, matched: list[dict]) -> int:
         b.updated_at = datetime.now(timezone.utc)
         s.add(b)
         s.flush()
+        # The entries' track rows go with them and are rebuilt below; the
+        # Tracks themselves stay, so their audio does.
+        s.exec(delete(BinTrack).where(BinTrack.entry_id.in_(select(BinEntry.id).where(BinEntry.bin_id == b.id))))
         s.exec(delete(BinEntry).where(BinEntry.bin_id == b.id))
         for pos, m in enumerate(matched):
             row, r = m["row"], m["resolved"]
@@ -247,7 +254,20 @@ def write(meta, matched: list[dict]) -> int:
                 match_status="unmatched" if not r else ("manual" if m["status"] == "manual" else "matched"),
             ))
         s.commit()
-        return b.id
+        bin_id = b.id
+
+    # Make the bin's records catalog records: their songs on Tracks, so the
+    # nightly audio ingest fetches them and the nightly prediction run scores
+    # them for every user (CLAUDE.md §5, Bins). The nightly ingest runs the
+    # same step as a backstop; its Claude analysis comes from the nightly
+    # prediction run (backfill_factors, bins only).
+    from backend.tracklink import link_bin_entries
+    with engine.connect() as con:
+        linked = link_bin_entries(con)
+    print(f"[import_bin] linked {linked['songs']} songs of {linked['entries']} entries "
+          f"({linked['new_tracks']} new tracks for the audio ingest; "
+          f"{linked['song_entries']} song entries on their track)")
+    return bin_id
 
 
 def main() -> int:

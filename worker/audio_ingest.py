@@ -3,7 +3,8 @@ Global audio ingest (PLAN_ml_worker_split §2): analyze every unique track
 that has no audio features yet, exactly once, shared across all users.
 
 A first-in, first-out queue of recordings (one row per Track, however many
-people own the record; see tracks_needing_audio), each downloaded with yt-dlp
+people own the record; see tracks_needing_audio) — library tracks first, then a
+capped number of bin records' tracks (BIN_TRACKS_PER_RUN) — each downloaded with yt-dlp
 and analyzed with Essentia (source='yt_full') once. A failure goes to the back
 of the queue with its reason on the Track. Requires
 essentia, yt-dlp, node and ffmpeg, so it runs on the Mac — yt-dlp is
@@ -62,6 +63,7 @@ from sqlalchemy import text
 import backend.models  # noqa: F401 — registers tables in SQLModel.metadata
 from backend.database import engine
 from worker import runlog
+from backend.tracklink import link_bin_entries
 from worker.migrate_tracks import sync_tracks, _FEATURE_COLS
 
 DOWNLOAD_TIMEOUT_S = 90
@@ -101,7 +103,17 @@ class ToolchainError(RuntimeError):
     every remaining track would fail the same way."""
 
 
-def tracks_needing_audio(con, limit: int | None = None):
+# Bin records' tracks (BinTrack, tracklink.link_bin_entries) queue after every
+# library track, and at most this many a night: about an hour at the measured
+# 11.9 tracks a minute. Nobody owns those records yet, so they can wait behind
+# what people are listening to; and the prediction run is started only once the
+# ingest finishes, so an uncapped first night (~3,600 tracks for the first two
+# bins, five hours) would hold every user's predictions back by as long.
+BIN_TRACKS_PER_RUN = 700
+
+
+def tracks_needing_audio(con, limit: int | None = None,
+                         bin_limit: int = BIN_TRACKS_PER_RUN):
     """The queue: one row per recording with no audio that is due for an
     attempt, first in, first out — (track_id, title, artist, album_name).
 
@@ -114,7 +126,13 @@ def tracks_needing_audio(con, limit: int | None = None):
     failed, when it last failed (`audio_failed_at`): a failure sends it to the
     back, behind everything already waiting and ahead of what arrives later.
     Before this the order was album id, so every night opened on the oldest
-    albums' unfindable tracks while that day's imports waited."""
+    albums' unfindable tracks while that day's imports waited.
+
+    Then, behind all of that, up to `bin_limit` tracks only a bin holds — no
+    copy has the song — searched by the bin entry's artist and title, in the
+    same first-in-first-out order (a bin's tracks were made in its order, so a
+    record finishes before the next starts). Once anyone imports the record its
+    songs link to these same tracks and they move up into the first part."""
     sql = f"""
         SELECT q.track_id, q.title, q.artist, q.album_name FROM (
             SELECT DISTINCT ON (t.id)
@@ -130,7 +148,27 @@ def tracks_needing_audio(con, limit: int | None = None):
     """
     if limit:
         sql += " LIMIT :limit"
-    return con.execute(text(sql), {"limit": limit} if limit else {}).fetchall()
+    rows = con.execute(text(sql), {"limit": limit} if limit else {}).fetchall()
+    room = bin_limit if not limit else min(bin_limit, limit - len(rows))
+    if room <= 0:
+        return rows
+    return rows + con.execute(text(f"""
+        SELECT q.track_id, q.title, q.artist, q.album_name FROM (
+            SELECT DISTINCT ON (t.id)
+                   t.id AS track_id, bt.title, e.artist, e.album_name,
+                   COALESCE(t.audio_failed_at, t.created_at) AS queued_at
+            FROM track t
+            JOIN bintrack bt ON bt.track_id = t.id
+            JOIN binentry e ON e.id = bt.entry_id
+            WHERE NOT EXISTS (SELECT 1 FROM trackaudio ta
+                              WHERE ta.track_id = t.id AND ta.bpm IS NOT NULL)
+              AND NOT EXISTS (SELECT 1 FROM song s WHERE s.track_id = t.id)
+              AND {_DUE}
+            ORDER BY t.id, e.id
+        ) q
+        ORDER BY q.queued_at, q.track_id
+        LIMIT :room
+    """), {"room": room}).fetchall()
 
 
 def _ytdlp_cmd(out_tmpl: str, search: str) -> list[str]:
@@ -453,6 +491,9 @@ def main() -> int:
     try:
         with engine.connect() as con:
             stats["linked"] = sync_tracks(con)  # link songs imported since last run
+            # A bin imported since: its records' songs onto Tracks (a no-op
+            # normally; worker/import_bin.py does it as it writes).
+            stats["bin_songs_linked"] = link_bin_entries(con)["songs"]
             queue = tracks_needing_audio(con, args.limit)
         print(f"[audio_ingest] {stats['linked']} new songs linked; "
               f"{len(queue)} tracks in the queue")

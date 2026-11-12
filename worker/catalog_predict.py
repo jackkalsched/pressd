@@ -15,6 +15,11 @@ Shape of the work, and why it is arranged this way:
     mean one round trip per album per user — tens of thousands of them.
   * Replay and factor statistics are looked up from per-user dictionaries built
     once, rather than queried per album.
+  * The bins' records are in the catalog too, whether or not anyone has added
+    them (Jack's rule, November 2026): their songs are on Tracks of their own
+    (BinTrack), so they are analysed and predicted exactly as a copy's are
+    (bin_records). A song bin's songs also get their own per-song prediction
+    (SongPrediction), read straight out of the same frame.
 
 The composite deliberately calls backend.scoring, the same code that scores a
 *rated* album, so a prediction and the eventual rating are computed on one
@@ -45,7 +50,8 @@ from worker import runlog
 
 
 def catalog_albums(con) -> list[dict]:
-    """One representative album row per distinct album, most-analyzed copy first.
+    """One representative album row per distinct album, most-analyzed copy first,
+    then the bins' records nobody holds a copy of (bin_records).
 
     Copies of the same record carry the same audio (trackaudio is keyed by the
     global track), so the choice only affects how *complete* the tracklist is —
@@ -53,15 +59,16 @@ def catalog_albums(con) -> list[dict]:
     """
     rows = con.execute(text("""
         SELECT a.id, a.artist, a.album_name, a.genre, a.year, a.album_art_url,
-               COUNT(ta.track_id) AS n_analyzed
+               a.subject_key, COUNT(ta.track_id) AS n_analyzed
         FROM album a
         JOIN song s ON s.album_id = a.id
         LEFT JOIN trackaudio ta ON ta.track_id = s.track_id AND ta.bpm IS NOT NULL
-        GROUP BY a.id, a.artist, a.album_name, a.genre, a.year, a.album_art_url
+        GROUP BY a.id, a.artist, a.album_name, a.genre, a.year, a.album_art_url,
+                 a.subject_key
     """)).fetchall()
 
     best: dict[str, dict] = {}
-    for aid, artist, album_name, genre, year, art, n_analyzed in rows:
+    for aid, artist, album_name, genre, year, art, subject, n_analyzed in rows:
         if not n_analyzed:
             continue  # nothing to predict from
         key = album_key(artist, album_name)
@@ -71,8 +78,102 @@ def catalog_albums(con) -> list[dict]:
                 "album_key": key, "album_id": aid, "artist": artist,
                 "album_name": album_name, "genre": genre, "year": year,
                 "album_art_url": art, "n_analyzed": n_analyzed,
+                "subject_key": subject,
             }
+    return sorted(best.values(), key=lambda r: r["album_key"]) + bin_records(con, list(best.values()))
+
+
+def bin_records(con, copies: list[dict]) -> list[dict]:
+    """The bins' records, as catalog rows, that no catalog copy stands for.
+
+    Jack's rule (November 2026): every record in a bin is scored for every
+    user's picks whether or not anyone has added it. A bin entry's songs are on
+    Tracks (BinTrack, tracklink.link_bin_entries), so the nightly ingest
+    analyses them and they are predicted exactly as a copy's are, from the
+    entry's artist, title and the catalog's genre. A record someone holds in
+    any edition is already here as that copy, so it isn't scored twice.
+    `album_id` is the entry's id negated (song_score_model.bin_frames)."""
+    rows = con.execute(text("""
+        SELECT e.id, e.artist, e.album_name, e.year, e.subject_key, e.cover_url,
+               e.tracklist_json, COUNT(ta.track_id) AS n_analyzed
+        FROM binentry e
+        JOIN bintrack bt ON bt.entry_id = e.id
+        LEFT JOIN trackaudio ta ON ta.track_id = bt.track_id AND ta.bpm IS NOT NULL
+        GROUP BY e.id
+    """)).fetchall()
+    # The artist's usual genre on Pressd, for a record whose catalog genre is
+    # only "Alternative" — a qualifier, so no genre (genres.canonical_genre):
+    # 114 of the first two bins' 297 records.
+    from collections import Counter
+    from backend.trackkeys import artist_key
+    tally: dict[str, Counter] = {}
+    for artist, genre, n in con.execute(text(
+            "SELECT artist, genre, COUNT(*) FROM album WHERE genre IS NOT NULL"
+            " GROUP BY artist, genre")).fetchall():
+        tally.setdefault(artist_key(artist or ""), Counter())[genre] += n
+    artist_genres = {k: c.most_common(1)[0][0] for k, c in tally.items()}
+    return pick_bin_records(rows, copies, artist_genres)
+
+
+def pick_bin_records(rows, copies: list[dict], artist_genres: dict | None = None) -> list[dict]:
+    """One catalog row per bin record (`subject_key`) with analysed audio that
+    no copy in `copies` covers, by subject key or album key: the entry with the
+    most analysed tracks, then the earliest. `rows` are (id, artist,
+    album_name, year, subject_key, cover_url, tracklist_json, n_analyzed). The
+    genre is the catalog's, else `artist_genres`' for the artist (artist_key)."""
+    import json
+    from backend.genres import canonical_genre
+    from backend.trackkeys import artist_key
+
+    covered = {c.get("subject_key") for c in copies} | {c["album_key"] for c in copies}
+    best: dict[str, dict] = {}
+    for eid, artist, album_name, year, subject, cover, tl_json, n_analyzed in rows:
+        if not n_analyzed or subject in covered:
+            continue
+        key = album_key(artist, album_name)
+        if key in covered:
+            continue
+        cur = best.get(subject)
+        if cur is not None and (cur["n_analyzed"], -cur["bin_entry_id"]) >= (n_analyzed, -eid):
+            continue
+        try:
+            tl = json.loads(tl_json) if tl_json else {}
+        except ValueError:
+            tl = {}
+        best[subject] = {
+            "album_key": key, "album_id": -eid, "bin_entry_id": eid,
+            "artist": artist, "album_name": album_name,
+            "genre": (canonical_genre(tl.get("genre"))
+                      or (artist_genres or {}).get(artist_key(artist or ""))),
+            "year": year or tl.get("year"),
+            "album_art_url": cover or tl.get("cover_url"), "n_analyzed": n_analyzed,
+            "subject_key": subject,
+        }
     return sorted(best.values(), key=lambda r: r["album_key"])
+
+
+def catalog_frame(con, catalog: list[dict]):
+    """The song frame every user's model predicts over: copies' songs
+    (album_frames) and bin records' (bin_frames) in one."""
+    import pandas as pd
+    from song_score_model import album_frames, bin_frames
+
+    parts = [
+        album_frames(con, [r["album_id"] for r in catalog if r["album_id"] > 0]),
+        bin_frames(con, [r for r in catalog if r.get("bin_entry_id")]),
+    ]
+    parts = [p for p in parts if p is not None]
+    if not parts:
+        return None
+    return parts[0] if len(parts) == 1 else pd.concat(parts, ignore_index=True)
+
+
+def song_bin_tracks(con) -> set[int]:
+    """The recordings song bins name (BinEntry.track_id), whose own predicted
+    scores the catalog stage stores (SongPrediction)."""
+    return {r[0] for r in con.execute(text(
+        "SELECT DISTINCT e.track_id FROM binentry e JOIN bin b ON b.id = e.bin_id"
+        " WHERE b.item_type = 'song' AND e.track_id IS NOT NULL")).fetchall()}
 
 
 def _replay_lookup(con, user_id: int):
@@ -136,6 +237,16 @@ _UPSERT = text("""
         genre = EXCLUDED.genre,
         year = EXCLUDED.year,
         album_art_url = EXCLUDED.album_art_url,
+        computed_at = NOW()
+""")
+
+
+_SONG_UPSERT = text("""
+    INSERT INTO songprediction (user_id, track_id, predicted_score, model_source, computed_at)
+    VALUES (:u, :t, :s, :m, NOW())
+    ON CONFLICT (user_id, track_id) DO UPDATE SET
+        predicted_score = EXCLUDED.predicted_score,
+        model_source = EXCLUDED.model_source,
         computed_at = NOW()
 """)
 
@@ -230,25 +341,48 @@ def predict_catalog_for_user(con, session, user, catalog, frame, um, prior,
         con.execute(_UPSERT, params)
         con.commit()
 
+    # A song bin's songs, each on its own: the mean of the recording's rows in
+    # the frame (one per copy or bin entry holding it), on the user's song scale.
+    songs = 0
+    wanted = song_bin_tracks(con)
+    if wanted and "track_id" in work.columns:
+        per = work[work["track_id"].isin(wanted)].groupby("track_id")["_pred"].mean()
+        song_params = [
+            {"u": user.id, "t": int(tid), "s": round(min(10.0, max(1.0, float(v))), 2),
+             "m": um.source}
+            for tid, v in per.items()
+        ]
+        if song_params:
+            con.execute(_SONG_UPSERT, song_params)
+            con.commit()
+            songs = len(song_params)
+
     scores = [p["score"] for p in params]
     spread = (max(scores) - min(scores)) if scores else 0.0
+    bins = sum(1 for r in catalog if r.get("bin_entry_id") and r["album_id"] in song_means)
     print(f"[catalog_predict] user {user.id}: {len(params)} albums "
-          f"[{um.source}] spread={spread:.2f}")
-    return {"albums": len(params), "model": um.source, "spread": round(spread, 2)}
+          f"({bins} from bins only), {songs} bin songs [{um.source}] spread={spread:.2f}")
+    return {"albums": len(params), "bin_albums": bins, "bin_songs": songs,
+            "model": um.source, "spread": round(spread, 2)}
 
 
 def predict_catalog(only_user: int | None = None, pooled=None,
                     dry_run: bool = False, clusters=None) -> dict:
-    from song_score_model import album_frames, fit_for_user, fit_pooled_model
+    from song_score_model import fit_for_user, fit_pooled_model
     from backend import scoring
 
     with engine.connect() as con:
         catalog = catalog_albums(con)
-        print(f"[catalog_predict] catalog: {len(catalog)} distinct albums with analyzed audio")
+        n_bins = sum(1 for r in catalog if r.get("bin_entry_id"))
+        print(f"[catalog_predict] catalog: {len(catalog)} distinct albums with analyzed audio "
+              f"({n_bins} bin records nobody holds a copy of)")
         if dry_run:
-            return {"catalog": len(catalog)}
+            for r in [r for r in catalog if r.get("bin_entry_id")][:15]:
+                print(f"   bin: {r['artist']} – {r['album_name']} "
+                      f"({r['n_analyzed']} tracks analysed, {r['genre'] or 'no genre'})")
+            return {"catalog": len(catalog), "bin_records": n_bins}
 
-        frame = album_frames(con, [r["album_id"] for r in catalog])
+        frame = catalog_frame(con, catalog)
         if frame is None:
             print("[catalog_predict] no analyzed audio anywhere — nothing to do")
             return {"catalog": len(catalog), "users": 0}

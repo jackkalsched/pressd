@@ -244,12 +244,23 @@ def store_global_factors(con, key, artist, album_name, genre, year, theme_featur
     con.commit()
 
 
-def albums_missing_factors(con, limit: int | None = None) -> list[tuple]:
+def albums_missing_factors(con, limit: int | None = None,
+                           only_bins: bool = False) -> list[tuple]:
     """One representative album row per distinct album that has no complete
-    global scoring yet. Copies collapse — that's the saving."""
+    global scoring yet. Copies collapse — that's the saving.
+
+    The bins' records come after the library's (November 2026): every record in
+    a bin is in the catalog every user's picks are scored over, owned or not,
+    so it needs its measurements as much as a copy does. Keyed on the entry's
+    artist and title, as catalog_predict and the bin page read them; such a row
+    has no album id (None), and its genre is the catalog's from the stored
+    resolve. `only_bins` leaves the library's out: the nightly run's own stage
+    covers those per user (score_missing_globally)."""
+    import json as _json
+    from backend.genres import canonical_genre
     from backend.trackkeys import album_key
 
-    rows = con.execute(text("""
+    rows = [] if only_bins else con.execute(text("""
         SELECT id, artist, album_name, year, genre FROM album ORDER BY id
     """)).fetchall()
     have = {
@@ -257,6 +268,27 @@ def albums_missing_factors(con, limit: int | None = None) -> list[tuple]:
             "SELECT album_key FROM albumfactors"
             " WHERE theme_features IS NOT NULL AND distinctness_raw IS NOT NULL")).fetchall()
     }
+    # A record someone holds in an edition that is measured is scored through
+    # that copy (catalog_predict.bin_records), so its bin entry needs nothing.
+    measured = {
+        subject for subject, artist, album_name in con.execute(text(
+            "SELECT DISTINCT subject_key, artist, album_name FROM album"
+            " WHERE subject_key IN (SELECT subject_key FROM binentry)")).fetchall()
+        if album_key(artist, album_name) in have
+    }
+    for _eid, artist, album_name, year, tl_json, subject in con.execute(text("""
+        SELECT e.id, e.artist, e.album_name, e.year, e.tracklist_json, e.subject_key
+        FROM binentry e JOIN bin b ON b.id = e.bin_id
+        WHERE e.tracklist_json IS NOT NULL AND b.hidden_at IS NULL
+        ORDER BY b.sort_order, b.id, e.position
+    """)).fetchall():
+        if subject in measured:
+            continue
+        try:
+            genre = canonical_genre(_json.loads(tl_json).get("genre"))
+        except (TypeError, ValueError):
+            genre = None
+        rows.append((None, artist, album_name, year, genre))
 
     seen, out = set(), []
     for aid, artist, album_name, year, genre in rows:

@@ -22,9 +22,9 @@ from .. import bins as binlib
 from ..database import get_session
 from ..deps import current_user
 from ..genres import canonical_genre
-from ..models import Album, AlbumPrediction, Bin, BinEntry, PressUser, Song
+from ..models import Album, AlbumPrediction, Bin, BinEntry, PressUser, Song, SongPrediction
 from ..scoring import predictions_unlocked
-from ..trackkeys import album_key
+from ..trackkeys import album_key, subject_key_album
 from .albums import create_copy, tag_genre
 
 router = APIRouter(prefix="/bins", tags=["bins"])
@@ -77,6 +77,33 @@ def _states(session: Session, user_id: int, b: Bin, entries: list[BinEntry], *, 
         return binlib.song_states(entries, rows, user_id)
     mine = _mine(session, user_id, keys)
     return [{"mine": mine.get(e.subject_key)} for e in entries]
+
+
+def _album_predictions(session: Session, user_id: int, entries: list[BinEntry]) -> dict[int, float]:
+    """entry id → the caller's predicted score for its record."""
+    want = {album_key(e.artist, e.album_name) for e in entries}
+    # album_key opens with the cleaned artist, so this reads only those
+    # artists' rows, enough to find another edition's key among them.
+    artists = {k.split("||", 1)[0] for k in want}
+    rows = session.exec(
+        select(AlbumPrediction.album_key, AlbumPrediction.artist, AlbumPrediction.album_name,
+               AlbumPrediction.predicted_score)
+        .where(AlbumPrediction.user_id == user_id,
+               AlbumPrediction.predicted_score.is_not(None),
+               func.split_part(AlbumPrediction.album_key, "||", 1).in_(artists))
+    ).all()
+    by_key = {r[0]: float(r[3]) for r in rows}
+    by_subject: dict[str, float] = {}
+    for _k, artist, name, score in rows:
+        by_subject.setdefault(subject_key_album(artist, name), float(score))
+    out = {}
+    for e in entries:
+        score = by_key.get(album_key(e.artist, e.album_name))
+        if score is None:
+            score = by_subject.get(e.subject_key)
+        if score is not None:
+            out[e.id] = round(score, 2)
+    return out
 
 
 def _card(b: Bin, entries: list[BinEntry], states: list[dict]) -> dict:
@@ -161,15 +188,24 @@ def get_bin(
             return tagged.most_common(1)[0][0]
         return canonical_genre(json.loads(e.tracklist_json).get("genre")) if e.tracklist_json else None
 
-    predicted: dict[str, float] = {}
-    if keys and not songs and predictions_unlocked(session, user.id):
-        akeys = {album_key(e.artist, e.album_name): e.subject_key for e in entries}
-        for akey, score in session.exec(
-            select(AlbumPrediction.album_key, AlbumPrediction.predicted_score)
-            .where(AlbumPrediction.user_id == user.id, AlbumPrediction.album_key.in_(akeys.keys()))
-        ).all():
-            if score is not None:
-                predicted[akeys[akey]] = round(float(score), 2)
+    # The caller's predicted score, from the nightly catalog stage, which
+    # scores every bin record for every user whether or not anyone holds it
+    # (worker/catalog_predict.py). An album bin's is the record's, by the
+    # entry's album_key — or, when someone's copy of another edition stands for
+    # the record in the catalog, that copy's, found by subject key. A song
+    # bin's is the song's own, on the song scale (SongPrediction).
+    predicted: dict[int, float] = {}
+    if entries and predictions_unlocked(session, user.id):
+        if songs:
+            tids = {e.track_id for e in entries if e.track_id}
+            by_track = dict(session.exec(
+                select(SongPrediction.track_id, SongPrediction.predicted_score)
+                .where(SongPrediction.user_id == user.id, SongPrediction.track_id.in_(tids))
+            ).all()) if tids else {}
+            predicted = {e.id: round(float(by_track[e.track_id]), 1)
+                         for e in entries if e.track_id in by_track}
+        else:
+            predicted = _album_predictions(session, user.id, entries)
 
     return {
         **_card(b, entries, states),
@@ -192,7 +228,7 @@ def get_bin(
                 "mine": st["mine"],
                 "pressd_avg": st["pressd_avg"] if songs else pressd.get(e.subject_key, (None, 0))[0],
                 "pressd_raters": st["pressd_raters"] if songs else pressd.get(e.subject_key, (None, 0))[1],
-                "predicted_score": predicted.get(e.subject_key),
+                "predicted_score": predicted.get(e.id),
                 "blurb": e.note,
             }
             for e, st in zip(entries, states)

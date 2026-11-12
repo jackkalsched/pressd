@@ -706,6 +706,7 @@ def delete_own_account(
 
     # Predictions are about this person's taste, so they go.
     run("DELETE FROM albumprediction WHERE user_id = :u")
+    run("DELETE FROM songprediction WHERE user_id = :u")
 
     # Thread posts are tombstoned rather than removed — the same soft delete
     # DELETE /posts/{id} does — because other people's replies hang off them.

@@ -235,3 +235,147 @@ def link_unlinked(con) -> dict[int, int]:
                 pairs)
     raw.commit()
     return dict(pairs)
+
+
+# ── Bin entries (November 2026) ──────────────────────────────────────────────
+# A bin's record is in the catalog before anyone owns a copy, so its songs need
+# Tracks of their own for the audio ingest to fetch and catalog_predict to score
+# (CLAUDE.md §5, Bins). They are keyed exactly as the copy a bin's Add makes
+# would be — the entry's artist and title, the stored tracklist's songs and
+# credits (bins.copy_data) — so that copy, or any edition of the record imported
+# from search, links to the same tracks and reuses their audio.
+
+def bin_songs(tracklist: dict, entry_artist: str) -> list[SongRow]:
+    """A stored tracklist (/search/resolve's shape) as SongRows whose ids are
+    the songs' positions in it, as albums._add_songs would make them."""
+    return [
+        SongRow(id=i, title=str(t.get("title") or ""), artist=t.get("artist") or entry_artist,
+                track_number=t.get("track_number"), duration_ms=t.get("duration_ms"))
+        for i, t in enumerate(tracklist.get("tracks") or [])
+    ]
+
+
+def song_position(song_title: str | None, titles: list[str]) -> int | None:
+    """Where a song bin's song sits on its album's tracklist: the first title
+    that is the same song by `match_title` (a feat-credit or "(Album Version)"
+    folded) — the rule bins.song_states finds it on copies by. Failing that,
+    the same letters without their spaces (Willow's "t r a n s p a r e n t s o
+    u l"), then the one title that opens with the song's and goes on to say
+    more (Outkast's "B.O.B. (Bombs Over Baghdad)")."""
+    from .trackkeys import match_title
+
+    if not song_title:
+        return None
+    want = match_title(song_title)
+    if not want:
+        return None
+    keys = [match_title(t or "") for t in titles]
+    hit = next((i for i, k in enumerate(keys) if k == want), None)
+    if hit is None:
+        tight = want.replace(" ", "")
+        hit = next((i for i, k in enumerate(keys) if k.replace(" ", "") == tight), None)
+    if hit is None:
+        longer = [i for i, k in enumerate(keys) if k.startswith(want + " ")]
+        hit = longer[0] if len(longer) == 1 else None
+    return hit
+
+
+def link_bin_entries(con, entry_ids: list[int] | None = None) -> dict:
+    """Give every bin entry with a stored tracklist its BinTrack rows, each on
+    a Track (made here when the recording is new), and a song entry its
+    `track_id`. Idempotent and safe nightly: an entry that already has its rows
+    is left alone, so a normal night does one query. `entry_ids` limits it to
+    those entries. `con` is an engine Connection on psycopg2; this commits.
+    Bulk, as link_unlinked is: ~3,600 songs one round trip each would take
+    twelve minutes over the Mac's link."""
+    import json as _json
+    from psycopg2.extras import execute_values
+
+    only = " AND e.id = ANY(:ids)" if entry_ids is not None else ""
+    params = {"ids": list(entry_ids)} if entry_ids is not None else {}
+    entries = con.execute(text(f"""
+        SELECT e.id, e.artist, e.album_name, e.tracklist_json, e.song_title
+        FROM binentry e
+        WHERE e.tracklist_json IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM bintrack bt WHERE bt.entry_id = e.id){only}
+        ORDER BY e.bin_id, e.position
+    """), params).fetchall()
+
+    out = {"entries": len(entries), "songs": 0, "new_tracks": 0, "song_entries": 0}
+    if entries:
+        by_base: dict[str, list[Candidate]] = {}
+        for k, tid, dur in con.execute(text(
+                "SELECT track_key, id, duration_ms FROM track")).fetchall():
+            by_base.setdefault(base_of(k), []).append(Candidate(k, tid, dur))
+
+        new_tracks: dict[str, tuple[int, int | None]] = {}   # key -> (placeholder, dur)
+        rows = []   # (entry_id, position, title, track_number, duration_ms, track id or placeholder)
+        for eid, artist, album_name, tl_json, _song in entries:
+            try:
+                tl = _json.loads(tl_json)
+            except (TypeError, ValueError):
+                continue
+            songs = bin_songs(tl, artist)
+            extra = tl.get("extra_artists")
+            keys = copy_keys(songs, artist, _json.dumps(extra) if extra else None, album_name)
+            taken: set[int] = set()
+            for s in songs:
+                key = keys[s.id]
+                tid, new_key = resolve(key, s.duration_ms, by_base.get(key, []))
+                if tid in taken:
+                    tid, new_key = None, f"{key}||b{eid}.{s.id}"
+                if tid is None:
+                    tid = -(len(new_tracks) + 1)
+                    new_tracks[new_key] = (tid, s.duration_ms)
+                    by_base.setdefault(base_of(new_key), []).append(
+                        Candidate(new_key, tid, s.duration_ms))
+                taken.add(tid)
+                rows.append((eid, s.id, s.title, s.track_number, s.duration_ms, tid))
+
+        raw = con.connection.driver_connection
+        with raw.cursor() as cur:
+            real: dict[int, int] = {}
+            if new_tracks:
+                # In entry order, so the ingest — first in, first out — finishes
+                # one record before it starts the next.
+                execute_values(cur,
+                    "INSERT INTO track (track_key, artist_norm, title_norm, duration_ms, created_at)"
+                    " VALUES %s ON CONFLICT (track_key) DO NOTHING",
+                    [(k, *key_parts(k), d, datetime.utcnow()) for k, (_, d) in new_tracks.items()],
+                    page_size=1000)
+                cur.execute("SELECT track_key, id FROM track WHERE track_key = ANY(%s)",
+                            (list(new_tracks),))
+                real = {new_tracks[k][0]: tid for k, tid in cur.fetchall()}
+            final = [(e, p, t, n, d, real.get(tid, tid)) for e, p, t, n, d, tid in rows]
+            final = [r if r[5] > 0 else (*r[:5], None) for r in final]
+            if final:
+                execute_values(cur,
+                    "INSERT INTO bintrack (entry_id, position, title, track_number, duration_ms, track_id)"
+                    " VALUES %s ON CONFLICT (entry_id, position) DO NOTHING",
+                    final, page_size=1000)
+        raw.commit()
+        out["songs"], out["new_tracks"] = len(rows), len(new_tracks)
+
+    # A song entry's own track, from its album's rows — also for entries linked
+    # before their song was matched.
+    pending = con.execute(text(f"""
+        SELECT e.id, e.song_title FROM binentry e
+        WHERE e.song_title IS NOT NULL AND e.track_id IS NULL
+          AND EXISTS (SELECT 1 FROM bintrack bt WHERE bt.entry_id = e.id){only}
+    """), params).fetchall()
+    titles: dict[int, list[tuple[str, int | None]]] = {}
+    if pending:
+        for eid, title, tid in con.execute(text(
+                "SELECT entry_id, title, track_id FROM bintrack"
+                " WHERE entry_id = ANY(:ids) ORDER BY entry_id, position"),
+                {"ids": [p[0] for p in pending]}).fetchall():
+            titles.setdefault(eid, []).append((title, tid))
+    for eid, song in pending:
+        tracks = titles.get(eid, [])
+        pos = song_position(song, [t[0] for t in tracks])
+        if pos is not None and tracks[pos][1] is not None:
+            con.execute(text("UPDATE binentry SET track_id = :t WHERE id = :e"),
+                        {"t": tracks[pos][1], "e": eid})
+            out["song_entries"] += 1
+    con.commit()
+    return out
