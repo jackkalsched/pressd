@@ -950,6 +950,15 @@ Render's unpinned `anthropic` reached 1.x every call failed on `temperature` —
 the 154 albums added that month had no subgenres, and iTunes had filed 97 albums under
 "Alternative" alone. A one-off backfill tagged the 421 stored albums that needed it
 (commit `8a28b6f`).
+**One set of genre tags per record** (`backend/genre_sync.py`, November 2026, Jack's rule):
+every copy of a record (`subject_key`) carries the same `genre` and `sub_genre1–3`, and a change
+on one copy is a change on all of them. Kept on the session (registered from `models.py`), not at
+the writers: a new copy takes the record's tags whatever its catalog said (a record nobody holds
+yet keeps the catalog's, and they become the record's); a copy whose tags change — the tagger,
+a backfill, `PATCH /albums/{id}`, anything through the ORM — writes them to every other copy in
+the same flush; a copy renamed onto another record takes that record's. So the tagger runs once
+per record, not per copy. On 2026-11-12 a one-off pass brought the 137 records (198 copies) whose
+copies disagreed onto one set each — the most complete, then the one most copies had.
 **`anthropic` is pinned to 0.44.0** in both requirement files: 1.x removed
 `temperature`, which the tagger and the theme measurements pass (§7). Moving to 1.x
 means deleting it from all five call sites, a change to how reproducible the theme
@@ -1437,7 +1446,7 @@ Current → risk → cheapest fix. Rows marked fixed have been implemented; the 
 
 | # | Finding | Risk | Cheapest fix |
 |---|---|---|---|
-| **P1** | ~~Finishing a rating rescored every user's library inside the request.~~ **Fixed.** The request now rescores only the rater ([albums.py:260](backend/routers/albums.py#L260)); the nightly job makes everyone exact again (`nightly_predict.py:385`); the userbase prior reads four columns instead of whole rows (`scoring.py:113`). On a 30-user test database one rating went from 124 queries to 13, and the rater's scores matched the old path exactly | ~~HIGH~~ → LOW | residual: the prior is still one scan over every rated album per rating, now of four numbers |
+| **P1** | ~~Finishing a rating rescored every user's library inside the request.~~ **Fixed.** The request now rescores only the rater ([albums.py:260](backend/routers/albums.py#L260)); the nightly job makes everyone exact again (`nightly_predict.py:385`); the userbase prior reads four columns instead of whole rows (`scoring.py:113`). On a 30-user test database one rating went from 124 queries to 13, and the rater's scores matched the old path exactly | ~~HIGH~~ → LOW | residual: the prior is still one scan over every rated album per rating, now of four numbers. Since November 2026 the rater's own rescore (`recompute_user_scores`) is one aggregate query — each rated album's four factors and song-score mean — and one batched `UPDATE` of the scores that moved, not every album and song loaded as full rows (6,332 songs for a 472-album library); identical scores on all 1,118 rated albums when checked, ~1.3s → ~0.5s for that library over the Mac's 210ms link |
 | **P2** | `/discover/charts` selects every rated album, then filters and groups twice in Python, uncached (`discover.py:189`) | **HIGH** — the Charts tab, both platforms | memoise the response on its filter tuple with the existing 60s TTL + invalidation hook |
 | **P11** | ~~All 10 `/util/*` endpoints had no auth.~~ **Fixed.** The router now carries `dependencies=[Depends(current_user)]` (`util.py:31-45`) and the two web call sites that used a bare `fetch` were moved onto `fetchAlbumColor`. Verified: all ten answer 401 without a token. A signed-in user can still call `/backfill-genres?override=true` | ~~HIGH~~ → LOW | residual: move the seven maintenance routes out of HTTP entirely, beside `run_audio_ingest.sh` |
 | **P8** | Engine allows 15 connections *per process* on Render; Supabase's session pooler allows 15 *per project* (`database.py`, `_build_engine`). **Partly fixed, November 2026:** a process run from `.env` (`PG_*`) now defaults to 2 + 2, after a local uvicorn for the simulator held 8 of the 15 and the pooler refused new clients (`EMAXCONNSESSION`) — 500s on the same Mac and less headroom for Render. `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` override | **HIGH** at scale | Render's own 5 + 10 still equals the whole project limit: size it against the real limit ÷ instances, or move to the transaction pooler |

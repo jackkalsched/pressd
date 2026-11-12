@@ -271,42 +271,55 @@ def recompute_user_scores(session, user, prior: dict | None = None) -> int:
     """Recompute (but don't commit) every rated album for one user, using their
     own factor stats (shrunk toward the global prior) and weights. Returns the
     number of albums re-scored. Pass `prior` when looping over users, so the
-    global stat block is fetched once rather than per user."""
-    from sqlmodel import select
-    from sqlalchemy.orm import selectinload
-    from .models import Album
+    global stat block is fetched once rather than per user.
+
+    A score needs only an album's four factors and the mean of its song
+    scores, so one aggregate query reads exactly that, and one batched UPDATE
+    writes back only the scores that moved. It used to load every rated album
+    as a full row and every one of their songs (6,332 rows for a 472-album
+    library) on each finished rating, which made saving the factors the slow
+    step of the whole flow. The arithmetic is unchanged — `compute_album_score`
+    over the same mean — so the scores are the same ones.
+
+    Raw SQL, so album rows already loaded in the session keep their old score
+    until refreshed; every caller commits next, which expires them."""
+    from sqlalchemy import text
 
     factor_stats = get_factor_stats(session, user_id=user.id, prior=prior)
     weights = get_user_weights(user)
 
-    albums = session.exec(
-        select(Album).where(
-            Album.status == "rated",
-            Album.user_id == user.id,
-        ).options(selectinload(Album.songs))
+    rows = session.execute(
+        text(
+            "SELECT a.id, a.theme, a.replay_value, a.production, a.distinctness, a.score,"
+            " count(s.id) AS n_songs, avg(s.score) AS mean"
+            " FROM album a LEFT JOIN song s ON s.album_id = a.id"
+            " WHERE a.user_id = :u AND a.status = 'rated'"
+            " GROUP BY a.id"
+        ),
+        {"u": user.id},
     ).all()
 
     count = 0
-    for album in albums:
-        song_scores = [s.score for s in album.songs if s.score is not None]
-        if not song_scores:
-            continue
-        has_factors = all(getattr(album, f) is not None for f in FACTOR_KEYS)
-        if has_factors:
-            album.score = compute_album_score(
-                song_scores,
-                album.theme, album.replay_value,
-                album.production, album.distinctness,
-                factor_stats, weights,
+    changed = []
+    for aid, theme, replay, production, distinctness, old, n_songs, mean in rows:
+        if mean is None:
+            continue  # no song scored yet
+        mean = float(mean)
+        if None not in (theme, replay, production, distinctness):
+            score = compute_album_score(
+                [mean], theme, replay, production, distinctness, factor_stats, weights,
             )
-        elif len(album.songs) <= EP_MAX_TRACKS:
+        elif n_songs <= EP_MAX_TRACKS:
             # EP: no factor ratings by design — score is the song mean
-            album.score = round(sum(song_scores) / len(song_scores), 2)
+            score = round(mean, 2)
         else:
             continue  # full album still awaiting factor ratings
-        session.add(album)
         count += 1
+        if old is None or abs(old - score) > 1e-9:
+            changed.append({"id": aid, "score": score})
 
+    if changed:
+        session.execute(text("UPDATE album SET score = :score WHERE id = :id"), changed)
     return count
 
 
