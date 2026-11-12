@@ -41,20 +41,20 @@ function Avatar({ user, size = 28 }: { user: Pick<UserInfo, 'name' | 'avatarUrl'
   )
 }
 
-const nav = [
-  // The pages iPhone's tab bar and side menu also show take its icons
-  // (mobile/components/TabBar.tsx, SideMenu.tsx). Charts sits right after
-  // For You, as on the phone; Stats is a pie so it can't pass for Charts' bars.
+// In the iPhone side menu's order (mobile/components/SideMenu.tsx), less
+// Getting Started: For You, Library, Social, Charts, then — under a hairline in
+// the sidebar — Bins and Upcoming. Web's own Rankings and Stats sit with
+// Library, whose views they are on iPhone. Shared pages take iPhone's icons;
+// Stats is a pie so it can't pass for Charts' bars.
+const nav: { to: string; label: string; icon: typeof ListMusic; rule?: boolean }[] = [
   { to: '/for-you', label: 'For You', icon: ListMusic },
-  { to: '/charts', label: 'Charts', icon: BarChart3 },
   { to: '/library', label: 'Library', icon: CircleUser },
-  // Pressd's themed collections; iPhone reaches them from For You's side menu.
-  { to: '/bins', label: 'Bins', icon: Package },
-  // Records announced and dated, a month at a time (iPhone: the side menu).
-  { to: '/upcoming', label: 'Upcoming', icon: CalendarDays },
-  { to: '/ratings', label: 'Rankings', icon: List },
+  { to: '/ratings', label: 'Your Rankings', icon: List },
   { to: '/stats', label: 'Stats', icon: ChartPie },
   { to: '/social', label: 'Social', icon: Users },
+  { to: '/charts', label: 'Charts', icon: BarChart3 },
+  { to: '/bins', label: 'Bins', icon: Package, rule: true },
+  { to: '/upcoming', label: 'Upcoming', icon: CalendarDays },
 ]
 
 function InviteModal({ onClose }: { onClose: () => void }) {
@@ -204,7 +204,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex flex-col gap-1">
-          {nav.map(({ to, label, icon: Icon }) => (
+          {nav.map(({ to, label, icon: Icon, rule }) => (
             <NavLink
               key={to}
               to={to}
@@ -212,6 +212,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               className={({ isActive }) =>
                 clsx(
                   'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                  rule && 'relative mt-3 before:absolute before:-top-2 before:inset-x-2 before:h-px before:bg-(--c-e2e2e2)',
                   isActive
                     ? 'bg-(--c-2d6a4f)/10 text-(--c-2d6a4f)'
                     : 'text-(--c-777) hover:text-(--c-111) hover:bg-(--c-f0f0f0)',
