@@ -23,7 +23,8 @@ dry run prints every doubtful and unmatched row and writes nothing; an
 unmatched row is still stored, in its place, with nothing to add.
 
 Re-running replaces the bin's entries with the new match; the bin's id and
-slug stay.
+slug stay, and each entry's blurb is set again from <slug>.blurbs.json
+(worker/bin_blurbs.py writes it), so a re-import never loses them.
 """
 import argparse
 import asyncio
@@ -204,6 +205,9 @@ def write(meta, matched: list[dict]) -> int:
     from sqlmodel import Session, delete, select
     from backend.database import engine
     from backend.models import Bin, BinEntry
+    from worker.bin_blurbs import load_blurbs
+
+    blurbs = load_blurbs(meta.slug)
 
     with Session(engine) as s:
         b = s.exec(select(Bin).where(Bin.slug == meta.slug)).first()
@@ -234,7 +238,7 @@ def write(meta, matched: list[dict]) -> int:
                 # the album it came out on, as the catalog names that album.
                 song, name = row.title, (r["album_name"] if r else "")
             s.add(BinEntry(
-                bin_id=b.id, position=pos, rank=row.rank,
+                bin_id=b.id, position=pos, rank=row.rank, note=blurbs.get(row.rank),
                 artist=artist, album_name=name, year=row.year, song_title=song,
                 subject_key=subject_key_album(artist, name),
                 deezer_id=int(m["id"]) if r and m["source"] == "deezer" else None,

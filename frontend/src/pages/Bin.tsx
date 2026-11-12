@@ -3,8 +3,9 @@
 // records over a blur of the first, ending in a hard edge; below it, centred,
 // the bare Pressd mark on Pressd's bins, the title and your progress (a cell per
 // record, in the list's order), then its records, in the order the Sort by
-// menu picks (shared/src/binSort.ts). Each record shows your
-// score or where it sits in your library, or Rate / Add.
+// menu picks (shared/src/binSort.ts). Each row is the cover, then its words —
+// title, artist, year · genre and Pressd's one-line blurb (worker/bin_blurbs.py) —
+// and on the right your score or where it sits in your library, with Rate / Add.
 //
 // A record always opens as its Pressd page (the community view): through your
 // copy's id when you have one, otherwise by name, which handles a record
@@ -272,14 +273,19 @@ export default function Bin() {
                       )}
                     </Link>
 
-                    <div className="min-w-0 flex-1">
-                      <Link to={entryHref(e)} className="group block">
+                    {/* The words on the left — title, artist, year · genre and the
+                        blurb — and the numbers with Rate / Save in one group on
+                        the right, sharing a bottom edge. Below sm the group drops
+                        under the words, figures left and buttons right. */}
+                    <div className="flex min-w-0 flex-1 flex-col gap-3.5 sm:flex-row sm:items-end sm:gap-8">
+                      <Link to={entryHref(e)} className="group block min-w-0 flex-1">
                         <p className="m-0 line-clamp-2 text-[17px] font-bold leading-snug text-(--c-1c1917) group-hover:underline">{e.songTitle ?? e.albumName}</p>
                         <p className="m-0 mt-1 truncate text-[14px] text-(--c-57534e)">{e.artist}</p>
                         {details(e) && <p className="m-0 mt-0.5 truncate text-[12.5px] text-(--c-8a7f72)">{details(e)}</p>}
+                        {e.blurb && <p className="m-0 mt-2.5 hidden max-w-[62ch] text-[13.5px] leading-snug text-(--c-57534e) md:line-clamp-2">{e.blurb}</p>}
                       </Link>
 
-                      <div className="mt-3.5 flex items-end justify-between gap-4">
+                      <div className="flex shrink-0 items-end justify-between gap-7">
                         {/* Pressd's order leads with the Pressd average and greys
                             yours; every other order leads with yours. */}
                         <div className="flex items-end gap-7">

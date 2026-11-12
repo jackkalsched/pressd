@@ -193,6 +193,7 @@ def get_bin(
                 "pressd_avg": st["pressd_avg"] if songs else pressd.get(e.subject_key, (None, 0))[0],
                 "pressd_raters": st["pressd_raters"] if songs else pressd.get(e.subject_key, (None, 0))[1],
                 "predicted_score": predicted.get(e.subject_key),
+                "blurb": e.note,
             }
             for e, st in zip(entries, states)
         ],
