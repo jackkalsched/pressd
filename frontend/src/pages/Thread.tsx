@@ -14,8 +14,8 @@ import {
   ArrowLeft, ChevronDown, ChevronUp, FileText, Lock, MoreHorizontal, Send, Triangle,
 } from 'lucide-react'
 import {
-  createThreadPost, fetchReplies, fetchThreadPosts, flagSpoiler, replyToPost,
-  reportPost, resolveThread,
+  copyAlbumToLibrary, createThreadPost, fetchReplies, fetchThreadPosts, fetchThreadPreview,
+  flagSpoiler, replyToPost, reportPost, resolveThread,
 } from '../api'
 import { songScoreColor } from '../types'
 import type {
@@ -41,7 +41,7 @@ const SORTS: { key: ThreadSort; label: string }[] = [
 // What each locked state should say. The gate exists to make the room worth
 // entering, so the copy reads as an invitation rather than a refusal.
 const LOCKED_COPY: Record<string, string> = {
-  rate_album: 'Finish rating this record to read what people are saying about it.',
+  rate_album: 'Rate this record to read every review and join the conversation.',
 }
 
 export default function Thread() {
@@ -181,21 +181,7 @@ export default function Thread() {
                 <VinylSpinner size={44} /> Loading…
               </div>
             ) : locked ? (
-              <div className="flex flex-col items-center text-center gap-3 py-20 lg:py-32 px-6 rounded-2xl border border-dashed border-(--c-e2dbd0)">
-                <Lock size={28} className="text-(--c-c2b8ad)" />
-                <p className="font-display text-xl font-bold text-(--c-111) m-0">Not yet</p>
-                <p className="text-sm text-(--c-8a7f72) leading-relaxed max-w-sm m-0">
-                  {LOCKED_COPY[meta?.lockedReason ?? ''] ?? 'This thread is not open to you yet.'}
-                </p>
-                {album && (
-                  <Link
-                    to="/library"
-                    className="mt-2 text-sm font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) transition-colors"
-                  >
-                    Go to your library
-                  </Link>
-                )}
-              </div>
+              <LockedRoom subject={ref} reason={meta?.lockedReason ?? null} />
             ) : (
               <>
                 {/* ── Sort + who is in the room ──────────────────────── */}
@@ -295,6 +281,118 @@ export default function Thread() {
             )}
           </main>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/** A room the reader hasn't earned yet: its three most popular reviews,
+ *  clipped and read-only (discussions.thread_preview), then the lock and the
+ *  way in — Rate now on your copy of the record, or on a copy cloned from
+ *  someone else's, as the community page's Rate now does. A record that can't
+ *  be rated yet (no songs, or not out) offers Add to Library instead. */
+function LockedRoom({ subject, reason }: { subject: SubjectRef; reason: string | null }) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const previewKey = ['threadPreview', subject.subjectType, subject.artist ?? '', subject.album ?? '']
+  const { data: preview, isLoading } = useQuery({
+    queryKey: previewKey,
+    queryFn: () => fetchThreadPreview(subject),
+  })
+
+  const posts = preview?.posts ?? []
+  const mine = preview?.yourCopy ?? null
+  const source = preview?.source ?? null
+  const action: 'rate' | 'continue' | 'add' | null = mine
+    ? (mine.canRate ? (mine.status === 'listening' ? 'continue' : 'rate') : null)
+    : source
+      ? (source.canRate ? 'rate' : 'add')
+      : null
+
+  async function go() {
+    if (busy || !action) return
+    setBusy(true); setError(null)
+    try {
+      if (mine) {
+        navigate(`/rate/${mine.id}`)
+        return
+      }
+      const copy = await copyAlbumToLibrary(source!.albumId, action === 'add' ? 'to_listen' : 'listening')
+      queryClient.invalidateQueries({ queryKey: ['albums'] })
+      if (action === 'add') {
+        await queryClient.invalidateQueries({ queryKey: previewKey })
+        setBusy(false)
+        return
+      }
+      navigate(`/rate/${copy.id}`)
+    } catch {
+      setError(action === 'add' ? 'Couldn’t add this album. Please try again.' : 'Couldn’t open this album to rate. Please try again.')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div>
+      {isLoading ? (
+        <div className="flex justify-center py-10"><VinylSpinner size={44} /></div>
+      ) : posts.length > 0 && (
+        <>
+          <p className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-(--c-a8998a) m-0 mb-1">
+            Top reviews
+          </p>
+          <div className="grid gap-x-8 xl:grid-cols-3">
+            {posts.map((p, i) => (
+              <div
+                key={p.id}
+                className="rise-in py-3.5 border-b border-(--c-f0ebe3) xl:border-b-0"
+                style={{ '--i': i } as CSSProperties}
+              >
+                <div className="flex items-center gap-3 mb-1">
+                  <AuthorLink author={p.author} gap="gap-3">
+                    <Avatar name={p.author.name} avatarUrl={p.author.avatarUrl} size={30} />
+                    <span className="text-[16px] font-semibold text-(--c-111) truncate group-hover/author:underline underline-offset-2">
+                      {p.author.name}
+                    </span>
+                  </AuthorLink>
+                  {p.createdAt && (
+                    <span className="text-[11px] text-(--c-c2b8ad) shrink-0">{timeAgo(p.createdAt)}</span>
+                  )}
+                  {p.author.score != null && (
+                    <span
+                      className="ml-auto font-display text-[15px] font-bold tabular-nums shrink-0"
+                      style={{ color: songScoreColor(p.author.score) }}
+                    >
+                      {p.author.score.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+                <p className="pl-[42px] text-[14.5px] text-(--c-111) leading-relaxed whitespace-pre-wrap break-words line-clamp-4 m-0">
+                  {p.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div className={`flex flex-col items-center text-center gap-3 px-6 rounded-2xl border border-dashed border-(--c-e2dbd0) ${posts.length > 0 ? 'mt-6 py-10' : 'py-20 lg:py-32'}`}>
+        <Lock size={28} className="text-(--c-c2b8ad)" />
+        <p className="font-display text-xl font-bold text-(--c-111) m-0">Not yet</p>
+        <p className="text-sm text-(--c-8a7f72) leading-relaxed max-w-sm m-0">
+          {LOCKED_COPY[reason ?? ''] ?? 'This thread is not open to you yet.'}
+        </p>
+        {action && (
+          <button
+            onClick={go}
+            disabled={busy}
+            className="mt-2 inline-flex items-center justify-center gap-2 min-w-[140px] h-10 px-5 rounded-full bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) disabled:opacity-70 text-white text-sm font-semibold transition-colors"
+          >
+            {busy ? <VinylSpinner size={18} /> : action === 'continue' ? 'Continue rating' : action === 'add' ? 'Add to Library' : 'Rate now'}
+          </button>
+        )}
+        {error && <p className="text-[12px] text-(--c-c0392b) m-0">{error}</p>}
       </div>
     </div>
   )

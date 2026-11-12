@@ -3,7 +3,7 @@
 // who have heard the same thing argue about it. Reading and posting need the
 // same thing (you finished it), so a locked thread shows the lock instead of
 // its contents. PLAN_discussions.md §4, §5, §6.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { DynamicColorIOS, Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type View as RNView } from 'react-native'
 import VinylSpinner from '../../components/VinylSpinner'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -14,8 +14,10 @@ import * as Clipboard from 'expo-clipboard'
 import * as haptics from '../../lib/haptics'
 import { ArrowLeft, ChevronDown, ChevronUp, FileText, Lock, Send, Triangle } from 'lucide-react-native'
 import {
+  copyAlbumToLibrary,
   createThreadPost,
   fetchThreadPosts,
+  fetchThreadPreview,
   flagSpoiler,
   reportPost,
   replyToPost,
@@ -50,7 +52,7 @@ const SORTS: { key: ThreadSort; label: string }[] = [
 // What each locked state should say. The gate exists to make the room worth
 // entering, so the copy has to read as an invitation rather than a refusal.
 const LOCKED_COPY: Record<string, string> = {
-  rate_album: 'Finish rating this record to read what people are saying about it.',
+  rate_album: 'Rate this record to read every review and join the conversation.',
 }
 
 export default function ThreadScreen() {
@@ -149,13 +151,7 @@ export default function ThreadScreen() {
         {metaLoading ? (
           <View style={styles.center}><VinylSpinner size={64} /></View>
         ) : locked ? (
-          <View style={styles.center}>
-            <Lock size={28} color={tc.inkMuted} />
-            <Text style={styles.lockedTitle}>Not yet</Text>
-            <Text style={styles.lockedBody}>
-              {LOCKED_COPY[meta?.lockedReason ?? ''] ?? 'This thread is not open to you yet.'}
-            </Text>
-          </View>
+          <LockedRoom subject={ref} reason={meta?.lockedReason ?? null} scrollRef={scrollRef} />
         ) : (
           <KeyboardAvoidingView
             style={{ flex: 1 }}
@@ -243,6 +239,125 @@ export default function ThreadScreen() {
         )}
       </SafeAreaView>
     </View>
+  )
+}
+
+/** A room the reader hasn't earned yet: its three most popular reviews,
+ *  clipped and read-only (discussions.thread_preview), then the lock and the
+ *  way in — Rate now on your copy of the record, or on a copy cloned from
+ *  someone else's, as the community view's Rate now does. A record that can't
+ *  be rated yet (no songs, or not out) offers Add to Library instead. */
+function LockedRoom({
+  subject,
+  reason,
+  scrollRef,
+}: {
+  subject: SubjectRef
+  reason: string | null
+  scrollRef: RefObject<ScrollView | null>
+}) {
+  const tc = useColors()
+  const router = useRouter()
+  const queryClient = useQueryClient()
+  const openProfile = useOpenProfile()
+  const [busy, setBusy] = useState(false)
+  const previewKey = ['threadPreview', subject.subjectType, subject.artist ?? '', subject.album ?? '']
+  const { data: preview, isLoading } = useQuery({
+    queryKey: previewKey,
+    queryFn: () => fetchThreadPreview(subject),
+  })
+
+  const posts = preview?.posts ?? []
+  const mine = preview?.yourCopy ?? null
+  const source = preview?.source ?? null
+  const action: 'rate' | 'continue' | 'add' | null = mine
+    ? (mine.canRate ? (mine.status === 'listening' ? 'continue' : 'rate') : null)
+    : source
+      ? (source.canRate ? 'rate' : 'add')
+      : null
+
+  async function go() {
+    if (busy || !action) return
+    haptics.light()
+    if (mine) {
+      router.push({ pathname: '/rate/[id]', params: { id: String(mine.id) } })
+      return
+    }
+    setBusy(true)
+    try {
+      const copy = await copyAlbumToLibrary(source!.albumId, action === 'add' ? 'to_listen' : 'listening')
+      queryClient.invalidateQueries({ queryKey: ['albums'] })
+      if (action === 'add') {
+        haptics.success()
+        await queryClient.invalidateQueries({ queryKey: previewKey })
+      } else {
+        router.push({ pathname: '/rate/[id]', params: { id: String(copy.id) } })
+      }
+    } catch {
+      Alert.alert(action === 'add' ? 'Couldn’t add this album' : 'Couldn’t open this album to rate', 'Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <ScrollView ref={scrollRef} contentContainerStyle={styles.lockedList} showsVerticalScrollIndicator={false}>
+      {isLoading ? (
+        <VinylSpinner size={48} style={{ marginTop: spacing.xl }} />
+      ) : posts.length > 0 && (
+        <>
+          <Text style={styles.lockedHeading}>TOP REVIEWS</Text>
+          {posts.map((p) => (
+            <View key={p.id} style={[styles.post, { borderColor: tc.border }]}>
+              <View style={styles.postHead}>
+                <Pressable
+                  style={styles.authorLink}
+                  onPress={() => openProfile(p.author.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${p.author.name}'s profile`}
+                >
+                  <Avatar name={p.author.name} avatarUrl={p.author.avatarUrl} size={30} />
+                  <Text style={styles.postAuthor} numberOfLines={1}>{p.author.name}</Text>
+                </Pressable>
+                {p.author.score != null && (
+                  <Text
+                    style={[styles.postScore, { color: scoreColor(p.author.score) }]}
+                    maxFontSizeMultiplier={NUM_SCALE_CAP}
+                  >
+                    {p.author.score.toFixed(2)}
+                  </Text>
+                )}
+              </View>
+              <Text style={styles.postBody} numberOfLines={4}>{p.body}</Text>
+            </View>
+          ))}
+        </>
+      )}
+
+      <View style={[styles.lockedBox, posts.length === 0 && !isLoading && styles.lockedBoxAlone, { borderColor: tc.border }]}>
+        <Lock size={28} color={tc.inkMuted} />
+        <Text style={styles.lockedTitle}>Not yet</Text>
+        <Text style={styles.lockedBody}>
+          {LOCKED_COPY[reason ?? ''] ?? 'This thread is not open to you yet.'}
+        </Text>
+        {action && (
+          <Pressable
+            onPress={go}
+            disabled={busy}
+            style={({ pressed }) => [styles.rateBtn, (pressed || busy) && { opacity: 0.8 }]}
+            accessibilityRole="button"
+          >
+            {busy ? (
+              <VinylSpinner size={18} />
+            ) : (
+              <Text style={styles.rateBtnText}>
+                {action === 'continue' ? 'Continue rating' : action === 'add' ? 'Add to Library' : 'Rate now'}
+              </Text>
+            )}
+          </Pressable>
+        )}
+      </View>
+    </ScrollView>
   )
 }
 
@@ -640,6 +755,24 @@ const styles = StyleSheet.create({
 
   lockedTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   lockedBody: { fontFamily: fonts.body, fontSize: 14, color: colors.inkTertiary, textAlign: 'center', lineHeight: 21 },
+  lockedList: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
+  lockedHeading: {
+    fontFamily: fonts.bodyBold, fontSize: 10.5, letterSpacing: 1.6, color: colors.inkTertiary,
+    marginTop: spacing.sm,
+  },
+  // Dashed, as web's: the room is there, the door is shut.
+  lockedBox: {
+    alignItems: 'center', gap: spacing.md, marginTop: spacing.xl,
+    paddingVertical: spacing.xl, paddingHorizontal: spacing.lg,
+    borderWidth: 1, borderStyle: 'dashed', borderRadius: radii.lg,
+  },
+  lockedBoxAlone: { marginTop: spacing.xxl * 2 },
+  rateBtn: {
+    marginTop: spacing.sm, minWidth: 150, height: 44, paddingHorizontal: spacing.xl,
+    borderRadius: radii.pill, backgroundColor: colors.green,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  rateBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: '#fff' },
 
   sortRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

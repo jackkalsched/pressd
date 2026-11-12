@@ -153,6 +153,144 @@ def resolve_thread(
     }
 
 
+# ── The locked room's preview ────────────────────────────────────────────────
+
+PREVIEW_POSTS = 3
+PREVIEW_CHARS = 280
+
+
+def clip_body(body: str, limit: int = PREVIEW_CHARS) -> tuple[str, bool]:
+    """(text, truncated): at most `limit` characters, cut back to the last word
+    break when one is near, with an ellipsis. Done on the server so the rest of
+    a review never reaches someone who hasn't rated the record."""
+    text = (body or "").strip()
+    if len(text) <= limit:
+        return text, False
+    cut = text[:limit]
+    space = cut.rfind(" ")
+    if space >= limit * 0.6:
+        cut = cut[:space]
+    return cut.rstrip(" ,;:—-") + "…", True
+
+
+def can_rate(song_count: int, release_date, today) -> bool:
+    """Whether a copy can go into the rating flow: it has songs, and it is out
+    (no date reads as out, as the clients' isUnreleased does)."""
+    if song_count <= 0:
+        return False
+    return release_date is None or release_date <= today
+
+
+@router.get("/threads/preview")
+def thread_preview(
+    subject_type: str = Query(...),
+    artist: str | None = None,
+    album: str | None = None,
+    user: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """A taste of a room the caller hasn't earned: its three most popular
+    reviews, clipped, plus what Rate now needs.
+
+    A deliberate, narrow exception to `thread_access` (Jack asked for it,
+    November 2026: the locked thread should show what is waiting behind the
+    rating, not a blank lock). The full thread stays gated — this returns no
+    replies, no votes of the caller's, no per-song scores and nobody's full
+    rating; at most `PREVIEW_POSTS` top-level reviews, each cut to
+    `PREVIEW_CHARS` here rather than in the client. Spoilers are what the gate
+    exists for, so a post marked as a spoiler by its author or flagged as one
+    by *anyone* is left out entirely (stricter than the thread's blur at
+    `SPOILER_FLAGS_TO_BLUR`), as are deleted posts, posts hidden by reports or
+    reported by the caller, and posts by anyone blocked either way. Authors are
+    `public_user` plus their score for the record, as the thread shows it.
+
+    Order is the thread's own `popular` (seven days of votes and replies), then
+    all-time standing, then newest, so a quiet week still shows the room's best.
+
+    `your_copy` is the caller's copy of the record in any edition (rated is
+    impossible here — they'd be inside), and `source` the copy Rate now / Add
+    clones when they have none: a rated one first, then the longest tracklist.
+    `can_rate` is false for a copy with no songs or not out yet, where the
+    client offers Add to Library (or nothing) instead of Rate now.
+    """
+    if subject_type not in SUBJECT_TYPES:
+        raise HTTPException(400, f"unknown subject_type {subject_type!r}")
+    key = _resolve_key(SubjectRef(subject_type=subject_type, artist=artist, album=album))
+    from datetime import date as _date
+
+    today = _date.today()
+
+    popular = ("(SELECT COALESCE(SUM(pl.value), 0) FROM postlike pl WHERE pl.post_id = p.id"
+               "   AND pl.created_at > NOW() - INTERVAL '7 days')"
+               " + (SELECT COUNT(*) FROM post r WHERE r.parent_id = p.id"
+               "   AND r.created_at > NOW() - INTERVAL '7 days')")
+    rows = session.execute(_sql(f"""
+        SELECT p.id, p.user_id, p.body, p.created_at
+        FROM post p JOIN thread t ON t.id = p.thread_id
+        WHERE t.subject_type = :s AND t.subject_key = :k
+          AND p.parent_id IS NULL AND p.kind = 'review'
+          AND p.deleted_at IS NULL AND p.user_id IS NOT NULL
+          AND NOT COALESCE(p.is_spoiler, false)
+          AND NOT EXISTS (SELECT 1 FROM postreport pr WHERE pr.post_id = p.id
+                            AND pr.reason = 'spoiler')
+          AND (SELECT COUNT(*) FROM postreport pr WHERE pr.post_id = p.id
+                 AND pr.reason <> 'spoiler') < {REPORTS_TO_HIDE}
+          AND NOT EXISTS (SELECT 1 FROM postreport pr WHERE pr.post_id = p.id
+                            AND pr.user_id = :me AND pr.reason <> 'spoiler')
+          {BLOCKED_SQL.format(col="p.user_id")}
+        ORDER BY {popular} DESC,
+                 (p.like_count - p.dislike_count + p.reply_count) DESC,
+                 p.created_at DESC, p.id DESC
+        LIMIT {PREVIEW_POSTS}
+    """), {"s": subject_type, "k": key, "me": user.id, "blk_me": user.id}).fetchall()
+
+    authors = {u.id: u for u in session.exec(
+        select(PressUser).where(PressUser.id.in_([r[1] for r in rows]))).all()} if rows else {}
+    scores: dict[int, float] = {}
+    if rows:
+        scores = {r[0]: round(float(r[1]), 2) for r in session.execute(_sql(
+            "SELECT user_id, score FROM album WHERE subject_key = :k AND status = 'rated'"
+            " AND score IS NOT NULL AND user_id IN :ids"),
+            {"k": key, "ids": tuple(authors)}).fetchall()}
+    posts = []
+    for pid, uid, body, created_at in rows:
+        if uid not in authors:
+            continue
+        text, truncated = clip_body(body)
+        posts.append({
+            "id": pid,
+            "body": text,
+            "truncated": truncated,
+            "created_at": created_at.isoformat() if created_at else None,
+            "author": {**public_user(authors[uid]), "score": scores.get(uid)},
+        })
+
+    copy_sql = """
+        SELECT a.id, a.status, a.release_date,
+               (SELECT COUNT(*) FROM song s WHERE s.album_id = a.id) AS n
+        FROM album a WHERE a.subject_key = :k {extra}
+        ORDER BY {order} LIMIT 1
+    """
+    mine = session.execute(_sql(copy_sql.format(
+        extra="AND a.user_id = :me",
+        # The one furthest along: Listening before To Listen.
+        order="(a.status = 'listening') DESC, a.id")), {"k": key, "me": user.id}).first()
+    source = None if mine else session.execute(_sql(copy_sql.format(
+        extra="",
+        order="(a.status = 'rated') DESC, n DESC, a.id")), {"k": key}).first()
+
+    return {
+        "subject_key": key,
+        "posts": posts,
+        "your_copy": None if not mine else {
+            "id": mine[0], "status": mine[1], "can_rate": can_rate(mine[3], mine[2], today),
+        },
+        "source": None if not source else {
+            "album_id": source[0], "can_rate": can_rate(source[3], source[2], today),
+        },
+    }
+
+
 def _serialize(row, viewer_id: int, scores: dict[int, float], votes: dict[int, int]) -> dict:
     (pid, uid, parent_id, body, kind, is_spoiler, created_at, edited_at, deleted_at,
      like_count, dislike_count, reply_count, name, avatar, spoiler_flags) = row
