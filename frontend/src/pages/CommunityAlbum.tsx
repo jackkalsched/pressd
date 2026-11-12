@@ -44,6 +44,7 @@ import { BangSkip, CompareScores, CoverWash, DANGER, GREEN, PILL, RECOMMEND, Rev
 import { stagger } from '../lib/format'
 import { trackParam, useTrackHighlight } from '../lib/trackHighlight'
 import VinylSpinner from '../components/VinylSpinner'
+import PredictedScore from '../components/PredictedScore'
 
 export default function CommunityAlbum() {
   const { id } = useParams<{ id: string }>()
@@ -359,8 +360,8 @@ function AveragedView({
     <div>
       {/* What the userbase thinks, against what the model thinks you'll think —
           two readings of one album, sharing a card and a type size. The
-          prediction is drawn hollow: same face, stroked, so the pair reads as
-          measured against estimated without a second colour. */}
+          prediction is drawn in the drifting predicted fill (PredictedScore), so
+          the pair reads as measured against estimated. */}
       <div className="flex items-stretch rise-in" style={stagger(0)}>
         <div className="flex-1 py-2">
           <p
@@ -376,10 +377,8 @@ function AveragedView({
           <>
             <div className="mx-8 my-2 w-px bg-(--c-e2dbd0)" />
             <div className="flex-1 py-2">
-              <p
-                className="font-display m-0 text-[64px] font-bold leading-none tabular-nums text-transparent [-webkit-text-stroke:2px_#2d6a4f]"
-              >
-                {data.predicted_score!.toFixed(2)}
+              <p className="font-display m-0 text-[64px] font-bold leading-none tabular-nums">
+                <PredictedScore value={data.predicted_score!} />
               </p>
               <p className="m-0 mt-2 flex items-center gap-1 text-[11px] font-bold tracking-[0.16em] text-(--c-2d6a4f)">
                 <Star size={11} fill={GREEN} strokeWidth={0} /> FOR YOU
@@ -391,7 +390,9 @@ function AveragedView({
       </div>
 
       {/* Nobody but you has rated it: no comparison to draw yet, so offer the
-          thing that would create one. */}
+          thing that would create one. Recommend only once you've finished
+          rating it yourself (Jack's rule): a record you haven't heard through
+          isn't yours to pass on yet. */}
       {noOneElse && recommendFrom != null && !upcoming && (
         <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3 rise-in" style={stagger(1)}>
           <p className="m-0 text-[14.5px] text-(--c-57534e)">
@@ -399,16 +400,16 @@ function AveragedView({
               ? <>No one else has rated <span className="font-semibold text-(--c-1c1917)">{data.album_name}</span> yet.</>
               : <>No one has rated it yet.</>}
           </p>
-          <button
+          {!notRated && <button
             onClick={() => setRecommending(true)}
             className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[13.5px] font-semibold text-white"
             style={{ background: RECOMMEND }}
           >
             <Star size={13} fill="var(--c-fff)" strokeWidth={0} /> Recommend to a friend
-          </button>
+          </button>}
         </div>
       )}
-      {recommending && recommendFrom != null && (
+      {recommending && recommendFrom != null && !notRated && (
         <RecommendModal
           album={{ id: recommendFrom, albumName: data.album_name, artist: data.artist }}
           onClose={() => setRecommending(false)}

@@ -22,6 +22,7 @@ import { songScoreColor } from '../types'
 import CoverImg from '../components/CoverImg'
 import PressdMark from '../components/PressdMark'
 import VinylSpinner from '../components/VinylSpinner'
+import PredictedScore from '../components/PredictedScore'
 import BinProgress from '../components/BinProgress'
 import { useUser } from '../context/UserContext'
 
@@ -303,7 +304,7 @@ export default function Bin() {
                           ) : (
                             <>
                               {rated && <Figure label="YOU" value={e.mine!.score!} places={places} />}
-                              {!rated && showPredicted(e) && <Figure label="PREDICTED" value={e.predictedScore!} places={places} />}
+                              {!rated && showPredicted(e) && <Figure label="PREDICTED" value={e.predictedScore!} places={places} predicted />}
                               {e.pressdAvg != null && <Figure label="PRESSD" value={e.pressdAvg} places={places} title={raters(e)} muted />}
                             </>
                           )}
@@ -363,14 +364,17 @@ function MenuRow({ on, onClick, children }: { on: boolean; onClick: () => void; 
 }
 
 /** A labelled number under a record: the Pressd average, yours, your
- *  predicted, or (`count`) how many people rated it. `muted` is the one the
+ *  predicted (`predicted`, PredictedScore's fill), or (`count`) how many
+ *  people rated it. `muted` is the one the
  *  order isn't about — smaller, in grey. */
-function Figure({ label, value, title, muted = false, count = false, places = 2 }: {
+function Figure({ label, value, title, muted = false, count = false, predicted = false, places = 2 }: {
   label: string
   value: number
   title?: string
   muted?: boolean
   count?: boolean
+  /** An estimate: drawn by PredictedScore, never in a score's flat colour. */
+  predicted?: boolean
   /** Two for an album's score, one for a song's. */
   places?: number
 }) {
@@ -379,6 +383,10 @@ function Figure({ label, value, title, muted = false, count = false, places = 2 
       <p className="m-0 text-[10px] font-semibold tracking-[0.12em] text-(--c-a8998a)">{label}</p>
       {muted ? (
         <p className="m-0 mt-1 font-display text-[15px] font-bold leading-none tabular-nums text-(--c-8a7f72)">{count ? value : value.toFixed(places)}</p>
+      ) : predicted ? (
+        <p className="m-0 mt-0.5 font-display text-[22px] font-bold leading-none tabular-nums">
+          <PredictedScore value={value} places={places} />
+        </p>
       ) : (
         <p className="m-0 mt-0.5 font-display text-[22px] font-bold leading-none tabular-nums" style={{ color: count ? 'var(--c-1c1917)' : songScoreColor(value) }}>
           {count ? value : value.toFixed(places)}

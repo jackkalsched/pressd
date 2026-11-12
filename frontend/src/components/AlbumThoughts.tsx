@@ -6,12 +6,16 @@
 // conversation once you have — because the review composer is behind a button.
 // On web the composer is already open on this page, directly above this row, so
 // the "write a review" state would be a second button for something in reach.
-// This row is only ever the door to the room.
+// This row is only ever the door to the room — locked or not. Before you've
+// rated the record (deps.thread_access) the room's top three reviews sit above
+// it, clipped and read-only (ThreadPreview's LockedPreviewPosts), and the row
+// still opens the thread, whose locked page shows them again over Rate now.
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { ChevronRight, Lock, MessageCircle } from 'lucide-react'
 import { resolveThread } from '../api'
 import { threadKey, threadPath } from '../lib/threads'
+import { LockedPreviewPosts } from './ThreadPreview'
 
 export default function AlbumThoughts({ album, artist }: { album: string; artist: string }) {
   const { data: meta } = useQuery({
@@ -44,18 +48,24 @@ export default function AlbumThoughts({ album, artist }: { album: string; artist
         {label}
       </span>
       <span className="flex-1" />
-      {!locked && <ChevronRight size={18} className="text-(--c-2d6a4f) shrink-0" />}
+      <ChevronRight size={18} className={`shrink-0 ${locked ? 'text-(--c-c2b8ad)' : 'text-(--c-2d6a4f)'}`} />
     </>
   )
 
   // Closes the block off the way the track rows are separated from each other.
   const row = 'flex items-center gap-3 py-3.5 border-b border-(--c-f0ebe3) mt-2 max-w-2xl'
-
-  if (locked) return <div className={row}>{body}</div>
-
-  return (
+  const link = (
     <Link to={threadPath('album', artist, album)} className={`${row} hover:opacity-70 transition-opacity`}>
       {body}
     </Link>
+  )
+
+  if (!locked) return link
+
+  return (
+    <div className="max-w-2xl">
+      <LockedPreviewPosts album={album} artist={artist} className="mt-6" />
+      {link}
+    </div>
   )
 }

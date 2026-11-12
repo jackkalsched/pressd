@@ -39,6 +39,7 @@ import {
 import { useTrackHighlight, trackParam } from '../lib/trackHighlight'
 import { stagger } from '../lib/format'
 import VinylSpinner from '../components/VinylSpinner'
+import PredictedScore from '../components/PredictedScore'
 import { useTracklistFill } from '../lib/useTracklistFill'
 import { outLine } from '../lib/upcoming'
 
@@ -479,9 +480,9 @@ export default function AlbumDetail() {
                 </>
               ) : album.predictedScore != null ? (
                 <>
-                  {/* Hollow, as on the community page: estimated, not measured. */}
-                  <p className="font-display m-0 text-[64px] font-bold leading-none tabular-nums text-transparent [-webkit-text-stroke:2px_#2d6a4f]">
-                    {album.predictedScore.toFixed(2)}
+                  {/* The drifting predicted fill, as on the community page: estimated, not measured. */}
+                  <p className="font-display m-0 text-[64px] font-bold leading-none tabular-nums">
+                    <PredictedScore value={album.predictedScore} />
                   </p>
                   <p className="m-0 mt-2 flex items-center gap-1 text-[11px] font-bold tracking-[0.16em] text-(--c-2d6a4f)">
                     <Star size={11} fill={GREEN} strokeWidth={0} /> {own ? 'FOR YOU' : `FOR ${ownerName.toUpperCase()}`}

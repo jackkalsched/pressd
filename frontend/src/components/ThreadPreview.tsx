@@ -3,12 +3,15 @@
 //
 // The room only opens to people who have rated the record (deps.thread_access
 // — a thread on an album you are halfway through is the most spoiler-prone
-// surface in the app), so before that this is a locked line and nothing else.
+// surface in the app). Before that it shows what the locked thread page shows:
+// the room's top three reviews, clipped on the server and read-only
+// (discussions.thread_preview, which leaves spoilers out entirely), under the
+// lock, and the way in — the thread page, which offers Rate now.
 // A post flagged as a spoiler stays covered here as it does in the thread.
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Lock, MessageCircle, ThumbsUp } from 'lucide-react'
-import { fetchThreadPosts, resolveThread } from '../api'
+import { fetchThreadPosts, fetchThreadPreview, resolveThread } from '../api'
 import { songScoreColor } from '../types'
 import { threadKey, threadPath } from '../lib/threads'
 import { stagger } from '../lib/format'
@@ -45,9 +48,14 @@ export default function ThreadPreview({ album, artist, index = 0 }: {
     return (
       <section className="mt-8 rise-in" style={stagger(index)}>
         <p className={`${SECTION_LABEL} mb-2.5`}>DISCUSSION</p>
-        <p className="m-0 flex items-center gap-2 text-[14px] font-semibold text-(--c-b5aa9c)">
-          <Lock size={14} className="shrink-0" /> Finish rating to read the discussion
-        </p>
+        <LockedPreviewPosts album={album} artist={artist} index={index + 1} />
+        <Link
+          to={path}
+          className="group mt-1.5 inline-flex items-center gap-2 text-[14px] font-semibold text-(--c-8a7f72) no-underline hover:text-(--c-2d6a4f)"
+        >
+          <Lock size={14} className="shrink-0" /> Finish rating to join the discussion
+          <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+        </Link>
       </section>
     )
   }
@@ -115,5 +123,52 @@ export default function ThreadPreview({ album, artist, index = 0 }: {
         <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
       </Link>
     </section>
+  )
+}
+
+/** A locked room's top three reviews, clipped on the server and read-only,
+ *  each opening the thread page (which shows them again over Rate now). Shares
+ *  the thread page's preview key, so opening the room after this is instant.
+ *  Nothing while it loads or when the room has no reviews to show. */
+export function LockedPreviewPosts({ album, artist, index = 0, className = '' }: {
+  album: string
+  artist: string
+  index?: number
+  className?: string
+}) {
+  const { data } = useQuery({
+    queryKey: ['threadPreview', 'album', artist, album],
+    queryFn: () => fetchThreadPreview({ subjectType: 'album', artist, album }),
+    retry: false,
+  })
+  const posts = data?.posts ?? []
+  if (posts.length === 0) return null
+  const path = threadPath('album', artist, album)
+
+  return (
+    <ul className={`m-0 -mx-3 mb-1 list-none p-0 ${className}`}>
+      {posts.slice(0, SHOWN).map((p, i) => (
+        <li key={p.id} className="rise-in" style={stagger(index + i)}>
+          <Link
+            to={path}
+            className="group block rounded-2xl px-3 py-3 no-underline transition-colors hover:bg-(--c-f2eee7)"
+          >
+            <div className="flex items-center gap-2">
+              <Avatar name={p.author.name} avatarUrl={p.author.avatarUrl} size={22} />
+              <span className="min-w-0 truncate text-[13px] font-semibold text-(--c-1c1917)">{p.author.name}</span>
+              {p.author.score != null && (
+                <span
+                  className="font-display ml-auto shrink-0 text-[14px] font-bold tabular-nums"
+                  style={{ color: songScoreColor(p.author.score) }}
+                >
+                  {p.author.score.toFixed(2)}
+                </span>
+              )}
+            </div>
+            <p className="m-0 mt-1.5 line-clamp-3 break-words text-[13.5px] leading-snug text-(--c-44403c)">{p.body}</p>
+          </Link>
+        </li>
+      ))}
+    </ul>
   )
 }

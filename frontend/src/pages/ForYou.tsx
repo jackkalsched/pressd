@@ -4,8 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Search, CalendarDays } from 'lucide-react'
 import { fetchAlbum, fetchAlbums, fetchFeed, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion, fetchBins } from '../api'
 import type { NewRelease, PredictedPick, RecommendSuggestion, TopReview } from '../api'
-import { MIN_RATED_ALBUMS, songScoreColor } from '../types'
-import { Cover, ScorePill, hueFromString, coverGradient, scoreTint } from '../components/covers'
+import { MIN_RATED_ALBUMS } from '../types'
+import { Cover, ScorePill, hueFromString, coverGradient } from '../components/covers'
 import HeatedDiscussions from '../components/HeatedDiscussions'
 import PassItOnCell from '../components/PassItOnCell'
 import SpotlightCard from '../components/SpotlightCard'
@@ -14,6 +14,7 @@ import RecommendModal from '../components/RecommendModal'
 import { markPassItOnEmpty, markPassItOnShown, passItOnRecent, usePassItOnDue, usePassItOnOpen } from '../lib/passItOn'
 import { useUser } from '../context/UserContext'
 import VinylSpinner from '../components/VinylSpinner'
+import PredictedScore from '../components/PredictedScore'
 import BinCard from '../components/BinCard'
 
 // ── small helpers ─────────────────────────────────────────────────────────────
@@ -449,7 +450,7 @@ export default function ForYou() {
                     <div className="mt-2 flex items-center gap-2">
                       {a.predictedScore != null ? (
                         <>
-                          <span className="text-[11px] px-2 py-0.5 rounded-md tabular-nums" style={{ background: scoreTint(a.predictedScore), color: songScoreColor(a.predictedScore) }}>~{a.predictedScore.toFixed(2)}</span>
+                          <span className="font-display text-[14px] font-bold leading-none tabular-nums"><PredictedScore value={a.predictedScore} prefix="~" sparkle={false} /></span>
                           <span className="text-[11px] text-(--c-b3a99c)">predicted</span>
                         </>
                       ) : (
@@ -898,7 +899,7 @@ function PickCard({
       <p className="mt-2.5 mb-0 font-bold text-[14px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{pick.albumName}</p>
       <p className="m-0 mt-0.5 text-[12px] text-(--c-8a7f72) truncate">{pick.artist}{pick.year ? ` · ${pick.year}` : ''}</p>
       <div className="mt-2 flex items-center gap-2">
-        <span className="text-[11px] px-2 py-0.5 rounded-md tabular-nums" style={{ background: scoreTint(pick.predictedScore), color: songScoreColor(pick.predictedScore) }}>~{pick.predictedScore.toFixed(2)}</span>
+        <span className="font-display text-[14px] font-bold leading-none tabular-nums"><PredictedScore value={pick.predictedScore} prefix="~" sparkle={false} /></span>
         <span className="text-[11px] text-(--c-b3a99c)">predicted</span>
       </div>
       {error && <p className="m-0 mt-1 text-[11px] text-(--c-c0392b)">Couldn&rsquo;t add — try again</p>}

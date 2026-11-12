@@ -23,6 +23,10 @@
   --c-green-fill-hover: #245c43;
   /* The lightness of a score badge's colour on a cover (AlbumCard). */
   --badge-l: 30%;
+  /* A predicted score's drifting fill (PredictedScore): gray, green, red. */
+  --predicted-0: #8a837c;
+  --predicted-1: #4E8E2A;
+  --predicted-2: #B3261E;
   --c-0f766e: #0f766e;
   --c-111: #111;
   --c-16a085: #16a085;
@@ -190,6 +194,9 @@
   --c-green-fill: #3c6e57;
   --c-green-fill-hover: #335e4a;
   --badge-l: 62%;
+  --predicted-0: #A8A29A;
+  --predicted-1: #5E9A2E;
+  --predicted-2: #E0675F;
   --c-0f766e: #64d8cf;
   --c-111: #f4efe7;
   --c-16a085: #64d8c1;
@@ -706,4 +713,50 @@ button:not(:disabled):active {
 
 @media (prefers-reduced-motion: reduce) {
   .vl-spin, .vl-arm, .vl-squash, .vl-plate, .vl-ripple, .vl-grooves, .vl-slide { animation: none; }
+}
+
+/* A predicted score (PredictedScore.tsx; mobile's is the same drawing). The
+   number is cut out of a gradient three times its width, gray → green → red →
+   green → gray, panned end to end and back on a 6s ease-in-out loop; a white
+   four-point sparkle flashes at its top right once every 3.4s (the last 0.7s
+   of the cycle). `predicted-paused` holds both while the number is off screen
+   or the tab is hidden. */
+@keyframes predicted-drift {
+  from { background-position: 0% 50%; }
+  to { background-position: 100% 50%; }
+}
+@keyframes predicted-sparkle {
+  0%, 79.4% { opacity: 0; transform: scale(.2) rotate(0deg); }
+  82.5% { opacity: 1; }
+  87.6% { transform: scale(1) rotate(17deg); }
+  91.8% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.15) rotate(45deg); }
+}
+.predicted-score { position: relative; display: inline-block; }
+.predicted-fill {
+  background-image: linear-gradient(90deg, var(--predicted-0), var(--predicted-1), var(--predicted-2), var(--predicted-1), var(--predicted-0));
+  background-size: 300% 100%;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: predicted-drift 6s ease-in-out infinite alternate;
+}
+.predicted-sparkle {
+  position: absolute;
+  width: max(6px, .42em);
+  height: max(6px, .42em);
+  top: -.15em;
+  right: -.23em;
+  opacity: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, .9));
+  animation: predicted-sparkle 3.4s linear infinite;
+}
+.predicted-paused .predicted-fill,
+.predicted-paused .predicted-sparkle { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .predicted-fill { animation: none; background-position: 50% 50%; }
+  .predicted-sparkle { display: none; }
 }

@@ -1311,6 +1311,19 @@ function CommunityAlbum({
             </View>
           )}
 
+          {/* The record's discussion, as the copy view has it: a way in even
+              before you've rated it (then a preview of its top reviews). A
+              release new to Pressd has no room yet. */}
+          {data.album_id != null && (
+            <AlbumThoughts
+              album={data.album_name}
+              artist={data.artist}
+              hasReview={false}
+              canWriteReview={false}
+              onWriteReview={() => {}}
+            />
+          )}
+
           {data.tracks.length > 0 && <Text style={styles.sectionLabel}>TRACKS</Text>}
           {data.tracks.map((t, i) => {
             const lit = highlightTrack != null && t.track_id === highlightTrack

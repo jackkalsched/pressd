@@ -36,7 +36,11 @@ Vocabulary of the core loop:
 - **Listening** — mid-album, partially rated.
 - **Rated** — finished; carries a score, four factors, optionally a written review.
 - **Recommending** an album drops it into a friend's To Listen, tagged with who sent it
-  (`recommended_by`, `recommendation_note`).
+  (`recommended_by`, `recommendation_note`). It is offered only on a record you have
+  **finished rating** (Jack's rule, November 2026): your rated copy on both platforms'
+  album pages and web's Library card, and web's community page's "Recommend to a friend"
+  only when your copy (any edition) is rated — never while it's Listening or To Listen.
+  Pass it on draws from your top-rated records already.
 
 Surfaces: **Library/profile** (three buckets plus stats), **Rankings** (labelled Ratings until November 2026; the `ratings` keys and web's
 `/ratings` route keep the old name — rankings by
@@ -743,7 +747,7 @@ the collage's lower-right corner (`BinMosaic`'s `pressd`); web's sidebar **Bins*
 list, two columns at `2xl`);
 iPhone's **side menu** (`components/SideMenu.tsx`, the ≡ beside For You's search icon,
 sliding in from the right, the button's side, with its own ≡ landing exactly where the
-masthead's was — measured on the tap — so the same finger closes it; the header is the Pressd mark and wordmark on the ≡'s line; sections split by hairlines: Getting Started (the first-run tutorial with `replay: '1'`, as Settings → *How Pressd works* opens it) on its own at the top; the four tabs in the tab bar's own order, icons and labels (For You, Library, Social, Charts — switched to with `router.navigate`, not pushed; For You just closes the menu); Bins and Upcoming; and, pinned to the foot of the panel, Settings and Contact support (a mail to pressdmusicapp@gmail.com). Web's sidebar follows the same order, less Getting Started: For You, Library, **Your Rankings** (web's own `/ratings`, its sidebar label since November 2026; the page's heading stays Rankings, since it also shows a friend's library) and Stats beside Library, Social, Charts, then under a hairline Bins and Upcoming (`nav` in `Layout.tsx`, which the small-screen bottom bar also draws) — with the same icons for the pages both have (`ListMusic`, `CircleUser`, `Users`, `BarChart3`, `Package`, `CalendarDays`; web's Stats is `ChartPie`). Settings is
+masthead's was — measured on the tap — so the same finger closes it; the header is the Pressd mark and wordmark on the ≡'s line; sections split by hairlines: Getting Started (the first-run tutorial with `replay: '1'`, as Settings → *How Pressd works* opens it) on its own at the top; the four tabs in the tab bar's own order, icons and labels (For You, Library, Social, Charts — switched to with `router.navigate`, not pushed; For You just closes the menu); Bins and Upcoming; and, pinned to the foot of the panel, Settings and Contact support (a mail to pressdmusicapp@gmail.com; when nothing handles `mailto:` — no Mail app, or the simulator — `openURL` rejects and the menu opens Settings with `focus` `contact` instead, scrolled to About's Contact support row, which takes a green wash fading over 1.5 s. `canOpenURL` isn't asked: `mailto` isn't in Info.plist's `LSApplicationQueriesSchemes`, and adding it needs a native rebuild). Web's sidebar follows the same order, less Getting Started: For You, Library, **Your Rankings** (web's own `/ratings`, its sidebar label since November 2026; the page's heading stays Rankings, since it also shows a friend's library) and Stats beside Library, Social, Charts, then under a hairline Bins and Upcoming (`nav` in `Layout.tsx`, which the small-screen bottom bar also draws) — with the same icons for the pages both have (`ListMusic`, `CircleUser`, `Users`, `BarChart3`, `Package`, `CalendarDays`; web's Stats is `ChartPie`). At the sidebar's foot, under a hairline and above your own name, **Settings** (lucide `Settings`) — a button, not a route, opening `SettingsDialog` in `settings` mode as the profile's gear does; the small-screen bottom bar has no room for it (nine items already), so there the profile's gear is the way. Settings is
 the profile's `SettingsSheet` in `settings` mode, which For You mounts too, opened once the
 menu has slid away), `app/bins/index.tsx` and
 `app/bins/[slug].tsx`. The bin page opens on a **banner** the width of the screen: the lead record's cover blurred
@@ -1754,7 +1758,13 @@ conversation.") and one button: **Rate now** / **Continue rating** on your copy 
 record, else **Rate now** on a copy cloned from `source` as Listening
 (`copyAlbumToLibrary`, the community page's path), or **Add to Library** (To Listen) when
 the record has no songs or isn't out; nothing when Pressd holds no copy. Web sets the
-three side by side at `xl`. The album page's locked `ThreadPreview` line is unchanged.
+three side by side at `xl`. The album pages carry the same preview (November 2026): before
+you've rated the record, web's `ThreadPreview` (the community page's rail) and `AlbumThoughts`
+(under a copy's tracks) show the three reviews read-only, clamped to three lines, each opening
+the thread (`LockedPreviewPosts` in `ThreadPreview.tsx`, sharing the thread page's
+`['threadPreview', …]` key), over a lock line that is itself a link into the room; iPhone's
+`AlbumThoughts` does the same on the copy view and now on the community view too, where
+there was no way into the discussion at all. The locked line is never a dead end.
 ⚠️ `frontend/src/components/CommentThread.tsx` is **not** this — it is review comments
 (`fetchComments`/`postComment`), friend-scoped and about one copy of an album, sharing a
 name with `mobile/components/CommentThread.tsx`.
@@ -1965,8 +1975,9 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   average, Compare). Same layout on all three: sticky cover column, unboxed numbers, the three
   views as pills in the top-right. A change to one view's look goes through the kit.
   Under the title, Average rating previews the room's top three posts
-  (`ThreadPreview`, sort `popular`) — a locked line until you've rated the record, as
-  `thread_access` requires — and someone else's rating shows their review there. With
+  (`ThreadPreview`, sort `popular`) — until you've rated the record, as `thread_access`
+  requires, the locked room's top three from `GET /threads/preview` over a lock line that
+  still opens the thread — and someone else's rating shows their review there. With
   either in it the column isn't pinned, since it can outrun the window.
 - **Domain-shaped code belongs in `shared/`; platform-shaped code stays in the app**
   (localStorage vs SecureStore, routing). The API speaks snake_case; the shared client
@@ -2067,8 +2078,8 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   `useRecalibrationMessage` (`shared/src/hooks/useRecalibration.ts`): two status lines,
   then the nudges (`RECALIBRATION_NUDGES` — reviews, friends, recommending, the room,
   the charts, the shelf) shuffled and cycling every 3.6s, never "Almost there…", with no subtext under them.
-- **A predicted score is drawn by `PredictedScore`** (iPhone, November 2026;
-  `mobile/components/PredictedScore.tsx`): the number in its caller's own font and size,
+- **A predicted score is drawn by `PredictedScore`** (both platforms, November 2026;
+  `mobile/components/PredictedScore.tsx`, `frontend/src/components/PredictedScore.tsx`): the number in its caller's own font and size,
   filled with a gray → green → red → green → gray gradient that drifts on a 6s ease-in-out
   loop, and a small white four-point sparkle that flashes at its top-right every 3.4s.
   A settled score stays flat-coloured, so the two never read alike. The colours are
@@ -2084,6 +2095,17 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   you'll rate this about 7.26") stays text. Reanimated 4.5.1, worklets 0.10.2 and
   masked-view 0.3.2 are pinned exactly in `mobile/package.json`; all three were
   already in the native build through expo-router, so they need no rebuild.
+  **Web's** is an inline-block span that inherits the caller's font: the text is cut
+  out of the gradient with `background-clip: text`, three times its width, its
+  `background-position` animated (`predicted-drift`, `predicted-sparkle` and the
+  `--predicted-0/1/2` pairs under `:root` / `:root.dark`, in `index.css`); an
+  IntersectionObserver and `visibilitychange` pause it off screen and in a hidden tab,
+  and under `prefers-reduced-motion` the gradient stands still with no sparkle. It
+  replaced the stroked hollow number on AlbumDetail's FOR YOU and CommunityAlbum's FOR
+  YOU, and draws a bin row's PREDICTED (`Figure`'s `predicted`) and For You's Ready to
+  rate `~7.59` under each card (no sparkle at that size). Web's Rate this next carries
+  its prediction only in its sentence, so it stays text; the library card's `~` badge
+  stays plain, as on iPhone.
 - **Hover feedback stays small.** `COVER_LIFT` is a 4% lift and a 1° lean on an
   ease-out; it was 13% and 3° on a springy curve and made rows of covers jump. Keep
   new hover scales in that range. The one exception, by request, is the shelf

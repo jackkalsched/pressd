@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CircleUser, ChartPie, BarChart3, List, ListMusic, Mail, X, MessageCircle, Users, Plus, ChevronDown, Package, CalendarDays } from 'lucide-react'
+import { CircleUser, ChartPie, BarChart3, List, ListMusic, Mail, X, MessageCircle, Users, Plus, ChevronDown, Package, CalendarDays, Settings } from 'lucide-react'
 import clsx from 'clsx'
 import { useUser } from '../context/UserContext'
 import { fetchFriends, getInviteLink, removeFriend } from '../api'
@@ -11,6 +11,7 @@ import PhoneDialog from './PhoneDialog'
 import { PeopleSheetHost } from './PeopleSheet'
 import { phoneVerifyConfigured } from '../lib/phoneVerify'
 import VinylSpinner from './VinylSpinner'
+import SettingsDialog from './SettingsDialog'
 
 function avatarColor(name: string): string {
   const colors = ['var(--c-2d6a4f)', 'var(--c-1d4ed8)', 'var(--c-7c3aed)', 'var(--c-b45309)', 'var(--c-0f766e)', 'var(--c-be185d)', 'var(--c-c2410c)']
@@ -158,6 +159,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient()
   const [showInvite, setShowInvite] = useState(false)
   const [showAddAlbum, setShowAddAlbum] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   // The sidebar's friends list folds away; remembered per browser, so a long
   // list stays out of the way across visits. Storage can be unavailable.
   const [friendsOpen, setFriendsOpen] = useState(() => {
@@ -294,8 +296,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        {/* Active user at bottom — always your own profile */}
+        {/* The foot, under a hairline, as on iPhone's side menu: Settings —
+            the dialog the profile's gear opens, a button rather than a page —
+            then the active user, always your own profile. The small-screen
+            bottom bar has no room for it; there the profile's gear is the way. */}
         <div className="mt-auto pt-4 border-t border-(--c-e2e2e2)">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-(--c-777) transition-colors hover:bg-(--c-f0f0f0) hover:text-(--c-111)"
+          >
+            <Settings size={16} />
+            Settings
+          </button>
           <button
             onClick={openOwnProfile}
             aria-label="Your profile"
@@ -348,6 +360,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <span>Profile</span>
         </button>
       </nav>
+
+      {showSettings && <SettingsDialog mode="settings" onClose={() => setShowSettings(false)} />}
 
       {/* Mobile FAB */}
       {!isViewingFriend && (
