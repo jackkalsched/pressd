@@ -750,7 +750,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  scoreBadgeText: { fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: -0.2 },
+  // Milker, as web's Library badges (`.font-rating`); one weight, so no bold.
+  scoreBadgeText: { fontFamily: fonts.rating, fontSize: 14 },
   // White disc so the star reads on dark art, mirroring the desktop card.
   recBadge: {
     position: 'absolute',
@@ -774,7 +775,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 2,
   },
-  predText: { fontFamily: fonts.bodyBold, fontSize: 12, color: 'rgba(255,255,255,0.85)', letterSpacing: -0.2 },
+  predText: { fontFamily: fonts.rating, fontSize: 14, color: 'rgba(255,255,255,0.9)' },
   albumName: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary, marginTop: 5 },
 
   // Rankings filters

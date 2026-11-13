@@ -78,6 +78,8 @@ function RootNavigator() {
     // (Fontshare EULA permits app embedding — see assets/fonts/ClashDisplay-LICENSE.txt).
     ClashDisplay_700Bold: require('../assets/fonts/ClashDisplay-Bold.ttf'),
     ClashDisplay_600SemiBold: require('../assets/fonts/ClashDisplay-Semibold.ttf'),
+    // Milker (Brandsemut, Jack's license): rating figures only, as on web (.font-rating).
+    Milker: require('../assets/fonts/Milker.otf'),
   })
 
   useEffect(() => {
