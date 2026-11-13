@@ -180,7 +180,7 @@ export default function ForYou() {
   })
   const { data: topReviews, refetch: refetchTopReviews } = useQuery({
     queryKey: ['top-reviews'],
-    queryFn: () => fetchTopReviews(8),
+    queryFn: () => fetchTopReviews(3),
     enabled: userId > 0,
   })
 
@@ -489,6 +489,73 @@ export default function ForYou() {
           />
         )}
 
+        {/* What are pressers talking about — the day's three most-engaged reviews,
+            userbase-wide, high on the page because reading reviews is what gets
+            people liking, replying and writing their own (Jack, November 2026). */}
+        {topReviews && (
+          <View style={styles.block}>
+            <SectionHead
+              label="WHAT ARE PRESSERS TALKING ABOUT"
+              meta={reviews.length > 0 ? dayLabel(topReviews.day) : undefined}
+            />
+            {reviews.length > 0 ? (
+              reviews.map((rv, i) => (
+                <ReviewCell
+                  key={`${rv.album_id}-${rv.author.id}`}
+                  review={rv}
+                  first={i === 0}
+                  onOpen={() => openAlbum(rv.album_id)}
+                  onOpenUser={openProfile}
+                  onLike={() => likeReview(rv.album_id)}
+                />
+              ))
+            ) : (
+              <View style={styles.reviewEmpty}>
+                <Text style={styles.reviewEmptyQuote}>No reviews yet today.</Text>
+                <Text style={styles.reviewEmptyBody}>
+                  Be the first — rate an album and leave your take to start the conversation.
+                </Text>
+                <Pressable style={styles.reviewEmptyCta} onPress={() => router.push('/add')}>
+                  <Text style={styles.textCtaLabel}>Add an album</Text>
+                  <ArrowRight size={14} color={tc.green} />
+                </Pressable>
+              </View>
+            )}
+          </View>
+        )}
+        {/* New & Popular — tap a cover to reveal add actions */}
+        {newReleases.length > 0 && user && (
+          <View style={styles.block}>
+            <SectionHead
+              label="NEW & POPULAR"
+              action={
+                <Pressable
+                  onPress={() => router.push('/upcoming')}
+                  hitSlop={10}
+                  style={styles.upcomingLink}
+                  accessibilityRole="button"
+                  accessibilityLabel="Upcoming releases"
+                >
+                  <CalendarDays size={16} color={tc.green} />
+                  <Text style={styles.upcomingLinkText}>Upcoming</Text>
+                  <ArrowRight size={14} color={tc.green} />
+                </Pressable>
+              }
+            />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rail}>
+              {/* deezerId is null for releases that never matched Deezer, and
+                  more than one of those is normal — keying on it alone collides. */}
+              {newReleases.map((r) => (
+                <NewReleaseCard
+                  key={r.deezerId ?? `${r.artist}::${r.albumName}`}
+                  release={r}
+                  onOpen={() => openRelease(r)}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {unlockLeft > 0 && (
           <View style={styles.unlock}>
             <View style={styles.unlockPips}>
@@ -567,38 +634,31 @@ export default function ForYou() {
           </View>
         )}
 
-        {/* New & Popular — tap a cover to reveal add actions */}
-        {newReleases.length > 0 && user && (
-          <View style={styles.block}>
+        {/* Pressd Trending — bubbly cells that pop in as they scroll into view */}
+        {trending.length > 0 && (
+          <View style={styles.block} onLayout={(e) => setTrendBlockY(e.nativeEvent.layout.y)}>
             <SectionHead
-              label="NEW & POPULAR"
-              action={
-                <Pressable
-                  onPress={() => router.push('/upcoming')}
-                  hitSlop={10}
-                  style={styles.upcomingLink}
-                  accessibilityRole="button"
-                  accessibilityLabel="Upcoming releases"
-                >
-                  <CalendarDays size={16} color={tc.green} />
-                  <Text style={styles.upcomingLinkText}>Upcoming</Text>
-                  <ArrowRight size={14} color={tc.green} />
-                </Pressable>
-              }
+              label="PRESSD TRENDING"
+              meta={trendMode === 'week' ? 'This week' : 'All time'}
+              onMetaPress={() => setTrendPickerOpen(true)}
+              metaRef={trendChipRef}
             />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rail}>
-              {/* deezerId is null for releases that never matched Deezer, and
-                  more than one of those is normal — keying on it alone collides. */}
-              {newReleases.map((r) => (
-                <NewReleaseCard
-                  key={r.deezerId ?? `${r.artist}::${r.albumName}`}
-                  release={r}
-                  onOpen={() => openRelease(r)}
-                />
-              ))}
-            </ScrollView>
+            {trending.map((t, i) => (
+              <TrendRow
+                key={t.album_id}
+                item={t}
+                rank={i + 1}
+                weekly={trendMode === 'week'}
+                scrollY={scrollY}
+                baseY={trendBlockY}
+                onPress={() => openCommunityAlbum(t.album_id)}
+              />
+            ))}
           </View>
         )}
+
+        {/* Heated discussions — records people are writing about right now. */}
+        <HeatedDiscussions />
 
         {/* Bins — Pressd's themed collections, and how far through each you are. */}
         {bins.length > 0 && (
@@ -626,66 +686,6 @@ export default function ForYou() {
           </View>
         )}
 
-        {/* Pressd Trending — bubbly cells that pop in as they scroll into view */}
-        {trending.length > 0 && (
-          <View style={styles.block} onLayout={(e) => setTrendBlockY(e.nativeEvent.layout.y)}>
-            <SectionHead
-              label="PRESSD TRENDING"
-              meta={trendMode === 'week' ? 'This week' : 'All time'}
-              onMetaPress={() => setTrendPickerOpen(true)}
-              metaRef={trendChipRef}
-            />
-            {trending.map((t, i) => (
-              <TrendRow
-                key={t.album_id}
-                item={t}
-                rank={i + 1}
-                weekly={trendMode === 'week'}
-                scrollY={scrollY}
-                baseY={trendBlockY}
-                onPress={() => openCommunityAlbum(t.album_id)}
-              />
-            ))}
-          </View>
-        )}
-
-        {/* Heated discussions — records people are writing about right now,
-            which is when their threads are worth opening. Sits above the
-            reviews for that reason. */}
-        <HeatedDiscussions />
-
-        {/* What are pressers talking about — userbase-wide reviews for the day */}
-        {topReviews && (
-          <View style={styles.block}>
-            <SectionHead
-              label="WHAT ARE PRESSERS TALKING ABOUT"
-              meta={reviews.length > 0 ? dayLabel(topReviews.day) : undefined}
-            />
-            {reviews.length > 0 ? (
-              reviews.map((rv, i) => (
-                <ReviewCell
-                  key={`${rv.album_id}-${rv.author.id}`}
-                  review={rv}
-                  first={i === 0}
-                  onOpen={() => openAlbum(rv.album_id)}
-                  onOpenUser={openProfile}
-                  onLike={() => likeReview(rv.album_id)}
-                />
-              ))
-            ) : (
-              <View style={styles.reviewEmpty}>
-                <Text style={styles.reviewEmptyQuote}>No reviews yet today.</Text>
-                <Text style={styles.reviewEmptyBody}>
-                  Be the first — rate an album and leave your take to start the conversation.
-                </Text>
-                <Pressable style={styles.reviewEmptyCta} onPress={() => router.push('/add')}>
-                  <Text style={styles.textCtaLabel}>Add an album</Text>
-                  <ArrowRight size={14} color={tc.green} />
-                </Pressable>
-              </View>
-            )}
-          </View>
-        )}
       </Animated.ScrollView>
 
       {/* Pressd Trending range — anchored to the chip that opens it */}
@@ -906,7 +906,8 @@ const styles = StyleSheet.create({
 
   suggestWhy: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted, fontStyle: 'italic', marginTop: 6 },
   predict: { alignItems: 'center', minWidth: 52 },
-  predictScore: { fontFamily: fonts.bodyBold, fontSize: 22 },
+  // Scores are Playfair, as everywhere else in the app (CLAUDE.md §12).
+  predictScore: { fontFamily: fonts.display, fontSize: 22 },
   predictLabel: { fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 0.8, color: colors.inkMuted, marginTop: 1 },
   suggestCta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.md },
   textCtaLabel: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
@@ -930,14 +931,14 @@ const styles = StyleSheet.create({
   trendCount: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted, marginTop: 3 },
   rank: { fontFamily: fonts.display, fontSize: 16, color: colors.inkMuted, width: 20, textAlign: 'center' },
   scorePill: { borderRadius: radii.sm, paddingHorizontal: 8, paddingVertical: 4, minWidth: 46, alignItems: 'center' },
-  scorePillText: { fontFamily: fonts.bodyBold, fontSize: 14 },
+  scorePillText: { fontFamily: fonts.display, fontSize: 14 },
 
   // Review cell — reviewer leads (bigger), album secondary, smaller quote
   review: { paddingVertical: spacing.lg },
   reviewHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   reviewAuthor: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.ink },
   reviewOn: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
-  reviewScore: { fontFamily: fonts.bodyBold, fontSize: 20 },
+  reviewScore: { fontFamily: fonts.display, fontSize: 20 },
   reviewQuote: { fontFamily: fonts.displayRegular, fontSize: 15, lineHeight: 22, color: colors.ink, marginTop: spacing.md },
   reviewAlbumRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
   reviewAlbum: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink },
@@ -946,7 +947,7 @@ const styles = StyleSheet.create({
   songNotes: { marginTop: spacing.md, gap: 5 },
   songNote: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   songNoteText: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary },
-  songNoteScore: { fontFamily: fonts.bodyBold, fontSize: 12 },
+  songNoteScore: { fontFamily: fonts.display, fontSize: 12 },
 
   reviewActions: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.md, paddingLeft: 38 + spacing.sm },
   reviewAction: { flexDirection: 'row', alignItems: 'center', gap: 6 },

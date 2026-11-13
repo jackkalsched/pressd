@@ -1,4 +1,4 @@
-// Thumbs up and thumbs down on one post. Mirror of mobile/components/VoteButtons.
+// A heart (the like, an up-vote) and a thumbs down on one post. Mirror of mobile/components/VoteButtons.
 //
 // The counts move on click and roll back if the write fails, because a vote
 // that waits on the network reads as a dead button. The server is the authority
@@ -6,10 +6,12 @@
 // reply replaces the guess rather than being merged with it.
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { ThumbsDown, ThumbsUp } from 'lucide-react'
+import { Heart, ThumbsDown } from 'lucide-react'
 import { votePost } from '../api'
 
-const UP = 'var(--c-2d6a4f)'
+// The up-vote is a heart, red when given: the same like the feed's heart gives
+// (a review's like is its thread post's up-vote, backend/likes.py).
+const UP = 'var(--c-c0392b)'
 const DOWN = 'var(--c-c0392b)'
 
 export default function VoteButtons({
@@ -65,14 +67,14 @@ export default function VoteButtons({
       <button
         type="button"
         onClick={() => cast(1)}
-        aria-label={`Thumbs up, ${up}`}
+        aria-label={`Like, ${up}`}
         aria-pressed={vote === 1}
         className={`flex items-center gap-1.5 rounded-full transition-colors ${pad} ${
-          vote === 1 ? 'bg-(--c-2d6a4f)/12' : 'bg-(--c-f5f5f5) hover:bg-(--c-ececec)'
+          vote === 1 ? 'bg-(--c-c0392b)/10' : 'bg-(--c-f5f5f5) hover:bg-(--c-ececec)'
         }`}
       >
         {/* Keyed on the state so turning it on replays the pop. */}
-        <ThumbsUp key={`u${vote === 1}`} className={vote === 1 ? 'pop' : undefined} size={size} color={vote === 1 ? UP : 'var(--c-a8998a)'} fill={vote === 1 ? UP : 'transparent'} />
+        <Heart key={`u${vote === 1}`} className={vote === 1 ? 'pop' : undefined} size={size} color={vote === 1 ? UP : 'var(--c-a8998a)'} fill={vote === 1 ? UP : 'transparent'} />
         <span className={`${countSize} font-medium tabular-nums`} style={{ color: vote === 1 ? UP : 'var(--c-666)' }}>{up}</span>
       </button>
 

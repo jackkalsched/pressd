@@ -11,7 +11,7 @@ import { useAuth } from '../../lib/auth'
 import { scrollToTop } from '../../lib/scrollToTop'
 import BinCard from '../../components/BinCard'
 import BinSearch from '../../components/BinSearch'
-import { binCardMatches } from '@pressd/shared/binSort'
+import { binCardMatches, binSections } from '@pressd/shared/binSort'
 import VinylSpinner from '../../components/VinylSpinner'
 import { colors, fonts, spacing, useColors } from '../../theme/tokens'
 
@@ -53,8 +53,13 @@ export default function Bins() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
-          {data.filter((b) => binCardMatches(b, query)).map((b) => (
-            <BinCard key={b.slug} bin={b} onPress={() => router.push({ pathname: '/bins/[slug]', params: { slug: b.slug } })} />
+          {binSections(data.filter((b) => binCardMatches(b, query))).map((section) => (
+            <View key={section.key} style={styles.section}>
+              <Text style={styles.sectionLabel}>{section.title.toUpperCase()}</Text>
+              {section.bins.map((b) => (
+                <BinCard key={b.slug} bin={b} onPress={() => router.push({ pathname: '/bins/[slug]', params: { slug: b.slug } })} />
+              ))}
+            </View>
           ))}
           {query !== '' && !data.some((b) => binCardMatches(b, query)) && (
             <Text style={styles.stateText}>No bins match “{query.trim()}”.</Text>
@@ -74,4 +79,6 @@ const styles = StyleSheet.create({
   searchBtn: { marginLeft: 'auto' },
   searchField: { flex: 1, marginLeft: spacing.sm },
   list: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.xl },
+  section: { gap: spacing.lg },
+  sectionLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.6, color: colors.inkMuted },
 })

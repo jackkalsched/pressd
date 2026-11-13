@@ -65,7 +65,7 @@ export default function HeatedDiscussions() {
   if (records.length === 0) return null
 
   return (
-    <section className="mb-9">
+    <section className="mb-9 flow-root">
       <div className="flex items-baseline justify-between mb-4 gap-3.5">
         <h2 className={SECTION_LABEL}>Heated discussions</h2>
         <span className="text-[11px] text-(--c-b3a99c)">Right now</span>

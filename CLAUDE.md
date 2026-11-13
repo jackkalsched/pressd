@@ -538,7 +538,8 @@ POST /social/like?album_id=      toggle_like  a reviewed copy → an up-vote on 
                                               a bare rating → the old per-copy `like` row
 ```
 One conversation, wherever it's read (November 2026): liking a review in the feed is the
-thread's up-arrow, and its replies are the thread's — the feed's "N replies" opens the
+thread's up-vote — drawn as a heart in both places, red when given (`VoteButtons`, both
+platforms, November 2026; a thumbs-down still sits beside it in the thread) — and its replies are the thread's — the feed's "N replies" opens the
 thread. Every surface reads a like through `backend/likes.py` (`like_states`): the
 feed, For You's top reviews (`/social/top-reviews`), web's Reviews tab (`/social/reviews`) and
 `GET /albums/{id}`'s `liked_by_me` (someone else's copy; mobile's compare screen starts its heart
@@ -607,7 +608,7 @@ spend a request on every open.
 
 ## 5. Module reference
 
-**`backend/models.py`** — 34 tables (`Block` for blocking, §5; `Bin`, `BinEntry` and `BinTrack` for bins, §5; `SongPrediction`, a song bin's per-song predictions, §6.3; five for the taste overlap: `TasteItem`, `TasteUser`, `TasteOverlap`, `OverlapSheet`, `OverlapEvent`; the first three written nightly by `worker/taste_nightly.py` and for one caller by the live path, all five served by `routers/overlap.py`). `Album` is a **per-user copy**, not a record
+**`backend/models.py`** — 35 tables (`ContactInvite`, a texted contact invite by hashed number, §5 Finding friends; `Block` for blocking, §5; `Bin`, `BinEntry` and `BinTrack` for bins, §5; `SongPrediction`, a song bin's per-song predictions, §6.3; five for the taste overlap: `TasteItem`, `TasteUser`, `TasteOverlap`, `OverlapSheet`, `OverlapEvent`; the first three written nightly by `worker/taste_nightly.py` and for one caller by the live path, all five served by `routers/overlap.py`). `Album` is a **per-user copy**, not a record
 (`:89`); anything "global" must pool copies. `Song` carries `track_id` into the global
 `Track`, so audio is analyzed once and shared (`:258-260`) — that split is what makes
 the ML affordable. A mapper event keeps `Album.subject_key` in step with artist+name on
@@ -773,7 +774,7 @@ R.E.M. compilation that doesn't hold "Imitation of Life" are not). A private bin
 will be a 404 to anyone but its owner; `delete_own_account` deletes a user's bins.
 Surfaces: For You's **BINS** section (up to three `BinCard`s, "See all →") on both
 platforms — a Pressd bin's card carries the full-colour Pressd mark on a cream chip in
-the collage's lower-right corner (`BinMosaic`'s `pressd`); web's sidebar **Bins** (`/bins`, `/bins/:slug`: the banner, the centred title and progress, then the
+the collage's lower-right corner (`BinMosaic`'s `pressd`); web's sidebar **Bins** (`/bins`: sections from `binSections` (`shared/src/binSort.ts`, both platforms) — **Pressd Official** (curated) then **From the community**, empty ones hidden — each bin a square `BinPoster` — the 2×2 of covers is the whole card, the title, source and progress in white over a dark fade at its foot, the Pressd chip top-right, two to four across; For You keeps the compact `BinCard` row; `/bins/:slug`: the banner, the centred title and progress, then the
 list, two columns at `2xl`);
 iPhone's **side menu** (`components/SideMenu.tsx`, the ≡ beside For You's search icon,
 sliding in from the right, the button's side, with its own ≡ landing exactly where the
@@ -1040,7 +1041,18 @@ as a lookup for arbitrary numbers. **Phone only, never email** — a number is w
 agreed to be found by in the prompt; nobody was told that about their email. Matches come
 back as search rows (`_with_relationship`, shared with `/users/search`) plus
 `phone_index`, so the app can say which contact it was; everyone else gets *Invite*, an
-`sms:` text carrying the caller's permanent invite link (`getInviteLink`). Web has no
+`sms:` text carrying Pressd's App Store listing (`APP_STORE_URL` in `shared/src/types.ts`, which
+web's `IOS_APP_URL` defaults to). Until November 2026 it carried the caller's web invite link
+(`getInviteLink`), which opened the website on a phone that wanted the app. The App Store link
+can't carry who invited them, so the invite is remembered by number instead: tapping Invite also
+sends the contact's numbers to `POST /users/me/contacts/invite` (`inviteContact`), stored as
+`ContactInvite` rows — the keyed hash only, never the number, and never for a number already on
+Pressd (the answer is `{ok: true}` either way, so it can't reveal who's here). When someone
+verifies a number (`add_phone`), `_claim_contact_invites` sends them a **friend request** from each
+inviter — a request, not a friendship, so they still say yes; skipped for an existing friendship or
+request, a block either way, or an invite older than `CONTACT_INVITE_TTL_DAYS` (180) — with a
+`friend` push, and deletes the claimed rows. This is the one place a non-user's number is kept,
+and only because the inviter chose to text them; `delete_own_account` removes an inviter's rows. Web has no
 address book to read, so this is a platform difference, not parity drift.
 
 **First run (both platforms).** Mobile's `app/(tabs)/_layout.tsx` and web's `AppGate`
@@ -2045,13 +2057,17 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   the name means the same on both); Plus Jakarta Sans for everything else (the web
   `body` face). A title that names an album keeps one face and sets the album in
   Playfair italic (web `<i>` inside `.font-display`; mobile `fonts.displayItalic`, a
-  loaded face, because iOS can't slant a custom font with `fontStyle`). Clash Display is the wordmark only, and Unbounded Bold (mobile `fonts.wide`, web `.font-wide`) the shelf's heading only. Web used DM Sans until September
+  loaded face, because iOS can't slant a custom font with `fontStyle`). Clash Display is the wordmark only, Milker (`.font-rating`, self-hosted in `public/fonts/`, Jack's license) web's rating figures only — Library's badges (`AlbumCard`), and For You's review cards and Trending (`ScorePill`'s `milker`), and Unbounded Bold (mobile `fonts.wide`, web `.font-wide`) the shelf's heading only. Web used DM Sans until September
   2026, share card included; don't bring a third face back.
 - **A taste overlap is coloured on the score scale**: `overlapScore(percent)`
   (`shared/src/types.ts`) puts 0% at a 1 (red) and 100% at a 10 (green), and each
   platform's own score colour draws it (web `songScoreColor`, mobile `scoreColor`), so
   it follows dark mode as scores do. The profile pill, the people sheet and the friends
   list all go through it; never a fixed green.
+- **A library's score badges are coloured on the fixed 1–10 scale** (`songScoreColor`, red → green),
+  both platforms (web `AlbumCard`, mobile Profile's and a friend's `AlbumCell`), as every other score
+  is — not against the owner's own spread, which they were until November 2026 (and web had read
+  user 1's spread for everyone, `fetchScoreRange(1)`). `GET /stats/score-range` has no caller left.
 - **A final album score is always shown to two decimals** (`8.20`, never `8.2`) —
   rated, predicted or projected, on both platforms. Song scores and factor values are
   one decimal. The tutorial's demo numbers follow the same rule.
@@ -2090,6 +2106,19 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   desktop only, a QR code (`public/app/qr-code.png`, Apple's own: an `apple.co` short
   link to the listing, so App Store Connect counts the scans). The link is one constant,
   `IOS_APP_URL` in `frontend/src/lib/iosApp.ts`; `VITE_IOS_APP_URL` overrides it.
+- **For You's order (both platforms, Jack, November 2026):** a friend's recommendation and Pass
+  it on, Pick this back up, **What are pressers talking about** — three reviews, the latest day
+  anyone reviewed, ranked by engagement (likes + replies, the thread post's) then recency
+  (`/social/top-reviews`) — New & Popular, the picks countdown and Rate this next (web: the day's record as a
+  featured card, then a row of the rest of the queue and picks, never the featured one twice — the
+  old Ready to rate and the right column's Rate this next, merged), Trending, Heated discussions, then Bins. Reviews sit high because reading them is what gets
+  people liking, replying and writing their own; change both screens together. Web's right
+  column (Friends this week, on Pressd green — avatars from the feed, ratings with or without a
+  review) is **floated** at `lg` (`railCards`, drawn again after the feed below `lg`), and every
+  section is `flow-root`, so each sits either beside the column or full width under it; the
+  reviews go one card at a time (each `TopReviewCard` is `flow-root`, the section isn't). Web's
+  "Your streak" card was removed (November 2026): web-only, computed in the browser, and nothing
+  else in the product knew of it.
 - **For You's single-record cards share `SpotlightCard`** (one per platform —
   `frontend/src/components/` and `mobile/components/`): Pass it on and Pick this back
   up. No border and no box button — the cover, blurred, is the card's
@@ -2155,9 +2184,11 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   and under `prefers-reduced-motion` the gradient stands still with no sparkle. It
   replaced the stroked hollow number on AlbumDetail's FOR YOU and CommunityAlbum's FOR
   YOU, and draws a bin row's PREDICTED (`Figure`'s `predicted`) and For You's Ready to
-  rate `~7.59` under each card (no sparkle at that size). Web's Rate this next carries
-  its prediction only in its sentence, so it stays text; the library card's `~` badge
-  stays plain, as on iPhone.
+  rate `~7.59` under each card (no sparkle at that size), and Rate this next's featured card
+  (`FeaturedNext`, SpotlightCard's look stood upright: the blurred cover as its colour, the
+  cover tilted, PREDICTED over the figure at the foot beside its button; no "We think you'll rate
+  this" sentence there). The library
+  card's `~` badge stays plain, as on iPhone.
 - **Hover feedback stays small.** `COVER_LIFT` is a 4% lift and a 1° lean on an
   ease-out; it was 13% and 3° on a springy curve and made rows of covers jump. Keep
   new hover scales in that range. The one exception, by request, is the shelf

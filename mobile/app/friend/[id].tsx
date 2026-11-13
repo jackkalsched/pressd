@@ -28,7 +28,6 @@ import {
   fetchFriendRequests,
   fetchSummary,
   fetchAlbums,
-  fetchScoreRange,
   addFriend,
   acceptFriendRequest,
   removeFriend,
@@ -50,7 +49,7 @@ import {
 } from '../../lib/rankings'
 import ProfileBanner from '../../components/ProfileBanner'
 import { OverlapPill } from '../../components/TasteOverlap'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors } from '../../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, useScoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 import { scrollToTop, useCompactBar } from '../../lib/scrollToTop'
 
@@ -63,16 +62,6 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'ratings', label: 'Rankings' },
 ]
 
-// Score-badge color relative to this user's own mean/sd, matching Profile.
-function scoreBadgeColor(score: number, mu: number, sd: number): string {
-  const SD_RANGE = 2.5
-  if (score >= mu) {
-    const t = Math.min(1, (score - mu) / (SD_RANGE * sd))
-    return `hsl(${Math.round(30 + t * 108)}, 70%, 30%)`
-  }
-  const t = Math.min(1, (mu - score) / (SD_RANGE * sd))
-  return `hsl(${Math.round(30 - t * 30)}, 72%, 30%)`
-}
 
 function topTags(tags: (string | null)[], n: number): string[] {
   const counts = new Map<string, number>()
@@ -140,17 +129,9 @@ export default function FriendProfile() {
     queryFn: () => fetchAlbums({ status: 'rated', userId: fid, excludeSingles: true }),
     enabled: Number.isFinite(fid),
   })
-  const { data: scoreRange } = useQuery({
-    queryKey: ['score-range', fid],
-    queryFn: () => fetchScoreRange(fid),
-    enabled: Number.isFinite(fid),
-    staleTime: 5 * 60_000,
-  })
   // Their picks — the same endpoint your own page reads, so the row renders
   // identically here. No onShelfSlotPress: someone else's shelf isn't editable.
   const { data: profile, isError: profileError } = useProfile(Number.isFinite(fid) ? fid : undefined)
-  const badgeMu = scoreRange?.mu ?? 7.0
-  const badgeSd = scoreRange?.sd ?? 1.0
 
   const person = profile
     ? { name: profile.name, avatarUrl: profile.avatar_url, bio: profile.bio }
@@ -478,7 +459,7 @@ export default function FriendProfile() {
         }
         renderItem={({ item, index }: { item: Album | ArtistRank; index: number }) => {
           if (isGrid) {
-            return <AlbumCell album={item as Album} mu={badgeMu} sd={badgeSd} onPress={() => openAlbum(item as Album)} />
+            return <AlbumCell album={item as Album} onPress={() => openAlbum(item as Album)} />
           }
           if ('artist' in item && !('id' in item)) {
             return (
@@ -529,8 +510,10 @@ export default function FriendProfile() {
   )
 }
 
-function AlbumCell({ album, mu, sd, onPress }: { album: Album; mu: number; sd: number; onPress: () => void }) {
-  const badge = album.score != null ? scoreBadgeColor(album.score, mu, sd) : null
+function AlbumCell({ album, onPress }: { album: Album; onPress: () => void }) {
+  // The fixed 1–10 scale every score uses, as a plain string: it colours a border.
+  const sc = useScoreColor()
+  const badge = album.score != null ? sc(album.score) : null
   return (
     <Pressable style={styles.cell} onPress={onPress}>
       <View style={styles.artWrap}>

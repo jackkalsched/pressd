@@ -10,7 +10,7 @@
 // A post flagged as a spoiler stays covered here as it does in the thread.
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRight, Lock, MessageCircle, ThumbsUp } from 'lucide-react'
+import { ArrowRight, Heart, Lock, MessageCircle } from 'lucide-react'
 import { fetchThreadPosts, fetchThreadPreview, resolveThread } from '../api'
 import { songScoreColor } from '../types'
 import { threadKey, threadPath } from '../lib/threads'
@@ -102,7 +102,7 @@ export default function ThreadPreview({ album, artist, index = 0 }: {
                 {(p.likeCount > 0 || p.replyCount > 0) && (
                   <div className="mt-1.5 flex items-center gap-3.5 text-[11.5px] font-semibold text-(--c-a8998a) tabular-nums">
                     {p.likeCount > 0 && (
-                      <span className="flex items-center gap-1"><ThumbsUp size={11} strokeWidth={2} /> {p.likeCount}</span>
+                      <span className="flex items-center gap-1"><Heart size={11} strokeWidth={2} /> {p.likeCount}</span>
                     )}
                     {p.replyCount > 0 && (
                       <span className="flex items-center gap-1"><MessageCircle size={11} strokeWidth={2} /> {p.replyCount}</span>

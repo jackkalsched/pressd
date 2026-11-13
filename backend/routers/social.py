@@ -196,9 +196,11 @@ def get_top_reviews(
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
-    """'What are pressers talking about' — the most-liked reviews across the
+    """'What are pressers talking about' — the most-engaged reviews across the
     entire userbase for the latest calendar day anyone reviewed. Userbase-wide
-    (not friends-only); ranked by like count, then recency, for that one day."""
+    (not friends-only); ranked by engagement — likes plus replies, both the
+    review's thread post's (backend/likes.py) — then recency, for that one day.
+    Both apps ask for three."""
     reviewed = session.exec(
         select(Album)
         .where(Album.review.is_not(None))
@@ -256,7 +258,7 @@ def get_top_reviews(
             "bottom_song": {"title": bottom.title, "score": bottom.score} if bottom else None,
         })
 
-    items.sort(key=lambda it: (it["like_count"], it["review_at"] or ""), reverse=True)
+    items.sort(key=lambda it: (it["like_count"] + it["comment_count"], it["review_at"] or ""), reverse=True)
     return {"day": target_day.isoformat(), "reviews": items[:limit]}
 
 

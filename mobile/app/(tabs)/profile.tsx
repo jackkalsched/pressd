@@ -20,7 +20,6 @@ import { ChevronDown, Pencil, Search, Settings, Star, X } from 'lucide-react-nat
 import {
   fetchAlbums,
   fetchSummary,
-  fetchScoreRange,
   fetchFriends,
   fetchArtistStats,
   fetchScatterData,
@@ -34,7 +33,7 @@ import { getPrefs } from '../../lib/prefs'
 import SettingsSheet, { type SheetMode } from '../../components/SettingsSheet'
 import FriendsSheet from '../../components/FriendsSheet'
 import AnchoredMenu from '../../components/AnchoredMenu'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor, useScoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 import { scrollToTop, useCompactBar, useTabScrollToTop } from '../../lib/scrollToTop'
 
@@ -42,17 +41,6 @@ const GAP = 10
 // The recommendation accent, shared with the Recommend control on album detail.
 const RECOMMEND = '#f97316'
 
-// Score-badge color relative to the user's own mean/sd, matching the desktop
-// AlbumCard: amber at the mean → dark green above (+2.5 SD), dark red below.
-function scoreBadgeColor(score: number, mu: number, sd: number): string {
-  const SD_RANGE = 2.5
-  if (score >= mu) {
-    const t = Math.min(1, (score - mu) / (SD_RANGE * sd))
-    return `hsl(${Math.round(30 + t * 108)}, 70%, 30%)`
-  }
-  const t = Math.min(1, (mu - score) / (SD_RANGE * sd))
-  return `hsl(${Math.round(30 - t * 30)}, 72%, 30%)`
-}
 
 type Tab = 'library' | 'stats' | 'ratings'
 const TABS: { key: Tab; label: string }[] = [
@@ -199,20 +187,11 @@ export default function Profile() {
     enabled: !!user,
   })
 
-  // Mean/sd of the user's album scores, so the badge color is relative to them.
-  const { data: scoreRange } = useQuery({
-    queryKey: ['score-range', user?.id],
-    queryFn: () => fetchScoreRange(user!.id),
-    enabled: !!user,
-    staleTime: 5 * 60_000,
-  })
   const { data: friends = [] } = useQuery({
     queryKey: ['friends', user?.id],
     queryFn: () => fetchFriends(user!.id),
     enabled: !!user,
   })
-  const badgeMu = scoreRange?.mu ?? 7.0
-  const badgeSd = scoreRange?.sd ?? 1.0
 
   // Name, avatar and the three picks, resolved server-side. The banner hides
   // the picks row on its own until the ten-album bar is cleared.
@@ -490,8 +469,6 @@ export default function Profile() {
           isGrid ? (
             <AlbumCell
               album={item as Album}
-              mu={badgeMu}
-              sd={badgeSd}
               onPress={() => {
                 const a = item as Album
                 if (a.status === 'listening') {
@@ -583,15 +560,15 @@ export default function Profile() {
 }
 
 function AlbumCell({
-  album, mu, sd, onPress,
+  album, onPress,
 }: {
   album: Album
-  mu: number
-  sd: number
   onPress: () => void
 }) {
   const showScore = album.status === 'rated' && album.score != null
-  const badge = showScore ? scoreBadgeColor(album.score!, mu, sd) : null
+  // The fixed 1–10 scale every score uses, as a plain string: it colours a border.
+  const sc = useScoreColor()
+  const badge = showScore ? sc(album.score!) : null
   return (
     <Pressable style={styles.cell} onPress={onPress}>
       <View style={styles.artWrap}>

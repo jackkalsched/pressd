@@ -80,15 +80,24 @@ export function Cover({
   )
 }
 
-export function ScorePill({ score, big }: { score: number; big?: boolean }) {
+export function ScorePill({ score, big, xl, milker = false }: {
+  score: number; big?: boolean; xl?: boolean
+  /** Set in Milker (.font-rating) — For You's review cards and Trending, as Library's badges are. */
+  milker?: boolean
+}) {
+  // xl: a review card's final score (For You), the card's headline number.
+  const [minWidth, padding, fontSize] = xl ? [60, '7px 12px', 21] : big ? [46, '6px 10px', 16] : [38, '3px 8px', 13]
   return (
     <span
       className="tabular-nums"
       style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        minWidth: big ? 46 : 38, padding: big ? '6px 10px' : '3px 8px', borderRadius: 9,
+        minWidth, padding, borderRadius: xl ? 11 : 9,
         background: scoreTint(score), color: songScoreColor(score),
-        fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: big ? 16 : 13, flexShrink: 0,
+        // Scores are Playfair, as on iPhone and the rest of web (CLAUDE.md §12) —
+        // except where a caller asks for Milker, which has one weight.
+        fontFamily: milker ? "'Milker', 'Plus Jakarta Sans', sans-serif" : "'Playfair Display', serif",
+        fontWeight: milker ? 400 : 700, fontSize, flexShrink: 0,
       }}
     >
       {score.toFixed(2)}

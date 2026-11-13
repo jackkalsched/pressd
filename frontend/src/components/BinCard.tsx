@@ -62,3 +62,49 @@ export default function BinCard({ bin, size = 104 }: { bin: Bin; size?: number }
     </Link>
   )
 }
+
+/** The Bins page's card: the 2×2 of covers is the whole card, and the title,
+ *  source and progress sit over its lower part on a dark fade, in white — so
+ *  the covers carry the bin rather than sitting beside it. On a Pressd bin the
+ *  chip rides in the top-right corner. For You keeps the compact BinCard row.
+ *  Over album art, so its colours are literal in either appearance. */
+export function BinPoster({ bin }: { bin: Bin }) {
+  const done = bin.progress.rated
+  const pct = bin.progress.total ? Math.min(100, (done / bin.progress.total) * 100) : 0
+  return (
+    <Link
+      to={`/bins/${bin.slug}`}
+      className="group relative block aspect-square overflow-hidden rounded-[22px] isolate shadow-[0_18px_40px_-26px_rgba(40,25,10,0.65)] transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_26px_50px_-26px_rgba(40,25,10,0.7)]"
+    >
+      <div className="absolute inset-0 -z-10 grid grid-cols-2 transition-transform duration-500 ease-out group-hover:scale-[1.03]">
+        {[0, 1, 2, 3].map((i) =>
+          bin.covers[i] ? (
+            <CoverImg key={i} url={bin.covers[i]} displayPx={320} alt="" className="block h-full w-full object-cover" />
+          ) : (
+            <div key={i} className="bg-[#2a2622]" />
+          ),
+        )}
+      </div>
+      {/* The fade the words sit on: clear at the top, near-black at the foot. */}
+      <div
+        className="absolute inset-0 -z-10"
+        style={{ background: 'linear-gradient(180deg, rgba(12,10,8,0) 30%, rgba(12,10,8,.55) 55%, rgba(12,10,8,.92) 100%)' }}
+      />
+      {bin.kind === 'curated' && <PressdBinBadge width={56} className="absolute top-3.5 right-3.5" />}
+      <div className="absolute inset-x-0 bottom-0 p-5 sm:p-6">
+        <p className="m-0 font-display text-[26px] sm:text-[28px] leading-[1.08] font-bold text-white line-clamp-3 [text-shadow:0_2px_14px_rgba(0,0,0,.45)]">{bin.title}</p>
+        {bin.sourceName && (
+          <p className="m-0 mt-1.5 text-[13px] font-medium text-white/75">
+            {bin.sourceName}{bin.sourceYear ? ` · ${bin.sourceYear}` : ''}
+          </p>
+        )}
+        <div className="mt-4 flex items-center gap-3">
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/20">
+            <div className="h-full rounded-full bg-[#7fd1a8] grow-x" style={{ width: `${pct}%` }} />
+          </div>
+          <span className="text-[12.5px] font-semibold tabular-nums text-white/85">{done} / {bin.progress.total}</span>
+        </div>
+      </div>
+    </Link>
+  )
+}

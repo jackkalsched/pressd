@@ -2,10 +2,10 @@
 // section. Mobile's app/bins/index.tsx, across the width of the page.
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { binCardMatches } from '@pressd/shared/binSort'
+import { binCardMatches, binSections } from '@pressd/shared/binSort'
 import BinSearch from '../components/BinSearch'
 import { fetchBins } from '../api'
-import BinCard from '../components/BinCard'
+import { BinPoster } from '../components/BinCard'
 import VinylSpinner from '../components/VinylSpinner'
 import { useUser } from '../context/UserContext'
 
@@ -38,13 +38,18 @@ export default function Bins() {
         {!data.some((b) => binCardMatches(b, query)) && (
           <p className="mt-10 text-[14px] text-(--c-57534e)">No bins match “{query.trim()}”.</p>
         )}
-        <div className="mt-8 grid gap-8 md:grid-cols-2 xl:grid-cols-3">
-          {data.filter((b) => binCardMatches(b, query)).map((b, i) => (
-            <div key={b.slug} className="rise-in" style={{ '--i': i } as React.CSSProperties}>
-              <BinCard bin={b} size={128} />
+        {binSections(data.filter((b) => binCardMatches(b, query))).map((section) => (
+          <section key={section.key} className="mt-9">
+            <h2 className="m-0 text-[11px] font-bold uppercase tracking-[0.16em] text-(--c-a8998a)">{section.title}</h2>
+            <div className="mt-4 grid gap-6 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              {section.bins.map((b, i) => (
+                <div key={b.slug} className="rise-in" style={{ '--i': i } as React.CSSProperties}>
+                  <BinPoster bin={b} />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </section>
+        ))}
         </>
       )}
     </div>

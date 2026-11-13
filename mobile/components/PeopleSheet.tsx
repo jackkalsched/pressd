@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
   songNotes: { marginTop: spacing.md, gap: 5, paddingLeft: 42 + spacing.md },
   songNote: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   songNoteText: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary },
-  songNoteScore: { fontFamily: fonts.bodyBold, fontSize: 12 },
+  songNoteScore: { fontFamily: fonts.display, fontSize: 12 },
 
   footer: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
   notNow: {

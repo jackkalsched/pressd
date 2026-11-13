@@ -1,4 +1,4 @@
-// Thumbs up and thumbs down on one post.
+// A heart (the like, an up-vote) and a thumbs down on one post.
 //
 // The counts move on tap and roll back if the write fails, because a vote that
 // waits on the network reads as a dead button. The server is the authority on
@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import * as haptics from '../lib/haptics'
-import { ThumbsDown, ThumbsUp } from 'lucide-react-native'
+import { Heart, ThumbsDown } from 'lucide-react-native'
 import { votePost } from '../lib/api'
 import { colors, fonts, radii, spacing, useColors } from '../theme/tokens'
 
@@ -30,7 +30,9 @@ export default function VoteButtons({
 }) {
   const tc = useColors()
   // Green for a vote up; a plain colour, since the thumbs are SVG.
-  const UP = tc.green
+  // The up-vote is a heart, red when given: the same like the feed's heart
+  // gives (a review's like is its thread post's up-vote, backend/likes.py).
+  const UP = '#c0392b'
   const [vote, setVote] = useState(myVote)
   const [up, setUp] = useState(likes)
   const [down, setDown] = useState(dislikes)
@@ -71,12 +73,12 @@ export default function VoteButtons({
         onPress={() => cast(1)}
         hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
         accessibilityRole="button"
-        accessibilityLabel={`Thumbs up, ${up}`}
+        accessibilityLabel={`Like, ${up}`}
         accessibilityState={{ selected: vote === 1 }}
         style={({ pressed }) => [styles.btn, compact && styles.btnCompact,
           vote === 1 && styles.onUp, pressed && { opacity: 0.6 }]}
       >
-        <ThumbsUp size={size} color={vote === 1 ? UP : tc.inkTertiary}
+        <Heart size={size} color={vote === 1 ? UP : tc.inkTertiary}
           fill={vote === 1 ? UP : 'transparent'} />
         <Text style={[styles.count, compact && styles.countCompact, vote === 1 && { color: UP }]}>{up}</Text>
       </Pressable>
@@ -106,7 +108,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill, backgroundColor: colors.inset,
   },
   btnCompact: { paddingVertical: 4, paddingHorizontal: 8 },
-  onUp: { backgroundColor: 'rgba(45, 106, 79, 0.12)' },
+  onUp: { backgroundColor: 'rgba(192, 57, 43, 0.10)' },
   onDown: { backgroundColor: 'rgba(192, 57, 43, 0.10)' },
   count: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary },
   countCompact: { fontSize: 11 },

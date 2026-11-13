@@ -42,7 +42,7 @@ export default function TrendingBoard({
               {row.rater_count} {row.rater_count === 1 ? 'rating' : 'ratings'}
               {row.last_rated ? ` · ${timeAgo(row.last_rated)}` : ''}
             </span>
-            {row.avg_score != null && <ScorePill score={row.avg_score} />}
+            {row.avg_score != null && <ScorePill score={row.avg_score} big milker />}
           </button>
         </li>
       ))}

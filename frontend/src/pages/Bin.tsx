@@ -314,15 +314,15 @@ export default function Bin() {
                             <div className="flex gap-2">
                               <button
                                 onClick={() => (e.mine ? navigate(`/rate/${e.mine.id}`) : add(e, 'listening'))}
-                                className="flex h-10 w-10 items-center justify-center rounded-full border border-(--c-e2dbd0) text-(--c-1c1917) hover:border-(--c-2d6a4f) hover:text-(--c-2d6a4f)"
+                                className="flex h-12 w-12 items-center justify-center rounded-full border border-(--c-e2dbd0) text-(--c-1c1917) hover:border-(--c-2d6a4f) hover:text-(--c-2d6a4f)"
                                 title="Rate now"
                                 aria-label={`Rate ${e.songTitle ?? e.albumName} now`}
                               >
-                                <Star size={18} />
+                                <Star size={22} />
                               </button>
                               <button
                                 onClick={() => (e.mine ? navigate(entryHref(e)) : add(e, 'to_listen'))}
-                                className={`flex h-10 w-10 items-center justify-center rounded-full border ${
+                                className={`flex h-12 w-12 items-center justify-center rounded-full border ${
                                   saved
                                     ? 'border-(--c-2d6a4f) bg-(--c-2d6a4f)/10 text-(--c-2d6a4f)'
                                     : 'border-(--c-e2dbd0) text-(--c-1c1917) hover:border-(--c-2d6a4f) hover:text-(--c-2d6a4f)'
@@ -330,7 +330,7 @@ export default function Bin() {
                                 title={saved ? 'In your library' : 'Save to your library'}
                                 aria-label={saved ? `${e.albumName} is in your library` : `Save ${e.albumName} to your library`}
                               >
-                                <Bookmark size={18} fill={saved ? 'currentColor' : 'none'} />
+                                <Bookmark size={22} fill={saved ? 'currentColor' : 'none'} />
                               </button>
                             </div>
                           )
@@ -380,15 +380,15 @@ function Figure({ label, value, title, muted = false, count = false, predicted =
 }) {
   return (
     <div title={title}>
-      <p className="m-0 text-[10px] font-semibold tracking-[0.12em] text-(--c-a8998a)">{label}</p>
+      <p className="m-0 text-[11px] font-semibold tracking-[0.12em] text-(--c-a8998a)">{label}</p>
       {muted ? (
-        <p className="m-0 mt-1 font-display text-[15px] font-bold leading-none tabular-nums text-(--c-8a7f72)">{count ? value : value.toFixed(places)}</p>
+        <p className="m-0 mt-1.5 font-display text-[21px] font-bold leading-none tabular-nums text-(--c-8a7f72)">{count ? value : value.toFixed(places)}</p>
       ) : predicted ? (
-        <p className="m-0 mt-0.5 font-display text-[22px] font-bold leading-none tabular-nums">
+        <p className="m-0 mt-1 font-display text-[30px] font-bold leading-none tabular-nums">
           <PredictedScore value={value} places={places} />
         </p>
       ) : (
-        <p className="m-0 mt-0.5 font-display text-[22px] font-bold leading-none tabular-nums" style={{ color: count ? 'var(--c-1c1917)' : songScoreColor(value) }}>
+        <p className="m-0 mt-1 font-display text-[30px] font-bold leading-none tabular-nums" style={{ color: count ? 'var(--c-1c1917)' : songScoreColor(value) }}>
           {count ? value : value.toFixed(places)}
         </p>
       )}

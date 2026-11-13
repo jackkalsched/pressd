@@ -458,6 +458,22 @@ body {
   font-display: swap;
 }
 
+/* Milker (Brandsemut), self-hosted from the font Jack supplied — his license.
+   Library's rating badges only (AlbumCard). One weight, so never bolded; it has
+   no "~", which falls back to the body face. */
+@font-face {
+  font-family: 'Milker';
+  src: url('/fonts/Milker.woff2') format('woff2'),
+       url('/fonts/Milker.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+.font-rating {
+  font-family: 'Milker', 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-weight: 400;
+}
+
 /* The brand wordmark itself. Not a general-purpose face. */
 .font-wordmark {
   font-family: 'Clash Display', 'Plus Jakarta Sans', system-ui, sans-serif;

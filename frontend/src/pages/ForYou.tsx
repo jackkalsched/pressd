@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Search, CalendarDays } from 'lucide-react'
+import { Plus, ArrowRight, Heart, MessageCircle, Check, Play, Search, CalendarDays } from 'lucide-react'
 import { fetchAlbum, fetchAlbums, fetchFeed, toggleLike, LIKE_QUERY_KEYS, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion, fetchBins } from '../api'
 import type { NewRelease, PredictedPick, RecommendSuggestion, TopReview } from '../api'
 import { MIN_RATED_ALBUMS } from '../types'
@@ -10,6 +10,8 @@ import HeatedDiscussions from '../components/HeatedDiscussions'
 import PassItOnCell from '../components/PassItOnCell'
 import SpotlightCard from '../components/SpotlightCard'
 import TrendingBoard from '../components/TrendingBoard'
+import Avatar from '../components/Avatar'
+import CoverImg from '../components/CoverImg'
 import RecommendModal from '../components/RecommendModal'
 import { markPassItOnEmpty, markPassItOnShown, passItOnRecent, usePassItOnDue, usePassItOnOpen } from '../lib/passItOn'
 import { useUser } from '../context/UserContext'
@@ -19,22 +21,11 @@ import BinCard from '../components/BinCard'
 
 // ── small helpers ─────────────────────────────────────────────────────────────
 
-function dayKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 function withinDays(dateStr: string | undefined | null, n: number): boolean {
   if (!dateStr) return false
   const t = new Date(dateStr).getTime()
   if (Number.isNaN(t)) return false
   return (Date.now() - t) / 86400000 < n
-}
-// Monday-based start of the week for a given date
-function weekStart(d: Date): number {
-  const x = new Date(d)
-  const dow = (x.getDay() + 6) % 7
-  x.setDate(x.getDate() - dow)
-  x.setHours(0, 0, 0, 0)
-  return x.getTime()
 }
 function timeAgo(dateStr?: string): string {
   if (!dateStr) return ''
@@ -121,7 +112,7 @@ export default function ForYou() {
   // friends-only rail below it.
   const { data: topReviews } = useQuery({
     queryKey: ['top-reviews'],
-    queryFn: () => fetchTopReviews(8),
+    queryFn: () => fetchTopReviews(3),
     enabled: userId > 0,
   })
 
@@ -176,38 +167,20 @@ export default function ForYou() {
 
   // Friends leaderboard: albums rated in the last 7 days, friends + you
   const leaders = useMemo(() => {
-    const counts = new Map<number, { id: number; name: string; count: number; you: boolean }>()
+    const counts = new Map<number, { id: number; name: string; avatarUrl?: string | null; count: number; you: boolean }>()
     for (const f of feed) {
-      if (f.type !== 'rating' || !withinDays(f.date_rated, 7)) continue
-      const e = counts.get(f.friend.id) ?? { id: f.friend.id, name: f.friend.name, count: 0, you: false }
+      // A rating with a review arrives as a 'review' item; it's still a rating.
+      if ((f.type !== 'rating' && f.type !== 'review') || !withinDays(f.date_rated, 7)) continue
+      const e = counts.get(f.friend.id) ?? { id: f.friend.id, name: f.friend.name, avatarUrl: f.friend.avatar_url, count: 0, you: false }
       e.count += 1
       counts.set(f.friend.id, e)
     }
     const youCount = rated.filter((a) => withinDays(a.dateRated, 7)).length
-    if (userId > 0) counts.set(userId, { id: userId, name: 'You', count: youCount, you: true })
+    if (userId > 0) counts.set(userId, { id: userId, name: 'You', avatarUrl: activeUser?.avatarUrl, count: youCount, you: true })
     return [...counts.values()].filter((e) => e.count > 0).sort((a, b) => b.count - a.count).slice(0, 5)
-  }, [feed, rated, userId])
+  }, [feed, rated, userId, activeUser?.avatarUrl])
   const maxLeader = Math.max(1, ...leaders.map((l) => l.count))
 
-  // Streak: consecutive weeks with ≥1 rating + the last 7 days of activity
-  const streak = useMemo(() => {
-    const dates = rated.map((a) => a.dateRated).filter(Boolean) as string[]
-    const daySet = new Set(dates.map((d) => dayKey(new Date(d))))
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date()
-      d.setDate(d.getDate() - (6 - i))
-      return { label: d.toLocaleDateString(undefined, { weekday: 'narrow' }), rated: daySet.has(dayKey(d)), today: i === 6 }
-    })
-    const ratedWeek = rated.filter((a) => withinDays(a.dateRated, 7)).length
-    const weekSet = new Set(dates.map((d) => weekStart(new Date(d))))
-    let weeks = 0
-    let cur = weekStart(new Date())
-    while (weekSet.has(cur)) {
-      weeks += 1
-      cur = weekStart(new Date(cur - 7 * 86400000))
-    }
-    return { weeks, ratedWeek, days }
-  }, [rated])
 
   // Rate this next — the same rotation mobile runs, so a shared account sees the
   // same record on both. The pool is deliberately not limited to the library:
@@ -242,6 +215,9 @@ export default function ForYou() {
   }, [toListen, picks, recommended, dayIndex])
   const suggestion = daily.queued
   const pick = daily.pick
+  // The row beside the featured card leaves the featured record out.
+  const restQueued = toListen.filter((a) => a.id !== suggestion?.id)
+  const restPicks = picks.filter((p) => p !== pick)
 
   async function handleLikeTop(albumId: number) {
     if (!activeUser) return
@@ -298,12 +274,51 @@ export default function ForYou() {
   // A line comment, not a JSX one: directly inside `return (` you are in
   // expression position, not JSX children position, so `{/* … */}` parses as a
   // block rather than a comment and the build fails on the element after it.
+  // The right column's cards, drawn floated beside the feed at lg and after it below.
+  const railCards = (
+    <>
+
+          {/* friends leaderboard — on Pressd green, dark in either appearance,
+              so its colours are literal (as the share card's are). */}
+          {leaders.length > 0 && (
+            <div className="rounded-[20px] p-5" style={{ background: 'linear-gradient(165deg,#2d6a4f,#234f3d)', color: '#eaf5ef', boxShadow: '0 20px 44px -22px rgba(35,79,61,.85)' }}>
+              <div className="flex items-baseline justify-between mb-3.5">
+                <span className="text-[10.5px] font-bold uppercase tracking-[0.16em]" style={{ color: '#a9d3bf' }}>Friends this week</span>
+                <span className="text-[11px]" style={{ color: '#8fc2aa' }}>most rated</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                {leaders.map((l, i) => (
+                  <div key={l.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-[10px]" style={{ background: l.you ? 'rgba(255,255,255,.12)' : 'transparent' }}>
+                    <span className="w-4 text-[12px] font-bold" style={{ color: '#8fc2aa' }}>{i + 1}</span>
+                    <Avatar name={l.you ? (activeUser?.name ?? l.name) : l.name} avatarUrl={l.avatarUrl} size={24} />
+                    <span className="w-[62px] text-[12.5px] font-semibold truncate" style={{ color: l.you ? '#fff' : '#d6ebe0' }}>{l.name}</span>
+                    <div className="flex-1 h-1.5 rounded-full overflow-hidden mx-1" style={{ background: 'rgba(255,255,255,.14)' }}>
+                      <div className="h-full rounded-full" style={{ width: `${(l.count / maxLeader) * 100}%`, background: l.you ? '#fff' : '#8fc2aa' }} />
+                    </div>
+                    <span className="font-display w-5 text-right text-[15px] font-bold tabular-nums" style={{ color: '#fff' }}>{l.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+    </>
+  )
+
   return (
     <div className="min-h-screen bg-(--c-f9f8f6) text-(--c-1c1917)">
-      <div className="mx-auto w-full max-w-[1600px] px-6 md:px-12 py-8 pb-24 flex flex-col lg:flex-row gap-8">
+      <div className="mx-auto w-full max-w-[1600px] px-6 md:px-12 py-8 pb-24 flow-root">
+
+        {/* ─────────── RIGHT RAIL ───────────
+            Floated, so the feed runs beside it and every section that starts
+            below its end takes the full width (each section is flow-root, so a
+            section is either beside the column or under it, never split). */}
+        <aside className="hidden lg:flex lg:float-right lg:w-[312px] lg:ml-8 lg:mb-8 flex-col gap-5">
+          {railCards}
+        </aside>
 
         {/* ─────────── FEED COLUMN ─────────── */}
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0">
 
           {/* header */}
           <header className="mb-7 flex items-start justify-between gap-4">
@@ -330,7 +345,7 @@ export default function ForYou() {
             <div className="flex items-center gap-4 rounded-[18px] border border-(--c-d7e6dd) p-5 mb-7" style={{ background: 'linear-gradient(100deg,var(--c-eef5f0),var(--c-faf8f5) 55%)' }}>
               <div className="flex-1">
                 <p className="m-0 font-bold text-[16px]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Rate your first album</p>
-                <p className="m-0 mt-1 text-[13px] text-(--c-8a7f72)">Add an album to start building your library and streak.</p>
+                <p className="m-0 mt-1 text-[13px] text-(--c-8a7f72)">Add an album to start building your library.</p>
               </div>
               <button
                 onClick={() => navigate('/library')}
@@ -380,6 +395,60 @@ export default function ForYou() {
               )}
             </div>
           )}
+          {passItOn && passModalOpen && (
+            <RecommendModal
+              key={passKey}
+              album={{ id: passItOn.album.id, albumName: passItOn.album.albumName, artist: passItOn.album.artist }}
+              initialFriendId={passItOn.friend.id}
+              onClose={() => setPassModalOpen(false)}
+              onSent={() => setPassSent(passKey)}
+            />
+          )}
+
+          {/* what are pressers talking about — the day's three most-engaged reviews,
+              userbase-wide (so there's something on day one, before any friends),
+              high on the page because reading reviews is what gets people liking,
+              replying and writing their own (Jack, November 2026). */}
+          {/* Not flow-root as a whole: each review is, so the ones that fit beside
+              the right column sit there and the rest run full width under it. */}
+          {(topReviews?.reviews.length ?? 0) > 0 && (
+            <section className="mb-9">
+              <div className="flex items-baseline justify-between mb-4 gap-3.5">
+                <h2 className={SECTION_LABEL}>What are pressers talking about</h2>
+                <span className="text-[11px] text-(--c-b3a99c)">{dayLabel(topReviews?.day ?? null)}</span>
+              </div>
+              <div className="space-y-3.5">
+                {topReviews!.reviews.map((rv) => (
+                  <TopReviewCard
+                    key={`${rv.author.id}-${rv.album_id}`}
+                    rv={rv}
+                    // The record, as the whole of Pressd rated it; the comments
+                    // live on the reviewer's own copy.
+                    onOpen={() => navigate(`/album/${rv.album_id}/community`)}
+                    onOpenComments={() => navigate(`/album/${rv.album_id}`)}
+                    onOpenAuthor={() => navigate(`/u/${rv.author.id}`)}
+                    onLike={() => handleLikeTop(rv.album_id)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* new releases (Deezer) */}
+          {newReleases.length > 0 && (
+            <section className="mb-9 flow-root">
+              <div className="flex items-baseline justify-between mb-4">
+                <h2 className={SECTION_LABEL}>New &amp; Popular</h2>
+                <button onClick={() => navigate('/upcoming')} className="text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) flex items-center gap-1"><CalendarDays size={13} /> Upcoming <ArrowRight size={12} /></button>
+              </div>
+              <div className="flex gap-4 overflow-x-auto pb-3.5 pt-1" style={{ scrollSnapType: 'x mandatory' }}>
+                {newReleases.map((r) => (
+                  <NewReleaseCard key={r.deezerId} release={r} userId={userId} onRate={(id) => navigate(`/rate/${id}`)} onAdded={() => queryClient.invalidateQueries({ queryKey: ['albums'] })} />
+                ))}
+              </div>
+            </section>
+          )}
+
           {unlockLeft > 0 && (
             <div className="rise-in mb-9 flex flex-wrap items-center gap-x-4 gap-y-2.5">
               <div className="flex gap-1.5" aria-hidden>
@@ -397,100 +466,102 @@ export default function ForYou() {
               </p>
             </div>
           )}
-          {passItOn && passModalOpen && (
-            <RecommendModal
-              key={passKey}
-              album={{ id: passItOn.album.id, albumName: passItOn.album.albumName, artist: passItOn.album.artist }}
-              initialFriendId={passItOn.friend.id}
-              onClose={() => setPassModalOpen(false)}
-              onSent={() => setPassSent(passKey)}
-            />
-          )}
-
-          {/* new releases (Deezer) */}
-          {newReleases.length > 0 && (
-            <section className="mb-9">
+          {/* Rate this next — iPhone's section, laid out wide: the day's record
+              as a featured card (the same rotation, so one account sees the same
+              record on both), then everything else ready to rate beside it —
+              the user's own queue first, then records the model likes that they
+              don't own, never the featured one twice. A queued album is something
+              they already chose; a pick is a suggestion, so it never outranks
+              their own list. */}
+          {(suggestion || pick || restQueued.length > 0 || restPicks.length > 0) && (
+            <section className="mb-9 flow-root">
               <div className="flex items-baseline justify-between mb-4">
-                <h2 className={SECTION_LABEL}>New &amp; Popular</h2>
-                <button onClick={() => navigate('/upcoming')} className="text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) flex items-center gap-1"><CalendarDays size={13} /> Upcoming <ArrowRight size={12} /></button>
-              </div>
-              <div className="flex gap-4 overflow-x-auto pb-3.5 pt-1" style={{ scrollSnapType: 'x mandatory' }}>
-                {newReleases.map((r) => (
-                  <NewReleaseCard key={r.deezerId} release={r} userId={userId} onRate={(id) => navigate(`/rate/${id}`)} onAdded={() => queryClient.invalidateQueries({ queryKey: ['albums'] })} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* ready to rate — the user's own queue first, then records the model
-              likes that they don't own. A queued album is something they already
-              chose; a pick is a suggestion, so it never outranks their own list. */}
-          {(toListen.length > 0 || picks.length > 0) && (
-            <section className="mb-9">
-              <div className="flex items-baseline justify-between mb-4">
-                <h2 className={SECTION_LABEL}>Ready to rate</h2>
+                <h2 className={SECTION_LABEL}>Rate this next</h2>
                 <button onClick={() => navigate('/library')} className="text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) flex items-center gap-1">Browse all <ArrowRight size={12} /></button>
               </div>
-              <div className="flex gap-4 overflow-x-auto pb-3.5 pt-1" style={{ scrollSnapType: 'x mandatory' }}>
-                {toListen.slice(0, 12).map((a) => (
-                  <button
-                    key={a.id}
-                    onClick={() => navigate(`/rate/${a.id}`)}
-                    className="text-left group"
-                    style={{ width: 172, flexShrink: 0, scrollSnapAlign: 'start' }}
-                  >
-                    <div className="relative" style={{ width: 172, height: 172, borderRadius: 16, overflow: 'hidden', boxShadow: '0 14px 34px -18px rgba(60,45,30,.5)' }}>
-                      <Cover artUrl={a.albumArtUrl} seed={a.artist} size={172} radius={16} fontSize={46} />
-                      <span className="absolute top-2.5 left-2.5 text-[9px] font-bold tracking-[0.1em] text-white px-2 py-1 rounded-full" style={{ background: 'rgba(28,25,23,.72)' }}>
-                        {a.recommendedByName ? 'RECOMMENDED' : 'IN QUEUE'}
-                      </span>
-                    </div>
-                    <p className="mt-2.5 mb-0 font-bold text-[14px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{a.albumName}</p>
-                    <p className="m-0 mt-0.5 text-[12px] text-(--c-8a7f72) truncate">{a.artist} · {a.year}</p>
-                    <div className="mt-2 flex items-center gap-2">
-                      {a.predictedScore != null ? (
-                        <>
-                          <span className="font-display text-[14px] font-bold leading-none tabular-nums"><PredictedScore value={a.predictedScore} prefix="~" sparkle={false} /></span>
-                          <span className="text-[11px] text-(--c-b3a99c)">predicted</span>
-                        </>
-                      ) : (
-                        <span className="text-[11px] text-(--c-b3a99c)">Not rated yet</span>
-                      )}
-                    </div>
-                  </button>
-                ))}
-                {picks.map((pick) => (
-                  <PickCard
-                    key={`${pick.artist}-${pick.albumName}`}
-                    pick={pick}
-                    userId={userId}
-                    onRate={(id) => navigate(`/rate/${id}`)}
-                    onAdded={() => {
-                      queryClient.invalidateQueries({ queryKey: ['albums'] })
-                      queryClient.invalidateQueries({ queryKey: ['picks', userId] })
-                    }}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
+              <div className="flex flex-col md:flex-row gap-5">
+                {(suggestion || pick) && (
+                  <div className="md:w-[360px] shrink-0 flex flex-col [&>*]:flex-1">
+                    {/* the day's record: queued (or recommended) first */}
+                    {suggestion && (
+                      <FeaturedNext
+                        artUrl={suggestion.albumArtUrl}
+                        seed={suggestion.artist}
+                        title={suggestion.albumName}
+                        sub={suggestion.artist + (suggestion.year ? ` · ${suggestion.year}` : '')}
+                        eyebrow={suggestion.recommendedByName ? `Recommended by ${suggestion.recommendedByName}` : 'In your queue'}
+                        predicted={suggestion.predictedScore}
+                        action={suggestion.recommendedByName ? 'Take a look' : 'Start rating'}
+                        // A recommendation is someone else's pick — dropping straight
+                        // into the scoring flow scores a record the person hasn't heard
+                        // of yet and gives them no way to look at it first. Albums they
+                        // queued themselves keep the fast path.
+                        onAction={() => navigate(suggestion.recommendedByName ? `/album/${suggestion.id}/community` : `/rate/${suggestion.id}`)}
+                      />
+                    )}
 
-          {/* Bins — Pressd's themed collections, and how far through each you are. */}
-          {bins.length > 0 && (
-            <section className="mb-9">
-              <div className="flex items-baseline justify-between mb-4">
-                <h2 className={SECTION_LABEL}>Bins</h2>
-                <button onClick={() => navigate('/bins')} className="text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) flex items-center gap-1">See all <ArrowRight size={12} /></button>
-              </div>
-              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                {bins.slice(0, 3).map((b) => <BinCard key={b.slug} bin={b} />)}
+                    {/* Nothing queued, but the model still has an opinion — same cell. */}
+                    {!suggestion && pick && (
+                      <NextUpPick
+                        pick={pick}
+                        userId={userId}
+                        onRate={(id) => navigate(`/rate/${id}`)}
+                        onAdded={() => {
+                          queryClient.invalidateQueries({ queryKey: ['albums'] })
+                          queryClient.invalidateQueries({ queryKey: ['picks', userId] })
+                        }}
+                      />
+                    )}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0 flex gap-4 overflow-x-auto pb-3.5 pt-1" style={{ scrollSnapType: 'x mandatory' }}>
+                  {restQueued.slice(0, 12).map((a) => (
+                    <button
+                      key={a.id}
+                      onClick={() => navigate(`/rate/${a.id}`)}
+                      className="text-left group"
+                      style={{ width: 172, flexShrink: 0, scrollSnapAlign: 'start' }}
+                    >
+                      <div className="relative" style={{ width: 172, height: 172, borderRadius: 16, overflow: 'hidden', boxShadow: '0 14px 34px -18px rgba(60,45,30,.5)' }}>
+                        <Cover artUrl={a.albumArtUrl} seed={a.artist} size={172} radius={16} fontSize={46} />
+                        <span className="absolute top-2.5 left-2.5 text-[9px] font-bold tracking-[0.1em] text-white px-2 py-1 rounded-full" style={{ background: 'rgba(28,25,23,.72)' }}>
+                          {a.recommendedByName ? 'RECOMMENDED' : 'IN QUEUE'}
+                        </span>
+                      </div>
+                      <p className="mt-2.5 mb-0 font-bold text-[14px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{a.albumName}</p>
+                      <p className="m-0 mt-0.5 text-[12px] text-(--c-8a7f72) truncate">{a.artist} · {a.year}</p>
+                      <div className="mt-2 flex items-center gap-2">
+                        {a.predictedScore != null ? (
+                          <>
+                            <span className="font-display text-[14px] font-bold leading-none tabular-nums"><PredictedScore value={a.predictedScore} prefix="~" sparkle={false} /></span>
+                            <span className="text-[11px] text-(--c-b3a99c)">predicted</span>
+                          </>
+                        ) : (
+                          <span className="text-[11px] text-(--c-b3a99c)">Not rated yet</span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                  {restPicks.map((pick) => (
+                    <PickCard
+                      key={`${pick.artist}-${pick.albumName}`}
+                      pick={pick}
+                      userId={userId}
+                      onRate={(id) => navigate(`/rate/${id}`)}
+                      onAdded={() => {
+                        queryClient.invalidateQueries({ queryKey: ['albums'] })
+                        queryClient.invalidateQueries({ queryKey: ['picks', userId] })
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
             </section>
           )}
 
           {/* trending */}
           {trending.length > 0 && (
-            <section className="mb-9">
+            <section className="mb-9 flow-root">
               <div className="flex items-baseline justify-between mb-4 gap-3.5">
                 <h2 className={SECTION_LABEL}>Trending on Pressd</h2>
                 <span className="text-[11px] text-(--c-b3a99c)">This week</span>
@@ -501,158 +572,27 @@ export default function ForYou() {
             </section>
           )}
 
-          {/* Records people are writing about right now, which is when their
-              threads are worth opening. Sits above the reviews for that reason,
-              the way it does on mobile's For You. */}
+          {/* Records people are writing about right now. */}
           <HeatedDiscussions />
 
-          {/* what are pressers talking about — userbase-wide, so this section has
-              something to show on day one, before the user has added anyone. */}
-          {(topReviews?.reviews.length ?? 0) > 0 && (
-            <section>
-              <div className="flex items-baseline justify-between mb-4 gap-3.5">
-                <h2 className={SECTION_LABEL}>What are pressers talking about</h2>
-                <span className="text-[11px] text-(--c-b3a99c)">{dayLabel(topReviews?.day ?? null)}</span>
+          {/* Bins — Pressd's themed collections, and how far through each you are. */}
+          {bins.length > 0 && (
+            <section className="mb-9 flow-root">
+              <div className="flex items-baseline justify-between mb-4">
+                <h2 className={SECTION_LABEL}>Bins</h2>
+                <button onClick={() => navigate('/bins')} className="text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) flex items-center gap-1">See all <ArrowRight size={12} /></button>
               </div>
-              <div className="flex flex-col gap-3.5">
-                {topReviews!.reviews.slice(0, 4).map((rv) => (
-                  <TopReviewCard
-                    key={`${rv.author.id}-${rv.album_id}`}
-                    rv={rv}
-                    // The record, as the whole of Pressd rated it; the comments
-                    // live on the reviewer's own copy.
-                    onOpen={() => navigate(`/album/${rv.album_id}/community`)}
-                    onOpenComments={() => navigate(`/album/${rv.album_id}`)}
-                    onOpenAuthor={() => navigate(`/u/${rv.author.id}`)}
-                    onLike={() => handleLikeTop(rv.album_id)}
-                  />
-                ))}
+              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {bins.slice(0, 3).map((b) => <BinCard key={b.slug} bin={b} />)}
               </div>
             </section>
           )}
 
         </div>
 
-        {/* ─────────── RIGHT RAIL ─────────── */}
-        <aside className="w-full lg:w-[312px] shrink-0 flex flex-col gap-5">
-
-          {/* streak */}
-          <div className="rounded-[20px] p-[22px]" style={{ background: 'linear-gradient(165deg,#2d6a4f,#234f3d)', color: '#eaf5ef', boxShadow: '0 20px 44px -22px rgba(35,79,61,.85)' }}>
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-[10.5px] font-bold uppercase tracking-[0.16em]" style={{ color: '#a9d3bf' }}>Your streak</span>
-              <span className="text-[11px]" style={{ color: '#a9d3bf' }}>Rating streak</span>
-            </div>
-            <div className="flex items-center gap-3.5 mb-5">
-              <Flame size={34} className="text-[#ffd9a0]" style={{ animation: 'none' }} fill="#f7b955" />
-              <div>
-                <div className="flex items-baseline gap-2">
-                  <span style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 44, lineHeight: 0.9, color: '#fff' }}>{streak.weeks}</span>
-                  <span className="text-[14px] font-semibold" style={{ color: '#a9d3bf' }}>{streak.weeks === 1 ? 'week' : 'weeks'}</span>
-                </div>
-                <p className="m-0 mt-1.5 text-[12px]" style={{ color: '#cfe6da' }}>in a row rating albums</p>
-              </div>
-            </div>
-            <div className="flex justify-between gap-1.5 mb-3.5">
-              {streak.days.map((d, i) => (
-                <div key={i} className="flex flex-col items-center gap-1.5 flex-1">
-                  <span className="text-[10px] font-semibold" style={{ color: '#8fbfa6' }}>{d.label}</span>
-                  <div
-                    className="flex items-center justify-center"
-                    style={{
-                      width: 30, height: 30, borderRadius: 10,
-                      background: d.rated ? 'rgba(255,255,255,.92)' : 'rgba(255,255,255,.08)',
-                      color: '#2d6a4f',
-                      border: d.today ? '2px dashed #9fd3ba' : 'none',
-                    }}
-                  >
-                    {d.rated && <Check size={14} strokeWidth={3} />}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="flex items-center gap-2.5 rounded-xl px-3.5 py-3" style={{ background: 'rgba(255,255,255,.09)' }}>
-              <span style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 22, color: '#fff' }}>{streak.ratedWeek}</span>
-              <p className="m-0 text-[12px] leading-tight" style={{ color: '#cfe6da' }}>albums rated in the<br />last 7 days</p>
-            </div>
-            <div className="mt-3 flex items-center gap-2 text-[11.5px]" style={{ color: '#a9d3bf' }}>
-              <Clock size={13} />
-              {streak.ratedWeek > 0 ? "You're on a roll — keep it going." : "Rate 1 album to start this week's streak."}
-            </div>
-          </div>
-
-          {/* friends leaderboard */}
-          {leaders.length > 0 && (
-            <div className="rounded-[20px] border border-(--c-e6ded2) bg-(--c-faf8f5) p-5">
-              <div className="flex items-baseline justify-between mb-3.5">
-                <span className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-(--c-a8998a)">Friends this week</span>
-                <span className="text-[11px] text-(--c-b3a99c)">most rated</span>
-              </div>
-              <div className="flex flex-col gap-1">
-                {leaders.map((l, i) => (
-                  <div key={l.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-[10px]" style={{ background: l.you ? 'var(--c-eef5f0)' : 'transparent' }}>
-                    <span className="w-4 text-[12px] font-bold text-(--c-c2b8ad)">{i + 1}</span>
-                    <div style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0, background: coverGradient(hueFromString(l.name)), color: 'var(--c-fff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 11 }}>
-                      {l.name[0].toUpperCase()}
-                    </div>
-                    <span className="w-[62px] text-[12.5px] font-semibold truncate" style={{ color: l.you ? 'var(--c-2d6a4f)' : 'var(--c-4a423a)' }}>{l.name}</span>
-                    <div className="flex-1 h-1.5 rounded-full overflow-hidden mx-1 bg-(--c-ece5da)">
-                      <div className="h-full rounded-full" style={{ width: `${(l.count / maxLeader) * 100}%`, background: l.you ? 'var(--c-2d6a4f)' : 'var(--c-cdbfae)' }} />
-                    </div>
-                    <span className="w-4 text-right text-[13px] font-bold text-(--c-4a423a)" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{l.count}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* rate this next */}
-          {suggestion && (
-            <div className="rounded-[20px] border border-dashed border-(--c-cdbfae) bg-(--c-f6f2ec) p-5">
-              <span className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-(--c-a8998a)">Rate this next</span>
-              <div className="flex gap-3 mt-3.5">
-                <Cover artUrl={suggestion.albumArtUrl} seed={suggestion.artist} size={60} radius={12} fontSize={23} />
-                <div className="flex-1 min-w-0">
-                  <p className="m-0 font-bold text-[14.5px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{suggestion.albumName}</p>
-                  <p className="m-0 mt-0.5 text-[12px] text-(--c-8a7f72) truncate">{suggestion.artist}</p>
-                  <p className="m-0 mt-2 text-[11.5px] leading-snug italic text-(--c-a08c76)">
-                    {suggestion.recommendedByName
-                      ? `Recommended by ${suggestion.recommendedByName}`
-                      : suggestion.predictedScore != null
-                        ? `We think you'll rate this ~${suggestion.predictedScore.toFixed(2)}`
-                        : 'Next up in your queue'}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => navigate(
-                  // A recommendation is someone else's pick — dropping straight
-                  // into the scoring flow scores a record the person hasn't heard
-                  // of yet and gives them no way to look at it first. Albums they
-                  // queued themselves keep the fast path.
-                  suggestion.recommendedByName ? `/album/${suggestion.id}/community` : `/rate/${suggestion.id}`,
-                )}
-                className="mt-4 w-full py-2.5 rounded-[11px] border border-(--c-2d6a4f) bg-transparent text-(--c-2d6a4f) hover:bg-(--c-green-fill) hover:text-white text-[13px] font-bold transition-colors flex items-center justify-center gap-1.5"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-              >
-                {suggestion.recommendedByName ? 'Take a look' : 'Start rating'} <ArrowRight size={14} />
-              </button>
-            </div>
-          )}
-
-          {/* Nothing queued, but the model still has an opinion — same cell, so
-              the section reads identically whether the record came from the
-              user's own queue or from the catalog. */}
-          {!suggestion && pick && (
-            <NextUpPick
-              pick={pick}
-              userId={userId}
-              onRate={(id) => navigate(`/rate/${id}`)}
-              onAdded={() => {
-                queryClient.invalidateQueries({ queryKey: ['albums'] })
-                queryClient.invalidateQueries({ queryKey: ['picks', userId] })
-              }}
-            />
-          )}
+        {/* The right column below lg: after the feed, as before. */}
+        <aside className="lg:hidden mt-9 flex flex-col gap-5">
+          {railCards}
         </aside>
       </div>
     </div>
@@ -758,9 +698,84 @@ function NewReleaseCard({
   )
 }
 
+// ── rate this next: the featured card ────────────────────────────────────────
+
+/** The day's record at the head of Rate this next, in For You's
+ *  single-record look (SpotlightCard's): the record's cover, blurred, is the
+ *  card's colour, the cover itself sits tilted, and the title is in Playfair.
+ *  SpotlightCard itself is a wide row with an arrow; this is the same card
+ *  stood upright for a column. Along the foot, the prediction (PredictedScore,
+ *  PREDICTED over it) beside the button. The whole card is the target, as
+ *  SpotlightCard's is, with its hover: a shadow, the cover easing straighter, the
+ *  arrow reaching forward — in COVER_LIFT's small range. Stretches to the row's
+ *  height. */
+function FeaturedNext({
+  artUrl, seed, eyebrow, title, sub, predicted, action, onAction, pending = false, error = false,
+}: {
+  artUrl?: string | null
+  seed: string
+  eyebrow: string
+  title: string
+  sub: string
+  predicted?: number | null
+  action: string
+  onAction: () => void
+  pending?: boolean
+  error?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onAction}
+      disabled={pending}
+      aria-label={`${action}: ${title}`}
+      className="spot-green spot-card group relative w-full overflow-hidden rounded-[28px] isolate p-5 flex flex-col text-left transition-[box-shadow,transform] duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_22px_44px_-26px_rgba(50,30,10,0.5)] disabled:cursor-wait"
+    >
+      {artUrl && (
+        <CoverImg
+          url={artUrl}
+          displayPx={120}
+          alt=""
+          aria-hidden
+          className="spot-glow pointer-events-none absolute inset-0 -z-10 h-full w-full scale-150 object-cover blur-3xl saturate-150 transition-opacity duration-500"
+        />
+      )}
+      <div className="flex gap-4 items-start w-full">
+        <div className="shrink-0 -rotate-[4deg] rounded-[18px] shadow-[0_16px_30px_-14px_rgba(40,25,10,0.6)] transition-transform duration-300 ease-out group-hover:-rotate-[1.5deg] group-hover:scale-[1.03]">
+          <Cover artUrl={artUrl} seed={seed} size={128} radius={18} fontSize={42} />
+        </div>
+        <div className="flex-1 min-w-0 pt-1">
+          <p className="m-0 mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.16em] line-clamp-2" style={{ color: 'var(--spot-ink)' }}>{eyebrow}</p>
+          <p className="m-0 font-display text-[22px] font-bold leading-tight text-(--c-1c1917) line-clamp-3">{title}</p>
+          <p className="m-0 mt-1.5 text-[13px] text-(--c-57534e) truncate">{sub}</p>
+        </div>
+      </div>
+      <div className="mt-auto pt-5 flex items-end gap-4 w-full">
+        {predicted != null && (
+          <div className="shrink-0">
+            <span className="block text-[9px] font-bold tracking-[0.12em] text-(--c-78716c)">PREDICTED</span>
+            <span className="font-display block mt-1 text-[32px] font-bold leading-none tabular-nums">
+              <PredictedScore value={predicted} />
+            </span>
+          </div>
+        )}
+        {/* Looks like a button; the card around it is the one. */}
+        <span
+          className={`flex-1 py-3 rounded-full bg-(--c-green-fill) group-hover:bg-(--c-green-fill-hover) text-white text-[13.5px] font-bold transition-colors flex items-center justify-center gap-1.5 ${pending ? 'opacity-60' : ''}`}
+          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+        >
+          {pending ? <VinylSpinner size={16} /> : null} {action}
+          <ArrowRight size={14} className="transition-transform duration-300 ease-out group-hover:translate-x-1" />
+        </span>
+      </div>
+      {error && <span className="block m-0 mt-2 text-[11px] text-(--c-c0392b)">Couldn&rsquo;t add — try again</span>}
+    </button>
+  )
+}
+
 // ── rate-this-next pick ───────────────────────────────────────────────────────
 
-/** The right-rail "Rate this next" cell when the day's rotation lands on a
+/** Rate this next's featured card when the day's rotation lands on a
  *  catalog pick rather than something the user queued. It has no album id yet,
  *  so the action imports the record first and then opens the rating flow. */
 function NextUpPick({
@@ -790,28 +805,18 @@ function NextUpPick({
   }
 
   return (
-    <div className="rounded-[20px] border border-dashed border-(--c-cdbfae) bg-(--c-f6f2ec) p-5">
-      <span className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-(--c-a8998a)">Rate this next</span>
-      <div className="flex gap-3 mt-3.5">
-        <Cover artUrl={pick.coverUrl} seed={pick.artist} size={60} radius={12} fontSize={23} />
-        <div className="flex-1 min-w-0">
-          <p className="m-0 font-bold text-[14.5px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{pick.albumName}</p>
-          <p className="m-0 mt-0.5 text-[12px] text-(--c-8a7f72) truncate">{pick.artist}{pick.year ? ` · ${pick.year}` : ''}</p>
-          <p className="m-0 mt-2 text-[11.5px] leading-snug italic text-(--c-a08c76)">
-            We think you&rsquo;ll rate this ~{pick.predictedScore.toFixed(2)}
-          </p>
-        </div>
-      </div>
-      <button
-        onClick={start}
-        disabled={pending}
-        className="mt-4 w-full py-2.5 rounded-[11px] border border-(--c-2d6a4f) bg-transparent text-(--c-2d6a4f) hover:bg-(--c-green-fill) hover:text-white text-[13px] font-bold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60"
-        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-      >
-        {pending ? <VinylSpinner size={16} /> : null} Start rating <ArrowRight size={14} />
-      </button>
-      {error && <p className="m-0 mt-2 text-[11px] text-(--c-c0392b)">Couldn&rsquo;t add — try again</p>}
-    </div>
+    <FeaturedNext
+      artUrl={pick.coverUrl}
+      seed={pick.artist}
+      eyebrow="Picked for you"
+      title={pick.albumName}
+      sub={pick.artist + (pick.year ? ` · ${pick.year}` : '')}
+      predicted={pick.predictedScore}
+      action="Start rating"
+      onAction={start}
+      pending={pending}
+      error={error}
+    />
   )
 }
 
@@ -921,7 +926,7 @@ function TopReviewCard({ rv, onOpen, onOpenComments, onOpenAuthor, onLike }: {
 }) {
   const liked = rv.liked_by_me
   return (
-    <article className="rounded-[18px] border border-(--c-e6ded2) bg-(--c-faf8f5) p-[18px]" style={{ boxShadow: '0 12px 34px -24px rgba(60,45,30,.4)' }}>
+    <article className="flow-root rounded-[18px] border border-(--c-e6ded2) bg-(--c-faf8f5) p-[18px]" style={{ boxShadow: '0 12px 34px -24px rgba(60,45,30,.4)' }}>
       <div className="flex items-center gap-2.5 mb-3">
         <button onClick={onOpenAuthor} aria-label={`Open ${rv.author.name}'s profile`} className="shrink-0 rounded-full border-none bg-transparent p-0 cursor-pointer transition-transform hover:scale-[1.04]">
           {rv.author.avatar_url ? (
@@ -938,7 +943,7 @@ function TopReviewCard({ rv, onOpen, onOpenComments, onOpenAuthor, onLike }: {
           </p>
           <p className="m-0 mt-px text-[11.5px] text-(--c-b3a99c)">{timeAgo(rv.review_at)}</p>
         </div>
-        {rv.score != null && <ScorePill score={rv.score} big />}
+        {rv.score != null && <ScorePill score={rv.score} xl milker />}
       </div>
       <div className="group/album flex gap-3.5 cursor-pointer" onClick={onOpen} role="link" aria-label={`Open ${rv.album_name}`}>
         <div className="shrink-0 transition-transform duration-300 ease-out group-hover/album:scale-[1.04] group-hover/album:-rotate-1">
@@ -953,13 +958,13 @@ function TopReviewCard({ rv, onOpen, onOpenComments, onOpenAuthor, onLike }: {
               {rv.top_song && (
                 <span className="truncate">
                   <span className="font-semibold text-(--c-2d6a4f)">Best</span> {rv.top_song.title}
-                  <span className="tabular-nums text-(--c-b3a99c)"> · {rv.top_song.score.toFixed(1)}</span>
+                  <span className="text-(--c-b3a99c)"> · <span className="font-display font-bold tabular-nums">{rv.top_song.score.toFixed(1)}</span></span>
                 </span>
               )}
               {rv.bottom_song && (
                 <span className="truncate">
                   <span className="font-semibold text-(--c-b1542f)">Worst</span> {rv.bottom_song.title}
-                  <span className="tabular-nums text-(--c-b3a99c)"> · {rv.bottom_song.score.toFixed(1)}</span>
+                  <span className="text-(--c-b3a99c)"> · <span className="font-display font-bold tabular-nums">{rv.bottom_song.score.toFixed(1)}</span></span>
                 </span>
               )}
             </div>

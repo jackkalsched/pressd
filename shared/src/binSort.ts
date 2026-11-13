@@ -82,6 +82,16 @@ export function binEntryMatches(e: BinEntry, query: string): boolean {
   return matches([e.songTitle, e.albumName, e.artist, e.year != null ? String(e.year) : null, e.genre], query)
 }
 
+/** The Bins page's sections, in order, empty ones left out: Pressd's own bins
+ *  (`kind` curated) under "Pressd Official", then everyone else's. Once for both
+ *  platforms, so the headings and their order can't drift. */
+export function binSections(bins: BinCard[]): { key: string; title: string; bins: BinCard[] }[] {
+  return [
+    { key: 'official', title: 'Pressd Official', bins: bins.filter((b) => b.kind === 'curated') },
+    { key: 'community', title: 'From the community', bins: bins.filter((b) => b.kind !== 'curated') },
+  ].filter((s) => s.bins.length > 0)
+}
+
 /** A bin on the Bins page, by its title or source. */
 export function binCardMatches(b: BinCard, query: string): boolean {
   return matches([b.title, b.sourceName, b.sourceYear != null ? String(b.sourceYear) : null], query)

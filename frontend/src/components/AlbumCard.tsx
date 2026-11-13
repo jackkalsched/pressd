@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Play, ChevronRight, Star, Trash2, Music, Sparkles } from 'lucide-react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Album } from '../types'
-import { SKIP_THRESHOLD, shortReleaseLabel } from '../types'
+import { SKIP_THRESHOLD, shortReleaseLabel, songScoreColor } from '../types'
 import RecommendModal from './RecommendModal'
-import { deleteAlbum, fetchScoreRange } from '../api'
+import { deleteAlbum } from '../api'
 import { useUser } from '../context/UserContext'
 import CoverImg from './CoverImg'
 import VinylSpinner from './VinylSpinner'
@@ -15,29 +15,10 @@ interface Props {
   showActions?: boolean
 }
 
-function scoreBadgeColor(score: number, mu: number, sd: number): string {
-  // Above average → amber (30°) to dark green (138°)
-  // Below average → amber (30°) to dark red (0°)
-  // Saturates at ±2.5 SD from mean
-  const SD_RANGE = 2.5
-  if (score >= mu) {
-    const t = Math.min(1, (score - mu) / (SD_RANGE * sd))
-    return `hsl(${Math.round(30 + t * 108)}, 70%, var(--badge-l))`
-  } else {
-    const t = Math.min(1, (mu - score) / (SD_RANGE * sd))
-    return `hsl(${Math.round(30 - t * 30)}, 72%, var(--badge-l))`
-  }
-}
-
 export default function AlbumCard({ album, showActions = true }: Props) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { isViewingFriend } = useUser()
-  const { data: scoreRange } = useQuery({
-    queryKey: ['score-range', 1],
-    queryFn: () => fetchScoreRange(1),
-    staleTime: 5 * 60 * 1000,
-  })
   const [showRecommend, setShowRecommend] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -160,17 +141,16 @@ export default function AlbumCard({ album, showActions = true }: Props) {
             </div>
           )}
 
-          {/* Score badge */}
+          {/* Score badge — Milker (.font-rating), a blocky figure that reads at a
+              glance over the cover. */}
           {album.score !== null && (
             <div
-              className="absolute top-2.5 right-2.5 text-[13px] font-bold px-3 py-1 rounded-full shadow-md tracking-tight select-none bg-(--c-fff)"
+              className="font-rating absolute top-2.5 right-2.5 text-[17px] leading-none px-3 py-1.5 rounded-full shadow-md select-none bg-(--c-fff)"
               style={{
-                color: scoreRange
-                  ? scoreBadgeColor(album.score, scoreRange.mu, scoreRange.sd)
-                  : scoreBadgeColor(album.score, 7.0, 1.0),
-                border: `1.5px solid ${scoreRange
-                  ? scoreBadgeColor(album.score, scoreRange.mu, scoreRange.sd)
-                  : scoreBadgeColor(album.score, 7.0, 1.0)}`,
+                // The fixed 1–10 scale every score uses (red → green), not the
+                // owner's own spread: a 7 reads as a 7 in anyone's library.
+                color: songScoreColor(album.score),
+                border: `1.5px solid ${songScoreColor(album.score)}`,
               }}
             >
               {album.score.toFixed(2)}
@@ -180,7 +160,7 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           {/* Predicted score badge */}
           {album.score === null && album.predictedScore !== null && (
             <div
-              className="absolute top-2.5 right-2.5 bg-black/50 backdrop-blur-md text-white/80 text-[13px] font-bold px-3 py-1 rounded-full shadow-lg tracking-tight select-none"
+              className="font-rating absolute top-2.5 right-2.5 bg-black/50 backdrop-blur-md text-white/90 text-[17px] leading-none px-3 py-1.5 rounded-full shadow-lg select-none"
               title="Predicted score"
             >
               ~{album.predictedScore.toFixed(2)}

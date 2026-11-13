@@ -214,7 +214,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               className={({ isActive }) =>
                 clsx(
                   'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
-                  rule && 'relative mt-3 before:absolute before:-top-2 before:inset-x-2 before:h-px before:bg-(--c-e2e2e2)',
+                  rule && 'relative mt-6 before:absolute before:-top-3 before:inset-x-2 before:h-px before:bg-(--c-e2e2e2)',
                   isActive
                     ? 'bg-(--c-2d6a4f)/10 text-(--c-2d6a4f)'
                     : 'text-(--c-777) hover:text-(--c-111) hover:bg-(--c-f0f0f0)',
@@ -225,19 +225,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               {label}
             </NavLink>
           ))}
-          {!isViewingFriend && (
-            <button
-              onClick={() => setShowAddAlbum(true)}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white w-full text-left mt-1"
-            >
-              <Plus size={16} />
-              Rate an Album
-            </button>
-          )}
+          {/* Always shown: it adds to your own library (activeUser), even while
+              the sidebar is still showing a friend's profile. */}
+          <button
+            onClick={() => setShowAddAlbum(true)}
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white w-full text-left mt-6"
+          >
+            <Plus size={16} />
+            Rate an Album
+          </button>
         </nav>
 
         {/* Friends section */}
-        <div className="mt-6 pt-5 border-t border-(--c-e2e2e2)">
+        <div className="mt-8 pt-6 border-t border-(--c-e2e2e2)">
           <div className="flex items-center justify-between px-2 mb-2">
             <button
               onClick={toggleFriends}
@@ -364,16 +364,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {showSettings && <SettingsDialog mode="settings" onClose={() => setShowSettings(false)} />}
 
       {/* Mobile FAB */}
-      {!isViewingFriend && (
-        <button
-          onClick={() => setShowAddAlbum(true)}
-          className="md:hidden fixed bottom-20 right-4 z-30 w-12 h-12 rounded-full bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white shadow-lg flex items-center justify-center transition-colors"
-          style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
-          aria-label="Rate an Album"
-        >
-          <Plus size={22} />
-        </button>
-      )}
+      <button
+        onClick={() => setShowAddAlbum(true)}
+        className="md:hidden fixed bottom-20 right-4 z-30 w-12 h-12 rounded-full bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white shadow-lg flex items-center justify-center transition-colors"
+        style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+        aria-label="Rate an Album"
+      >
+        <Plus size={22} />
+      </button>
 
       {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
       {/* The one-time ask. Layout only renders past the tutorial and welcome
