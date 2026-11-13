@@ -767,16 +767,17 @@ function ReviewCell({ review, first, onOpen, onOpenUser, onLike }: { review: Top
             <Text style={styles.reviewAlbum} numberOfLines={1}>{review.album_name}</Text>
             <Text style={styles.reviewArtist} numberOfLines={1}>{review.artist}</Text>
           </View>
+          {/* Like and replies on the album's line, at its right edge; their own
+              Pressables take the tap before the cell's. */}
+          <View style={styles.reviewActions}>
+            <LikeButton liked={!!review.liked_by_me} count={review.like_count} onToggle={onLike} />
+            <Pressable style={styles.reviewAction} onPress={onOpen} hitSlop={8}>
+              <MessageCircle size={15} color={tc.inkMuted} />
+              <Text style={styles.reviewActionText}>{review.comment_count}</Text>
+            </Pressable>
+          </View>
         </View>
       </Pressable>
-
-      <View style={styles.reviewActions}>
-        <LikeButton liked={!!review.liked_by_me} count={review.like_count} onToggle={onLike} />
-        <Pressable style={styles.reviewAction} onPress={onOpen} hitSlop={8}>
-          <MessageCircle size={15} color={tc.inkMuted} />
-          <Text style={styles.reviewActionText}>{review.comment_count}</Text>
-        </Pressable>
-      </View>
     </View>
   )
 }
@@ -949,7 +950,7 @@ const styles = StyleSheet.create({
   songNoteText: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary },
   songNoteScore: { fontFamily: fonts.display, fontSize: 12 },
 
-  reviewActions: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.md, paddingLeft: 38 + spacing.sm },
+  reviewActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, flexShrink: 0 },
   reviewAction: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   reviewActionText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary },
 
