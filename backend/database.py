@@ -303,6 +303,7 @@ def init_db():
             #    nobody's pick vanishes. A cleared shelf is stored as five nulls,
             #    never NULL, so this never refills it.
             "ALTER TABLE pressuser ADD COLUMN IF NOT EXISTS shelf TEXT",
+            "ALTER TABLE bin ADD COLUMN IF NOT EXISTS cover_url TEXT",
             "UPDATE pressuser SET shelf = '[' || favorite_album_id || ',null,null,null,null]' "
             "WHERE shelf IS NULL AND favorite_album_id IS NOT NULL",
             # ── A review's likes are its thread post's up-votes (social.toggle_like).

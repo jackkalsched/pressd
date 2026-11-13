@@ -838,9 +838,19 @@ def delete_own_account(
     # Numbers this account texted invites to (the hashes, never the numbers).
     run("DELETE FROM contactinvite WHERE inviter_id = :u")
 
-    # Bins they made, and everything in them. Pressd's own have no owner.
-    run("DELETE FROM binentry WHERE bin_id IN (SELECT id FROM bin WHERE owner_id = :u)")
-    run("DELETE FROM bin WHERE owner_id = :u")
+    # Bins. Their own reports and views go everywhere; a private bin goes whole
+    # (its reports, views, cover, songs, entries, then the bin), while a
+    # published one stays for the people who found it, unowned.
+    run("DELETE FROM binreport WHERE user_id = :u")
+    run("DELETE FROM binview WHERE user_id = :u")
+    private = "SELECT id FROM bin WHERE owner_id = :u AND visibility = 'private'"
+    run(f"DELETE FROM binreport WHERE bin_id IN ({private})")
+    run(f"DELETE FROM binview WHERE bin_id IN ({private})")
+    run(f"DELETE FROM bincover WHERE bin_id IN ({private})")
+    run(f"DELETE FROM bintrack WHERE entry_id IN (SELECT id FROM binentry WHERE bin_id IN ({private}))")
+    run(f"DELETE FROM binentry WHERE bin_id IN ({private})")
+    run("DELETE FROM bin WHERE owner_id = :u AND visibility = 'private'")
+    run("UPDATE bin SET owner_id = NULL WHERE owner_id = :u AND visibility = 'published'")
 
     # The uploaded pictures hang off the user row by foreign key too.
     run("DELETE FROM useravatar WHERE user_id = :u")

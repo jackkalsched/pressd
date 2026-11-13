@@ -772,6 +772,8 @@ class Bin(SQLModel, table=True):
     entry_count: int = Field(default=0)
     # Where it sits among Pressd's bins on For You and the index, lowest first.
     sort_order: int = Field(default=0)
+    # A user bin's own picture (BinCover); null shows the entries' covers.
+    cover_url: Optional[str] = None
     hidden_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
     created_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
     updated_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))

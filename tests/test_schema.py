@@ -14,5 +14,15 @@ def test_delete_covers_new_tables():
     import inspect
     from backend.routers.users import delete_own_account
     src = inspect.getsource(delete_own_account)
-    for t in ("tasteoverlap", "tasteuser", "overlapsheet", "overlapevent", "songprediction", "contactinvite"):
+    for t in ("tasteoverlap", "tasteuser", "overlapsheet", "overlapevent", "songprediction", "contactinvite",
+              "binreport", "binview", "bincover"):
         assert f"DELETE FROM {t}" in src
+
+
+def test_delete_bins_order():
+    import inspect
+    from backend.routers.users import delete_own_account
+    src = inspect.getsource(delete_own_account)
+    assert src.index("DELETE FROM bintrack") < src.index("DELETE FROM binentry")
+    assert "visibility = 'private'" in src
+    assert "SET owner_id = NULL" in src
