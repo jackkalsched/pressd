@@ -12,6 +12,7 @@ import {
   Animated,
   Easing,
   Linking,
+  Share,
   Modal,
   PanResponder,
   Pressable,
@@ -23,19 +24,22 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useRouter, type Href } from 'expo-router'
-import { BarChart3, CalendarDays, ChevronRight, CircleUser, Compass, ListMusic, Mail, Menu, Package, Settings, Users, type LucideIcon } from 'lucide-react-native'
+import { BarChart3, CalendarDays, ChevronRight, CircleUser, Compass, ListMusic, Mail, Menu, Package, Settings, UserPlus, Users, type LucideIcon } from 'lucide-react-native'
 import { selection } from '../lib/haptics'
+import { useAuth } from '../lib/auth'
+import { getInviteLink } from '../lib/api'
 import { colors, fonts, spacing, useColors } from '../theme/tokens'
 
 // An entry switches to a tab (`tab`), goes to a page (`href`), or does
 // something its host or the phone owns (`action`): Settings is the profile's
 // SettingsSheet, which For You mounts too; Contact support opens a mail to
 // the address Settings → About uses, or, with no mail app, Settings scrolled
-// to that row.
+// to that row. Invite friends hands the caller's permanent invite link to the
+// iOS share sheet, which offers Messages, Mail and the rest.
 type Item = { label: string; icon: LucideIcon } & (
   | { tab: 'index' | 'profile' | 'social' | 'charts' }
   | { href: Href }
-  | { action: 'settings' | 'contact' }
+  | { action: 'settings' | 'contact' | 'invite' }
 )
 
 const SUPPORT_EMAIL = 'pressdmusicapp@gmail.com'
@@ -57,6 +61,7 @@ const SECTIONS: Item[][] = [
     { label: 'Bins', icon: Package, href: '/bins' },
     { label: 'Upcoming', icon: CalendarDays, href: '/upcoming' },
   ],
+  [{ label: 'Invite Friends', icon: UserPlus, action: 'invite' }],
 ]
 
 // Pinned to the foot of the panel.
@@ -80,6 +85,7 @@ export default function SideMenu({ visible, anchor, onClose, onSettings }: {
 }) {
   const tc = useColors()
   const router = useRouter()
+  const { user } = useAuth()
   const insets = useSafeAreaInsets()
   const { width } = useWindowDimensions()
   const panel = Math.min(320, width * 0.78)
@@ -122,12 +128,25 @@ export default function SideMenu({ visible, anchor, onClose, onSettings }: {
         if (item.tab !== 'index') router.navigate(`/${item.tab}` as Href)
       } else if ('href' in item) router.push(item.href)
       else if (item.action === 'settings') onSettings()
+      else if (item.action === 'invite') invite()
       // openURL rejects when nothing handles mailto: (no Mail app, or the
       // simulator). canOpenURL isn't asked first: it answers truthfully only
       // for schemes in Info.plist's LSApplicationQueriesSchemes, which would
       // take a native rebuild.
       else Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Pressd support')}`).catch(() => onSettings('contact'))
     })
+  }
+
+  // The permanent link (`GET /users/{id}/invite-link`, the one web's Invite and
+  // Share profile send): whoever joins through it becomes the caller's friend.
+  // Asked for on the tap, so the share sheet opens after a short wait; a
+  // failed fetch opens nothing rather than a sheet with no link in it.
+  async function invite() {
+    if (!user) return
+    try {
+      const { link } = await getInviteLink(user.id)
+      await Share.share({ message: `Rate albums with me on Pressd: ${link}` })
+    } catch { /* no link, no sheet */ }
   }
 
   const backdrop = x.interpolate({ inputRange: [0, panel], outputRange: [1, 0], extrapolate: 'clamp' })
