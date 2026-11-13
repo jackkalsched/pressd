@@ -765,7 +765,7 @@ class Bin(SQLModel, table=True):
     title: str
     description: Optional[str] = None
     ranked: bool = Field(default=True)
-    visibility: str = Field(default="published", index=True)  # private | unlisted | published
+    visibility: str = Field(default="published", index=True)  # private | published (Pressd's: published)
     source_name: Optional[str] = None
     source_url: Optional[str] = None
     source_published: Optional[date] = None
