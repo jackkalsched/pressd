@@ -355,10 +355,17 @@ def run_user(user_id: int, skip_llm: bool = False, pooled=None,
         if previous == (rated_albums, rated_songs) and not force:
             gap = catalog_gap(con, user_id, catalog, frame)
             if not gap:
+                # No refit, but what left the catalog still leaves their picks
+                # tonight (catalog_predict.prune_predictions) — a hidden bin's
+                # records would otherwise wait for this user's next rating.
+                from worker.catalog_predict import prune_predictions
+                pruned = prune_predictions(con, user_id, catalog)
+                con.commit()
                 print(f"[nightly_predict] user {user_id}: no new ratings since last run "
                       f"({rated_albums} albums / {rated_songs} songs) — skipped, "
-                      f"{synced} album rows synced from the catalog")
-                return {"user_id": user_id, "status": "unchanged", "synced": synced}
+                      f"{synced} album rows synced from the catalog, pruned {pruned}")
+                return {"user_id": user_id, "status": "unchanged", "synced": synced,
+                        "pruned": pruned}
     if previous == (rated_albums, rated_songs) and not force:
         # Nothing of theirs changed, but the catalog has records they have no
         # prediction for — a bin's, newly analysed, or anyone's new import.

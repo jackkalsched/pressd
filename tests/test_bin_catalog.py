@@ -105,3 +105,21 @@ def test_audio_queue_puts_curated_bins_first():
     import inspect
     from worker import audio_ingest
     assert "b.kind <> 'curated'" in inspect.getsource(audio_ingest.tracks_needing_audio)
+
+
+def test_stale_predictions_drop_what_left_the_catalog():
+    from worker.catalog_predict import stale_predictions
+    albums, songs = stale_predictions(
+        have_albums={"a||kept", "b||hidden bin", "c||my copy"},
+        have_songs={1, 2},
+        catalog_keys={"a||kept", "d||new"},
+        own_keys={"c||my copy"},
+        song_tracks={1},
+    )
+    assert albums == {"b||hidden bin"}     # neither in the catalog nor the user's own
+    assert songs == {2}                    # no song bin names it any more
+
+
+def test_stale_predictions_never_wipe_on_an_empty_catalog():
+    from worker.catalog_predict import stale_predictions
+    assert stale_predictions({"a||x"}, {1}, set(), set(), set()) == (set(), set())

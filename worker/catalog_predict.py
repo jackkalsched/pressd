@@ -178,6 +178,46 @@ def song_bin_tracks(con) -> set[int]:
         " WHERE b.item_type = 'song' AND e.track_id IS NOT NULL")).fetchall()}
 
 
+def stale_predictions(have_albums, have_songs, catalog_keys, own_keys,
+                      song_tracks) -> tuple[set, set]:
+    """The stored predictions tonight's catalog no longer stands behind: album
+    keys neither in the catalog nor one of the user's own copies, and song
+    tracks no song bin names. The catalog stage only ever upserts, so without
+    this a record that left the catalog — its bin hidden or deleted, or the
+    entry taken out — stayed in that user's picks forever. An empty catalog is
+    a failed read, not an empty world, and deletes nothing."""
+    if not catalog_keys:
+        return set(), set()
+    keep = set(catalog_keys) | set(own_keys)
+    return ({k for k in have_albums if k not in keep},
+            {t for t in have_songs if t not in set(song_tracks)})
+
+
+def prune_predictions(con, user_id: int, catalog: list[dict] | None,
+                      song_tracks: set[int] | None = None) -> dict:
+    """Delete one user's stale predictions (stale_predictions). Doesn't
+    commit: it rides in the caller's per-user write."""
+    if not catalog:
+        return {"albums": 0, "songs": 0}
+    if song_tracks is None:
+        song_tracks = song_bin_tracks(con)
+    have_albums = {r[0] for r in con.execute(text(
+        "SELECT album_key FROM albumprediction WHERE user_id = :u"), {"u": user_id}).fetchall()}
+    have_songs = {r[0] for r in con.execute(text(
+        "SELECT track_id FROM songprediction WHERE user_id = :u"), {"u": user_id}).fetchall()}
+    own = {album_key(r[0], r[1]) for r in con.execute(text(
+        "SELECT artist, album_name FROM album WHERE user_id = :u"), {"u": user_id}).fetchall()}
+    drop_albums, drop_songs = stale_predictions(
+        have_albums, have_songs, {r["album_key"] for r in catalog}, own, song_tracks)
+    if drop_albums:
+        con.execute(text("DELETE FROM albumprediction WHERE user_id = :u AND album_key = ANY(:k)"),
+                    {"u": user_id, "k": sorted(drop_albums)})
+    if drop_songs:
+        con.execute(text("DELETE FROM songprediction WHERE user_id = :u AND track_id = ANY(:t)"),
+                    {"u": user_id, "t": sorted(drop_songs)})
+    return {"albums": len(drop_albums), "songs": len(drop_songs)}
+
+
 def _replay_lookup(con, user_id: int):
     """(by_artist, by_genre, overall) replay means for one user.
 
@@ -341,7 +381,6 @@ def predict_catalog_for_user(con, session, user, catalog, frame, um, prior,
 
     if params:
         con.execute(_UPSERT, params)
-        con.commit()
 
     # A song bin's songs, each on its own: the mean of the recording's rows in
     # the frame (one per copy or bin entry holding it), on the user's song scale.
@@ -356,16 +395,21 @@ def predict_catalog_for_user(con, session, user, catalog, frame, um, prior,
         ]
         if song_params:
             con.execute(_SONG_UPSERT, song_params)
-            con.commit()
             songs = len(song_params)
+
+    # What left the catalog leaves the picks, in the same write as tonight's
+    # numbers: a hidden or deleted bin's records, an entry taken out.
+    pruned = prune_predictions(con, user.id, catalog, wanted)
+    con.commit()
 
     scores = [p["score"] for p in params]
     spread = (max(scores) - min(scores)) if scores else 0.0
     bins = sum(1 for r in catalog if r.get("bin_entry_id") and r["album_id"] in song_means)
     print(f"[catalog_predict] user {user.id}: {len(params)} albums "
-          f"({bins} from bins only), {songs} bin songs [{um.source}] spread={spread:.2f}")
+          f"({bins} from bins only), {songs} bin songs [{um.source}] spread={spread:.2f}, "
+          f"pruned {pruned['albums']} albums / {pruned['songs']} songs")
     return {"albums": len(params), "bin_albums": bins, "bin_songs": songs,
-            "model": um.source, "spread": round(spread, 2)}
+            "model": um.source, "spread": round(spread, 2), "pruned": pruned}
 
 
 def predict_catalog(only_user: int | None = None, pooled=None,
