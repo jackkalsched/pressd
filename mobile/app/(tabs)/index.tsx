@@ -931,16 +931,15 @@ const styles = StyleSheet.create({
   trendRowPressed: { opacity: 0.5 },
   trendCount: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted, marginTop: 3 },
   rank: { fontFamily: fonts.display, fontSize: 16, color: colors.inkMuted, width: 20, textAlign: 'center' },
-  scorePill: { borderRadius: radii.sm, paddingHorizontal: 10, paddingVertical: 6, minWidth: 54, alignItems: 'center' },
-  scorePillText: { fontFamily: fonts.rating, fontSize: 17 },
+  scorePill: { borderRadius: radii.sm, paddingHorizontal: 8, paddingVertical: 4, minWidth: 46, alignItems: 'center' },
+  scorePillText: { fontFamily: fonts.display, fontSize: 14 },
 
   // Review cell — reviewer leads (bigger), album secondary, smaller quote
   review: { paddingVertical: spacing.lg },
   reviewHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   reviewAuthor: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.ink },
   reviewOn: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
-  // Milker, as web's review cards and Trending (ScorePill's `milker`).
-  reviewScore: { fontFamily: fonts.rating, fontSize: 21 },
+  reviewScore: { fontFamily: fonts.display, fontSize: 20 },
   reviewQuote: { fontFamily: fonts.displayRegular, fontSize: 15, lineHeight: 22, color: colors.ink, marginTop: spacing.md },
   reviewAlbumRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
   reviewAlbum: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink },

@@ -155,9 +155,6 @@ export const fonts = {
   // general-purpose face: use display/body for everything else.
   wordmark: 'ClashDisplay_700Bold',
   wordmarkSemiBold: 'ClashDisplay_600SemiBold',
-  // Milker, web's `.font-rating`: rating figures only (Trending's pills). One
-  // weight, and no "~" — keep it to plain numbers.
-  rating: 'Milker',
 
   body: 'PlusJakartaSans_400Regular',
   bodyMedium: 'PlusJakartaSans_500Medium',

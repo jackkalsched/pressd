@@ -2057,7 +2057,7 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   the name means the same on both); Plus Jakarta Sans for everything else (the web
   `body` face). A title that names an album keeps one face and sets the album in
   Playfair italic (web `<i>` inside `.font-display`; mobile `fonts.displayItalic`, a
-  loaded face, because iOS can't slant a custom font with `fontStyle`). Clash Display is the wordmark only, Milker (Jack's license) the rating figures only, on both platforms — web's `.font-rating` (self-hosted in `public/fonts/`: Library's badges, `AlbumCard`; For You's review cards and Trending, `ScorePill`'s `milker`) and mobile's `fonts.rating` (`assets/fonts/Milker.otf`, loaded in `app/_layout.tsx`: Library's badges on Profile and someone's profile, For You's review score and Trending pills); one weight and no `~`, and Unbounded Bold (mobile `fonts.wide`, web `.font-wide`) the shelf's heading only. Web used DM Sans until September
+  loaded face, because iOS can't slant a custom font with `fontStyle`). Clash Display is the wordmark only, Milker (`.font-rating`, self-hosted in `public/fonts/`, Jack's license) web's rating figures only — Library's badges (`AlbumCard`), and For You's review cards and Trending (`ScorePill`'s `milker`), and Unbounded Bold (mobile `fonts.wide`, web `.font-wide`) the shelf's heading only. Web used DM Sans until September
   2026, share card included; don't bring a third face back.
 - **A taste overlap is coloured on the score scale**: `overlapScore(percent)`
   (`shared/src/types.ts`) puts 0% at a 1 (red) and 100% at a 10 (green), and each
