@@ -1516,6 +1516,17 @@ export interface ContactMatch extends UserSearchResult {
 
 /** Which of these numbers (E.164) belong to people on Pressd. Phone only — the
  *  server hashes each one in memory, compares, and keeps nothing. */
+/** Remember that you texted this contact an invite: if one of these numbers
+ *  (E.164) joins Pressd and verifies it, they get a friend request from you.
+ *  Best effort — the text goes out whether or not this lands. */
+export async function inviteContact(phones: string[]): Promise<void> {
+  await apiFetch(`${BASE()}/users/me/contacts/invite`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phones }),
+  }).catch(() => {})
+}
+
 export async function matchContacts(phones: string[]): Promise<ContactMatch[]> {
   const res = await apiFetch(`${BASE()}/users/me/contacts/match`, {
     method: 'POST',

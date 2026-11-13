@@ -858,6 +858,21 @@ class Block(SQLModel, table=True):
     blocked_id: int = Field(foreign_key="pressuser.id", index=True)
     created_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
 
+class ContactInvite(SQLModel, table=True):
+    """A number someone texted a Pressd invite to from their contacts, so that
+    whoever verifies that number later gets a friend request from them
+    (`users.add_phone`, `_claim_contact_invites`). Only the keyed hash is kept
+    (backend/phone.py), the same form a verified number is stored in, and only
+    because the inviter chose to text that person; claimed rows are deleted,
+    and unclaimed ones stop counting after CONTACT_INVITE_TTL_DAYS. A new table,
+    so create_all builds it and the last migration turns RLS on."""
+    __table_args__ = (UniqueConstraint("inviter_id", "phone_hash"),)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    inviter_id: int = Field(foreign_key="pressuser.id", index=True)
+    phone_hash: str = Field(index=True)
+    created_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
+
+
 # One set of genre tags per record, across every copy (backend/genre_sync.py):
 # registered here so every session that can write an Album carries the rule.
 from . import genre_sync  # noqa: E402,F401

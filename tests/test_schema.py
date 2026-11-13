@@ -14,5 +14,5 @@ def test_delete_covers_new_tables():
     import inspect
     from backend.routers.users import delete_own_account
     src = inspect.getsource(delete_own_account)
-    for t in ("tasteoverlap", "tasteuser", "overlapsheet", "overlapevent", "songprediction"):
+    for t in ("tasteoverlap", "tasteuser", "overlapsheet", "overlapevent", "songprediction", "contactinvite"):
         assert f"DELETE FROM {t}" in src

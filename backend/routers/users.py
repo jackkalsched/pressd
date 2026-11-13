@@ -6,7 +6,7 @@ import uuid
 import smtplib
 from email.mime.text import MIMEText
 from binascii import Error as BinasciiError
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
@@ -23,6 +23,7 @@ from ..deps import current_user, optional_user, authorize_view, auth_response, o
 from ..blocks import blocked_ids, is_blocked
 from ..models import (
     Block,
+    ContactInvite,
     PressUser,
     PushToken,
     Invite,
@@ -136,6 +137,7 @@ def update_notification_prefs(
 @router.post("/me/phone")
 def add_phone(
     data: dict,
+    background: BackgroundTasks,
     current: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
@@ -172,8 +174,55 @@ def add_phone(
         # Two accounts verifying the same number at once: the index decides.
         session.rollback()
         raise HTTPException(status_code=409, detail="That number is already on another Pressd account")
+    _claim_contact_invites(session, background, current)
     session.refresh(current)
     return own_user(current)
+
+
+# How long a texted invite waits for its number to join. Long enough for
+# someone to come round to it; short enough that a number which has since
+# changed hands doesn't hand a stranger a request.
+CONTACT_INVITE_TTL_DAYS = 180
+
+
+def _claim_contact_invites(session: Session, background: BackgroundTasks, user: PressUser) -> None:
+    """Everyone who texted this number an invite from their contacts sends the
+    newcomer a friend request now, as if they'd tapped Add the moment the
+    number joined. A request, not a friendship: the person invited still says
+    yes. Someone already a friend or with a request either way is left as is;
+    a block either way, or an invite past its TTL, sends nothing. The claimed
+    rows go, so a number re-verified later asks no one twice."""
+    if not user.phone_hash:
+        return
+    invites = session.exec(select(ContactInvite).where(ContactInvite.phone_hash == user.phone_hash)).all()
+    if not invites:
+        return
+    cutoff = datetime.now(timezone.utc) - timedelta(days=CONTACT_INVITE_TTL_DAYS)
+    now = datetime.now(timezone.utc)
+    sent: list[PressUser] = []
+    for inv in invites:
+        inviter = session.get(PressUser, inv.inviter_id)
+        fresh = inv.created_at is None or inv.created_at >= cutoff
+        if inviter and inviter.id != user.id and fresh and not is_blocked(session, inviter.id, user.id):
+            a, b = min(inviter.id, user.id), max(inviter.id, user.id)
+            if not session.exec(select(Friendship).where(Friendship.user_id_a == a, Friendship.user_id_b == b)).first():
+                session.add(Friendship(user_id_a=a, user_id_b=b, status="pending",
+                                       requested_by=inviter.id, requested_at=now))
+                sent.append(inviter)
+        session.delete(inv)
+    try:
+        session.commit()
+    except IntegrityError:
+        # A request between the two landed meanwhile; it stands. Drop the invites.
+        session.rollback()
+        session.execute(text("DELETE FROM contactinvite WHERE phone_hash = :h"), {"h": user.phone_hash})
+        session.commit()
+        return
+    tokens = tokens_for_user(session, user.id, "friend") if sent else []
+    for inviter in sent:
+        if tokens:
+            background.add_task(send_push, tokens, f"{inviter.name} wants to be friends!",
+                                "They invited you to Pressd. Tap to accept.", {"kind": "friend_request"})
 
 
 @router.delete("/me/phone")
@@ -270,7 +319,7 @@ def match_contacts(
         for i, p in enumerate(phones):
             # E.164 only: a "+" and 8–15 digits. The app normalises; anything
             # else can't equal a stored number, so it's skipped, not an error.
-            if isinstance(p, str) and p.startswith("+") and p[1:].isdigit() and 8 <= len(p) - 1 <= 15:
+            if _e164(p):
                 by_hash.setdefault(phone_hash(p), i)
     except PhoneNotConfigured as e:
         print(f"[contacts] not configured: {e}")
@@ -292,6 +341,46 @@ def match_contacts(
     # then the ones already sent or already friends.
     order = lambda r: (not r["request_received"], r["already_friends"] or r["request_sent"], r["name"].lower())
     return sorted(rows, key=order)
+
+
+def _e164(p) -> bool:
+    """A "+" and 8–15 digits: the only form a stored number can equal."""
+    return isinstance(p, str) and p.startswith("+") and p[1:].isdigit() and 8 <= len(p) - 1 <= 15
+
+
+@router.post("/me/contacts/invite")
+def invite_contact(
+    data: dict,
+    current: PressUser = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """Remember that the caller texted this number a Pressd invite, so that if
+    it joins it gets a friend request from them (`_claim_contact_invites`).
+
+    The one place a number that isn't on Pressd is kept, and only because the
+    caller chose to invite that person: as the keyed hash, never the number.
+    A number already on Pressd isn't stored — the app offers Add for those.
+    Answers `{ok: true}` either way, so this can't be used to learn who's here.
+    """
+    phones = [p for p in (data.get("phones") or [])[:10] if _e164(p)]
+    if not phones:
+        raise HTTPException(status_code=400, detail="phones must hold E.164 numbers")
+    try:
+        hashes = {phone_hash(p) for p in phones}
+    except PhoneNotConfigured as e:
+        print(f"[contacts] not configured: {e}")
+        raise HTTPException(status_code=503, detail="Inviting contacts isn’t available yet")
+    if current.phone_hash:
+        hashes.discard(current.phone_hash)
+    on_pressd = set(session.exec(select(PressUser.phone_hash).where(PressUser.phone_hash.in_(list(hashes)))).all())
+    for h in hashes - on_pressd:
+        # Inviting again restarts the clock.
+        session.execute(text("""
+            INSERT INTO contactinvite (inviter_id, phone_hash, created_at) VALUES (:u, :h, NOW())
+            ON CONFLICT (inviter_id, phone_hash) DO UPDATE SET created_at = NOW()"""),
+            {"u": current.id, "h": h})
+    session.commit()
+    return {"ok": True}
 
 
 @router.get("/search")
@@ -746,6 +835,8 @@ def delete_own_account(
 
     # Blocks either way round.
     run("DELETE FROM block WHERE blocker_id = :u OR blocked_id = :u")
+    # Numbers this account texted invites to (the hashes, never the numbers).
+    run("DELETE FROM contactinvite WHERE inviter_id = :u")
 
     # Bins they made, and everything in them. Pressd's own have no owner.
     run("DELETE FROM binentry WHERE bin_id IN (SELECT id FROM bin WHERE owner_id = :u)")

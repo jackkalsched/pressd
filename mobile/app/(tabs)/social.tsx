@@ -22,12 +22,12 @@ import {
   copyAlbumToLibrary,
   toggleLike,
   LIKE_QUERY_KEYS,
+  inviteContact,
   searchUsers,
   addFriend,
   fetchFriendRequests,
   acceptFriendRequest,
   declineFriendRequest,
-  getInviteLink,
   matchContacts,
   type ContactMatch,
   type FeedItem,
@@ -48,7 +48,7 @@ import {
   type AddressBookEntry,
   type ContactsAccess,
 } from '../../lib/contacts'
-import { avatarColor } from '@pressd/shared/types'
+import { APP_STORE_URL, avatarColor } from '@pressd/shared/types'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 import { scrollToTop, useCompactBar, useTabScrollToTop } from '../../lib/scrollToTop'
@@ -726,7 +726,7 @@ function FindFriends({ visible, onClose, onOpenFriend }: { visible: boolean; onC
  *  iOS permission prompt (NSContactsUsageDescription). Then it shows who's on
  *  Pressd (matched by phone
  *  number on the server, which keeps nothing; lib/contacts.ts) and offers an
- *  invite text to everyone else.
+ *  invite text to everyone else, carrying the App Store link (APP_STORE_URL).
  *
  *  Once connected, the list sits behind a Contacts row rather than filling the
  *  sheet every time it opens — it's opened straight away only on the visit
@@ -763,13 +763,6 @@ function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
     staleTime: 5 * 60_000,
   })
 
-  const { data: invite } = useQuery({
-    queryKey: ['invite-link', user?.id],
-    queryFn: () => getInviteLink(user!.id),
-    enabled: !!user && granted,
-    staleTime: Infinity,
-  })
-
   async function connect() {
     const next = await requestContactsAccess()
     setAccess(next)
@@ -777,8 +770,11 @@ function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
   }
 
   function sendInvite(c: AddressBookEntry) {
-    if (!invite) return
-    const body = `I’m rating albums on Pressd — come compare music taste with me: ${invite.link}`
+    // The App Store listing, not the web invite link: a contact on a phone wants
+    // the app, and the listing opens straight in the App Store.
+    const body = `I’m rating albums on Pressd — come compare music taste with me: ${APP_STORE_URL}`
+    // If they join and verify any of these numbers, they get a request from you.
+    inviteContact(c.numbers)
     // iOS reads "sms:<number>&body=…"; the number as the contact stores it.
     Linking.openURL(`sms:${encodeURIComponent(c.rawNumbers[0] ?? '')}&body=${encodeURIComponent(body)}`).catch(() => {})
   }
@@ -889,7 +885,7 @@ function ContactFriends({ onOpenProfile, onRequest, onAccept }: {
               <Avatar name={item.name} size={36} />
               <Text style={[styles.userName, { flex: 1 }]} numberOfLines={1}>{item.name}</Text>
             </View>
-            <Pressable style={[styles.inviteBtn, { borderColor: tc.green }]} onPress={() => sendInvite(item)} disabled={!invite} accessibilityLabel={`Invite ${item.name}`}>
+            <Pressable style={[styles.inviteBtn, { borderColor: tc.green }]} onPress={() => sendInvite(item)} accessibilityLabel={`Invite ${item.name}`}>
               <Text style={styles.inviteBtnText}>Invite</Text>
             </Pressable>
           </View>

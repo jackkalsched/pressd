@@ -523,3 +523,7 @@ export interface SearchResults {
 }
 
 export type SearchGroup = 'people' | 'albums' | 'artists' | 'songs'
+
+/** Pressd's App Store listing: what a contact invite texts (mobile's Find
+ *  friends), and web's default for "Download on the App Store" (lib/iosApp.ts). */
+export const APP_STORE_URL = 'https://apps.apple.com/us/app/pressd-music-ratings/id6796907083'
