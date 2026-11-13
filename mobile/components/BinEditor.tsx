@@ -64,12 +64,31 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
   const insets = useSafeAreaInsets()
   const queryClient = useQueryClient()
   const slug = bin.slug
-  const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState<string | null>(null)
+  // Writes in flight, by what they write ('title', 'order', `remove:12`…). A
+  // list, not one slot: two can run at once (✕ on two rows, a switch while a
+  // title saves), and the first to land mustn't clear the other's flag.
+  const [inFlight, setInFlight] = useState<string[]>([])
+  const saving = (what: string) => inFlight.includes(what)
+  const writing = inFlight.length > 0
+  // Each write's failure under its own key, so a later write starting or
+  // landing doesn't wipe an earlier one's error.
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const setErrorFor = (what: string, text: string | null) =>
+    setErrors((all) => {
+      if (text == null) {
+        if (!(what in all)) return all
+        const next = { ...all }
+        delete next[what]
+        return next
+      }
+      return { ...all, [what]: text }
+    })
+  const errorLines = Object.values(errors)
+  const error = errorLines.length > 0
   // Notes save on their own; Done waits for them as for everything else.
   const [notesSaving, setNotesSaving] = useState(0)
   const [adding, setAdding] = useState(false)
-  const busy = saving != null || notesSaving > 0
+  const busy = writing || notesSaving > 0
   // How many fields hold focus (one, or none). A field saves as it loses
   // focus, so Done first lets go of the keyboard and closes only once that
   // field has blurred and its save has landed — closing straight away would
@@ -87,17 +106,20 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
   const refresh = () => refreshBin(queryClient, slug)
 
   async function run(what: string, fn: () => Promise<unknown>, fallback: string): Promise<boolean> {
-    setSaving(what)
-    setError(null)
+    setInFlight((l) => [...l, what])
+    setErrorFor(what, null)
     try {
       await fn()
       refresh()
       return true
     } catch (e) {
-      setError(binErrorText(e, fallback))
+      setErrorFor(what, binErrorText(e, fallback))
       return false
     } finally {
-      setSaving(null)
+      setInFlight((l) => {
+        const i = l.indexOf(what)
+        return i < 0 ? l : [...l.slice(0, i), ...l.slice(i + 1)]
+      })
     }
   }
 
@@ -132,7 +154,7 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
 
   // ── The bin's own picture: square, framed in the picker ──
   async function pickCover() {
-    setError(null)
+    setErrorFor('cover', null)
     let perm = await ImagePicker.getMediaLibraryPermissionsAsync()
     if (!perm.granted && perm.canAskAgain) perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!perm.granted) {
@@ -152,7 +174,7 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
     })
     if (result.canceled || !result.assets[0]) return
     const base64 = result.assets[0].base64
-    if (!base64) { setError('Couldn’t read that picture'); return }
+    if (!base64) { setErrorFor('cover', 'Couldn’t read that picture'); return }
     if (await run('cover', () => uploadBinCover(slug, base64), 'Couldn’t set that picture')) success()
   }
 
@@ -169,9 +191,9 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
   const rows = order.map((id) => byId.get(id)).filter((e): e is BinEntry => !!e)
 
   async function move(id: number, step: -1 | 1) {
-    // One move at a time: a second order sent before the first lands would be
-    // built on a list the server no longer has.
-    if (saving != null) return
+    // Only with nothing else in flight: an order sent while another move or a
+    // removal is still landing is built on a list the server no longer has.
+    if (writing) return
     const at = order.indexOf(id)
     const to = at + step
     if (at < 0 || to < 0 || to >= order.length) return
@@ -198,8 +220,8 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          setSaving('delete')
-          setError(null)
+          setInFlight((l) => [...l, 'delete'])
+          setErrorFor('delete', null)
           try {
             await deleteBin(slug)
             // Leave first: the page still watching the bin would ask for it
@@ -210,8 +232,8 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
             queryClient.invalidateQueries({ queryKey: ['bins'] })
             queryClient.invalidateQueries({ queryKey: ['search'] })
           } catch (e) {
-            setError(binErrorText(e, 'Couldn’t delete that bin'))
-            setSaving(null)
+            setErrorFor('delete', binErrorText(e, 'Couldn’t delete that bin'))
+            setInFlight((l) => l.filter((w) => w !== 'delete'))
           }
         },
       },
@@ -222,7 +244,7 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
     if (busy) return
     selection()
     Keyboard.dismiss()
-    setError(null)
+    setErrors({})
     setClosing(true)
   }
 
@@ -259,17 +281,17 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
           <View style={styles.pictureActions}>
             <Pressable
               onPress={pickCover}
-              disabled={saving === 'cover'}
+              disabled={saving('cover')}
               style={({ pressed }) => [styles.outlineBtn, { borderColor: tc.border }, pressed && { opacity: 0.6 }]}
               accessibilityRole="button"
             >
-              {saving === 'cover' ? <VinylSpinner size={14} /> : <ImagePlus size={14} color={tc.green} />}
+              {saving('cover') ? <VinylSpinner size={14} /> : <ImagePlus size={14} color={tc.green} />}
               <Text style={styles.outlineBtnText}>{bin.coverUrl ? 'Change picture' : 'Upload a picture'}</Text>
             </Pressable>
             {bin.coverUrl && (
               <Pressable
                 onPress={() => run('cover', () => deleteBinCover(slug), 'Couldn’t remove that picture')}
-                disabled={saving === 'cover'}
+                disabled={saving('cover')}
                 hitSlop={6}
                 accessibilityRole="button"
               >
@@ -309,14 +331,14 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
         <VisibilitySwitch
           value={bin.visibility}
           onChange={(v) => run('visibility', () => updateBin(slug, { visibility: v }), 'Couldn’t change who can see it')}
-          disabled={saving === 'visibility'}
+          disabled={saving('visibility')}
         />
 
         <View style={styles.switchRow}>
           <Text style={styles.switchLabel}>Number the records</Text>
           <Switch
             value={bin.ranked}
-            disabled={saving === 'ranked'}
+            disabled={saving('ranked')}
             onValueChange={(v) => {
               selection()
               void run('ranked', () => updateBin(slug, { ranked: v }), 'Couldn’t change that')
@@ -325,7 +347,9 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
           />
         </View>
 
-        {error && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}
+        {errorLines.map((text, i) => (
+          <Text key={i} style={styles.error} accessibilityRole="alert">{text}</Text>
+        ))}
 
         {/* ── Its records ── */}
         <View style={[styles.recordsHead, { borderTopColor: tc.border }]}>
@@ -371,9 +395,9 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
                 <View style={styles.rowTools}>
                   <Pressable
                     onPress={() => move(e.id, -1)}
-                    disabled={i === 0 || saving != null}
+                    disabled={i === 0 || writing}
                     hitSlop={4}
-                    style={[styles.tool, (i === 0 || saving != null) && styles.toolOff]}
+                    style={[styles.tool, (i === 0 || writing) && styles.toolOff]}
                     accessibilityRole="button"
                     accessibilityLabel={`Move ${e.albumName} up`}
                   >
@@ -381,9 +405,9 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
                   </Pressable>
                   <Pressable
                     onPress={() => move(e.id, 1)}
-                    disabled={i === rows.length - 1 || saving != null}
+                    disabled={i === rows.length - 1 || writing}
                     hitSlop={4}
-                    style={[styles.tool, (i === rows.length - 1 || saving != null) && styles.toolOff]}
+                    style={[styles.tool, (i === rows.length - 1 || writing) && styles.toolOff]}
                     accessibilityRole="button"
                     accessibilityLabel={`Move ${e.albumName} down`}
                   >
@@ -391,13 +415,14 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
                   </Pressable>
                   <Pressable
                     onPress={() => remove(e)}
-                    disabled={saving === `remove:${e.id}`}
+                    // Not while an order is landing: that order still lists this row.
+                    disabled={saving(`remove:${e.id}`) || saving('order')}
                     hitSlop={4}
                     style={styles.tool}
                     accessibilityRole="button"
                     accessibilityLabel={`Take ${e.albumName} out of the bin`}
                   >
-                    {saving === `remove:${e.id}` ? <VinylSpinner size={14} /> : <X size={17} color={tc.inkMuted} />}
+                    {saving(`remove:${e.id}`) ? <VinylSpinner size={14} /> : <X size={17} color={tc.inkMuted} />}
                   </Pressable>
                 </View>
               </View>
@@ -408,7 +433,7 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
                 onSaving={(on) => setNotesSaving((n) => n + (on ? 1 : -1))}
                 onFocus={focus.onFocus}
                 onBlurred={blurred}
-                onFailed={setError}
+                onFailed={(text) => setErrorFor(`note:${e.id}`, text)}
               />
             </View>
           ))
@@ -416,11 +441,11 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
 
         <Pressable
           onPress={confirmDelete}
-          disabled={saving === 'delete'}
+          disabled={saving('delete')}
           style={({ pressed }) => [styles.deleteBtn, { borderTopColor: tc.border }, pressed && { opacity: 0.6 }]}
           accessibilityRole="button"
         >
-          {saving === 'delete' ? <VinylSpinner size={14} /> : <Trash2 size={15} color={tc.danger} />}
+          {saving('delete') ? <VinylSpinner size={14} /> : <Trash2 size={15} color={tc.danger} />}
           <Text style={styles.deleteText}>Delete bin</Text>
         </Pressable>
       </ScrollView>
@@ -438,8 +463,9 @@ function NoteField({ slug, entry, onSaved, onSaving, onFocus, onBlurred, onFaile
   onSaving: (on: boolean) => void
   onFocus: () => void
   onBlurred: () => void
-  /** Tells the editor too, so Done stays open on a note that didn't save. */
-  onFailed: (text: string) => void
+  /** Tells the editor too, so Done stays open on a note that didn't save;
+   *  null as a new save starts. */
+  onFailed: (text: string | null) => void
 }) {
   const tc = useColors()
   const stored = entry.note ?? ''
@@ -457,6 +483,7 @@ function NoteField({ slug, entry, onSaved, onSaving, onFocus, onBlurred, onFaile
     setBusy(true)
     onSaving(true)
     setError(null)
+    onFailed(null)
     try {
       await updateBinEntryNote(slug, entry.id, v)
       onSaved()
