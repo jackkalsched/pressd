@@ -915,7 +915,7 @@ notes under rows too), and adds albums from your library or a catalog search (Ad
 copy and the community view, not on FriendCompare), never inside the rating flow. Someone else's
 public bin reads like a curated one — your progress, Sort by, search, Rate now / Add — with Report in
 a "…" menu. For You's BINS row is the `for_you` scope. **Search**: `/search/all` gains a **Bins**
-group (`bins`, title or description, the same word rules as `binCardMatches`) of Pressd's bins,
+group (`bins`: the typed phrase matched case-insensitively in title or description — one `ILIKE`, with no accent or punctuation folding and no per-word matching, a known shortfall of spec §8a's `binCardMatches` rules) of Pressd's bins,
 published community bins and your own, private ones included, never anyone else's private bin; ranked
 yours, then Pressd's, then popularity. `SearchBin` carries `ownerless` (a former member), `coverUrl`
 and `covers`, drawn as the uploaded cover first, else the mosaic; a row says "N albums · by {name}".
