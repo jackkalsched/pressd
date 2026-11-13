@@ -373,7 +373,8 @@ export default function AlbumDetail() {
             {own && rated && album.othersRaterCount > 0 && (
               <Link to={`/album/${album.id}/community?compare=1`} className={PILL}>Compare</Link>
             )}
-            {rated && (
+            {/* Your own rating only — the card is yours to post (Jack, November 2026). */}
+            {own && rated && (
               <button onClick={() => setShowShareCard(true)} className={PILL}>
                 <Share2 size={13} /> Share card
               </button>

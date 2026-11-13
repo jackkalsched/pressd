@@ -554,9 +554,9 @@ export default function AlbumDetail() {
             <Text style={styles.compareBtnText}>Compare</Text>
           </Pressable>
         )}
-        {/* Any finished album can be shared, not just your own — a friend's
-            rating is worth passing on too, and the card names whose it is. */}
-        {album.status === 'rated' && album.score != null && (
+        {/* Only your own finished album can be shared: the card is your rating
+            to post, never someone else's (Jack, November 2026). */}
+        {isMine && album.status === 'rated' && album.score != null && (
           <Pressable
             style={styles.shareBtn}
             onPress={() => setSharing(true)}
