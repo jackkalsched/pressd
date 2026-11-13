@@ -162,10 +162,10 @@ def test_routes_exist():
 
 
 def test_entry_from_release_keeps_the_resolve_shape():
-    from backend.routers.bins import entry_fields
+    from backend.routers.bins import clean_release, entry_fields
     release = {"album_name": "Blonde", "artist": "Frank Ocean", "year": 2016, "cover_url": "c",
                "deezer_id": "123", "genre": "R&B", "tracks": [{"title": "Nikes"}] * 17}
-    f = entry_fields(release)
+    f = entry_fields(clean_release(release))
     assert f["artist"] == "Frank Ocean" and f["album_name"] == "Blonde" and f["year"] == 2016
     assert f["deezer_id"] == 123 and f["cover_url"] == "c"
     assert f["subject_key"] == subject_key_album("Frank Ocean", "Blonde")
@@ -173,7 +173,7 @@ def test_entry_from_release_keeps_the_resolve_shape():
     assert copy_data(NS(tracklist_json=f["tracklist_json"], artist=f["artist"], album_name=f["album_name"]),
                      "listening")["tracks"][0]["title"] == "Nikes"
     with pytest.raises(ValueError):
-        entry_fields({"album_name": "", "artist": "x", "tracks": []})
+        clean_release({"album_name": "", "artist": "x", "tracks": []})
 
 
 def test_release_refusal():
@@ -206,9 +206,16 @@ def test_a_malformed_release_is_refused_before_it_is_stored():
     from backend.routers.bins import MAX_RELEASE_TRACKS, clean_release, entry_fields
     base = {"album_name": "N", "artist": "A"}
     for tracks in (["a", "b", "c"], [{"title": ""}], [{"title": 5}], [{"title": "x", "duration_ms": "x"}],
-                   [{"title": "x", "track_number": [1]}], [{"title": "x"}] * (MAX_RELEASE_TRACKS + 1)):
+                   [{"title": "x", "track_number": [1]}], [{"title": "x"}] * (MAX_RELEASE_TRACKS + 1),
+                   # Past Postgres INTEGER, which bintrack's columns are.
+                   [{"title": "x", "duration_ms": 10**12}], [{"title": "x", "track_number": -1}],
+                   # JSON's Infinity and NaN, which Python's json accepts.
+                   [{"title": "x", "duration_ms": float("inf")}], [{"title": "x", "track_number": float("nan")}]):
         with pytest.raises(ValueError):
-            entry_fields({**base, "tracks": tracks})
+            clean_release({**base, "tracks": tracks})
+    for bad in ({"year": 10**9}, {"deezer_id": 10**12}, {"deezer_id": 0}, {"total_tracks": float("inf")}):
+        with pytest.raises(ValueError):
+            clean_release({**base, **bad, "tracks": []})
     with pytest.raises(ValueError):
         clean_release("not a dict")
     r = clean_release({**base, "junk": {"x": 1}, "extra_artists": ["B", 3],
@@ -219,5 +226,5 @@ def test_a_malformed_release_is_refused_before_it_is_stored():
     assert "junk" not in r and r["extra_artists"] == ["B"]
     # What is stored is what tracklink.bin_songs reads without a surprise.
     from backend.tracklink import bin_songs
-    songs = bin_songs(json.loads(entry_fields({**base, "tracks": r["tracks"]})["tracklist_json"]), "A")
+    songs = bin_songs(json.loads(entry_fields(r)["tracklist_json"]), "A")
     assert songs[0].track_number == 2 and songs[0].duration_ms == 1500

@@ -518,15 +518,27 @@ def release_refusal(release: dict, today: date) -> str | None:
 MAX_RELEASE_TRACKS = 200
 
 
-def _int_or_none(v, what: str) -> int | None:
+# Postgres INTEGER: track numbers, durations and Deezer ids land in int4
+# columns (bintrack, binentry, album, song), and one value past it fails the
+# whole insert it rides in.
+INT4_MAX = 2_147_483_647
+
+
+def _int_or_none(v, what: str, lo: int = 0, hi: int = INT4_MAX) -> int | None:
+    """A whole number in [lo, hi], or None when absent. Anything else — a
+    string that isn't a number, a list, NaN, Infinity, a value out of range —
+    is a ValueError, which the route answers with a 422."""
     if v is None or v == "":
         return None
     if isinstance(v, (dict, list)):
         raise ValueError(f"{what} must be a number")
     try:
-        return int(v)
-    except (TypeError, ValueError):
+        n = int(v)
+    except (TypeError, ValueError, OverflowError):
         raise ValueError(f"{what} must be a number")
+    if not lo <= n <= hi:
+        raise ValueError(f"{what} is out of range")
+    return n
 
 
 def _str_or_none(v) -> str | None:
@@ -568,21 +580,21 @@ def clean_release(release: dict) -> dict:
         "album_name": name,
         "artist": artist,
         "extra_artists": extra,
-        "year": _int_or_none(release.get("year"), "year"),
+        "year": _int_or_none(release.get("year"), "year", 1000, 3000),
         "release_date": _str_or_none(release.get("release_date")),
         "cover_url": _str_or_none(release.get("cover_url") or release.get("art_url")),
-        "total_tracks": _int_or_none(release.get("total_tracks"), "total_tracks"),
+        "total_tracks": _int_or_none(release.get("total_tracks"), "total_tracks", 0, 10_000),
         "genre": _str_or_none(release.get("genre")),
-        "deezer_id": _int_or_none(release.get("deezer_id"), "deezer_id"),
+        "deezer_id": _int_or_none(release.get("deezer_id"), "deezer_id", 1),
         "tracks": tracks,
     }
 
 
-def entry_fields(release: dict) -> dict:
-    """A BinEntry's columns from a resolved release (/search/resolve's shape,
-    as import_bin stores a curated entry's), the cleaned resolve kept whole as
-    the tracklist so the bin's Add makes the copy from it with no outbound call."""
-    r = clean_release(release)
+def entry_fields(r: dict) -> dict:
+    """A BinEntry's columns from a release clean_release has already checked
+    (/search/resolve's shape, as import_bin stores a curated entry's), kept
+    whole as the tracklist so the bin's Add makes the copy from it with no
+    outbound call."""
     return {
         "artist": r["artist"],
         "album_name": r["album_name"],
