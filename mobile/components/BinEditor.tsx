@@ -97,7 +97,10 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
   const [closing, setClosing] = useState(false)
   const focus = { onFocus: () => setFocused((n) => n + 1) }
   const blurred = () => setFocused((n) => Math.max(0, n - 1))
-  // A save that fails on the way out keeps the editor open, its error showing.
+  // A save that fails on the way out keeps the editor open, its error showing,
+  // and forgets the Done: otherwise the next write to land would clear the
+  // error and close the editor unasked.
+  if (closing && error) setClosing(false)
   const leaving = closing && !error
   useEffect(() => {
     if (leaving && focused === 0 && !busy) onDone()
