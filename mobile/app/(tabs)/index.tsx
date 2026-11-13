@@ -930,8 +930,8 @@ const styles = StyleSheet.create({
   trendRowPressed: { opacity: 0.5 },
   trendCount: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted, marginTop: 3 },
   rank: { fontFamily: fonts.display, fontSize: 16, color: colors.inkMuted, width: 20, textAlign: 'center' },
-  scorePill: { borderRadius: radii.sm, paddingHorizontal: 8, paddingVertical: 4, minWidth: 46, alignItems: 'center' },
-  scorePillText: { fontFamily: fonts.display, fontSize: 14 },
+  scorePill: { borderRadius: radii.sm, paddingHorizontal: 10, paddingVertical: 5, minWidth: 54, alignItems: 'center' },
+  scorePillText: { fontFamily: fonts.display, fontSize: 17 },
 
   // Review cell — reviewer leads (bigger), album secondary, smaller quote
   review: { paddingVertical: spacing.lg },
