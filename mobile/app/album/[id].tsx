@@ -479,8 +479,12 @@ export default function AlbumDetail() {
     queryClient.invalidateQueries({ queryKey: ['community-by-name', name, artist] })
   }
 
-  // Both of you finished this album → the side-by-side comparison view.
-  if (owner && myAlbum && album.status === 'rated' && myAlbum.status === 'rated' &&
+  // Both of you finished this album → the side-by-side comparison, when asked
+  // for (`compare`). Opening someone's rating shows their rating first, with
+  // Compare and Your rating to switch, as web's album page does.
+  const canCompareFriend = !!(owner && myAlbum && album.status === 'rated' && myAlbum.status === 'rated' &&
+    album.score != null && myAlbum.score != null)
+  if (compare === '1' && owner && myAlbum && album.status === 'rated' && myAlbum.status === 'rated' &&
       album.score != null && myAlbum.score != null) {
     return (
       <FriendCompare
@@ -537,7 +541,16 @@ export default function AlbumDetail() {
             where it reads as a title rather than a control. */}
         <View style={styles.topBarRight}>
         {canCompare && (
-          <Pressable style={styles.compareBtn} onPress={openCompare} hitSlop={8}>
+          // On someone else's rating of a record you've rated too, Compare means
+          // you against them (FriendCompare), as web's album page; on your own
+          // copy, you against the Pressd average.
+          <Pressable
+            style={styles.compareBtn}
+            onPress={!isMine && canCompareFriend
+              ? () => router.push({ pathname: '/album/[id]', params: { id: String(albumId), compare: '1' } })
+              : openCompare}
+            hitSlop={8}
+          >
             <Text style={styles.compareBtnText}>Compare</Text>
           </Pressable>
         )}
@@ -758,9 +771,28 @@ export default function AlbumDetail() {
             <Text style={styles.ctaText}>{cta}</Text>
           </Pressable>
         )}
+        {/* Someone else's rating of a record you've rated too: compare the two,
+            or go to yours. */}
+        {!isMine && canCompareFriend && (
+          <View style={styles.ctaRow}>
+            <Pressable
+              style={({ pressed }) => [styles.cta, styles.ctaInRow, pressed && { backgroundColor: colors.greenPressed }]}
+              onPress={() => router.push({ pathname: '/album/[id]', params: { id: String(albumId), compare: '1' } })}
+            >
+              <Text style={styles.ctaText} numberOfLines={1}>Compare with {owner?.name}</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.cta, styles.ctaInRow, pressed && { backgroundColor: colors.greenPressed }]}
+              onPress={() => router.push({ pathname: '/album/[id]', params: { id: String(album.viewerCopy!.id) } })}
+            >
+              <Pencil size={17} color="#fff" />
+              <Text style={styles.ctaText} numberOfLines={1}>Your rating</Text>
+            </Pressable>
+          </View>
+        )}
         {/* Someone else's copy of a record you hold: on to your copy, never a
             second one of the same record. */}
-        {!isMine && album.viewerCopy && (
+        {!isMine && album.viewerCopy && !canCompareFriend && (
           <Pressable
             style={({ pressed }) => [styles.cta, pressed && { backgroundColor: colors.greenPressed }]}
             onPress={() =>
