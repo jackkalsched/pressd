@@ -14,7 +14,7 @@ export default function Bins() {
   const [query, setQuery] = useState('')
   const { data, isLoading, isError } = useQuery({
     queryKey: ['bins', activeUser?.id],
-    queryFn: fetchBins,
+    queryFn: () => fetchBins(),
     enabled: !!activeUser,
   })
 
@@ -38,7 +38,7 @@ export default function Bins() {
         {!data.some((b) => binCardMatches(b, query)) && (
           <p className="mt-10 text-[14px] text-(--c-57534e)">No bins match “{query.trim()}”.</p>
         )}
-        {binSections(data.filter((b) => binCardMatches(b, query))).map((section) => (
+        {binSections(data.filter((b) => binCardMatches(b, query)), activeUser?.id).map((section) => (
           <section key={section.key} className="mt-9">
             <h2 className="m-0 text-[11px] font-bold uppercase tracking-[0.16em] text-(--c-a8998a)">{section.title}</h2>
             <div className="mt-4 grid gap-6 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">

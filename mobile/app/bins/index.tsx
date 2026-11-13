@@ -24,7 +24,7 @@ export default function Bins() {
   const [query, setQuery] = useState('')
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['bins', user?.id],
-    queryFn: fetchBins,
+    queryFn: () => fetchBins(),
     enabled: !!user,
   })
 
@@ -53,7 +53,7 @@ export default function Bins() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
-          {binSections(data.filter((b) => binCardMatches(b, query))).map((section) => (
+          {binSections(data.filter((b) => binCardMatches(b, query)), user?.id).map((section) => (
             <View key={section.key} style={styles.section}>
               <Text style={styles.sectionLabel}>{section.title.toUpperCase()}</Text>
               {section.bins.map((b) => (

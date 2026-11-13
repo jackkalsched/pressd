@@ -82,13 +82,19 @@ export function binEntryMatches(e: BinEntry, query: string): boolean {
   return matches([e.songTitle, e.albumName, e.artist, e.year != null ? String(e.year) : null, e.genre], query)
 }
 
-/** The Bins page's sections, in order, empty ones left out: Pressd's own bins
- *  (`kind` curated) under "Pressd Official", then everyone else's. Once for both
- *  platforms, so the headings and their order can't drift. */
-export function binSections(bins: BinCard[]): { key: string; title: string; bins: BinCard[] }[] {
+/** The Bins page's sections, in order, empty ones left out: the caller's own
+ *  bins (a user bin whose owner is `me`), then Pressd's (`kind` curated) under
+ *  "Pressd Official", then everyone else's. Once for both platforms, so the
+ *  headings and their order can't drift. */
+export function binSections(
+  bins: BinCard[],
+  me: number | null | undefined,
+): { key: string; title: string; bins: BinCard[] }[] {
+  const mine = (b: BinCard) => b.kind !== 'curated' && me != null && b.owner?.id === me
   return [
+    { key: 'mine', title: 'Your bins', bins: bins.filter(mine) },
     { key: 'official', title: 'Pressd Official', bins: bins.filter((b) => b.kind === 'curated') },
-    { key: 'community', title: 'From the community', bins: bins.filter((b) => b.kind !== 'curated') },
+    { key: 'community', title: 'From the community', bins: bins.filter((b) => b.kind !== 'curated' && !mine(b)) },
   ].filter((s) => s.bins.length > 0)
 }
 

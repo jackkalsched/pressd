@@ -138,7 +138,7 @@ export default function ForYou() {
   }
   const { data: bins = [] } = useQuery({
     queryKey: ['bins', userId],
-    queryFn: fetchBins,
+    queryFn: () => fetchBins(),
     enabled: userId > 0,
   })
 

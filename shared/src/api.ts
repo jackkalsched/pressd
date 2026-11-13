@@ -713,6 +713,13 @@ export interface BinCard {
   sourceUrl: string | null
   sourceYear: number | null
   entryCount: number
+  visibility: 'private' | 'published'
+  /** The maker of a user bin; null for Pressd's, and for a bin whose maker left. */
+  owner: { id: number; name: string; avatarUrl: string | null } | null
+  /** The owner's own picture for the bin; null shows the 2×2 of `covers`. */
+  coverUrl: string | null
+  /** The caller owns it, so may edit it. Decided by the server. */
+  canEdit: boolean
   /** The first four entries' covers, for a 2×2. */
   covers: string[]
   progress: BinProgress
@@ -741,6 +748,8 @@ export interface BinEntry {
   predictedScore: number | null
   /** A sentence about the record (or song), Pressd's own (worker/bin_blurbs.py). */
   blurb: string | null
+  /** A user bin's owner's note; `blurb` is null there, as `note` is on Pressd's. */
+  note: string | null
 }
 
 export interface BinDetail extends BinCard {
@@ -761,13 +770,25 @@ function transformBinCard(d: Record<string, unknown>): BinCard {
     sourceUrl: (d.source_url as string | null) ?? null,
     sourceYear: (d.source_year as number | null) ?? null,
     entryCount: (d.entry_count as number) ?? 0,
+    visibility: (d.visibility as BinCard['visibility']) ?? 'published',
+    owner: d.owner
+      ? {
+          id: (d.owner as Record<string, unknown>).id as number,
+          name: (d.owner as Record<string, unknown>).name as string,
+          avatarUrl: ((d.owner as Record<string, unknown>).avatar_url as string | null) ?? null,
+        }
+      : null,
+    coverUrl: (d.cover_url as string | null) ?? null,
+    canEdit: !!d.can_edit,
     covers: (d.covers as string[] | undefined) ?? [],
     progress: { rated: p.rated ?? 0, listening: p.listening ?? 0, toListen: p.to_listen ?? 0, total: p.total ?? 0 },
   }
 }
 
-export async function fetchBins(): Promise<BinCard[]> {
-  const res = await apiFetch(`${BASE()}/bins`)
+export type BinScope = 'curated' | 'mine' | 'community' | 'for_you'
+
+export async function fetchBins(scope?: BinScope): Promise<BinCard[]> {
+  const res = await apiFetch(`${BASE()}/bins${scope ? `?scope=${scope}` : ''}`)
   if (!res.ok) throw new Error('Failed to load bins')
   return ((await res.json()) as Record<string, unknown>[]).map(transformBinCard)
 }
@@ -780,26 +801,111 @@ export async function fetchBin(slug: string): Promise<BinDetail> {
     ...transformBinCard(d),
     description: (d.description as string | null) ?? null,
     sourcePublished: (d.source_published as string | null) ?? null,
-    entries: ((d.entries ?? []) as Record<string, unknown>[]).map((e) => ({
-      id: e.id as number,
-      position: e.position as number,
-      rank: (e.rank as number | null) ?? null,
-      artist: e.artist as string,
-      albumName: e.album_name as string,
-      songTitle: (e.song_title as string | null) ?? null,
-      trackId: (e.track_id as number | null) ?? null,
-      year: (e.year as number | null) ?? null,
-      genre: (e.genre as string | null) ?? null,
-      coverUrl: (e.cover_url as string | null) ?? null,
-      deezerId: (e.deezer_id as number | null) ?? null,
-      addable: !!e.addable,
-      mine: (e.mine as BinEntry['mine']) ?? null,
-      pressdAvg: (e.pressd_avg as number | null) ?? null,
-      pressdRaters: (e.pressd_raters as number) ?? 0,
-      predictedScore: (e.predicted_score as number | null) ?? null,
-      blurb: (e.blurb as string | null) ?? null,
-    })),
+    entries: ((d.entries ?? []) as Record<string, unknown>[]).map(transformBinEntry),
   }
+}
+
+function transformBinEntry(e: Record<string, unknown>): BinEntry {
+  return {
+    id: e.id as number,
+    position: e.position as number,
+    rank: (e.rank as number | null) ?? null,
+    artist: e.artist as string,
+    albumName: e.album_name as string,
+    songTitle: (e.song_title as string | null) ?? null,
+    trackId: (e.track_id as number | null) ?? null,
+    year: (e.year as number | null) ?? null,
+    genre: (e.genre as string | null) ?? null,
+    coverUrl: (e.cover_url as string | null) ?? null,
+    deezerId: (e.deezer_id as number | null) ?? null,
+    addable: !!e.addable,
+    mine: (e.mine as BinEntry['mine']) ?? null,
+    pressdAvg: (e.pressd_avg as number | null) ?? null,
+    pressdRaters: (e.pressd_raters as number) ?? 0,
+    predictedScore: (e.predicted_score as number | null) ?? null,
+    blurb: (e.blurb as string | null) ?? null,
+    note: (e.note as string | null) ?? null,
+  }
+}
+
+/** A refused request throws the server's `detail` as its message ("unreleased",
+ *  "single", "That album is already in this bin"…), so the UI can map it to
+ *  copy; `fallback` only when the body has none. */
+async function binRequest(path: string, method: string, body: unknown, fallback: string): Promise<any> {
+  const res = await apiFetch(`${BASE()}/bins${path}`, {
+    method,
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    const detail = (err as { detail?: unknown }).detail
+    throw new Error(typeof detail === 'string' ? detail : fallback)
+  }
+  return res.json()
+}
+
+const binPath = (slug: string) => `/${encodeURIComponent(slug)}`
+
+export interface BinFields {
+  title?: string
+  description?: string
+  ranked?: boolean
+  visibility?: 'private' | 'published'
+}
+
+/** Refused with the server's detail at the 25-bin cap (409). */
+export async function createBin(body: BinFields & { title: string }): Promise<BinCard> {
+  return transformBinCard(await binRequest('', 'POST', body, 'Could not create that bin'))
+}
+
+export async function updateBin(slug: string, body: BinFields): Promise<BinCard> {
+  return transformBinCard(await binRequest(binPath(slug), 'PATCH', body, 'Could not save that bin'))
+}
+
+export async function deleteBin(slug: string): Promise<void> {
+  await binRequest(binPath(slug), 'DELETE', undefined, 'Could not delete that bin')
+}
+
+/** Put a record in your bin: one of your copies by `albumId`, or a record
+ *  resolved from the catalogs. Refused (detail as the message): "unreleased",
+ *  "single", already in the bin, or a full bin. */
+export async function addToBin(
+  slug: string,
+  source: { albumId: number } | { release: Record<string, unknown> },
+): Promise<BinEntry> {
+  const body = 'albumId' in source ? { album_id: source.albumId } : { release: source.release }
+  return transformBinEntry(await binRequest(`${binPath(slug)}/entries`, 'POST', body, 'Could not add that record'))
+}
+
+/** Your note on a record; empty clears it. */
+export async function updateBinEntryNote(slug: string, entryId: number, note: string): Promise<BinEntry> {
+  return transformBinEntry(
+    await binRequest(`${binPath(slug)}/entries/${entryId}`, 'PATCH', { note }, 'Could not save that note'),
+  )
+}
+
+export async function removeBinEntry(slug: string, entryId: number): Promise<void> {
+  await binRequest(`${binPath(slug)}/entries/${entryId}`, 'DELETE', undefined, 'Could not remove that record')
+}
+
+/** The whole new order; refused (400) when it isn't every entry once. */
+export async function reorderBin(slug: string, entryIds: number[]): Promise<void> {
+  await binRequest(`${binPath(slug)}/order`, 'PUT', { entry_ids: entryIds }, 'Could not reorder that bin')
+}
+
+/** Base64 JSON, as a profile banner is; each platform makes the base64. */
+export async function uploadBinCover(slug: string, base64: string): Promise<{ coverUrl: string }> {
+  const d = await binRequest(`${binPath(slug)}/cover`, 'POST', { data: base64 }, 'Could not upload that picture')
+  return { coverUrl: d.cover_url as string }
+}
+
+export async function deleteBinCover(slug: string): Promise<void> {
+  await binRequest(`${binPath(slug)}/cover`, 'DELETE', undefined, 'Could not remove that picture')
+}
+
+export async function reportBin(slug: string, reason?: string): Promise<void> {
+  await binRequest(`${binPath(slug)}/report`, 'POST', reason ? { reason } : {}, 'Could not send that report')
 }
 
 /** Rate now (`listening`) or Add to To Listen (`to_listen`) for one entry.
@@ -814,7 +920,10 @@ export async function addBinEntry(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status }),
   })
-  if (!res.ok) throw new Error('Could not add that record')
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? 'Could not add that record')
+  }
   const d = await res.json()
   return { albumId: d.album_id, status: d.status, alreadyExisted: !!d.already_existed }
 }
