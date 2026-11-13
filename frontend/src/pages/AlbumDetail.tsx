@@ -388,9 +388,10 @@ export default function AlbumDetail() {
                 <Star size={12} fill={RECOMMEND} strokeWidth={0} /> Recommend
               </button>
             )}
-            {/* A bin takes records that are out (backend/routers/bins.py
-                refuses the rest), through your copy when you hold one. */}
-            {!isUnreleased(album.releaseDate) && (
+            {/* A bin takes albums that are out and aren't singles
+                (backend/routers/bins.py refuses the rest), through your copy
+                when you hold one — iPhone's `canBin`. */}
+            {!isUnreleased(album.releaseDate) && album.songs.length > 2 && (
               <AddToBinMenu
                 ownAlbumId={own ? album.id : (yourCopy?.id ?? null)}
                 albumName={album.albumName}

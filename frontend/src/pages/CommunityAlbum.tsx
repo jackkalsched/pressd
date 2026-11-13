@@ -244,7 +244,8 @@ export default function CommunityAlbum() {
                 {comparing ? 'Average rating' : 'Compare'}
               </button>
             )}
-            {!outDate && (
+            {/* Out and not a single, as iPhone's community view (`canBin`). */}
+            {!outDate && shown.tracks.length > 2 && (
               <AddToBinMenu ownAlbumId={shown.your_album_id} albumName={shown.album_name} artist={shown.artist} />
             )}
             {inLibrary && notRated && (
