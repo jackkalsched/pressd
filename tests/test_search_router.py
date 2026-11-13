@@ -28,12 +28,28 @@ def test_effective_limit_defaults():
     assert effective_limit(None, 999) == FULL
 
 
-def test_bin_search_sql_never_admits_others_private():
+def _bin_sql():
     from backend.routers.search_all import BIN_SEARCH_SQL
-    sql = str(BIN_SEARCH_SQL)
-    assert "b.owner_id = :me" in sql
-    assert "b.visibility = 'published'" in sql
-    assert "b.hidden_at IS NULL" in sql
-    assert "binreport" in sql and "FROM block" in sql
-    # every non-own, non-curated alternative sits inside the published branch
-    assert sql.index("b.visibility = 'published'") > sql.index("b.kind = 'curated'")
+    return " ".join(str(BIN_SEARCH_SQL).split())
+
+
+def test_bin_search_sql_never_admits_others_private():
+    sql = _bin_sql()
+    where, order = sql.split(" ORDER BY ")
+    # Exactly three alternatives; only own and curated lack a visibility check.
+    alts = where.split("AND ( ", 1)[1]
+    own, curated, third = alts.split(" OR ", 2)
+    assert own == "b.owner_id = :me"
+    assert curated == "b.kind = 'curated'"
+    for needle in ("b.visibility = 'published'", "b.hidden_at IS NULL", "FROM block k", "FROM binreport r"):
+        assert needle in third
+        assert needle not in own + curated
+        assert where.count(needle) == 1
+
+
+def test_bin_search_order_is_own_then_curated_then_popularity():
+    order = _bin_sql().split(" ORDER BY ")[1]
+    keys = [order.index(k) for k in (
+        "COALESCE(b.owner_id = :me, FALSE) DESC", "(b.kind = 'curated') DESC", "FROM binview", "b.updated_at DESC")]
+    assert keys == sorted(keys) and keys[0] == 0
+    assert "NULLS LAST" not in order

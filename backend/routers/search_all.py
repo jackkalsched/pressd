@@ -16,12 +16,11 @@ Singles are included: the library hides them, search shouldn't.
 does Pressd already have, so the client can open the Pressd record instead of
 offering to import it.
 """
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
-from datetime import datetime, timedelta, timezone
-
 from sqlalchemy import func, or_, text
 from sqlmodel import Session, select
 
@@ -71,7 +70,7 @@ WHERE (b.title ILIKE :p ESCAPE '\\' OR COALESCE(b.description, '') ILIKE :p ESCA
     )
   )
 ORDER BY
-  (b.owner_id = :me) DESC NULLS LAST,
+  COALESCE(b.owner_id = :me, FALSE) DESC,
   (b.kind = 'curated') DESC,
   (SELECT COUNT(*) FROM binview v WHERE v.bin_id = b.id AND v.viewed_at >= :since
      AND (b.owner_id IS NULL OR v.user_id != b.owner_id)) DESC,
