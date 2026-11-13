@@ -6,6 +6,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
+from backend.trackkeys import subject_key_album
 from backend.bins import (
     best_copies, copy_data, parse_list_csv, parse_list_meta, pick_release, pick_song_release, progress, song_states,
 )
@@ -117,3 +118,85 @@ def test_song_states_scores_and_progress():
     assert mine1 == {"mine": {"id": 10, "status": "rated", "score": 9.0}, "pressd_avg": 8.0, "pressd_raters": 2, "track_id": 7}
     assert mine3["mine"] == {"id": 12, "status": "to_listen", "score": None}
     assert mine4["mine"] is None
+
+
+# ── The router's pure parts (backend/routers/bins.py) ─────────────────────────
+
+def _bin(**kw):
+    base = dict(slug="u-abc", title="T", kind="user", item_type="album", ranked=True, source_name=None,
+                source_url=None, source_published=None, entry_count=0, visibility="private",
+                owner_id=5, cover_url=None)
+    return NS(**{**base, **kw})
+
+
+def test_card_marks_ownership():
+    from backend.routers.bins import _card
+    owner = NS(id=5, name="jack", avatar_url=None, bio=None, email="secret@x")
+    mine = _card(_bin(), [], [], 5, owner=owner)
+    assert mine["can_edit"] is True
+    assert mine["owner"] == {"id": 5, "name": "jack", "avatar_url": None, "bio": None}
+    assert _card(_bin(), [], [], 6, owner=owner)["can_edit"] is False
+    gone = _card(_bin(owner_id=None, visibility="published"), [], [], 6)
+    assert gone["owner"] is None and gone["can_edit"] is False
+    curated = _card(_bin(kind="curated", owner_id=None, visibility="published"), [], [], 5)
+    assert curated["can_edit"] is False and curated["owner"] is None
+    assert {"kind", "visibility", "cover_url"} <= set(mine)
+
+
+def test_reorder_rejects_stale_lists():
+    from fastapi import HTTPException
+    from backend.routers.bins import checked_order
+    assert checked_order([1, 2, 3], [3, 1, 2]) == [3, 1, 2]
+    for bad in ([1, 2], [1, 2, 3, 4], [1, 1, 2], []):
+        with pytest.raises(HTTPException) as e:
+            checked_order([1, 2, 3], bad)
+        assert e.value.status_code == 400
+
+
+def test_routes_exist():
+    import inspect
+    from backend.routers.bins import list_bins, router
+    paths = {r.path for r in router.routes}
+    assert {"/bins/{slug}/entries", "/bins/{slug}/order", "/bins/{slug}/cover", "/bins/{slug}/report"} <= paths
+    assert "scope" in inspect.signature(list_bins).parameters
+
+
+def test_entry_from_release_keeps_the_resolve_shape():
+    from backend.routers.bins import entry_fields
+    release = {"album_name": "Blonde", "artist": "Frank Ocean", "year": 2016, "cover_url": "c",
+               "deezer_id": "123", "genre": "R&B", "tracks": [{"title": "Nikes"}] * 17}
+    f = entry_fields(release)
+    assert f["artist"] == "Frank Ocean" and f["album_name"] == "Blonde" and f["year"] == 2016
+    assert f["deezer_id"] == 123 and f["cover_url"] == "c"
+    assert f["subject_key"] == subject_key_album("Frank Ocean", "Blonde")
+    # The stored tracklist is the resolve itself, so a bin's Add makes the copy from it.
+    assert copy_data(NS(tracklist_json=f["tracklist_json"], artist=f["artist"], album_name=f["album_name"]),
+                     "listening")["tracks"] == release["tracks"]
+    with pytest.raises(ValueError):
+        entry_fields({"album_name": "", "artist": "x", "tracks": []})
+
+
+def test_release_refusal():
+    from datetime import date, timedelta
+    from backend.routers.bins import release_refusal
+    today = date(2026, 11, 13)
+    ten = [{"title": str(i)} for i in range(10)]
+    assert release_refusal({"tracks": ten, "album_name": "X"}, today) is None
+    assert release_refusal({"tracks": ten, "album_name": "X",
+                            "release_date": (today + timedelta(days=3)).isoformat()}, today) == "unreleased"
+    assert release_refusal({"tracks": ten, "album_name": "X", "year": 2027}, today) == "unreleased"
+    assert release_refusal({"tracks": ten[:2], "album_name": "X"}, today) == "single"
+    assert release_refusal({"tracks": ten, "album_name": "X - Single"}, today) == "single"
+    assert release_refusal({"tracks": [], "album_name": "X"}, today) == "single"
+
+
+def test_release_from_copy():
+    from datetime import date
+    from backend.routers.bins import release_from_copy
+    album = NS(album_name="N", artist="A", extra_artists='["B"]', year=2020, release_date=date(2020, 5, 1),
+               album_art_url="art", total_tracks=2, genre="Rock")
+    songs = [NS(title="two", track_number=2, duration_ms=1000, explicit=False, artist="A"),
+             NS(title="one", track_number=1, duration_ms=None, explicit=True, artist="A")]
+    r = release_from_copy(album, songs)
+    assert [t["title"] for t in r["tracks"]] == ["one", "two"]
+    assert r["extra_artists"] == ["B"] and r["release_date"] == "2020-05-01" and r["cover_url"] == "art"
