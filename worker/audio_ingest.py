@@ -264,9 +264,14 @@ def _store_features(track_id: int, features: dict) -> None:
 # night (see run_queue) — slower, never stopped.
 DOWNLOADERS = 3
 # How YouTube says "slow down" in yt-dlp's last ERROR line, as opposed to "no
-# such video": a rate limit, or the sign-in wall it puts up for suspected bots.
-BLOCK_SIGNS = ("http error 429", "too many requests", "sign in to confirm",
-               "not a bot", "rate-limit", "rate limit")
+# such video": a rate limit, or the sign-in wall it puts up for suspected bots
+# ("Sign in to confirm you're not a bot", with a curly or straight apostrophe).
+# Not a bare "sign in to confirm": an age-gated video says "Sign in to confirm
+# your age", a fact about that one video. Matched as a block, it dropped the
+# runs of 2026-11-11 and -12 to one downloader at their sixth and eighth track,
+# and the second of them took fifteen hours.
+BLOCK_SIGNS = ("http error 429", "too many requests", "not a bot",
+               "rate-limit", "rate limit")
 # A breather before the single downloader carries on.
 FALLBACK_PAUSE_S = 60
 

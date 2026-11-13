@@ -134,4 +134,6 @@ def test_block_signs():
     assert ai._blocked(BOT)
     assert ai._blocked("ERROR: unable to download video data: HTTP Error 429: Too Many Requests")
     assert not ai._blocked("ERROR: [youtube] abc: Video unavailable")
+    assert not ai._blocked("ERROR: [youtube] t_qGKkn6-tE: Sign in to confirm your age. This video may be inappropriate for some users.")
+    assert ai._blocked("ERROR: [youtube] RewBHN2nPl8: Sign in to confirm you\u2019re not a bot. This helps protect our community.")
     assert not ai._blocked(None)
