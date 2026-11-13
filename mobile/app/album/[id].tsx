@@ -22,7 +22,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as haptics from '../../lib/haptics'
-import { ArrowLeft, Check, ChevronRight, Heart, Pencil, Share2, Star, Trash2 } from 'lucide-react-native'
+import { ArrowLeft, Check, ChevronRight, FolderPlus, Heart, Pencil, Share2, Star, Trash2 } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchFriends,
@@ -49,6 +49,7 @@ import AlbumBackdrop from '../../components/AlbumBackdrop'
 import BangSkip from '../../components/BangSkip'
 import ShareCard from '../../components/ShareCard'
 import RecommendSheet from '../../components/RecommendSheet'
+import AddToBinSheet from '../../components/AddToBinSheet'
 import AlbumThoughts from '../../components/AlbumThoughts'
 import NoComparisonYet from '../../components/NoComparisonYet'
 import { confirmDeleteAlbum, useDeleteAlbum } from '../../lib/useDeleteAlbum'
@@ -290,6 +291,7 @@ export default function AlbumDetail() {
   // Above the early returns for the same reason useDeleteAlbum is.
   const [sharing, setSharing] = useState(false)
   const [recommending, setRecommending] = useState(false)
+  const [binning, setBinning] = useState(false)
   const [copying, setCopying] = useState<'listening' | 'to_listen' | null>(null)
   const [copyError, setCopyError] = useState<string | null>(null)
   // Held here rather than inside ReviewSection: the button that opens the
@@ -396,6 +398,10 @@ export default function AlbumDetail() {
   // copy and somebody sent it. On a friend's copy the sender is their business,
   // not yours, so the page stays ordinary.
   const wasRecommended = isMine && !!album.recommendedByName
+  const canBin = album.songs.length > 2 && !isUnreleased(album.releaseDate)
+  // Your copy of the record goes by its id — this one, or yours in another
+  // edition; anyone else's is resolved from the catalogs by name.
+  const binAlbumId = isMine ? album.id : album.viewerCopy?.id ?? null
   const recWhen = album.recommendedAt ? relativeDay(album.recommendedAt) : null
 
   // Compare is offered wherever a comparison exists to make, so the control is
@@ -559,6 +565,22 @@ export default function AlbumDetail() {
             accessibilityLabel={`Recommend ${album.albumName} to a friend`}
           >
             <Star size={17} color={RECOMMEND} fill={RECOMMEND} />
+          </Pressable>
+        )}
+        {/* Add to bin… on any copy of a record a bin can hold: an album or EP
+            that's out. A single (two songs or fewer) or a copy with no songs
+            yet has nothing to offer a bin, and the server would refuse it. */}
+        {canBin && (
+          <Pressable
+            style={styles.shareBtn}
+            onPress={() => {
+              haptics.selection()
+              setBinning(true)
+            }}
+            hitSlop={10}
+            accessibilityLabel="Add to bin…"
+          >
+            <FolderPlus size={17} color={tc.green} />
           </Pressable>
         )}
         {/* Sits last in the bar, away from Back and Compare — destructive, so
@@ -857,6 +879,15 @@ export default function AlbumDetail() {
         visible={recommending}
         onClose={() => setRecommending(false)}
       />
+      {canBin && (
+        <AddToBinSheet
+          visible={binning}
+          onClose={() => setBinning(false)}
+          ownAlbumId={binAlbumId}
+          albumName={album.albumName}
+          artist={album.artist}
+        />
+      )}
     </View>
   )
 }
@@ -913,6 +944,9 @@ function CommunityAlbum({
   const [queuing, setQueuing] = useState(false)
   const [queued, setQueued] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [binning, setBinning] = useState(false)
+  // Add to bin… on a record a bin can hold: an album or EP that's out.
+  const canBin = data.tracks.length > 2 && !upcomingDate
   const notRated = data.your_status !== 'rated'
   const inLibrary = data.your_album_id != null
   // Someone other than you has to have rated it. Without that check the button
@@ -965,6 +999,19 @@ function CommunityAlbum({
             <Text style={styles.compareBtnText} numberOfLines={1}>Average Rating</Text>
           </Pressable>
         ) : null}
+        {canBin && (
+          <Pressable
+            style={styles.shareBtn}
+            onPress={() => {
+              haptics.selection()
+              setBinning(true)
+            }}
+            hitSlop={10}
+            accessibilityLabel="Add to bin…"
+          >
+            <FolderPlus size={17} color={tc.green} />
+          </Pressable>
+        )}
         {/* Removing an unrated copy lives here rather than on the library tile:
             a 12px target in a grid is a bad place for something with no undo,
             and by this point you're looking at the record you'd be deleting.
@@ -1119,6 +1166,15 @@ function CommunityAlbum({
             })}
           </ScrollView>
         </SafeAreaView>
+        {canBin && (
+          <AddToBinSheet
+            visible={binning}
+            onClose={() => setBinning(false)}
+            ownAlbumId={data.your_album_id ?? null}
+            albumName={data.album_name}
+            artist={data.artist}
+          />
+        )}
       </View>
     )
   }
@@ -1349,6 +1405,15 @@ function CommunityAlbum({
           })}
         </ScrollView>
       </SafeAreaView>
+      {canBin && (
+        <AddToBinSheet
+          visible={binning}
+          onClose={() => setBinning(false)}
+          ownAlbumId={data.your_album_id ?? null}
+          albumName={data.album_name}
+          artist={data.artist}
+        />
+      )}
     </View>
   )
 }

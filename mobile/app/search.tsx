@@ -1,4 +1,4 @@
-// Search Pressd: people, records, artists and songs in one call (GET /search/all),
+// Search Pressd: people, records, artists, songs and bins in one call (GET /search/all),
 // then the catalogs' albums that Pressd doesn't have yet. Opened from the icon on
 // For You, pushed over the tabs; Cancel goes back to where you were.
 //
@@ -15,7 +15,7 @@ import { Check, Plus, Search, Star, X } from 'lucide-react-native'
 import { useAlbumSearch } from '@pressd/shared/hooks/useAlbumSearch'
 import { pushRecent, recentKey, songTarget, type RecentItem } from '@pressd/shared/recentSearches'
 import type { AlbumSearchResult } from '@pressd/shared/api'
-import type { SearchAlbum, SearchArtist, SearchGroup, SearchPerson, SearchResults, SearchSong } from '@pressd/shared/types'
+import type { SearchAlbum, SearchArtist, SearchBin, SearchGroup, SearchPerson, SearchResults, SearchSong } from '@pressd/shared/types'
 import { fetchArtistImage, searchAll, searchKnown } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useOpenProfile } from '../lib/useOpenProfile'
@@ -23,6 +23,7 @@ import { catalogKey, deezerIdOf, useCatalogPick } from '../lib/catalogPick'
 import * as haptics from '../lib/haptics'
 import Avatar from '../components/Avatar'
 import CoverImage from '../components/CoverImage'
+import { BinMosaic } from '../components/BinCard'
 import VinylSpinner from '../components/VinylSpinner'
 import TracklistLoader from '../components/TracklistLoader'
 import { colors, fonts, radii, spacing, useColors, scoreColor } from '../theme/tokens'
@@ -36,6 +37,7 @@ type Target =
   | { kind: 'album'; albumId: number; community: boolean; track?: number }
   | { kind: 'artist'; name: string }
   | { kind: 'catalog'; album_name: string; artist: string; deezer: string | null }
+  | { kind: 'bin'; slug: string }
 
 const STATUS_LABEL = { listening: 'Listening', to_listen: 'To Listen' } as const
 
@@ -117,6 +119,9 @@ export default function SearchScreen() {
         return
       case 'catalog':
         catalog.preview(t)
+        return
+      case 'bin':
+        router.push({ pathname: '/bins/[slug]', params: { slug: t.slug } })
         return
     }
   }
@@ -211,10 +216,11 @@ export default function SearchScreen() {
   const albums = rows('albums')
   const artists = rows('artists')
   const songs = rows('songs')
+  const bins = rows('bins')
   const nothingOnPressd =
     results != null &&
     !isPlaceholderData &&
-    results.people.length + results.albums.length + results.artists.length + results.songs.length === 0
+    results.people.length + results.albums.length + results.artists.length + results.songs.length + results.bins.length === 0
 
   function seeAll(g: SearchGroup | 'catalog') {
     haptics.selection()
@@ -349,6 +355,21 @@ export default function SearchScreen() {
               </View>
             )}
 
+            {bins.list.length > 0 && (
+              <View style={styles.section}>
+                {header('Bins', 'bins', bins.more, expanded === 'bins' && fullLoading)}
+                {bins.list.map((b) => (
+                  <Row
+                    key={b.slug}
+                    onPress={() => open(binItem(b))}
+                    lead={<BinMosaic covers={b.covers} coverUrl={b.coverUrl} size={COVER} radius={radii.sm} />}
+                    title={b.title}
+                    sub={binSub(b)}
+                  />
+                ))}
+              </View>
+            )}
+
             {(catalogPending || fresh.length > 0) && (
               <View style={styles.section}>
                 {header('From the catalogs', 'catalog', fresh.length > SHOWN, catalogPending)}
@@ -461,6 +482,24 @@ function catalogItem(r: AlbumSearchResult): RecentItem {
     sub: r.artist,
     artUrl: r.cover_url,
     target: { kind: 'catalog', album_name: r.album_name, artist: r.artist, deezer: deezerIdOf(r) } satisfies Target,
+  }
+}
+
+/** "12 albums · by name": Pressd for its own, "a former Pressd member" for a
+ *  public bin whose maker left. Web's words (GlobalSearch.tsx). */
+function binSub(b: SearchBin): string {
+  const by = b.kind === 'curated' ? 'Pressd' : b.ownerless || !b.ownerName ? 'a former Pressd member' : b.ownerName
+  return `${b.entryCount} ${b.entryCount === 1 ? 'album' : 'albums'} · by ${by}`
+}
+
+function binItem(b: SearchBin): RecentItem {
+  return {
+    kind: 'bin',
+    key: b.slug,
+    label: b.title,
+    sub: binSub(b),
+    artUrl: b.coverUrl ?? b.covers[0] ?? null,
+    target: { kind: 'bin', slug: b.slug } satisfies Target,
   }
 }
 
