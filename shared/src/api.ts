@@ -3,7 +3,7 @@ import type {
   DiscussionPost, SubjectRef, ThreadMeta, ThreadPage, ThreadSort,
   FeedPost, HeatedMood, HeatedRecord, SubjectType,
   TasteReason, Overlap, OverlapAlbum, PeopleSheetData, SheetPerson, SheetSong, SheetAction, FriendOverlap,
-  SearchResults, SearchGroup, SearchAlbum, SearchArtist, SearchSong,
+  SearchResults, SearchGroup, SearchAlbum, SearchArtist, SearchSong, SearchBin,
 } from './types'
 
 // ── Runtime configuration ─────────────────────────────────────────────────────
@@ -1581,6 +1581,16 @@ export async function searchAll(q: string, group?: SearchGroup): Promise<SearchR
       artist: s.artist,
       mine: s.mine,
       status: s.status,
+    })),
+    bins: (d.bins ?? []).map((b: any): SearchBin => ({
+      slug: b.slug,
+      title: b.title,
+      entryCount: b.entry_count,
+      coverUrl: b.cover_url ?? null,
+      covers: b.covers ?? [],
+      ownerName: b.owner_name ?? null,
+      ownerless: !!b.ownerless,
+      kind: b.kind,
     })),
   }
   /* eslint-enable @typescript-eslint/no-explicit-any */

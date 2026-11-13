@@ -520,9 +520,23 @@ export interface SearchResults {
   albums: SearchAlbum[]
   artists: SearchArtist[]
   songs: SearchSong[]
+  bins: SearchBin[]
 }
 
-export type SearchGroup = 'people' | 'albums' | 'artists' | 'songs'
+/** A bin in the one search box: Pressd's, yours, or someone's published one.
+ *  `ownerless` is a published bin whose owner left ("a former Pressd member"). */
+export interface SearchBin {
+  slug: string
+  title: string
+  entryCount: number
+  coverUrl: string | null
+  covers: string[]
+  ownerName: string | null
+  ownerless: boolean
+  kind: 'curated' | 'user'
+}
+
+export type SearchGroup = 'people' | 'albums' | 'artists' | 'songs' | 'bins'
 
 /** Pressd's App Store listing: what a contact invite texts (mobile's Find
  *  friends), and web's default for "Download on the App Store" (lib/iosApp.ts). */

@@ -20,13 +20,16 @@ from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
-from sqlalchemy import func, or_
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import func, or_, text
 from sqlmodel import Session, select
 
 from ..database import get_session
+from .. import user_bins as ub
 from ..blocks import blocked_ids
 from ..deps import current_user
-from ..models import Album, PressUser, Song, Track
+from ..models import Album, BinEntry, PressUser, Song, Track
 from ..search_rank import (
     _records, albums_group, artists_group, fold, people_group, songs_group,
 )
@@ -35,13 +38,46 @@ from . import users
 
 router = APIRouter(prefix="/search", tags=["search"], dependencies=[Depends(current_user)])
 
-ALLOWED_GROUPS = ("people", "albums", "artists", "songs")
+ALLOWED_GROUPS = ("people", "albums", "artists", "songs", "bins")
 PREVIEW = 4
 FULL = 25
 MAX_KNOWN = 50
 ALBUM_CAP = 400
 SONG_CAP = 400
 PEOPLE_CAP = 40
+BIN_COVERS = 4
+
+# user_bins.can_view in SQL: the caller's own bin (any visibility, hidden
+# included), Pressd's, or another person's published, unhidden bin whose owner
+# is not blocked either way and which the caller hasn't reported. Never anyone
+# else's private bin. Ranked own, then Pressd's, then the community's by
+# distinct viewers over POPULAR_DAYS (the owner's own views left out, as
+# routers.bins._community does), then newest.
+BIN_SEARCH_SQL = text("""
+SELECT b.id, b.slug, b.title, b.kind, b.owner_id, b.entry_count, b.cover_url, u.name AS owner_name
+FROM bin b
+LEFT JOIN pressuser u ON u.id = b.owner_id
+WHERE (b.title ILIKE :p ESCAPE '\\' OR COALESCE(b.description, '') ILIKE :p ESCAPE '\\')
+  AND (
+    b.owner_id = :me
+    OR b.kind = 'curated'
+    OR (
+      b.visibility = 'published' AND b.hidden_at IS NULL
+      AND (b.owner_id IS NULL OR NOT EXISTS (
+        SELECT 1 FROM block k WHERE
+          (k.blocker_id = :me AND k.blocked_id = b.owner_id)
+          OR (k.blocker_id = b.owner_id AND k.blocked_id = :me)))
+      AND NOT EXISTS (SELECT 1 FROM binreport r WHERE r.bin_id = b.id AND r.user_id = :me)
+    )
+  )
+ORDER BY
+  (b.owner_id = :me) DESC NULLS LAST,
+  (b.kind = 'curated') DESC,
+  (SELECT COUNT(*) FROM binview v WHERE v.bin_id = b.id AND v.viewed_at >= :since
+     AND (b.owner_id IS NULL OR v.user_id != b.owner_id)) DESC,
+  b.updated_at DESC, b.id DESC
+LIMIT :limit
+""")
 
 
 def effective_limit(group: Optional[str], limit: Optional[int]) -> int:
@@ -155,7 +191,32 @@ def search_all(
 
     if "songs" in wanted:
         out["songs"] = songs_group(q, _song_cands(session, me.id, p, pf), me.id, limit)
+
+    if "bins" in wanted:
+        out["bins"] = _bins_group(session, me.id, p, limit)
     return out
+
+
+def _bins_group(session: Session, me: int, p: str, limit: int) -> list[dict]:
+    since = datetime.now(timezone.utc) - timedelta(days=ub.POPULAR_DAYS)
+    rows = session.execute(BIN_SEARCH_SQL, {"p": p, "me": me, "since": since, "limit": limit}).all()
+    if not rows:
+        return []
+    covers: dict[int, list[str]] = {}
+    for bin_id, url in session.exec(
+        select(BinEntry.bin_id, BinEntry.cover_url)
+        .where(BinEntry.bin_id.in_([r.id for r in rows]), BinEntry.cover_url.is_not(None))
+        .order_by(BinEntry.bin_id, BinEntry.position)
+    ).all():
+        if len(covers.setdefault(bin_id, [])) < BIN_COVERS:
+            covers[bin_id].append(url)
+    return [{
+        "slug": r.slug, "title": r.title, "kind": r.kind, "entry_count": r.entry_count,
+        "cover_url": r.cover_url, "covers": covers.get(r.id, []),
+        "owner_name": r.owner_name if r.kind == "user" else None,
+        # A public bin whose owner deleted their account: "a former Pressd member".
+        "ownerless": r.kind == "user" and r.owner_id is None,
+    } for r in rows]
 
 
 @router.post("/known")

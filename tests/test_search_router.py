@@ -16,7 +16,7 @@ def test_parse_known_caps_and_validates():
 
 
 def test_groups():
-    assert ALLOWED_GROUPS == ("people", "albums", "artists", "songs")
+    assert ALLOWED_GROUPS == ("people", "albums", "artists", "songs", "bins")
 
 
 def test_effective_limit_defaults():
@@ -26,3 +26,14 @@ def test_effective_limit_defaults():
     assert effective_limit("albums", 10) == 10
     assert effective_limit("albums", 999) == FULL
     assert effective_limit(None, 999) == FULL
+
+
+def test_bin_search_sql_never_admits_others_private():
+    from backend.routers.search_all import BIN_SEARCH_SQL
+    sql = str(BIN_SEARCH_SQL)
+    assert "b.owner_id = :me" in sql
+    assert "b.visibility = 'published'" in sql
+    assert "b.hidden_at IS NULL" in sql
+    assert "binreport" in sql and "FROM block" in sql
+    # every non-own, non-curated alternative sits inside the published branch
+    assert sql.index("b.visibility = 'published'") > sql.index("b.kind = 'curated'")
