@@ -27,6 +27,7 @@ import { useUser } from '../context/UserContext'
 import { songScoreColor, BANG_THRESHOLD, SKIP_THRESHOLD, EP_MAX_TRACKS, isUnreleased } from '../types'
 import type { Album } from '../types'
 import RecommendModal from '../components/RecommendModal'
+import AddToBinMenu from '../components/AddToBinMenu'
 import CommentThread from '../components/CommentThread'
 import AlbumThoughts from '../components/AlbumThoughts'
 import ShareCardModal from '../components/ShareCard'
@@ -385,6 +386,15 @@ export default function AlbumDetail() {
               >
                 <Star size={12} fill={RECOMMEND} strokeWidth={0} /> Recommend
               </button>
+            )}
+            {/* A bin takes records that are out (backend/routers/bins.py
+                refuses the rest), through your copy when you hold one. */}
+            {!isUnreleased(album.releaseDate) && (
+              <AddToBinMenu
+                ownAlbumId={own ? album.id : (yourCopy?.id ?? null)}
+                albumName={album.albumName}
+                artist={album.artist}
+              />
             )}
             {/* Not out yet, or no songs: nothing to score until it is and they
                 arrive. */}

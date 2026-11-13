@@ -4,7 +4,7 @@
 import { Link } from 'react-router-dom'
 import LegalPage from '../components/LegalPage'
 
-const UPDATED = 'November 12, 2026'
+const UPDATED = 'November 13, 2026'
 const CONTACT = 'pressdmusicapp@gmail.com'
 
 export default function Guidelines() {
@@ -42,9 +42,16 @@ export default function Guidelines() {
         rules apply to them.
       </p>
 
+      <h2>Bins</h2>
+      <p>
+        A bin is private until you make it public. A public bin’s title, description, notes and
+        picture are seen by everyone signed in, so the same rules apply to them. If you delete
+        your account, your public bins stay up without your name.
+      </p>
+
       <h2>If something’s wrong</h2>
       <ul>
-        <li><strong>Report</strong> a post in a discussion. Posts enough people report are hidden.</li>
+        <li><strong>Report</strong> a post in a discussion, or a bin from its page. Posts and bins enough people report are hidden, and a bin you report disappears for you at once.</li>
         <li><strong>Block</strong> someone from their profile: you stop seeing each other’s reviews and activity, and any friendship ends. Unblock them any time in Settings.</li>
         <li>For anything else, write to <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.</li>
       </ul>

@@ -37,6 +37,7 @@ import { isUnreleased, songScoreColor } from '../types'
 import { outLine } from '../lib/upcoming'
 import { Cover } from '../components/covers'
 import RecommendModal from '../components/RecommendModal'
+import AddToBinMenu from '../components/AddToBinMenu'
 import ThreadPreview from '../components/ThreadPreview'
 import { useUser } from '../context/UserContext'
 import CoverImg from '../components/CoverImg'
@@ -242,6 +243,9 @@ export default function CommunityAlbum() {
               <button onClick={() => setComparing((c) => !c)} className={PILL}>
                 {comparing ? 'Average rating' : 'Compare'}
               </button>
+            )}
+            {!outDate && (
+              <AddToBinMenu ownAlbumId={shown.your_album_id} albumName={shown.album_name} artist={shown.artist} />
             )}
             {inLibrary && notRated && (
               <button

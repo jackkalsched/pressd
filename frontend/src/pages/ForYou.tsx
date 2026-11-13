@@ -66,8 +66,10 @@ export default function ForYou() {
   const userId = activeUser?.id ?? 0
 
   const { data: bins = [] } = useQuery({
-    queryKey: ['bins', userId],
-    queryFn: () => fetchBins(),
+    // At least one of Pressd's, the rest public community bins at random,
+    // re-drawn by the server on each load (spec §7).
+    queryKey: ['bins', 'for_you', userId],
+    queryFn: () => fetchBins('for_you'),
     enabled: userId > 0,
   })
   const { data: listening = [] } = useQuery({

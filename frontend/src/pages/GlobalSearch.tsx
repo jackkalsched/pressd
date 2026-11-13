@@ -1,4 +1,4 @@
-// Search Pressd: people, records, artists and songs in one call (GET /search/all),
+// Search Pressd: people, records, artists, songs and bins in one call (GET /search/all),
 // then the catalogs' albums that Pressd doesn't have yet — mobile's app/search.tsx,
 // laid out wide. Opened from the icon on For You; Esc or Cancel goes back.
 //
@@ -11,11 +11,12 @@ import { Check, Music, Plus, Search, Star, X } from 'lucide-react'
 import { pushRecent, recentKey, songTarget, type RecentItem } from '@pressd/shared/recentSearches'
 import { fetchArtistImage, importAlbum, resolveAlbum, searchAll, searchKnown } from '../api'
 import type { AlbumSearchResult } from '../api'
-import type { SearchAlbum, SearchArtist, SearchGroup, SearchPerson, SearchResults, SearchSong } from '../types'
+import type { SearchAlbum, SearchArtist, SearchBin, SearchGroup, SearchPerson, SearchResults, SearchSong } from '../types'
 import { songScoreColor } from '../types'
 import { useAlbumSearch } from '../hooks/useAlbumSearch'
 import { useUser } from '../context/UserContext'
 import { SECTION_LABEL } from '../components/albumView'
+import { BinMosaic } from '../components/BinCard'
 import Avatar from '../components/Avatar'
 import CoverImg from '../components/CoverImg'
 import TracklistLoader from '../components/TracklistLoader'
@@ -31,6 +32,7 @@ type Target =
   | { kind: 'album'; albumId: number; community: boolean; track?: number }
   | { kind: 'artist'; name: string }
   | { kind: 'catalog'; album_name: string; artist: string; deezer: string | null }
+  | { kind: 'bin'; slug: string }
 
 const STATUS_LABEL = { listening: 'Listening', to_listen: 'To Listen' } as const
 
@@ -72,6 +74,8 @@ function hrefFor(t: Target): string {
     }
     case 'artist':
       return `/artist/${encodeURIComponent(t.name)}?mode=pressd`
+    case 'bin':
+      return `/bins/${encodeURIComponent(t.slug)}`
     case 'catalog': {
       // Look before you commit: the record's Pressd page by name, which may not
       // exist on Pressd yet — the Deezer id lets it resolve a tracklist.
@@ -229,10 +233,11 @@ export default function GlobalSearch() {
   const albums = rows('albums')
   const artists = rows('artists')
   const songs = rows('songs')
+  const bins = rows('bins')
   const answered = results != null && !isPlaceholderData
   const nothingOnPressd =
     answered &&
-    results.people.length + results.albums.length + results.artists.length + results.songs.length === 0
+    results.people.length + results.albums.length + results.artists.length + results.songs.length + results.bins.length === 0
 
   const navItems: RecentItem[] = !active
     ? recents
@@ -241,6 +246,7 @@ export default function GlobalSearch() {
         ...albums.list.map(albumItem),
         ...artists.list.map(artistItem),
         ...songs.list.map(songItem),
+        ...bins.list.map(binItem),
         ...catalogShown.map(catalogItem),
       ]
   const navIndex = (item: RecentItem) => navItems.findIndex((n) => n.kind === item.kind && n.key === item.key)
@@ -385,7 +391,7 @@ export default function GlobalSearch() {
               <p className="mt-10 text-center text-[14px] text-(--c-8a7f72)">Nothing on Pressd matches &ldquo;{q}&rdquo;.</p>
             )}
 
-            <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-8 md:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-8 md:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
               {people.list.length > 0 && (
                 <section className="min-w-0">
                   {head('PEOPLE', 'people', people.more, expanded === 'people' && fullLoading)}
@@ -457,6 +463,24 @@ export default function GlobalSearch() {
                         lead={<CoverLead url={s.artUrl} />}
                         title={s.title}
                         sub={`${s.albumName} · ${s.artist}`}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {bins.list.length > 0 && (
+                <section className="min-w-0">
+                  {head('BINS', 'bins', bins.more, expanded === 'bins' && fullLoading)}
+                  <ul className="m-0 -mx-3 list-none p-0">
+                    {bins.list.map((b, i) => (
+                      <Row
+                        key={b.slug}
+                        index={i}
+                        {...rowProps(binItem(b))}
+                        lead={<BinMosaic covers={b.covers} coverUrl={b.coverUrl} size={LEAD} rounded="rounded-md" />}
+                        title={b.title}
+                        sub={binSub(b)}
                       />
                     ))}
                   </ul>
@@ -588,6 +612,24 @@ function catalogItem(r: AlbumSearchResult): RecentItem {
       artist: r.artist,
       deezer: r.source === 'deezer' ? r.source_id : null,
     } satisfies Target,
+  }
+}
+
+/** "12 albums · by name": Pressd for its own, "a former Pressd member" for a
+ *  public bin whose maker left. */
+function binSub(b: SearchBin): string {
+  const by = b.kind === 'curated' ? 'Pressd' : b.ownerless || !b.ownerName ? 'a former Pressd member' : b.ownerName
+  return `${b.entryCount} ${b.entryCount === 1 ? 'album' : 'albums'} · by ${by}`
+}
+
+function binItem(b: SearchBin): RecentItem {
+  return {
+    kind: 'bin',
+    key: b.slug,
+    label: b.title,
+    sub: binSub(b),
+    artUrl: b.coverUrl ?? b.covers[0] ?? null,
+    target: { kind: 'bin', slug: b.slug } satisfies Target,
   }
 }
 

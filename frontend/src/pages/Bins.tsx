@@ -1,34 +1,58 @@
-// Bins — every one of Pressd's bins, from the sidebar and For You's Bins
-// section. Mobile's app/bins/index.tsx, across the width of the page.
+// Bins — your own, Pressd's, and other people's public ones, from the sidebar
+// and For You's Bins section. Mobile's app/bins/index.tsx, across the width of
+// the page. New bin makes one and opens it in edit mode, to add albums.
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
+import { useQueries } from '@tanstack/react-query'
+import { Plus } from 'lucide-react'
 import { binCardMatches, binSections } from '@pressd/shared/binSort'
 import BinSearch from '../components/BinSearch'
 import { fetchBins } from '../api'
 import { BinPoster } from '../components/BinCard'
+import NewBinDialog from '../components/NewBinDialog'
 import VinylSpinner from '../components/VinylSpinner'
 import { useUser } from '../context/UserContext'
 
 export default function Bins() {
   const { activeUser } = useUser()
+  const navigate = useNavigate()
   const [query, setQuery] = useState('')
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['bins', activeUser?.id],
-    queryFn: () => fetchBins(),
-    enabled: !!activeUser,
+  const [making, setMaking] = useState(false)
+  // Three lists, each in the server's own order (yours last edited first,
+  // the community's most opened first), then split into sections by
+  // binSections, so the headings match iPhone's.
+  const scopes = ['mine', 'curated', 'community'] as const
+  const results = useQueries({
+    queries: scopes.map((scope) => ({
+      queryKey: ['bins', scope, activeUser?.id],
+      queryFn: () => fetchBins(scope),
+      enabled: !!activeUser,
+    })),
   })
+  const isLoading = results.some((r) => r.isLoading)
+  const isError = results.every((r) => r.isError)
+  const data = isLoading ? undefined : results.flatMap((r) => r.data ?? [])
 
   return (
     <div className="mx-auto w-full max-w-[1600px] px-6 md:px-12 py-8 pb-24">
       {/* The search sits at the far right of the header, opening leftward. */}
       <div className="flex items-center gap-4">
         <h1 className="m-0 font-display text-4xl font-bold text-(--c-1c1917)">Bins</h1>
-        {!!data?.length && (
-          <div className="ml-auto flex min-w-0 flex-1 justify-end">
+        <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-3">
+          {!!data?.length && (
             <BinSearch value={query} onChange={setQuery} placeholder="Search bins" className="w-full max-w-sm" />
-          </div>
-        )}
+          )}
+          <button
+            onClick={() => setMaking(true)}
+            className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-(--c-green-fill) px-4 text-[14px] font-semibold text-white hover:bg-(--c-green-fill-hover)"
+          >
+            <Plus size={16} strokeWidth={2.4} /> New bin
+          </button>
+        </div>
       </div>
+      {making && (
+        <NewBinDialog onClose={() => setMaking(false)} onCreated={(b) => navigate(`/bins/${b.slug}?edit=1`)} />
+      )}
       {isLoading ? (
         <div className="flex justify-center py-24"><VinylSpinner size={64} /></div>
       ) : isError || !data?.length ? (
