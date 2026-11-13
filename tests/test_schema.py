@@ -26,3 +26,12 @@ def test_delete_bins_order():
     assert src.index("DELETE FROM bintrack") < src.index("DELETE FROM binentry")
     assert "visibility = 'private'" in src
     assert "SET owner_id = NULL" in src
+
+
+def test_user_bin_tables_are_registered():
+    from sqlmodel import SQLModel
+    import backend.models  # noqa: F401
+    for t in ("bincover", "binreport", "binview"):
+        assert t in SQLModel.metadata.tables
+    assert list(SQLModel.metadata.tables["binview"].primary_key.columns.keys()) == ["bin_id", "user_id"]
+    assert "cover_url" in SQLModel.metadata.tables["bin"].columns
