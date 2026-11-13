@@ -5,6 +5,7 @@
 // what a tap means — pressing the vote you already hold clears it — so the
 // reply it sends replaces the guess rather than being merged with it.
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import * as haptics from '../lib/haptics'
 import { ThumbsDown, ThumbsUp } from 'lucide-react-native'
@@ -44,6 +45,7 @@ export default function VoteButtons({
     setVote(myVote); setUp(likes); setDown(dislikes)
   }
 
+  const queryClient = useQueryClient()
   async function cast(value: 1 | -1) {
     const prev = { vote, up, down }
     const next = vote === value ? 0 : value
@@ -54,6 +56,9 @@ export default function VoteButtons({
     try {
       const r = await votePost(postId, value)
       setVote(r.myVote); setUp(r.likeCount); setDown(r.dislikeCount)
+      // An up-vote on a review is its like in the feeds: refresh them (not the
+      // thread itself, whose order would jump under the reader).
+      for (const queryKey of [['feed'], ['top-reviews'], ['friend-reviews']]) queryClient.invalidateQueries({ queryKey })
     } catch {
       setVote(prev.vote); setUp(prev.up); setDown(prev.down)
     }

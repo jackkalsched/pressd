@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, ArrowRight, Heart, MessageCircle, Flame, Clock, Check, Play, Search, CalendarDays } from 'lucide-react'
-import { fetchAlbum, fetchAlbums, fetchFeed, toggleLike, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion, fetchBins } from '../api'
+import { fetchAlbum, fetchAlbums, fetchFeed, toggleLike, LIKE_QUERY_KEYS, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion, fetchBins } from '../api'
 import type { NewRelease, PredictedPick, RecommendSuggestion, TopReview } from '../api'
 import { MIN_RATED_ALBUMS } from '../types'
 import { Cover, ScorePill, hueFromString, coverGradient } from '../components/covers'
@@ -247,7 +247,7 @@ export default function ForYou() {
     if (!activeUser) return
     try {
       await toggleLike(activeUser.id, albumId)
-      queryClient.invalidateQueries({ queryKey: ['top-reviews'] })
+      for (const queryKey of LIKE_QUERY_KEYS) queryClient.invalidateQueries({ queryKey })
     } catch { /* ignore */ }
   }
 

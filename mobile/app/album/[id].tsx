@@ -1478,7 +1478,7 @@ function FriendCompare({
 }) {
   const tc = useColors()
   const { user } = useAuth()
-  const [liked, setLiked] = useState(false)
+  const [liked, setLiked] = useState(theirs.likedByMe ?? false)
 
   const theirScore = theirs.score!
   const myScore = mine.score!

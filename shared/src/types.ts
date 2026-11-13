@@ -75,6 +75,8 @@ export interface Album {
   /** Your own copy of this record, in any edition, when this one is someone
    *  else's. Only populated by the single-album fetch. */
   viewerCopy: { id: number; status: AlbumStatus; score: number | null } | null
+  /** Someone else's copy only: whether you've liked this rating (`GET /albums/{id}`). */
+  likedByMe?: boolean
   /** Who this copy belongs to. Only populated by the single-album fetch. */
   owner: { id: number; name: string; avatarUrl?: string } | null
   review: string | null

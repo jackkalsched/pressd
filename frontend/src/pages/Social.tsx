@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Music, Search, UserPlus, Check, Heart, X, Clock, MessageCircle, Star, BookOpen, Users, ChevronDown } from 'lucide-react'
 import {
-  fetchFeed, searchUsers, addFriend, toggleLike,
+  fetchFeed, searchUsers, addFriend, toggleLike, LIKE_QUERY_KEYS,
   fetchFriendRequests, acceptFriendRequest, declineFriendRequest,
   fetchFriends, fetchFriendReviews, fetchDiscussionFeed, fetchCompare,
 } from '../api'
@@ -95,7 +95,7 @@ function FeedCard({ item }: { item: FeedItem }) {
     setLikeCount(c => wasLiked ? c - 1 : c + 1)
     try {
       await toggleLike(activeUser.id, item.album_id)
-      queryClient.invalidateQueries({ queryKey: ['feed'] })
+      for (const queryKey of LIKE_QUERY_KEYS) queryClient.invalidateQueries({ queryKey })
     } catch {
       // revert
       setLiked(wasLiked)
@@ -492,7 +492,7 @@ function ReviewCard({ review }: { review: FriendReview }) {
     setLikeCount(c => wasLiked ? c - 1 : c + 1)
     try {
       await toggleLike(activeUser.id, review.album_id)
-      queryClient.invalidateQueries({ queryKey: ['friend-reviews'] })
+      for (const queryKey of LIKE_QUERY_KEYS) queryClient.invalidateQueries({ queryKey })
     } catch {
       setLiked(wasLiked)
       setLikeCount(c => wasLiked ? c + 1 : c - 1)

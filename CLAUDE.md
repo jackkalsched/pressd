@@ -539,7 +539,13 @@ POST /social/like?album_id=      toggle_like  a reviewed copy → an up-vote on 
 ```
 One conversation, wherever it's read (November 2026): liking a review in the feed is the
 thread's up-arrow, and its replies are the thread's — the feed's "N replies" opens the
-thread. The feed's like skips `thread_access`: you were shown a friend's review, you didn't
+thread. Every surface reads a like through `backend/likes.py` (`like_states`): the
+feed, For You's top reviews (`/social/top-reviews`), web's Reviews tab (`/social/reviews`) and
+`GET /albums/{id}`'s `liked_by_me` (someone else's copy; mobile's compare screen starts its heart
+from it). Until November 2026 only the feed read the post, so a review liked anywhere read as
+unliked on For You and the Reviews tab (all 109 review up-votes then), and a second tap there took
+the like back. A like, or a thread up-vote, refreshes every list that shows one
+(`LIKE_QUERY_KEYS` in `shared/src/api.ts`; `VoteButtons` the feeds only). The feed's like skips `thread_access`: you were shown a friend's review, you didn't
 walk into the room. Likes given in the feed before were moved onto their posts by a boot
 migration that also deletes the moved `like` rows (`database.py`), so an up-vote taken back
 can't return. Comments on a copy still mirror into the thread only when the commenter may

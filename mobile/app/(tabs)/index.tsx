@@ -18,6 +18,7 @@ import {
   fetchTopReviews,
   fetchRecommendSuggestion,
   toggleLike,
+  LIKE_QUERY_KEYS,
   type NewRelease,
   type RecommendSuggestion,
   type TopReview,
@@ -368,7 +369,7 @@ export default function ForYou() {
     if (!user) return
     try {
       await toggleLike(user.id, albumId)
-      queryClient.invalidateQueries({ queryKey: ['top-reviews'] })
+      for (const queryKey of LIKE_QUERY_KEYS) queryClient.invalidateQueries({ queryKey })
     } catch { /* ignore */ }
   }
 

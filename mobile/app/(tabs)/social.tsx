@@ -21,6 +21,7 @@ import {
   fetchCompare,
   copyAlbumToLibrary,
   toggleLike,
+  LIKE_QUERY_KEYS,
   searchUsers,
   addFriend,
   fetchFriendRequests,
@@ -242,10 +243,8 @@ export default function Social() {
   async function like(albumId: number) {
     if (!user) return
     await toggleLike(user.id, albumId)
-    queryClient.invalidateQueries({ queryKey: ['feed', user.id] })
-    queryClient.invalidateQueries({ queryKey: ['reviews'] })
-    // A review's like is its thread post's up-vote.
-    queryClient.invalidateQueries({ queryKey: ['threadPosts'] })
+    // A review's like is its thread post's up-vote: refresh every list showing it.
+    for (const queryKey of LIKE_QUERY_KEYS) queryClient.invalidateQueries({ queryKey })
   }
   async function addToQueue(item: FeedItem) {
     if (!user || queued.has(item.album_id)) return

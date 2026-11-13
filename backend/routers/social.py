@@ -2,12 +2,13 @@ from datetime import datetime, date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text as _sql
-from sqlmodel import Session, select, func
+from sqlmodel import Session, select
 from ..database import get_session
 from ..deps import current_user
-from ..models import Album, Comment, Friendship, Like, PressUser, Song
+from ..models import Album, Friendship, Like, PressUser, Song
 from ..scoring import top_bottom_songs
 from ..blocks import blocked_ids
+from ..likes import like_states, review_posts
 
 router = APIRouter(prefix="/social", tags=["social"])
 
@@ -59,37 +60,9 @@ def get_feed(
             .limit(100)
         ).all()
 
-        album_ids = [a.id for a in rating_albums]
-        like_counts: dict[int, int] = {}
-        comment_counts: dict[int, int] = {}
-        liked_by_me: set[int] = set()
-        if album_ids:
-            like_counts = {
-                row[0]: row[1]
-                for row in session.exec(
-                    select(Like.album_id, func.count(Like.id))
-                    .where(Like.album_id.in_(album_ids))
-                    .group_by(Like.album_id)
-                ).all()
-            }
-            comment_counts = {
-                row[0]: row[1]
-                for row in session.exec(
-                    select(Comment.album_id, func.count(Comment.id))
-                    .where(Comment.album_id.in_(album_ids))
-                    .group_by(Comment.album_id)
-                ).all()
-            }
-            liked_by_me = set(session.exec(
-                select(Like.album_id)
-                .where(Like.album_id.in_(album_ids))
-                .where(Like.user_id == user_id)
-            ).all())
-
-        # A review is also a post in the record's thread, and its likes and replies
-        # are the post's: one conversation, wherever it's read. Liking it here
-        # votes it up there, and its replies are the thread's.
-        review_posts = _review_posts(session, [a for a in rating_albums if a.review], user_id)
+        # One reading of a like for every surface (backend/likes.py): a review's
+        # likes and replies are its thread post's, a bare rating's its own.
+        states = like_states(session, rating_albums, user_id)
 
         for album in rating_albums:
             friend = friends.get(album.user_id)
@@ -102,21 +75,10 @@ def get_feed(
                 "artist": album.artist,
                 "album_art_url": album.album_art_url,
                 "score": album.score,
-                "like_count": like_counts.get(album.id, 0),
-                "liked_by_me": album.id in liked_by_me,
-                "comment_count": comment_counts.get(album.id, 0),
+                **_like_fields(states[album.id]),
             }
             if album.review and album.review_at:
                 # A rating that carries a review is a higher-signal event.
-                post = review_posts.get(album.id)
-                if post:
-                    base = {
-                        **base,
-                        "post_id": post["id"],
-                        "like_count": post["likes"],
-                        "liked_by_me": post["mine"],
-                        "comment_count": post["replies"],
-                    }
                 items.append({
                     **base,
                     "type": "review",
@@ -203,32 +165,7 @@ def get_friend_reviews(
         .limit(100)
     ).all()
 
-    album_ids = [a.id for a in reviewed]
-    like_counts: dict[int, int] = {}
-    comment_counts: dict[int, int] = {}
-    liked_by_me: set[int] = set()
-    if album_ids:
-        like_counts = {
-            row[0]: row[1]
-            for row in session.exec(
-                select(Like.album_id, func.count(Like.id))
-                .where(Like.album_id.in_(album_ids))
-                .group_by(Like.album_id)
-            ).all()
-        }
-        comment_counts = {
-            row[0]: row[1]
-            for row in session.exec(
-                select(Comment.album_id, func.count(Comment.id))
-                .where(Comment.album_id.in_(album_ids))
-                .group_by(Comment.album_id)
-            ).all()
-        }
-        liked_by_me = set(session.exec(
-            select(Like.album_id)
-            .where(Like.album_id.in_(album_ids))
-            .where(Like.user_id == user_id)
-        ).all())
+    states = like_states(session, reviewed, user_id)
 
     items = []
     for album in reviewed:
@@ -244,9 +181,7 @@ def get_friend_reviews(
             "score": album.score,
             "review": album.review,
             "review_at": album.review_at.isoformat() if album.review_at else None,
-            "like_count": like_counts.get(album.id, 0),
-            "liked_by_me": album.id in liked_by_me,
-            "comment_count": comment_counts.get(album.id, 0),
+            **_like_fields(states[album.id]),
         })
 
     if sort == "top":
@@ -289,27 +224,7 @@ def get_top_reviews(
             select(PressUser).where(PressUser.id.in_([a.user_id for a in day_albums]))
         ).all()
     }
-    like_counts = {
-        row[0]: row[1]
-        for row in session.exec(
-            select(Like.album_id, func.count(Like.id))
-            .where(Like.album_id.in_(album_ids))
-            .group_by(Like.album_id)
-        ).all()
-    }
-    comment_counts = {
-        row[0]: row[1]
-        for row in session.exec(
-            select(Comment.album_id, func.count(Comment.id))
-            .where(Comment.album_id.in_(album_ids))
-            .group_by(Comment.album_id)
-        ).all()
-    }
-    liked_by_me = set(session.exec(
-        select(Like.album_id)
-        .where(Like.album_id.in_(album_ids))
-        .where(Like.user_id == user.id)
-    ).all())
+    states = like_states(session, day_albums, user.id)
 
     # Favorite / least-favorite track per album (highest / lowest scored song).
     songs_by_album: dict[int, list[Song]] = {}
@@ -336,9 +251,7 @@ def get_top_reviews(
             "score": album.score,
             "review": album.review,
             "review_at": album.review_at.isoformat() if album.review_at else None,
-            "like_count": like_counts.get(album.id, 0),
-            "liked_by_me": album.id in liked_by_me,
-            "comment_count": comment_counts.get(album.id, 0),
+            **_like_fields(states[album.id]),
             "top_song": {"title": top.title, "score": top.score} if top else None,
             "bottom_song": {"title": bottom.title, "score": bottom.score} if bottom else None,
         })
@@ -448,22 +361,12 @@ def get_compare(
     return {"items": items[:60]}
 
 
-def _review_posts(session: Session, albums: list, user_id: int) -> dict[int, dict]:
-    """Each album copy's review post in its record's thread, by album id: its id,
-    up-votes, replies, and whether `user_id` voted it up."""
-    if not albums:
-        return {}
-    rows = session.execute(_sql("""
-        SELECT p.id, p.user_id, t.subject_key, p.like_count, p.reply_count,
-               EXISTS (SELECT 1 FROM postlike v WHERE v.post_id = p.id AND v.user_id = :me AND v.value = 1)
-        FROM post p JOIN thread t ON t.id = p.thread_id
-        WHERE t.subject_type = 'album' AND p.kind = 'review' AND p.deleted_at IS NULL
-          AND p.user_id = ANY(:users) AND t.subject_key = ANY(:keys)"""),
-        {"me": user_id, "users": list({a.user_id for a in albums}),
-         "keys": list({a.subject_key for a in albums if a.subject_key})}).all()
-    by_owner = {(r[1], r[2]): {"id": r[0], "likes": r[3] or 0, "replies": r[4] or 0, "mine": bool(r[5])}
-                for r in rows}
-    return {a.id: by_owner[(a.user_id, a.subject_key)] for a in albums if (a.user_id, a.subject_key) in by_owner}
+def _like_fields(state: dict) -> dict:
+    """A like state as a feed row's fields; `post_id` only when the review has one."""
+    out = {k: state[k] for k in ("like_count", "liked_by_me", "comment_count")}
+    if state["post_id"] is not None:
+        out["post_id"] = state["post_id"]
+    return out
 
 
 @router.post("/like")
@@ -478,7 +381,7 @@ def toggle_like(
     apply: this is a friend's review you were shown, not a room you walked into."""
     user_id = user.id
     album = session.get(Album, album_id)
-    post = _review_posts(session, [album], user_id).get(album_id) if album and album.review else None
+    post = review_posts(session, [album], user_id).get(album_id) if album else None
     if post:
         if post["mine"]:
             session.execute(_sql("DELETE FROM postlike WHERE user_id = :u AND post_id = :p"),

@@ -121,6 +121,7 @@ function transformAlbum(a: Record<string, unknown>): Album {
     topSongId: (a.top_song_id as number | null) ?? null,
     othersRaterCount: (a.others_rater_count as number | undefined) ?? 0,
     viewerCopy: (a.viewer_copy as Album['viewerCopy'] | undefined) ?? null,
+    likedByMe: (a.liked_by_me as boolean | undefined) ?? false,
     owner: a.owner
       ? (() => {
           const o = a.owner as { id: number; name: string; avatar_url: string | null }
@@ -2094,6 +2095,13 @@ export async function fetchCompare(): Promise<CompareItem[]> {
   const data = await res.json()
   return (data.items ?? []) as CompareItem[]
 }
+
+/** Every cached list that shows a like on someone's rating. A review's like is
+ *  its thread post's up-vote (backend/likes.py), so liking it in one place, or
+ *  voting it up in the thread, changes all of them; refresh them all. */
+export const LIKE_QUERY_KEYS: readonly (readonly string[])[] = [
+  ['feed'], ['top-reviews'], ['friend-reviews'], ['threadPosts'],
+]
 
 export async function toggleLike(userId: number, albumId: number): Promise<{ liked: boolean }> {
   const res = await apiFetch(`${BASE()}/social/like?user_id=${userId}&album_id=${albumId}`, {

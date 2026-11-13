@@ -22,6 +22,7 @@ from ..trackkeys import _clean_album, artist_key, match_title, same_album, subje
 from ..carryover import carryover_for_album
 from ..credits import album_artists
 from ..threads import sync_review_post
+from ..likes import like_states
 from ..push import send_push, tokens_for_user
 
 router = APIRouter(prefix="/albums", tags=["albums"])
@@ -245,6 +246,9 @@ def get_album(
         **row,
         "others_rater_count": others,
         "viewer_copy": _viewer_copy(session, user.id, album),
+        # Whether the viewer has liked this rating, read as every feed reads it
+        # (backend/likes.py), so the compare screen's heart starts right.
+        "liked_by_me": album.user_id != user.id and like_states(session, [album], user.id)[album.id]["liked_by_me"],
         # Whose rating this is, for a copy opened from anywhere: profiles are
         # public, so the owner needn't be anyone in the viewer's friends list.
         "owner": public_user(owner) if (owner := session.get(PressUser, album.user_id)) else None,
