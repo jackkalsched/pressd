@@ -58,6 +58,7 @@ export default function NewBinDialog({ onClose, onCreated }: {
     try {
       const bin = await createBin({ title: title.trim(), description: description.trim(), visibility, ranked: true })
       queryClient.invalidateQueries({ queryKey: ['bins'] })
+      queryClient.invalidateQueries({ queryKey: ['search'] })
       onCreated(bin)
     } catch (err) {
       setError(binErrorText(err, 'Couldn’t make that bin'))

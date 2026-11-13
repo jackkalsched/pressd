@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, FolderPlus, Plus } from 'lucide-react'
 import { addToBin, fetchBins, resolveReleaseByName, type BinCard } from '../api'
-import { binErrorText } from '../lib/bins'
+import { binErrorText, refreshBin } from '../lib/bins'
 import { useUser } from '../context/UserContext'
 import { BinMosaic } from './BinCard'
 import NewBinDialog from './NewBinDialog'
@@ -65,8 +65,7 @@ export default function AddToBinMenu({ ownAlbumId, albumName, artist }: {
       await addToBin(slug, await source())
       setAdded((a) => [...a, slug])
       // The response is a partial entry; the bin's own page refetches whole.
-      queryClient.invalidateQueries({ queryKey: ['bin', slug] })
-      queryClient.invalidateQueries({ queryKey: ['bins'] })
+      refreshBin(queryClient, slug)
     } catch (e) {
       setError({ slug, text: binErrorText(e, 'Couldn’t add it to that bin') })
     } finally {

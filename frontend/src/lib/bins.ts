@@ -1,4 +1,5 @@
 // Words about bins, once for every web surface that shows one.
+import type { QueryClient } from '@tanstack/react-query'
 import type { BinCard } from '../api'
 
 // The server's limits (backend/user_bins.py), so a field stops where it would
@@ -6,6 +7,14 @@ import type { BinCard } from '../api'
 export const TITLE_MAX = 80
 export const DESCRIPTION_MAX = 500
 export const NOTE_MAX = 280
+
+/** After a write to a bin: its page, every list of bins, and search, which
+ *  finds bins by title and description and shows their covers and counts. */
+export function refreshBin(queryClient: QueryClient, slug: string) {
+  queryClient.invalidateQueries({ queryKey: ['bin', slug] })
+  queryClient.invalidateQueries({ queryKey: ['bins'] })
+  queryClient.invalidateQueries({ queryKey: ['search'] })
+}
 
 /** A bin's text fields: the new-bin dialog and the edit mode. */
 export const BIN_FIELD =

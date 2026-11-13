@@ -4,7 +4,7 @@
 // catalogs (Add an album's search). Every change is its own request and the
 // bin is refetched after it: the server answers adds and notes with a partial
 // entry (no genre, no Pressd figures), never a row to keep.
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, GripVertical, ImagePlus, Music, Plus, Search, Trash2, X } from 'lucide-react'
@@ -17,7 +17,7 @@ import { isUnreleased } from '../types'
 import { useAlbumSearch } from '../hooks/useAlbumSearch'
 import { useUser } from '../context/UserContext'
 import { BIN_COVER_PX, loadImage, renderCrop } from '../lib/banner'
-import { BIN_FIELD, DESCRIPTION_MAX, NOTE_MAX, TITLE_MAX, binErrorText } from '../lib/bins'
+import { BIN_FIELD, DESCRIPTION_MAX, NOTE_MAX, TITLE_MAX, binErrorText, refreshBin } from '../lib/bins'
 import { useSlideRows } from '../lib/useSlideRows'
 import BannerCropper from './BannerCropper'
 import { BinMosaic } from './BinCard'
@@ -36,29 +36,67 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const slug = bin.slug
-  const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState<string | null>(null)
+  // Writes in flight, by what they write ('title', 'order', `remove:12`…). A
+  // list, not one slot: two can run at once (✕ on two rows, a switch while a
+  // title saves), and the first to land mustn't clear the other's flag.
+  const [inFlight, setInFlight] = useState<string[]>([])
+  const saving = (what: string) => inFlight.includes(what)
+  const writing = inFlight.length > 0
+  // Each write's failure under its own key, so a later write starting or
+  // landing doesn't wipe an earlier one's error.
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const setErrorFor = (what: string, text: string | null) =>
+    setErrors((all) => {
+      if (text == null) {
+        if (!(what in all)) return all
+        const next = { ...all }
+        delete next[what]
+        return next
+      }
+      return { ...all, [what]: text }
+    })
+  const errorLines = Object.values(errors)
+  const error = errorLines.length > 0
+  // Notes save on their own; Done waits for them as for everything else.
+  const [notesSaving, setNotesSaving] = useState(0)
+  const busy = writing || notesSaving > 0
   const [adding, setAdding] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  // Done waits for what's in flight — a field's save starts as it loses focus,
+  // which the click on Done itself causes — and closes once it has landed. A
+  // save that fails on the way out keeps the editor open, its error showing,
+  // and forgets the Done, so a later write landing can't close it unasked.
+  const [closing, setClosing] = useState(false)
+  if (closing && error) setClosing(false)
+  const leaving = closing && !error
+  useEffect(() => {
+    if (leaving && !busy) onDone()
+  }, [leaving, busy, onDone])
 
-  function refresh() {
-    queryClient.invalidateQueries({ queryKey: ['bin', slug] })
-    queryClient.invalidateQueries({ queryKey: ['bins'] })
-  }
+  const refresh = () => refreshBin(queryClient, slug)
 
   async function run(what: string, fn: () => Promise<unknown>, fallback: string): Promise<boolean> {
-    setSaving(what)
-    setError(null)
+    setInFlight((l) => [...l, what])
+    setErrorFor(what, null)
     try {
       await fn()
       refresh()
       return true
     } catch (e) {
-      setError(binErrorText(e, fallback))
+      setErrorFor(what, binErrorText(e, fallback))
       return false
     } finally {
-      setSaving(null)
+      setInFlight((l) => {
+        const i = l.indexOf(what)
+        return i < 0 ? l : [...l.slice(0, i), ...l.slice(i + 1)]
+      })
     }
+  }
+
+  function done() {
+    if (closing) return
+    setErrors({})
+    setClosing(true)
   }
 
   // ── Details: text saves when the field is left; switches save at once ──
@@ -84,13 +122,14 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
     const file = e.target.files?.[0]
     e.target.value = '' // the same file can be picked again
     if (!file) return
-    if (!file.type.startsWith('image/')) { setError('Please choose an image file'); return }
+    setErrorFor('cover', null)
+    if (!file.type.startsWith('image/')) { setErrorFor('cover', 'Please choose an image file'); return }
     try {
       const img = await loadImage(file)
       if (Math.abs(img.naturalWidth / img.naturalHeight - 1) < 0.01) await uploadCover(renderCrop(img, BIN_COVER_PX, BIN_COVER_PX))
       else setCropImage(img)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Couldn’t read that picture')
+      setErrorFor('cover', err instanceof Error ? err.message : 'Couldn’t read that picture')
     }
   }
 
@@ -116,12 +155,16 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
   }
   async function commitOrder(next: number[]) {
     if (next.join(',') === serverKey) return
+    // An order sent while another move or a removal is still landing is built
+    // on a list the server no longer has; the handles are off meanwhile.
+    if (writing) { setOrder(serverIds); return }
     const ok = await run('order', () => reorderBin(slug, next), 'Couldn’t save the new order')
     if (!ok) setOrder(serverIds)
   }
   function onHandleKey(e: React.KeyboardEvent, id: number) {
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
     e.preventDefault()
+    if (writing) return
     const at = order.indexOf(id)
     const next = moveTo(id, at + (e.key === 'ArrowUp' ? -1 : 1))
     setOrder(next)
@@ -143,17 +186,17 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
               <button
                 type="button"
                 onClick={() => fileInput.current?.click()}
-                disabled={saving === 'cover'}
+                disabled={saving('cover')}
                 className="flex items-center gap-1.5 rounded-full border border-(--c-e2dbd0) px-3.5 py-1.5 text-[13px] font-semibold text-(--c-2d6a4f) hover:border-(--c-2d6a4f) disabled:opacity-60"
               >
-                {saving === 'cover' ? <VinylSpinner size={14} /> : <ImagePlus size={14} />}
+                {saving('cover') ? <VinylSpinner size={14} /> : <ImagePlus size={14} />}
                 {bin.coverUrl ? 'Change picture' : 'Upload a picture'}
               </button>
               {bin.coverUrl && (
                 <button
                   type="button"
                   onClick={() => run('cover', () => deleteBinCover(slug), 'Couldn’t remove that picture')}
-                  disabled={saving === 'cover'}
+                  disabled={saving('cover')}
                   className="px-1 text-[13px] font-medium text-(--c-8a7f72) hover:text-(--c-b91c1c)"
                 >
                   Use the album covers
@@ -195,7 +238,7 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
           <VisibilitySwitch
             value={bin.visibility}
             onChange={(v) => v !== bin.visibility && run('visibility', () => updateBin(slug, { visibility: v }), 'Couldn’t change who can see it')}
-            disabled={saving === 'visibility'}
+            disabled={saving('visibility')}
           />
         </div>
 
@@ -204,13 +247,15 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
           <input
             type="checkbox"
             checked={bin.ranked}
-            disabled={saving === 'ranked'}
+            disabled={saving('ranked')}
             onChange={(e) => run('ranked', () => updateBin(slug, { ranked: e.target.checked }), 'Couldn’t change that')}
             className="h-5 w-5 accent-(--c-2d6a4f)"
           />
         </label>
 
-        {error && <p className="m-0 text-[13px] text-(--c-b91c1c)" role="alert">{error}</p>}
+        {errorLines.map((line, i) => (
+          <p key={i} className="m-0 text-[13px] text-(--c-b91c1c)" role="alert">{line}</p>
+        ))}
 
         <div className="flex items-center justify-between gap-3 border-t border-(--c-e8e2d9) pt-5">
           <button
@@ -222,10 +267,14 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
           </button>
           <button
             type="button"
-            onClick={onDone}
-            className="flex h-10 items-center gap-1.5 rounded-full bg-(--c-green-fill) px-5 text-[14px] font-semibold text-white hover:bg-(--c-green-fill-hover)"
+            // Not `disabled`: the click that blurs a field starts its save,
+            // and a button disabled by then would swallow the click. Done
+            // waits for the save instead (closing above).
+            onClick={done}
+            aria-disabled={busy || leaving}
+            className={`flex h-10 items-center gap-1.5 rounded-full bg-(--c-green-fill) px-5 text-[14px] font-semibold text-white hover:bg-(--c-green-fill-hover) ${busy ? 'opacity-60' : ''}`}
           >
-            {saving ? <VinylSpinner size={16} /> : <Check size={15} strokeWidth={2.6} />} Done
+            {busy || leaving ? <VinylSpinner size={16} /> : <Check size={15} strokeWidth={2.6} />} Done
           </button>
         </div>
       </aside>
@@ -235,7 +284,7 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
         <div className="mb-4 flex items-center justify-between gap-3">
           <p className="m-0 text-[14px] font-semibold text-(--c-57534e)">
             {rows.length} {rows.length === 1 ? 'album' : 'albums'}
-            {saving === 'order' && <VinylSpinner size={16} className="ml-2 inline-block align-middle" />}
+            {saving('order') && <VinylSpinner size={16} className="ml-2 inline-block align-middle" />}
           </p>
           <button
             type="button"
@@ -274,7 +323,7 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
                 <button
                   type="button"
                   aria-label={`Move ${e.albumName}; arrow keys move it up or down`}
-                  onPointerDown={() => setArmed(e.id)}
+                  onPointerDown={() => { if (!writing) setArmed(e.id) }}
                   onPointerUp={() => dragging == null && setArmed(null)}
                   onKeyDown={(ev) => onHandleKey(ev, e.id)}
                   className="mt-5 cursor-grab touch-none text-(--c-a8998a) hover:text-(--c-57534e) active:cursor-grabbing"
@@ -300,14 +349,21 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
                     <button
                       type="button"
                       onClick={() => run(`remove:${e.id}`, () => removeBinEntry(slug, e.id), 'Couldn’t take that album out')}
-                      disabled={saving === `remove:${e.id}`}
+                      disabled={saving(`remove:${e.id}`)}
                       aria-label={`Take ${e.albumName} out of the bin`}
                       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-(--c-a8998a) hover:bg-(--c-efe9e0) hover:text-(--c-b91c1c)"
                     >
-                      {saving === `remove:${e.id}` ? <VinylSpinner size={14} /> : <X size={16} />}
+                      {saving(`remove:${e.id}`) ? <VinylSpinner size={14} /> : <X size={16} />}
                     </button>
                   </div>
-                  <NoteField key={`${e.id}:${e.note ?? ''}`} slug={slug} entry={e} onSaved={refresh} />
+                  <NoteField
+                    key={`${e.id}:${e.note ?? ''}`}
+                    slug={slug}
+                    entry={e}
+                    onSaved={refresh}
+                    onSaving={(on) => setNotesSaving((n) => n + (on ? 1 : -1))}
+                    onFailed={(text) => setErrorFor(`note:${e.id}`, text)}
+                  />
                 </div>
               </li>
             ))}
@@ -319,7 +375,7 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
       {cropImage && (
         <BannerCropper
           image={cropImage}
-          saving={saving === 'cover'}
+          saving={saving('cover')}
           width={BIN_COVER_PX}
           height={BIN_COVER_PX}
           title="Frame the picture"
@@ -336,6 +392,7 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
             await deleteBin(slug)
             queryClient.removeQueries({ queryKey: ['bin', slug] })
             queryClient.invalidateQueries({ queryKey: ['bins'] })
+            queryClient.invalidateQueries({ queryKey: ['search'] })
             navigate('/bins', { replace: true })
           }}
         />
@@ -345,7 +402,15 @@ export default function BinEditor({ bin, onDone }: { bin: BinDetail; onDone: () 
 }
 
 /** A record's note, saved when the field is left. */
-function NoteField({ slug, entry, onSaved }: { slug: string; entry: BinEntry; onSaved: () => void }) {
+function NoteField({ slug, entry, onSaved, onSaving, onFailed }: {
+  slug: string
+  entry: BinEntry
+  onSaved: () => void
+  onSaving: (on: boolean) => void
+  /** Tells the editor too, so Done stays open on a note that didn't save;
+   *  null as a new save starts. */
+  onFailed: (text: string | null) => void
+}) {
   const [value, setValue] = useState(entry.note ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -353,14 +418,19 @@ function NoteField({ slug, entry, onSaved }: { slug: string; entry: BinEntry; on
     const v = value.trim()
     if (v === (entry.note ?? '')) return
     setBusy(true)
+    onSaving(true)
     setError(null)
+    onFailed(null)
     try {
       await updateBinEntryNote(slug, entry.id, v)
       onSaved()
     } catch (e) {
-      setError(binErrorText(e, 'Couldn’t save that note'))
+      const text = binErrorText(e, 'Couldn’t save that note')
+      setError(text)
+      onFailed(text)
     } finally {
       setBusy(false)
+      onSaving(false)
     }
   }
   return (
