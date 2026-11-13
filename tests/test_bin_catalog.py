@@ -84,3 +84,23 @@ def test_pick_bin_records_falls_back_to_the_artists_genre():
             _row(2, "Bon Iver", "22, A Million", "bon iver||22 a million", 3, tl=alt)]
     got = {r["bin_entry_id"]: r["genre"] for r in pick_bin_records(rows, [], {"radiohead": "Rock"})}
     assert got == {1: "Rock", 2: None}
+
+
+def test_every_bin_reader_skips_hidden_bins():
+    import inspect
+    import song_score_model
+    from backend import tracklink
+    from theme_predictor import global_factors
+    from worker import audio_ingest, catalog_predict
+    for fn in (catalog_predict.bin_records, audio_ingest.tracks_needing_audio,
+               tracklink.link_bin_entries, global_factors.albums_missing_factors):
+        assert "COUNTING_ENTRY_JOIN" in inspect.getsource(fn), fn.__name__
+    from backend.user_bins import COUNTING_ENTRY_JOIN
+    assert "hidden_at IS NULL" in COUNTING_ENTRY_JOIN
+    assert COUNTING_ENTRY_JOIN in song_score_model._BIN_SQL.text
+
+
+def test_audio_queue_puts_curated_bins_first():
+    import inspect
+    from worker import audio_ingest
+    assert "b.kind <> 'curated'" in inspect.getsource(audio_ingest.tracks_needing_audio)

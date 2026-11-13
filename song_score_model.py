@@ -22,6 +22,7 @@ from sqlalchemy import text
 warnings.filterwarnings("ignore")
 
 from backend.trackkeys import artist_key
+from backend.user_bins import COUNTING_ENTRY_JOIN
 
 import numpy as np
 import pandas as pd
@@ -1101,6 +1102,7 @@ _BIN_SQL = text(f"""
            {_AF_SELECT}, bt.track_id
     FROM bintrack bt
     JOIN binentry e ON e.id = bt.entry_id
+    {COUNTING_ENTRY_JOIN}
     JOIN trackaudio af ON af.track_id = bt.track_id
     WHERE bt.entry_id = ANY(:entry_ids) AND af.bpm IS NOT NULL
 """)

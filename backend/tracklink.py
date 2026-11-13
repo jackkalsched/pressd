@@ -34,6 +34,7 @@ from sqlalchemy import text
 
 from .credits import extras_of
 from .trackkeys import key_parts, recording_key
+from .user_bins import COUNTING_ENTRY_JOIN
 
 # Duration disagreement beyond this means "different recording, same name".
 DUR_TOL_MS = 10_000
@@ -296,6 +297,7 @@ def link_bin_entries(con, entry_ids: list[int] | None = None) -> dict:
     entries = con.execute(text(f"""
         SELECT e.id, e.artist, e.album_name, e.tracklist_json, e.song_title
         FROM binentry e
+        {COUNTING_ENTRY_JOIN}
         WHERE e.tracklist_json IS NOT NULL
           AND NOT EXISTS (SELECT 1 FROM bintrack bt WHERE bt.entry_id = e.id){only}
         ORDER BY e.bin_id, e.position
@@ -360,6 +362,7 @@ def link_bin_entries(con, entry_ids: list[int] | None = None) -> dict:
     # before their song was matched.
     pending = con.execute(text(f"""
         SELECT e.id, e.song_title FROM binentry e
+        {COUNTING_ENTRY_JOIN}
         WHERE e.song_title IS NOT NULL AND e.track_id IS NULL
           AND EXISTS (SELECT 1 FROM bintrack bt WHERE bt.entry_id = e.id){only}
     """), params).fetchall()

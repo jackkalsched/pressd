@@ -64,6 +64,7 @@ import backend.models  # noqa: F401 — registers tables in SQLModel.metadata
 from backend.database import engine
 from worker import runlog
 from backend.tracklink import link_bin_entries
+from backend.user_bins import COUNTING_ENTRY_JOIN
 from worker.migrate_tracks import sync_tracks, _FEATURE_COLS
 
 DOWNLOAD_TIMEOUT_S = 90
@@ -156,17 +157,19 @@ def tracks_needing_audio(con, limit: int | None = None,
         SELECT q.track_id, q.title, q.artist, q.album_name FROM (
             SELECT DISTINCT ON (t.id)
                    t.id AS track_id, bt.title, e.artist, e.album_name,
-                   COALESCE(t.audio_failed_at, t.created_at) AS queued_at
+                   COALESCE(t.audio_failed_at, t.created_at) AS queued_at,
+                   b.kind AS bin_kind
             FROM track t
             JOIN bintrack bt ON bt.track_id = t.id
             JOIN binentry e ON e.id = bt.entry_id
+            {COUNTING_ENTRY_JOIN}
             WHERE NOT EXISTS (SELECT 1 FROM trackaudio ta
                               WHERE ta.track_id = t.id AND ta.bpm IS NOT NULL)
               AND NOT EXISTS (SELECT 1 FROM song s WHERE s.track_id = t.id)
               AND {_DUE}
-            ORDER BY t.id, e.id
+            ORDER BY t.id, (b.kind <> 'curated'), e.id
         ) q
-        ORDER BY q.queued_at, q.track_id
+        ORDER BY (q.bin_kind <> 'curated'), q.queued_at, q.track_id
         LIMIT :room
     """), {"room": room}).fetchall()
 

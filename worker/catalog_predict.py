@@ -46,6 +46,7 @@ import backend.models  # noqa: F401 — registers tables in SQLModel.metadata
 from backend.database import engine
 from backend.models import PressUser
 from backend.trackkeys import album_key
+from backend.user_bins import COUNTING_ENTRY_JOIN
 from worker import runlog
 
 
@@ -93,10 +94,11 @@ def bin_records(con, copies: list[dict]) -> list[dict]:
     entry's artist, title and the catalog's genre. A record someone holds in
     any edition is already here as that copy, so it isn't scored twice.
     `album_id` is the entry's id negated (song_score_model.bin_frames)."""
-    rows = con.execute(text("""
+    rows = con.execute(text(f"""
         SELECT e.id, e.artist, e.album_name, e.year, e.subject_key, e.cover_url,
                e.tracklist_json, COUNT(ta.track_id) AS n_analyzed
         FROM binentry e
+        {COUNTING_ENTRY_JOIN}
         JOIN bintrack bt ON bt.entry_id = e.id
         LEFT JOIN trackaudio ta ON ta.track_id = bt.track_id AND ta.bpm IS NOT NULL
         GROUP BY e.id
