@@ -514,27 +514,83 @@ def release_refusal(release: dict, today: date) -> str | None:
     return reason
 
 
-def entry_fields(release: dict) -> dict:
-    """A BinEntry's columns from a resolved release (/search/resolve's shape,
-    as import_bin stores a curated entry's), the resolve kept whole as the
-    tracklist so the bin's Add makes the copy from it with no outbound call."""
+# More songs than any record a bin should hold; a longer list is refused.
+MAX_RELEASE_TRACKS = 200
+
+
+def _int_or_none(v, what: str) -> int | None:
+    if v is None or v == "":
+        return None
+    if isinstance(v, (dict, list)):
+        raise ValueError(f"{what} must be a number")
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        raise ValueError(f"{what} must be a number")
+
+
+def _str_or_none(v) -> str | None:
+    return str(v) if isinstance(v, (str, int, float)) and str(v).strip() else None
+
+
+def clean_release(release: dict) -> dict:
+    """A client-sent release rebuilt from the fields /search/resolve has and
+    nothing else. It is stored as the entry's tracklist, and the nightly audio
+    ingest links every unlinked entry in one pass (tracklink.link_bin_entries,
+    which writes track numbers and durations into integer columns): one
+    malformed song there would fail that run, and every run after it, for
+    everyone. So every value is checked here, once, and a bad one is a 422."""
+    if not isinstance(release, dict):
+        raise ValueError("a release must be an object")
     artist = str(release.get("artist") or "").strip()
     name = str(release.get("album_name") or "").strip()
-    if not artist or not name or not isinstance(release.get("tracks"), list):
+    raw_tracks = release.get("tracks")
+    if not artist or not name or not isinstance(raw_tracks, list):
         raise ValueError("a release needs an artist, a title and its tracks")
-    try:
-        deezer = int(release["deezer_id"]) if release.get("deezer_id") else None
-    except (TypeError, ValueError):
-        deezer = None
-    year = release.get("year")
+    if len(raw_tracks) > MAX_RELEASE_TRACKS:
+        raise ValueError(f"a release has at most {MAX_RELEASE_TRACKS} tracks")
+    tracks = []
+    for t in raw_tracks:
+        if not isinstance(t, dict) or not isinstance(t.get("title"), str) or not t["title"].strip():
+            raise ValueError("every track needs a title")
+        tracks.append({
+            "title": t["title"].strip(),
+            "track_number": _int_or_none(t.get("track_number"), "track_number"),
+            "duration_ms": _int_or_none(t.get("duration_ms"), "duration_ms"),
+            "explicit": bool(t.get("explicit")),
+            "spotify_id": None,
+            "artist": _str_or_none(t.get("artist")) or artist,
+        })
+    extra = release.get("extra_artists")
+    extra = [str(a) for a in extra if isinstance(a, str) and a.strip()] if isinstance(extra, list) else []
     return {
-        "artist": artist,
+        "spotify_id": None,
         "album_name": name,
-        "year": year if isinstance(year, int) else None,
-        "subject_key": subject_key_album(artist, name),
-        "deezer_id": deezer,
-        "cover_url": release.get("cover_url") or release.get("art_url"),
-        "tracklist_json": json.dumps({**release, "artist": artist, "album_name": name}),
+        "artist": artist,
+        "extra_artists": extra,
+        "year": _int_or_none(release.get("year"), "year"),
+        "release_date": _str_or_none(release.get("release_date")),
+        "cover_url": _str_or_none(release.get("cover_url") or release.get("art_url")),
+        "total_tracks": _int_or_none(release.get("total_tracks"), "total_tracks"),
+        "genre": _str_or_none(release.get("genre")),
+        "deezer_id": _int_or_none(release.get("deezer_id"), "deezer_id"),
+        "tracks": tracks,
+    }
+
+
+def entry_fields(release: dict) -> dict:
+    """A BinEntry's columns from a resolved release (/search/resolve's shape,
+    as import_bin stores a curated entry's), the cleaned resolve kept whole as
+    the tracklist so the bin's Add makes the copy from it with no outbound call."""
+    r = clean_release(release)
+    return {
+        "artist": r["artist"],
+        "album_name": r["album_name"],
+        "year": r["year"],
+        "subject_key": subject_key_album(r["artist"], r["album_name"]),
+        "deezer_id": r["deezer_id"],
+        "cover_url": r["cover_url"],
+        "tracklist_json": json.dumps(r),
     }
 
 
@@ -626,6 +682,7 @@ def add_to_bin(
     else:
         raise HTTPException(status_code=422, detail="Send album_id or release")
     try:
+        release = clean_release(release)
         fields = entry_fields(release)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))

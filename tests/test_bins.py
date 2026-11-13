@@ -171,7 +171,7 @@ def test_entry_from_release_keeps_the_resolve_shape():
     assert f["subject_key"] == subject_key_album("Frank Ocean", "Blonde")
     # The stored tracklist is the resolve itself, so a bin's Add makes the copy from it.
     assert copy_data(NS(tracklist_json=f["tracklist_json"], artist=f["artist"], album_name=f["album_name"]),
-                     "listening")["tracks"] == release["tracks"]
+                     "listening")["tracks"][0]["title"] == "Nikes"
     with pytest.raises(ValueError):
         entry_fields({"album_name": "", "artist": "x", "tracks": []})
 
@@ -200,3 +200,24 @@ def test_release_from_copy():
     r = release_from_copy(album, songs)
     assert [t["title"] for t in r["tracks"]] == ["one", "two"]
     assert r["extra_artists"] == ["B"] and r["release_date"] == "2020-05-01" and r["cover_url"] == "art"
+
+
+def test_a_malformed_release_is_refused_before_it_is_stored():
+    from backend.routers.bins import MAX_RELEASE_TRACKS, clean_release, entry_fields
+    base = {"album_name": "N", "artist": "A"}
+    for tracks in (["a", "b", "c"], [{"title": ""}], [{"title": 5}], [{"title": "x", "duration_ms": "x"}],
+                   [{"title": "x", "track_number": [1]}], [{"title": "x"}] * (MAX_RELEASE_TRACKS + 1)):
+        with pytest.raises(ValueError):
+            entry_fields({**base, "tracks": tracks})
+    with pytest.raises(ValueError):
+        clean_release("not a dict")
+    r = clean_release({**base, "junk": {"x": 1}, "extra_artists": ["B", 3],
+                       "tracks": [{"title": " s ", "track_number": "2", "duration_ms": 1500.0, "artist": None,
+                                   "evil": "y"}]})
+    assert r["tracks"] == [{"title": "s", "track_number": 2, "duration_ms": 1500, "explicit": False,
+                            "spotify_id": None, "artist": "A"}]
+    assert "junk" not in r and r["extra_artists"] == ["B"]
+    # What is stored is what tracklink.bin_songs reads without a surprise.
+    from backend.tracklink import bin_songs
+    songs = bin_songs(json.loads(entry_fields({**base, "tracks": r["tracks"]})["tracklist_json"]), "A")
+    assert songs[0].track_number == 2 and songs[0].duration_ms == 1500
