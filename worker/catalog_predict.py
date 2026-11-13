@@ -174,7 +174,7 @@ def song_bin_tracks(con) -> set[int]:
     """The recordings song bins name (BinEntry.track_id), whose own predicted
     scores the catalog stage stores (SongPrediction)."""
     return {r[0] for r in con.execute(text(
-        "SELECT DISTINCT e.track_id FROM binentry e JOIN bin b ON b.id = e.bin_id"
+        f"SELECT DISTINCT e.track_id FROM binentry e {COUNTING_ENTRY_JOIN}"
         " WHERE b.item_type = 'song' AND e.track_id IS NOT NULL")).fetchall()}
 
 
