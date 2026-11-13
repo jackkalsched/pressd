@@ -723,14 +723,12 @@ function ReviewCell({ review, first, onOpen, onOpenUser, onLike }: { review: Top
   return (
     <View style={[styles.review, !first && [styles.hairline, { borderColor: tc.border }]]}>
       <Pressable onPress={onOpen}>
-        {/* Reviewer identity leads, bigger than the album */}
+        {/* The record leads, with the reviewer's score for it */}
         <View style={styles.reviewHead}>
-          <Pressable onPress={() => onOpenUser(review.author.id)} accessibilityRole="button" accessibilityLabel={`View ${review.author.name}'s profile`}>
-            <Cover uri={review.author.avatar_url} seed={review.author.name} size={38} radius={19} />
-          </Pressable>
+          <Cover uri={review.album_art_url} seed={review.album_name} size={44} />
           <View style={styles.mediaText}>
-            <Text style={styles.reviewAuthor} numberOfLines={1} onPress={() => onOpenUser(review.author.id)}>{review.author.name}</Text>
-            <Text style={styles.reviewOn} numberOfLines={1}>reviewed {review.album_name}</Text>
+            <Text style={styles.reviewAlbum} numberOfLines={1}>{review.album_name}</Text>
+            <Text style={styles.reviewArtist} numberOfLines={1}>{review.artist}</Text>
           </View>
           {review.score != null && (
             <Text style={[styles.reviewScore, { color: scoreColor(review.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{review.score.toFixed(2)}</Text>
@@ -760,15 +758,16 @@ function ReviewCell({ review, first, onOpen, onOpenUser, onLike }: { review: Top
           </View>
         )}
 
-        {/* Album cover + name, smaller than the reviewer */}
+        {/* Who wrote it, along the foot */}
         <View style={styles.reviewAlbumRow}>
-          <Cover uri={review.album_art_url} seed={review.album_name} size={40} />
+          <Pressable onPress={() => onOpenUser(review.author.id)} accessibilityRole="button" accessibilityLabel={`View ${review.author.name}'s profile`}>
+            <Cover uri={review.author.avatar_url} seed={review.author.name} size={30} radius={15} />
+          </Pressable>
           <View style={styles.mediaText}>
-            <Text style={styles.reviewAlbum} numberOfLines={1}>{review.album_name}</Text>
-            <Text style={styles.reviewArtist} numberOfLines={1}>{review.artist}</Text>
+            <Text style={styles.reviewAuthorFoot} numberOfLines={1} onPress={() => onOpenUser(review.author.id)}>{review.author.name}</Text>
           </View>
-          {/* Like and replies on the album's line, at its right edge; their own
-              Pressables take the tap before the cell's. */}
+          {/* Like and replies on the reviewer's line, at its right edge; their
+              own Pressables take the tap before the cell's. */}
           <View style={styles.reviewActions}>
             <LikeButton liked={!!review.liked_by_me} count={review.like_count} onToggle={onLike} />
             <Pressable style={styles.reviewAction} onPress={onOpen} hitSlop={8}>
@@ -942,8 +941,9 @@ const styles = StyleSheet.create({
   reviewScore: { fontFamily: fonts.display, fontSize: 20 },
   reviewQuote: { fontFamily: fonts.displayRegular, fontSize: 15, lineHeight: 22, color: colors.ink, marginTop: spacing.md },
   reviewAlbumRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
-  reviewAlbum: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink },
-  reviewArtist: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
+  reviewAlbum: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.ink },
+  reviewArtist: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, marginTop: 1 },
+  reviewAuthorFoot: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.ink },
 
   songNotes: { marginTop: spacing.md, gap: 5 },
   songNote: { flexDirection: 'row', alignItems: 'center', gap: 6 },
