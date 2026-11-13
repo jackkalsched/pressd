@@ -91,10 +91,10 @@ def test_every_bin_reader_skips_hidden_bins():
     import song_score_model
     from backend import tracklink
     from theme_predictor import global_factors
-    from worker import audio_ingest, catalog_predict
+    from worker import audio_ingest, catalog_predict, nightly_predict
     for fn in (catalog_predict.bin_records, audio_ingest.tracks_needing_audio,
                tracklink.link_bin_entries, global_factors.albums_missing_factors,
-               catalog_predict.song_bin_tracks):
+               catalog_predict.song_bin_tracks, nightly_predict.catalog_gap):
         assert "COUNTING_ENTRY_JOIN" in inspect.getsource(fn), fn.__name__
     from backend.user_bins import COUNTING_ENTRY_JOIN
     assert "hidden_at IS NULL" in COUNTING_ENTRY_JOIN
