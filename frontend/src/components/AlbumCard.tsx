@@ -141,7 +141,7 @@ export default function AlbumCard({ album, showActions = true }: Props) {
             </div>
           )}
 
-          {/* Score badge — Milker (.font-rating), a blocky figure that reads at a
+          {/* Score badge — Big Noodle Titling (.font-rating), a blocky figure that reads at a
               glance over the cover. */}
           {album.score !== null && (
             <div

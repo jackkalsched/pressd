@@ -945,7 +945,7 @@ function TopReviewCard({ rv, onOpen, onOpenComments, onOpenAuthor, onLike }: {
           </p>
           <p className="m-0 mt-px text-[11.5px] text-(--c-b3a99c)">{timeAgo(rv.review_at)}</p>
         </div>
-        {rv.score != null && <ScorePill score={rv.score} xl milker />}
+        {rv.score != null && <ScorePill score={rv.score} xl rating />}
       </div>
       <div className="group/album flex gap-3.5 cursor-pointer" onClick={onOpen} role="link" aria-label={`Open ${rv.album_name}`}>
         <div className="shrink-0 transition-transform duration-300 ease-out group-hover/album:scale-[1.04] group-hover/album:-rotate-1">

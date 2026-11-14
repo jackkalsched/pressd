@@ -458,19 +458,21 @@ body {
   font-display: swap;
 }
 
-/* Milker (Brandsemut), self-hosted from the font Jack supplied — his license.
-   Library's rating badges only (AlbumCard). One weight, so never bolded; it has
-   no "~", which falls back to the body face. */
+/* Big Noodle Titling (Sentinel Type), self-hosted — free for any use, personal
+   or commercial (see fonts/BigNoodleTitling-LICENSE.txt). Rating figures only:
+   Library's badges (AlbumCard), For You's review cards and Trending (ScorePill's
+   `rating`). One weight, so never bolded; it has no "~", which falls back to the
+   body face. It replaced Milker (November 2026). */
 @font-face {
-  font-family: 'Milker';
-  src: url('/fonts/Milker.woff2') format('woff2'),
-       url('/fonts/Milker.woff') format('woff');
+  font-family: 'Big Noodle Titling';
+  src: url('/fonts/BigNoodleTitling.woff2') format('woff2'),
+       url('/fonts/BigNoodleTitling.woff') format('woff');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 .font-rating {
-  font-family: 'Milker', 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: 'Big Noodle Titling', 'Plus Jakarta Sans', system-ui, sans-serif;
   font-weight: 400;
 }
 
