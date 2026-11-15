@@ -1004,6 +1004,16 @@ def artist_detail(
         # Only what the comparison actually draws — the full global payload
         # would double the response for albums and song_scores the compare view
         # never reads.
+        # Compare's record list holds your score against the record's Pressd
+        # average (the pooled row: every copy, any edition by title, the community
+        # page's PRESSD AVG), and opens the record's Pressd page.
+        def _record(name: str) -> str:
+            return _same_record(name) or name.strip().lower()
+        pooled_rows = {_record(r["album_name"]): r for r in g["albums"]}
+        for r in payload["albums"]:
+            pr = pooled_rows.get(_record(r["album_name"]))
+            r["pressd_score"] = pr["score"] if pr else None
+            r["pressd_raters"] = pr["rater_count"] if pr else 0
         payload["global"] = {
             "percentiles": g["percentiles"],
             "avg_song_score": g["avg_song_score"],

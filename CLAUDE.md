@@ -2009,11 +2009,17 @@ for editing a review later, and both paths post into the thread through
    only for search's artist rows), October
    2026. Web has mobile's three scopes, as pills and `?mode=` in the URL: *mine*, *Pressd
    avg* (`population=global`: every copy pooled, ranked site-wide, with the popularity
-   ranks) and *Compare* (`both`: the two song averages side by side, then straight into
-   both distributions as curves, and `fetchSimilarArtistComparisons`), drawn from
-   [artistCompare.tsx](frontend/src/components/artistCompare.tsx). *Where you split* (the
-   song-gap list) was removed from both apps in November 2026 (Jack's call); mobile's
-   `app/splits/[name].tsx` and web's `SongGapChart` are now unreachable — kept, not deleted. Your own scope lists exactly your rated copies, one row each. In the
+   ranks) and *Compare* (`both`: the two song averages side by side, then *Where you split* —
+   the songs you and the userbase hear most differently, `song_gaps`, web's `SongGapChart`, iPhone's
+   `SongGapChart` with See all opening `app/splits/[name].tsx` — then both distributions as curves,
+   and `fetchSimilarArtistComparisons`), drawn from
+   [artistCompare.tsx](frontend/src/components/artistCompare.tsx). Where you split was removed for
+   a week in November 2026 and brought back (both Jack's calls). It has no heading and no average gap now: the
+   hottest take, then the songs by gap, highest first (the full list too; it was most-rated first),
+   and iPhone's full list is a bare page of bars under a back button. The two averages above it
+   carry no difference under their "vs.". Compare's record list shows each of your records' score beside
+   the record's Pressd average (`pressd_score` / `pressd_raters`, added to your rows from the pooled
+   ones in `artist_detail`'s `both` branch), and a record opens its Pressd page, as in Pressd avg. Your own scope lists exactly your rated copies, one row each. In the
    Pressd scope an album row is one record rated by anyone,
    pooled across copies (`stats._artist_album_rows`, keyed on `_clean_album` of the title alone, scored as
    the plain mean of copies — the community page's own PRESSD AVG), so both clients

@@ -122,9 +122,8 @@ export default function SongGapChart({
 
   const summary = useMemo(() => {
     if (gaps.length === 0) return null
-    const mean = gaps.reduce((s, g) => s + g.diff, 0) / gaps.length
     const hottest = gaps.reduce((m, g) => (Math.abs(g.diff) > Math.abs(m.diff) ? g : m), gaps[0])
-    return { mean, hottest }
+    return { hottest }
   }, [gaps])
 
   // Nobody else in Press'd has rated a track of theirs, so there is no crowd to
@@ -142,29 +141,17 @@ export default function SongGapChart({
   return (
     <View>
       <View style={styles.tiles}>
+        {/* The track, not the figure: the song answers what you are arguing
+            about, and the bar for it is already in the chart. The average gap
+            sat beside it until November 2026 (Jack's call). */}
         <View style={styles.tile}>
-          <Text style={[styles.tileValue, { color: summary.mean >= 0 ? UP : DOWN }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>
-            {summary.mean >= 0 ? '+' : ''}{summary.mean.toFixed(2)}
-          </Text>
-          <Text style={styles.tileLabel}>Average gap vs Pressd</Text>
-        </View>
-        {/* Right-set, so the pair reads as one line with the two figures
-            pushed to opposite edges rather than both crowding the left. */}
-        <View style={[styles.tile, styles.tileRight]}>
-          {/* The track, not the figure. "2.1" answers how far apart you are;
-              the song answers what you are arguing about, which is the thing
-              worth reading — and the bar for it is already in the chart. */}
           <Text
-            style={[
-              styles.tileSong,
-              styles.textRight,
-              { color: summary.hottest.diff >= 0 ? UP : DOWN },
-            ]}
+            style={[styles.tileSong, { color: summary.hottest.diff >= 0 ? UP : DOWN }]}
             numberOfLines={2}
           >
             {summary.hottest.title}
           </Text>
-          <Text style={[styles.tileLabel, styles.textRight]} numberOfLines={1}>Hottest take</Text>
+          <Text style={styles.tileLabel} numberOfLines={1}>Hottest take</Text>
         </View>
       </View>
 
