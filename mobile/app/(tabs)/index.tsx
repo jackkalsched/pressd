@@ -507,6 +507,13 @@ export default function ForYou() {
                   review={rv}
                   first={i === 0}
                   onOpen={() => openAlbum(rv.album_id)}
+                  onOpenReplies={() => router.push({
+                    pathname: '/thread/[subject]',
+                    params: {
+                      subject: 'album', artist: rv.artist, album: rv.album_name, title: rv.album_name,
+                      ...(rv.post_id ? { post: String(rv.post_id) } : {}),
+                    },
+                  })}
                   onOpenUser={openProfile}
                   onLike={() => likeReview(rv.album_id)}
                 />
@@ -720,7 +727,7 @@ function NewReleaseCard({ release, onOpen }: { release: NewRelease; onOpen: () =
   )
 }
 
-function ReviewCell({ review, first, onOpen, onOpenUser, onLike }: { review: TopReview; first: boolean; onOpen: () => void; onOpenUser: (id: number) => void; onLike: () => void }) {
+function ReviewCell({ review, first, onOpen, onOpenReplies, onOpenUser, onLike }: { review: TopReview; first: boolean; onOpen: () => void; onOpenReplies: () => void; onOpenUser: (id: number) => void; onLike: () => void }) {
   const tc = useColors()
   return (
     <View style={[styles.review, !first && [styles.hairline, { borderColor: tc.border }]]}>
@@ -772,7 +779,7 @@ function ReviewCell({ review, first, onOpen, onOpenUser, onLike }: { review: Top
               own Pressables take the tap before the cell's. */}
           <View style={styles.reviewActions}>
             <LikeButton liked={!!review.liked_by_me} count={review.like_count} onToggle={onLike} />
-            <Pressable style={styles.reviewAction} onPress={onOpen} hitSlop={8}>
+            <Pressable style={styles.reviewAction} onPress={onOpenReplies} hitSlop={8} accessibilityRole="button" accessibilityLabel={`${review.comment_count} replies, open the discussion`}>
               <MessageCircle size={15} color={tc.inkMuted} />
               <Text style={styles.reviewActionText}>{review.comment_count}</Text>
             </Pressable>

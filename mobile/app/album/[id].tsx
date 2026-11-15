@@ -35,6 +35,7 @@ import {
   copyAlbumToLibrary,
   saveReview,
   deleteReview,
+  fetchThreadPreview,
   toggleLike,
   type CommunityAlbum as CommunityAlbumData,
   type CommunityTrack,
@@ -45,6 +46,7 @@ import { useTracklistFill } from '../../lib/useTracklistFill'
 import { useAuth } from '../../lib/auth'
 import { useProfile } from '../../lib/picks'
 import { useOpenProfile } from '../../lib/useOpenProfile'
+import Avatar from '../../components/Avatar'
 import CommentThread from '../../components/CommentThread'
 import AlbumBackdrop from '../../components/AlbumBackdrop'
 import BangSkip from '../../components/BangSkip'
@@ -56,6 +58,9 @@ import NoComparisonYet from '../../components/NoComparisonYet'
 import { confirmDeleteAlbum, useDeleteAlbum } from '../../lib/useDeleteAlbum'
 import { colors, contentWidth, fitType, fonts, radii, spacing, useColors, scoreColor } from '../../theme/tokens'
 import { scrollToTop } from '../../lib/scrollToTop'
+
+// The owner's face on someone else's cover (web's is 72 on a 380 cover).
+const COVER_OWNER = 44
 
 const WINDOW_H = Dimensions.get('window').height
 
@@ -352,8 +357,9 @@ export default function AlbumDetail() {
             : undefined
         }
         onBack={leave}
+        // A record's Pressd page opens an artist on Pressd's numbers, not yours.
         onOpenArtist={(n) =>
-          router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent(n) } })
+          router.push({ pathname: '/artist/[name]', params: { name: encodeURIComponent(n), mode: 'pressd' } })
         }
         onRate={() => startRating(shown)}
         onQueue={() => queueAlbum(shown)}
@@ -642,6 +648,20 @@ export default function AlbumDetail() {
                 <Text style={styles.artInitial}>{album.albumName[0]}</Text>
               </View>
             )}
+            {/* Someone else's copy: their face on the record's bottom-right
+                corner, so the page reads as theirs at a glance (web's
+                AlbumDetail does the same). It opens their profile. */}
+            {owner && (
+              <Pressable
+                style={styles.coverOwner}
+                onPress={() => openProfile(owner.id)}
+                hitSlop={6}
+                accessibilityRole="link"
+                accessibilityLabel={`${owner.name}'s profile`}
+              >
+                <Avatar name={owner.name} avatarUrl={owner.avatarUrl} size={COVER_OWNER} />
+              </Pressable>
+            )}
           </View>
           <Text style={styles.albumName} numberOfLines={2} onPress={() => scrollToTop(listRef)} accessibilityRole="button" accessibilityHint="Scrolls to the top">{album.albumName}</Text>
           <Text style={styles.artist} numberOfLines={1}>
@@ -901,6 +921,7 @@ export default function AlbumDetail() {
         <ReviewSection
           album={album}
           editable={isMine}
+          ownerId={owner?.id}
           editing={reviewEditing}
           onEditingChange={setReviewEditing}
         />
@@ -1770,15 +1791,27 @@ function ForkBtn({ label, onPress }: { label: string; onPress: () => void }) {
 function ReviewSection({
   album,
   editable,
+  ownerId,
   editing,
   onEditingChange,
 }: {
   album: Album
   editable: boolean
+  /** Someone else's copy: its owner, whose review may already be on the page. */
+  ownerId?: number
   editing: boolean
   onEditingChange: (v: boolean) => void
 }) {
   const tc = useColors()
+  // AlbumThoughts' preview of the room (same key; read from its cache, never
+  // fetched here). When the owner's review is one of the three it shows, the
+  // page already has it, so it isn't printed again under the tracks.
+  const { data: roomPreview } = useQuery({
+    queryKey: ['threadPreview', 'album', album.artist, album.albumName],
+    queryFn: () => fetchThreadPreview({ subjectType: 'album', artist: album.artist, album: album.albumName }),
+    enabled: false,
+  })
+  const shownAbove = ownerId != null && (roomPreview?.posts ?? []).slice(0, 3).some((p) => p.author.id === ownerId)
 
   const queryClient = useQueryClient()
   // A Modal renders in its own native hierarchy, outside the SafeAreaProvider,
@@ -1818,7 +1851,7 @@ function ReviewSection({
 
   // Nothing to *show* without a review, but the component stays mounted so the
   // composer it owns can still be opened from the button beside the rating CTA.
-  if (!editable && !album.review) return null
+  if (!editable && (!album.review || shownAbove)) return null
 
   function cancel() {
     setDraft(album.review ?? '')
@@ -2025,6 +2058,19 @@ const styles = StyleSheet.create({
 
   head: { alignItems: 'center', marginTop: spacing.xxl },
   art: { width: 148, height: 148, borderRadius: radii.lg },
+  // The owner's face on the cover's corner, ringed in the page colour.
+  coverOwner: {
+    position: 'absolute',
+    right: -12,
+    bottom: -10,
+    padding: 3,
+    borderRadius: (COVER_OWNER + 6) / 2,
+    backgroundColor: colors.bg,
+    shadowColor: '#28190a',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+  },
   artFallback: { backgroundColor: colors.inset, alignItems: 'center', justifyContent: 'center' },
   artInitial: { fontFamily: fonts.display, fontSize: 56, color: colors.inkMuted },
   albumName: { fontFamily: fonts.display, fontSize: 26, color: colors.ink, textAlign: 'center', marginTop: spacing.lg },

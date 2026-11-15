@@ -221,6 +221,8 @@ export default function ArtistPage() {
   const owner = isViewingFriend ? viewingUser!.name : null
   // Pooled rows are one per record, so they open the record's community page;
   // a library's rows open that library's copy.
+  // Pressd avg, for an artist short of what the userbase has in common.
+  const thin = mode === 'pressd' && !!data?.small_sample
   const albumHref = (id: number) => (mode === 'pressd' ? `/album/${id}/community` : `/album/${id}`)
 
   // Scores in the score colour, rates in bang green / skip red, as on the album
@@ -324,7 +326,15 @@ export default function ArtistPage() {
         })()}
       </div>
 
-      {data.small_sample && (
+      {/* Pressd avg counts only what the userbase shares — a song once three
+          people have scored it, an artist once fifteen such songs exist
+          (backend/common_ratings.py). Short of that its numbers would be one or
+          two people's, so the stats step aside for one line and the records. */}
+      {thin ? (
+        <p className="m-0 mb-10 text-[14px] font-medium text-(--c-57534e)">
+          Not enough Pressd ratings for {data.artist}&rsquo;s stats yet.
+        </p>
+      ) : data.small_sample && (
         <p className="m-0 mb-6 text-[13.5px] font-medium text-(--c-2d6a4f)">
           Rate at least {SMALL_SAMPLE} songs to see advanced stats!
         </p>
@@ -339,7 +349,7 @@ export default function ArtistPage() {
           theirs={data.global?.avg_song_score ?? null}
           mineLabel={owner ? `${possessive(owner).toUpperCase()} AVG SONG` : 'MY AVG SONG'}
         />
-      ) : (
+      ) : thin ? null : (
       <div className="flex flex-wrap gap-x-12 gap-y-6 mb-12">
         {inlineStats.map(({ label, value, sub, color }, i) => (
           <div key={label} className="rise-in" style={stagger(i + 1)}>
@@ -356,10 +366,10 @@ export default function ArtistPage() {
       {/* Compare goes from the two song averages straight into the two score
           distributions; it has no percentile bars, and no "Where you split"
           list since November 2026 (Jack's call). */}
-      {mode !== 'compare' && <PercentilesSection data={stats} smallSample={data.small_sample} />}
+      {mode !== 'compare' && !thin && <PercentilesSection data={stats} smallSample={data.small_sample} />}
 
       {/* Histogram — or, comparing, both distributions on one pair of axes. */}
-      {data.song_scores.length > 0 && (
+      {data.song_scores.length > 0 && !thin && (
         <div className="mb-12">
           <p className={`${SECTION_LABEL} mb-4`}>SONG SCORE DISTRIBUTION</p>
           {mode === 'compare' ? (
@@ -376,7 +386,7 @@ export default function ArtistPage() {
 
       {/* Scatterplot — not in Compare, which is about you against the userbase,
           not this artist against the rest of a library. */}
-      {mode !== 'compare' && (
+      {mode !== 'compare' && !thin && (
       <div className="mb-12">
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <p className={SECTION_LABEL}>SONG SCORE VS EXTERNAL FACTORS — ALL ARTISTS</p>

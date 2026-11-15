@@ -2180,6 +2180,8 @@ export interface TopReview {
   like_count: number
   liked_by_me: boolean
   comment_count: number
+  /** The review's post in the record's thread, when it has one. */
+  post_id?: number
   top_song: { title: string; score: number } | null
   bottom_song: { title: string; score: number } | null
 }
@@ -2522,6 +2524,13 @@ export async function votePost(
   if (!res.ok) throw new Error('Failed to vote')
   const d = await res.json()
   return { myVote: d.my_vote ?? 0, likeCount: d.like_count ?? 0, dislikeCount: d.dislike_count ?? 0 }
+}
+
+/** Delete your own post or reply. A review post takes the review on your copy
+ *  of the record with it (discussions.delete_post). */
+export async function deletePost(postId: number): Promise<void> {
+  const res = await apiFetch(`${BASE()}/posts/${postId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to delete post')
 }
 
 export async function reportPost(

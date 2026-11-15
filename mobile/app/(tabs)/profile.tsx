@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
+  Dimensions,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -230,6 +231,24 @@ export default function Profile() {
   const bar = useCompactBar(70)
   const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true, listener: bar.track })
 
+  // Typing into the Library or Rankings search scrolls the field up under the
+  // compact bar, so what you type stays in view above the keyboard. While it's
+  // in use the list carries a screen of room at its foot, or a short (or
+  // filtered) list couldn't scroll far enough to lift it.
+  // The field's place in the list header (its top in the content: the header
+  // starts the content), from its own layout.
+  const searchY = useRef(0)
+  const [searchFocused, setSearchFocused] = useState(false)
+  function liftSearch() {
+    setSearchFocused(true)
+    // After the spacer has laid out.
+    setTimeout(() => {
+      const target = insets.top + 64 // just under the compact bar
+      const list = scrollRef.current as { scrollToOffset?: (p: { offset: number; animated?: boolean }) => void } | null
+      list?.scrollToOffset?.({ offset: Math.max(0, searchY.current - target), animated: true })
+    }, 60)
+  }
+
   const isGrid = tab === 'library'
   const rankMetrics = rankMode === 'albums' ? ALBUM_METRICS : ARTIST_METRICS
   const currentMetric = rankMetrics.find((m) => m.key === rankMetric) ?? rankMetrics[0]
@@ -394,10 +413,12 @@ export default function Profile() {
                     </Pressable>
                   ))}
                 </View>
-                <View style={styles.searchBar}>
+                <View style={styles.searchBar} onLayout={(e) => { searchY.current = e.nativeEvent.layout.y }}>
                   <Search size={15} color={tc.inkTertiary} />
                   <TextInput
                     style={styles.searchBarInput}
+                    onFocus={liftSearch}
+                    onBlur={() => setSearchFocused(false)}
                     value={libSearch}
                     onChangeText={setLibSearch}
                     placeholder="Search album or artist"
@@ -444,10 +465,12 @@ export default function Profile() {
                     <ChevronDown size={13} color={tc.inkSecondary} />
                   </Pressable>
                 </View>
-                <View style={styles.searchBar}>
+                <View style={styles.searchBar} onLayout={(e) => { searchY.current = e.nativeEvent.layout.y }}>
                   <Search size={15} color={tc.inkTertiary} />
                   <TextInput
                     style={styles.searchBarInput}
+                    onFocus={liftSearch}
+                    onBlur={() => setSearchFocused(false)}
                     value={rankSearch}
                     onChangeText={setRankSearch}
                     placeholder="Search your library"
@@ -504,6 +527,8 @@ export default function Profile() {
             />
           )
         }
+        ListFooterComponent={searchFocused ? <View style={{ height: Dimensions.get('window').height }} /> : null}
+        keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
           tab === 'stats' ? null : isGrid && gridLoading ? (
             <VinylSpinner size={48} style={{ marginTop: spacing.xxl }} />

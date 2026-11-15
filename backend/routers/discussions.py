@@ -30,7 +30,7 @@ from sqlmodel import Session, select
 from ..database import get_session
 from ..deps import authorize_thread, current_user, public_user, thread_access
 from ..models import Album, Post, PostLike, PostReport, PressUser, Song, Thread
-from ..threads import display_for, get_or_create_thread, thread_summary
+from ..threads import _recount, display_for, get_or_create_thread, thread_summary
 from ..push import send_push, tokens_for_user
 from ..trackkeys import subject_key_album
 from ..threads import SPOILER_FLAGS_TO_BLUR
@@ -619,7 +619,14 @@ def delete_post(
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
-    """Soft, because a removed parent still has to anchor its replies (§3)."""
+    """Soft, because a removed parent still has to anchor its replies (§3).
+    Both apps offer it on your own posts and replies (November 2026).
+
+    A reply comes off its parent's count. A review post is the mirror of the
+    review on your copy of the record (threads.sync_review_post), so deleting it
+    clears that review too — otherwise the album page and the feeds would keep
+    showing words the thread says are gone, and the next save would bring the
+    post back."""
     post = session.get(Post, post_id)
     if not post:
         raise HTTPException(404, "Post not found")
@@ -629,11 +636,22 @@ def delete_post(
         return {"ok": True}
     post.deleted_at = datetime.utcnow()
     session.add(post)
-    thread = session.get(Thread, post.thread_id)
-    if thread:
-        thread.post_count = max(0, (thread.post_count or 1) - 1)
-        session.add(thread)
+    if post.parent_id:
+        root = session.get(Post, post.parent_id)
+        if root:
+            root.reply_count = max(0, (root.reply_count or 1) - 1)
+            session.add(root)
+    if post.kind == "review":
+        thread = session.get(Thread, post.thread_id)
+        if thread and thread.subject_type == "album":
+            for copy in session.exec(
+                select(Album).where(Album.user_id == user.id, Album.subject_key == thread.subject_key)
+            ).all():
+                if copy.review:
+                    copy.review = None
+                    session.add(copy)
     session.commit()
+    _recount(session, post.thread_id)
     return {"ok": True}
 
 

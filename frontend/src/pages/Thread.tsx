@@ -7,15 +7,15 @@
 // The web adaptations are input-shaped, not feature-shaped: mobile's long-press
 // action sheet becomes an overflow button that appears on hover or focus, and
 // the composer sends on Enter the way every other web composer here does.
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowLeft, ChevronDown, ChevronUp, FileText, Lock, MoreHorizontal, Send, Triangle,
+  ArrowLeft, ChevronDown, ChevronUp, FileText, Lock, MoreHorizontal, Send, Trash2, Triangle,
 } from 'lucide-react'
 import {
   copyAlbumToLibrary, createThreadPost, fetchReplies, fetchThreadPosts, fetchThreadPreview,
-  flagSpoiler, replyToPost, reportPost, resolveThread,
+  deletePost, flagSpoiler, replyToPost, reportPost, resolveThread,
 } from '../api'
 import { songScoreColor } from '../types'
 import type {
@@ -23,7 +23,7 @@ import type {
 } from '../types'
 import { threadKey } from '../lib/threads'
 import { timeAgo } from '../lib/format'
-import VoteButtons from '../components/VoteButtons'
+import VoteButtons, { ReplyBubble } from '../components/VoteButtons'
 import Avatar from '../components/Avatar'
 import FullReviewModal from '../components/FullReviewModal'
 import CoverImg from '../components/CoverImg'
@@ -97,6 +97,24 @@ export default function Thread() {
     return () => clearTimeout(t)
   }, [fresh])
 
+  // `?post=`: arriving from a review's reply count (For You), the room scrolls
+  // to that post and marks it, once.
+  const linkedPost = Number(params.get('post')) || null
+  const scrolledTo = useRef<number | null>(null)
+  const postsReady = !!page
+  useEffect(() => {
+    if (!postsReady || linkedPost == null || scrolledTo.current === linkedPost) return
+    const t = window.setTimeout(() => {
+      const el = document.querySelector(`[data-post-id="${linkedPost}"]`)
+      if (!el) return
+      scrolledTo.current = linkedPost
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      el.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' })
+      setFresh({ id: linkedPost, parentId: null })
+    }, 250)
+    return () => window.clearTimeout(t)
+  }, [postsReady, linkedPost])
+
   const send = useMutation({
     mutationFn: async () => {
       const body = draft.trim()
@@ -125,6 +143,9 @@ export default function Thread() {
   // reads as a page that failed to load. Below lg the rail stacks on top,
   // which is the mobile order: the record, then the room.
   const title = meta?.title || album || 'Discussion'
+  const albumHref = subjectType === 'album' && album
+    ? `/album/community?${new URLSearchParams({ name: album, ...(artist ? { artist } : {}) }).toString()}`
+    : null
 
   return (
     <div className="min-h-screen bg-(--c-f9f8f6)">
@@ -141,7 +162,13 @@ export default function Thread() {
           {/* ── The record ─────────────────────────────────────────── */}
           <aside className="lg:w-[360px] xl:w-[400px] shrink-0">
             <div className="lg:sticky lg:top-8">
-              <div className="flex lg:flex-col items-center lg:items-stretch gap-4">
+              {/* The record opens its Pressd page (the community view, by name). */}
+              <Link
+                to={albumHref ?? '#'}
+                onClick={albumHref ? undefined : (e) => e.preventDefault()}
+                aria-label={albumHref ? `Open ${title} on Pressd` : undefined}
+                className={`group/rec flex lg:flex-col items-center lg:items-stretch gap-4 no-underline ${albumHref ? '' : 'pointer-events-none'}`}
+              >
                 {meta?.artUrl ? (
                   <CoverImg
                     url={meta.artUrl}
@@ -157,14 +184,14 @@ export default function Thread() {
                   <p className="hidden lg:block text-[10.5px] font-bold uppercase tracking-[0.16em] text-(--c-a8998a) m-0 mb-1">
                     Discussion
                   </p>
-                  <h1 className="font-display text-xl lg:text-[28px] lg:leading-tight font-bold text-(--c-111) truncate lg:whitespace-normal m-0">
+                  <h1 className="font-display text-xl lg:text-[28px] lg:leading-tight font-bold text-(--c-111) truncate lg:whitespace-normal m-0 transition-colors group-hover/rec:text-(--c-2d6a4f)">
                     {title}
                   </h1>
                   {!!meta?.subtitle && (
                     <p className="text-[12.5px] lg:text-[15px] text-(--c-8a7f72) truncate m-0 mt-0.5">{meta.subtitle}</p>
                   )}
                 </div>
-              </div>
+              </Link>
 
               {!locked && page?.summary && (
                 <div className="mt-5 lg:mt-6 lg:pt-6 lg:border-t lg:border-(--c-eee)">
@@ -271,7 +298,7 @@ export default function Thread() {
                 ) : (
                   <div>
                     {posts.map((p, i) => (
-                      <div key={p.id} className="rise-in" style={{ '--i': i } as CSSProperties}>
+                      <div key={p.id} data-post-id={p.id} className="rise-in" style={{ '--i': i } as CSSProperties}>
                         <PostRow post={p} onChanged={invalidate} onReply={setReplyTo} fresh={fresh} />
                       </div>
                     ))}
@@ -361,7 +388,7 @@ function LockedRoom({ subject, reason }: { subject: SubjectRef; reason: string |
                   )}
                   {p.author.score != null && (
                     <span
-                      className="ml-auto font-display text-[15px] font-bold tabular-nums shrink-0"
+                      className="ml-auto font-display text-[18px] font-bold tabular-nums shrink-0"
                       style={{ color: songScoreColor(p.author.score) }}
                     >
                       {p.author.score.toFixed(2)}
@@ -580,9 +607,33 @@ function PostRow({
   const system = post.kind === 'system'
   const hidden = post.isSpoiler && !revealed && !system
 
+  // Your own post or reply can be deleted (a tombstone stays, for the replies
+  // under it). A review takes the review on your copy with it, and the pages
+  // that show it are refreshed.
+  const queryClient = useQueryClient()
+  async function remove(target: DiscussionPost) {
+    const review = target.kind === 'review'
+    const what = review ? 'review' : target.parentId ? 'reply' : 'post'
+    if (!confirm(`Delete your ${what}?${review ? ' It comes off your album page too.' : ''}`)) return
+    try {
+      await deletePost(target.id)
+    } catch {
+      alert(`Couldn't delete your ${what}. Please try again.`)
+      return
+    }
+    queryClient.invalidateQueries({ queryKey: ['replies', post.id] })
+    if (review) {
+      for (const queryKey of [['album'], ['albums'], ['feed'], ['top-reviews'], ['reviews'], ['threadPreview']]) {
+        queryClient.invalidateQueries({ queryKey })
+      }
+    }
+    onChanged()
+  }
+
   async function act(value: string) {
     setMenu(false)
     if (value === 'reply') return onReply(post)
+    if (value === 'delete') return remove(post)
     if (value === 'copy') {
       await navigator.clipboard.writeText(post.body).catch(() => {})
       return
@@ -634,7 +685,7 @@ function PostRow({
         <div className="ml-auto flex items-center gap-2.5 shrink-0">
           {post.author?.score != null && (
             <span
-              className="font-display text-[15px] font-bold tabular-nums"
+              className="font-display text-[18px] font-bold tabular-nums"
               style={{ color: songScoreColor(post.author.score) }}
             >
               {post.author.score.toFixed(2)}
@@ -662,8 +713,12 @@ function PostRow({
                   {[
                     { value: 'reply', label: 'Reply' },
                     { value: 'copy', label: 'Copy text' },
-                    { value: 'spoiler', label: 'Flag as spoiler' },
-                    { value: 'report', label: 'Report post' },
+                    ...(post.canDelete
+                      ? [{ value: 'delete', label: post.kind === 'review' ? 'Delete review' : 'Delete post' }]
+                      : [
+                          { value: 'spoiler', label: 'Flag as spoiler' },
+                          { value: 'report', label: 'Report post' },
+                        ]),
                   ].map((o) => (
                     <button
                       key={o.value}
@@ -696,28 +751,23 @@ function PostRow({
         </p>
       )}
 
-      <div className="flex items-center gap-4 mt-2.5">
+      <div className="flex items-center gap-2 mt-2.5">
         <VoteButtons
           postId={post.id}
           likes={post.likeCount}
-          dislikes={post.dislikeCount}
           myVote={post.myVote}
         />
-        <button
-          onClick={() => onReply(post)}
-          className="text-[12px] font-medium text-(--c-a8998a) hover:text-(--c-555) transition-colors"
-        >
-          Reply
-        </button>
-        {post.replyCount > 0 && (
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className="flex items-center gap-1 text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) transition-colors"
-          >
-            {post.replyCount} {post.replyCount === 1 ? 'reply' : 'replies'}
-            {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-          </button>
-        )}
+        {/* The bubble opens the replies and starts one of your own; open, it
+            folds them away. */}
+        <ReplyBubble
+          count={post.replyCount}
+          open={open}
+          onClick={() => {
+            if (open) { setOpen(false); return }
+            if (post.replyCount > 0) setOpen(true)
+            onReply(post)
+          }}
+        />
       </div>
 
       {/* Indented and ruled on the left so a reply reads as hanging off the post
@@ -751,7 +801,7 @@ function PostRow({
                       )}
                       {r.author?.score != null && (
                         <span
-                          className="font-display text-[13px] font-bold tabular-nums ml-auto shrink-0"
+                          className="font-display text-[15px] font-bold tabular-nums ml-auto shrink-0"
                           style={{ color: songScoreColor(r.author.score) }}
                         >
                           {r.author.score.toFixed(2)}
@@ -764,14 +814,24 @@ function PostRow({
                     <p className="text-[13.5px] text-(--c-111) leading-relaxed whitespace-pre-wrap break-words m-0">
                       {r.body}
                     </p>
-                    <div className="mt-1.5">
+                    <div className="mt-1.5 flex items-center gap-3">
                       <VoteButtons
                         postId={r.id}
                         likes={r.likeCount}
-                        dislikes={r.dislikeCount}
                         myVote={r.myVote}
                         compact
                       />
+                      {r.canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => remove(r)}
+                          aria-label="Delete your reply"
+                          title="Delete your reply"
+                          className="text-(--c-c2b8ad) hover:text-(--c-c0392b) transition-colors"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   </>
                 )}

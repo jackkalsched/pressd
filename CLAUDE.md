@@ -549,7 +549,12 @@ POST /social/like?album_id=      toggle_like  a reviewed copy → an up-vote on 
 ```
 One conversation, wherever it's read (November 2026): liking a review in the feed is the
 thread's up-vote — drawn as a heart in both places, red when given (`VoteButtons`, both
-platforms, November 2026; a thumbs-down still sits beside it in the thread) — and its replies are the thread's — the feed's "N replies" opens the
+platforms, November 2026; no thumbs-down is offered since — the thread's order still reads stored
+dislikes — and a speech bubble with the reply count sits beside it, `ReplyBubble`, opening the
+replies and a reply box; on iPhone that box sits right under the post, not in the foot bar).
+For You's reply count on a review opens its thread at that post (`post=` on both thread pages:
+scrolled to and marked once; `TopReview.post_id`). A previewed post's face and name — the album
+pages' room preview, iPhone's first-reply preview — open the author's profile — and its replies are the thread's — the feed's "N replies" opens the
 thread. Every surface reads a like through `backend/likes.py` (`like_states`): the
 feed, For You's top reviews (`/social/top-reviews`), web's Reviews tab (`/social/reviews`) and
 `GET /albums/{id}`'s `liked_by_me` (someone else's copy; mobile's compare screen starts its heart
@@ -1868,13 +1873,12 @@ backend: `/users/` rows carry only `id`, `name`, `avatar_url`, `bio`.
   recomputes scores; both rating screens *read* the weights via `fetchFactorWeights`;
   **nothing on either platform writes them**. Every user is on 25/15/15/5. The unused
   `updateFactorWeights` wrapper was removed in the cleanup; re-add it when the UI lands.
-- **Discussion posts can't be edited or deleted from the apps.** `PATCH /posts/{id}`
-  and `DELETE /posts/{id}` still exist server-side, and both thread screens render the
-  deleted tombstone, but no client reaches them — the unused `deletePost`/`editPost`
-  wrappers were removed in the cleanup, so wiring this up means re-adding two six-line
-  functions. A moderation gap, given `PostReport` and the auto-hide rule. The web thread
-  deliberately stayed at parity here rather than spending the `canDelete`/`canEdit` flags
-  the payload already carries: doing it on one platform only is the drift §1 forbids.
+- **Discussion posts can be deleted, not edited, from the apps** (November 2026). Your own post's
+  menu (web's "…", iPhone's long-press) offers Delete in place of Flag / Report, and your own reply
+  a trash icon; both confirm, then `deletePost` → `DELETE /posts/{id}`, which tombstones the post,
+  takes a reply off its parent's `reply_count`, recounts the thread, and on a **review** post clears
+  the review on the author's copies of the record (else the album page and feeds would keep it, and
+  the next save would bring the post back). `PATCH /posts/{id}` still has no client.
 - **A tracklist never re-syncs after import.** `POST /albums/import` returns an existing
   copy with `already_existed: True` and only backfills a missing cover (`albums.py:410`).
   There is no refresh endpoint, so when an upstream catalog corrects a tracklist the
@@ -2017,7 +2021,11 @@ for editing a review later, and both paths post into the thread through
    scatter, ranks and percentiles — count only what the userbase has in common (November 2026,
    `backend/common_ratings.py`): a song only if 3+ different users scored it (`track_id`), a record's
    factors only if 3+ users rated a copy, and an artist on the board only with 15+ such songs. The
-   "most rated" ranks still count every rating, and *mine* and *Compare* are untouched. Both pages list
+   "most rated" ranks still count every rating, and *mine* and *Compare* are untouched. An artist opened from a shared surface — search, a
+   record's Pressd page — opens on *Pressd avg*; from your own library, stats or rankings, on
+   *mine*. Short of 15 common songs, *Pressd avg* drops its stats, percentiles, distribution and
+   scatter for one line ("Not enough Pressd ratings for {artist}'s stats yet") above the records.
+   Both pages list
    records newest first and nothing else: the discography grids (web's
    `DiscographyGrid`, mobile's `Discography.tsx`, deleted) and web's Discover list went,
    along with the releases nobody on Pressd had added. So `fetchAotyAlbums` and
@@ -2372,8 +2380,9 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
 - **A page's title takes you back to the top** (iPhone, November 2026): `mobile/lib/scrollToTop.ts`.
   The big masthead title and the compact title in the bar that fades in both call
   `scrollToTop(ref)` on the page's scroll view (ScrollView, FlatList or SectionList, Animated
-  or not) — For You, Charts, Social, Profile, someone's profile, a genre page, Upcoming, a
-  thread, the artist page, artist splits and both album views. A compact bar that takes taps
+  or not) — For You, Charts, Social, Profile, someone's profile, a genre page, Upcoming, the
+  artist page, artist splits and both album views (a thread's top bar is the exception: its record —
+  cover, title, subtitle — opens the record's Pressd page by name, on both platforms). A compact bar that takes taps
   gets its `pointerEvents` from `useCompactBar(at)`, `at` being where its fade begins: a
   transparent bar still catches taps, and would block the masthead's own back and search
   controls under it. A new page with a title wires it the same way. **Tapping the tab you're
