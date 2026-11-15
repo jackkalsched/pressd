@@ -281,6 +281,9 @@ export default function AlbumDetail() {
   // review sits with the record — under its title — rather than after the
   // tracks. Yours stays below, where you write and edit it.
   const reviewInRail = !own && rated && !!album.review
+  // Someone else's copy they haven't written about: the comments take the
+  // record's column instead, under the cover (Jack, November 2026).
+  const commentsInRail = !own && !reviewInRail && canSeeComments
 
   /** Someone else's copy into your library, at `status`. */
   async function importToLibrary(status: 'to_listen' | 'listening') {
@@ -429,7 +432,7 @@ export default function AlbumDetail() {
             {/* Pinned while you scroll the tracks — unless a review or your own
                 discussion sits in it, which can run past the bottom of the window
                 and be unreachable while pinned. */}
-            <div className={reviewInRail || own ? '' : 'lg:sticky lg:top-8'}>
+            <div className={reviewInRail || own || commentsInRail ? '' : 'lg:sticky lg:top-8'}>
               <div className="relative mx-auto w-full max-w-[380px]">
                 <div className="overflow-hidden rounded-[28px] shadow-[0_28px_60px_-28px_rgba(40,25,10,0.6)] pop-in">
                   {album.albumArtUrl ? (
@@ -478,6 +481,12 @@ export default function AlbumDetail() {
               )}
               {reviewInRail && (
                 <ReviewSection album={album} editable={false} authorName={ownerName} index={1} inRail />
+              )}
+              {commentsInRail && (
+                <section className="mt-10">
+                  <p className={`${SECTION_LABEL} mb-4`}>COMMENTS</p>
+                  <CommentThread albumId={album.id} />
+                </section>
               )}
               {/* Your own copy: your review, the record's discussion and the
                   comments sit under the record, as the public page's discussion
@@ -701,7 +710,7 @@ export default function AlbumDetail() {
                 the whole userbase said. */}
             {!own && <AlbumThoughts album={album.albumName} artist={album.artist} />}
 
-            {!own && canSeeComments && (
+            {!own && !commentsInRail && canSeeComments && (
               <section className="mt-12">
                 <p className={`${SECTION_LABEL} mb-4`}>COMMENTS</p>
                 <CommentThread albumId={album.id} />
