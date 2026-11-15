@@ -8,7 +8,8 @@
 // rows that ease in. Nothing is singled out by rank; the order says it.
 import type { CSSProperties } from 'react'
 import type { TrendingAlbum } from '../api'
-import { Cover, COVER_LIFT, ScorePill } from './covers'
+import { Cover, COVER_LIFT } from './covers'
+import { songScoreColor } from '../types'
 import { timeAgo } from '../lib/format'
 
 export default function TrendingBoard({
@@ -42,7 +43,12 @@ export default function TrendingBoard({
               {row.rater_count} {row.rater_count === 1 ? 'rating' : 'ratings'}
               {row.last_rated ? ` · ${timeAgo(row.last_rated)}` : ''}
             </span>
-            {row.avg_score != null && <ScorePill score={row.avg_score} big />}
+            {/* The bare figure on the score scale — no pill behind it (Jack, November 2026). */}
+            {row.avg_score != null && (
+              <span className="font-display shrink-0 min-w-[46px] text-right text-[18px] font-bold tabular-nums" style={{ color: songScoreColor(row.avg_score) }}>
+                {row.avg_score.toFixed(2)}
+              </span>
+            )}
           </button>
         </li>
       ))}
