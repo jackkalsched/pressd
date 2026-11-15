@@ -4,6 +4,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import * as SecureStore from 'expo-secure-store'
 import { recentKey } from '@pressd/shared/recentSearches'
+import { WHATS_NEW } from '@pressd/shared/whatsNew'
 import { loadPrefs } from './prefs'
 import {
   signInWithGoogle,
@@ -15,6 +16,7 @@ import {
   uploadAvatar,
   deleteAvatar,
   markTutorialSeen,
+  markWhatsNewSeen,
   addPhone,
   removePhone,
   skipPhonePrompt,
@@ -59,6 +61,8 @@ interface AuthContextValue {
   addPhoneNumber: (firebaseIdToken: string) => Promise<void>
   removePhoneNumber: () => Promise<void>
   skipPhoneNumber: () => Promise<void>
+  /** Close this release's "What's new" (shared/src/whatsNew.ts). */
+  dismissWhatsNew: () => void
   signOut: () => void
 }
 
@@ -212,7 +216,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // device may show the tutorial once more — not worth holding anyone here for.
   const completeTutorial = useCallback(() => {
     if (!user || user.tutorialSeen !== false) return
-    persistUser({ ...user, tutorialSeen: true })
+    // The tutorial stands in for this release's "What's new" (markTutorialSeen
+    // records both), so a new account isn't shown the notes after it.
+    persistUser({ ...user, tutorialSeen: true, whatsNewSeen: WHATS_NEW.id })
     markTutorialSeen(user.id).catch(() => {})
   }, [user, persistUser])
 
@@ -223,6 +229,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const removePhoneNumber = useCallback(async () => {
     persistUser(await removePhone())
   }, [persistUser])
+
+  // Local first, like completeTutorial: the sheet closes on this render, and a
+  // failed save only means it may show once more.
+  const dismissWhatsNew = useCallback(() => {
+    if (!user) return
+    persistUser({ ...user, whatsNewSeen: WHATS_NEW.id })
+    markWhatsNewSeen(user.id).catch(() => {})
+  }, [user, persistUser])
 
   // Local first, like completeTutorial: the prompt closes on this render, and a
   // failed save only means it may ask once more.
@@ -248,6 +262,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       addPhoneNumber,
       removePhoneNumber,
       skipPhoneNumber,
+      dismissWhatsNew,
       signOut,
     }),
     [
@@ -265,6 +280,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       addPhoneNumber,
       removePhoneNumber,
       skipPhoneNumber,
+      dismissWhatsNew,
       signOut,
     ],
   )

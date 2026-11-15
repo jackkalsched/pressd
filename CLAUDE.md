@@ -2049,10 +2049,31 @@ for editing a review later, and both paths post into the thread through
    then the review, autosave, the `TopSongTiebreak` dialog and the share card. The
    desktop difference is a rail holding the running average and tracklist. Web's old
    "Clear all" button went with the form it belonged to; mobile never had it.
-9. **Release notes.** Neither app has them: mobile's `WhatsNewSheet` (and `lib/whatsNew`,
-   `lib/releaseNotes`) was removed in November 2026. (The five-card tutorial and
-   `markTutorialSeen` closed, September 2026: `frontend/src/pages/Tutorial.tsx`. Web's
-   `HowItWorks.tsx` is the signed-out marketing page, a different thing.)
+9. **Release notes — "What's new in Pressd"** (iPhone only, November 2026; web shows none, by
+   Jack's call). One copy of the slides, `shared/src/whatsNew.ts` (`WHATS_NEW`: a release `id` —
+   `1.1` first — and its slides, each a `key`, a Playfair title and a line: an intro, then Bins,
+   Search, Taste overlap, Upcoming, Your profile, A fresh look; `whatsNewCta` is Show me / Next /
+   Let's go). `mobile/components/WhatsNewSheet` is a full-screen swiped pager in the tutorial's
+   manner (Skip, dots, insets read outside its Modal), each picture fitted to the room left;
+   `components/WhatsNewScenes` draws each slide's picture as a small arrangement of the app's own UI
+   — floating cards (one raised and highlighted), tilted tags, a dashed trail behind, in a 330×300
+   stage — with made-up people around real records (covers by their catalog addresses on Pressd,
+   in `COVERS`; allison's and jack's real photos, `mobile/assets/whatsnew/`, with maya.j's bin
+   cover): the intro is VinylSpinner's 1f among feature tags, bins
+   are three bin rows with progress, search a field over grouped results, taste overlap the people
+   sheet's rows with the percent highlighted, Upcoming a month and a release card, the profile a
+   banner, shelf and location, the fresh look a For You pair of review cards that a glowing bar sweeps from light to dark and
+   back, on a loop (still under Reduce Motion). The sheet has
+   the Pressd mark and wordmark centred above, the title and line centred, dots over a full-width
+   button. Shown once **per account** —
+   `PressUser.whats_new_seen` holds the last release dismissed (`own_user`'s `whats_new_seen`, set
+   by `PATCH /users/{id}`). Every account when it shipped owes the first one; a new account's
+   tutorial records the current release on either platform (`markTutorialSeen` sends both), so a
+   sign-up isn't told what changed. `whatsNewOwed` decides (an absent field — an old session —
+   waits for the `/users/me` refresh). In the root layout after the username, tutorial and phone
+   prompt and before the notifications ask and the people sheet, off `HELD_ON` screens. A new
+   release is a new `id`, slides and scenes. The tutorial (`TutorialScenes`, five cards)
+   predates bins and Upcoming and doesn't mention them.
 
 **Not gaps.** `registerPushToken`/`unregisterPushToken` and
 `fetchNotificationPrefs`/`updateNotificationPrefs` (FCM, no web push today), and

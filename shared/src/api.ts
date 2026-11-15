@@ -1,3 +1,4 @@
+import { WHATS_NEW } from './whatsNew'
 import type {
   Album, Song, ArtistStats, FactorStats, FactorPoints,
   DiscussionPost, SubjectRef, ThreadMeta, ThreadPage, ThreadSort,
@@ -1516,12 +1517,16 @@ export interface UserInfo {
   phonePromptDone?: boolean
   /** Own record only: the last four digits of the verified number on file. */
   phoneLast4?: string | null
+  /** Own record only: the release whose "What's new" was dismissed (null owes
+   *  the current one, shared/src/whatsNew.ts); absent from an older server. */
+  whatsNewSeen?: string | null
 }
 
 function toUserInfo(u: {
   id: number; name: string; avatar_url?: string | null; bio?: string | null
   tutorial_seen?: boolean; username_chosen?: boolean
   phone_prompt_done?: boolean; phone_last4?: string | null
+  whats_new_seen?: string | null
 }): UserInfo {
   return {
     id: u.id,
@@ -1532,6 +1537,7 @@ function toUserInfo(u: {
     usernameChosen: u.username_chosen,
     phonePromptDone: u.phone_prompt_done,
     phoneLast4: u.phone_last4,
+    whatsNewSeen: u.whats_new_seen,
   }
 }
 
@@ -1929,9 +1935,20 @@ export async function markTutorialSeen(userId: number): Promise<void> {
   const res = await apiFetch(`${BASE()}/users/${userId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tutorial_seen: true }),
+    // A new account's tutorial stands in for this release's "What's new".
+    body: JSON.stringify({ tutorial_seen: true, whats_new_seen: WHATS_NEW.id }),
   })
   if (!res.ok) throw new Error('Failed to save tutorial progress')
+}
+
+/** The current release's "What's new" was dismissed. */
+export async function markWhatsNewSeen(userId: number): Promise<void> {
+  const res = await apiFetch(`${BASE()}/users/${userId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ whats_new_seen: WHATS_NEW.id }),
+  })
+  if (!res.ok) throw new Error('Failed to save')
 }
 
 /** One scored song of a user's, as the favourite-song picker lists them: best

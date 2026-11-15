@@ -31,6 +31,8 @@ import { getMessaging, setBackgroundMessageHandler } from '@react-native-firebas
 import PhoneSheet from '../components/PhoneSheet'
 import { PeopleSheetHost } from '../components/PeopleSheet'
 import { colors } from '../theme/tokens'
+import WhatsNewSheet from '../components/WhatsNewSheet'
+import { whatsNewOwed } from '@pressd/shared/whatsNew'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
 loadSocialSeen() // hydrate the Social "new activity" marker once at launch
@@ -51,7 +53,7 @@ const queryClient = new QueryClient({
 })
 
 function RootNavigator() {
-  const { user, ready } = useAuth()
+  const { user, ready, dismissWhatsNew } = useAuth()
   const router = useRouter()
   // Whether iOS has yet to ask this device about notifications: the launch
   // prompt is only worth showing before it has. null until iOS answers.
@@ -138,8 +140,12 @@ function RootNavigator() {
   const otherPromptsDone =
     pastFirstRun && user.usernameChosen !== false && user.phonePromptDone === true
   const notifyOwed = !pushPromptAnswered && pushUnasked !== false
+  // This release's notes, once per account (shared/src/whatsNew.ts): after the
+  // username, the tutorial and the phone prompt, before the notifications ask.
+  const whatsNewDue = otherPromptsDone && whatsNewOwed(user)
   return (
     <>
+    <WhatsNewSheet visible={whatsNewDue && !onHeldScreen} onClose={dismissWhatsNew} />
     {/* The one-time phone-number ask for an account older than the username
         page's phone step, after the tutorial. An explicit false: a session that hasn't heard of the field yet waits
         for the launch refresh in lib/auth rather than asking twice. */}
@@ -154,11 +160,11 @@ function RootNavigator() {
         Held until the phone answer is known to be in, so a session that
         learns from the launch refresh that the prompt is owed can't have
         the sheet already up underneath it. */}
-    <NotifyPromptSheet visible={otherPromptsDone && !onHeldScreen && notifyOwed && pushUnasked === true} />
+    <NotifyPromptSheet visible={otherPromptsDone && !whatsNewDue && !onHeldScreen && notifyOwed && pushUnasked === true} />
     <PeopleSheetHost
       held={
         !pastFirstRun || user.usernameChosen === false ||
-        user.phonePromptDone !== true || notifyOwed
+        user.phonePromptDone !== true || whatsNewDue || notifyOwed
       }
     />
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>

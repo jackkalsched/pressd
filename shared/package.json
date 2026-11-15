@@ -12,6 +12,7 @@
     "./covers": "./src/covers.ts",
     "./binSort": "./src/binSort.ts",
     "./artistMetrics": "./src/artistMetrics.ts",
+    "./whatsNew": "./src/whatsNew.ts",
     "./rating": "./src/rating.ts",
     "./recentSearches": "./src/recentSearches.ts",
     "./hooks/useAlbumSearch": "./src/hooks/useAlbumSearch.ts",
