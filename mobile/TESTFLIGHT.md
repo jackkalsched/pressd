@@ -102,10 +102,23 @@ so a bump applied to only one of them silently reverts:
   Debug and Release configurations
 - `app.json` → `ios.buildNumber`
 
-Currently `5`. `CFBundleShortVersionString` (`1.0.0`) only changes for user-visible
-releases. Note that the Xcode project's `MARKETING_VERSION` says `1.0` while the
-plist says `1.0.0`; the plist literal is what ships, and App Store Connect shows the
-version as `1.0`.
+Currently `8`. `CFBundleShortVersionString` changes for user-visible releases — it is
+`1.1.0` since November 2026 (the What's new release, `shared/src/whatsNew.ts` id
+`1.1`), in `app.json` → `version`, the plist literal, and `MARKETING_VERSION` (`1.1`)
+in both configurations. The plist literal is what ships.
+
+## Shipping a new App Store version (1.1, November 2026)
+
+1. Bump: the version (`1.1.0`) and build number in all the places above.
+2. Archive and upload as above (Any iOS Device → Product → Archive → Distribute App →
+   App Store Connect → Upload), wait for processing.
+3. Test it from TestFlight first (internal testers need no review).
+4. App Store Connect → the app → **+** beside iOS App (left sidebar) → version `1.1`.
+5. Fill in **What's New in This Version** (the release notes on the store listing),
+   update screenshots if the UI changed, and pick build 8 under **Build**.
+6. Version release: manual or automatic once approved. Submit for Review — usually
+   24–48 hours. The backend must already serve what the build needs (it is deployed
+   from `main`), since the old build and the new run against it side by side.
 
 ### Distribute to testers
 
