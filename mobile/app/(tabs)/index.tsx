@@ -907,10 +907,10 @@ const styles = StyleSheet.create({
   spotStrong: { fontFamily: fonts.bodyBold, color: colors.ink },
 
   suggestWhy: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted, fontStyle: 'italic', marginTop: 6 },
-  predict: { alignItems: 'center', minWidth: 52 },
+  predict: { alignItems: 'center', minWidth: 68 },
   // Scores are Playfair, as everywhere else in the app (CLAUDE.md §12).
-  predictScore: { fontFamily: fonts.display, fontSize: 22 },
-  predictLabel: { fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 0.8, color: colors.inkMuted, marginTop: 1 },
+  predictScore: { fontFamily: fonts.display, fontSize: 30 },
+  predictLabel: { fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 0.8, color: colors.inkMuted, marginTop: 2 },
   suggestCta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.md },
   textCtaLabel: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
   mastheadIcons: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
