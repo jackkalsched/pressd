@@ -1,6 +1,8 @@
+import { Fragment, useState } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Info, X } from 'lucide-react'
+import { ARTIST_METRICS, ARTIST_METRICS_FOOT } from '@pressd/shared/artistMetrics'
 import { fetchArtistDetail, fetchSimilarArtistComparisons } from '../api'
 import type { ArtistPopulation } from '../api'
 import { useUser } from '../context/UserContext'
@@ -110,10 +112,51 @@ function PercentileBar({
   )
 }
 
+/** What each metric means: a small card under the heading, closed by its ✕
+ *  or the ⓘ again. */
+function MetricsCard({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="pop-in relative mb-6 max-w-[640px] rounded-2xl border border-(--c-e8e2d9) bg-(--c-fff) p-5 pr-11 shadow-[0_18px_40px_-24px_rgba(50,30,10,0.45)]">
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute right-3 top-3 rounded-full p-1 text-(--c-a8998a) transition-colors hover:text-(--c-1c1917)"
+      >
+        <X size={15} />
+      </button>
+      <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5">
+        {ARTIST_METRICS.map((m) => (
+          <Fragment key={m.name}>
+            <dt className="text-[13px] font-semibold text-(--c-1c1917)">{m.name}</dt>
+            <dd className="m-0 text-[13px] leading-snug text-(--c-57534e)">{m.meaning}</dd>
+          </Fragment>
+        ))}
+      </dl>
+      <p className="m-0 mt-4 text-[12.5px] leading-snug text-(--c-8a7f72)">{ARTIST_METRICS_FOOT}</p>
+    </div>
+  )
+}
+
 function PercentilesSection({ data, smallSample }: { data: ReturnType<typeof buildStats>; smallSample: boolean }) {
+  // The ⓘ opens a notecard saying what each metric means (shared/src/artistMetrics.ts).
+  const [explain, setExplain] = useState(false)
   return (
     <div className="mb-12">
-      <p className={`${SECTION_LABEL} mb-4`}>PERCENTILE RANKINGS</p>
+      <div className="mb-4 flex items-center gap-2">
+        <p className={`${SECTION_LABEL} m-0`}>PERCENTILE RANKINGS</p>
+        <button
+          type="button"
+          onClick={() => setExplain((v) => !v)}
+          aria-expanded={explain}
+          aria-label="What these metrics mean"
+          title="What these metrics mean"
+          className={`rounded-full p-0.5 transition-colors ${explain ? 'text-(--c-2d6a4f)' : 'text-(--c-a8998a) hover:text-(--c-1c1917)'}`}
+        >
+          <Info size={15} />
+        </button>
+      </div>
+      {explain && <MetricsCard onClose={() => setExplain(false)} />}
 
       {/* POOR / AVERAGE / GREAT header */}
       <div className="flex items-end gap-4 mb-1 px-4">

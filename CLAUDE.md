@@ -2025,6 +2025,8 @@ for editing a review later, and both paths post into the thread through
    record's Pressd page — opens on *Pressd avg*; from your own library, stats or rankings, on
    *mine*. Short of 15 common songs, *Pressd avg* drops its stats, percentiles, distribution and
    scatter for one line ("Not enough Pressd ratings for {artist}'s stats yet") above the records.
+   An ⓘ beside PERCENTILE RANKINGS (both platforms) opens a notecard of what each metric means,
+   from `shared/src/artistMetrics.ts`, which restates `_artist_payload`'s formulas — change both.
    Both pages list
    records newest first and nothing else: the discography grids (web's
    `DiscographyGrid`, mobile's `Discography.tsx`, deleted) and web's Discover list went,
