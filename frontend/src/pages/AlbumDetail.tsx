@@ -416,17 +416,6 @@ export default function AlbumDetail() {
             {own && !canRate && !isUnreleased(album.releaseDate) && filling && (
               <span className={PILL} aria-label="Loading the tracklist"><VinylSpinner size={14} /></span>
             )}
-            {own && (
-              <button
-                onClick={remove}
-                disabled={busy === 'delete'}
-                aria-label={`Delete ${album.albumName}`}
-                className="ml-1 flex h-9 w-9 items-center justify-center rounded-full hover:bg-red-50 disabled:opacity-50"
-                style={{ color: DANGER }}
-              >
-                {busy === 'delete' ? <VinylSpinner size={17} /> : <Trash2 size={16} />}
-              </button>
-            )}
           </div>
         </div>
 
@@ -722,6 +711,22 @@ export default function AlbumDetail() {
             )}
           </main>
         </div>
+
+        {/* Deleting your copy sits at the foot of the page, under everything
+            (Jack, November 2026): it has no undo, so it stays away from the
+            controls you reach for on the way in. */}
+        {own && (
+          <div className="mt-16 flex justify-center border-t border-(--c-ece5da) pt-8">
+            <button
+              onClick={remove}
+              disabled={busy === 'delete'}
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13.5px] font-semibold transition-colors hover:bg-red-50 disabled:opacity-50"
+              style={{ color: DANGER }}
+            >
+              {busy === 'delete' ? <VinylSpinner size={16} /> : <Trash2 size={15} />} Delete from library
+            </button>
+          </div>
+        )}
       </div>
 
       {showRecommend && (

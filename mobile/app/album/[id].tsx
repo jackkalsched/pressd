@@ -23,7 +23,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as haptics from '../../lib/haptics'
-import { ArrowLeft, Check, ChevronRight, FolderPlus, Heart, Pencil, Share2, Star, Trash2 } from 'lucide-react-native'
+import { ArrowLeft, Check, FolderPlus, Heart, Pencil, Share2, Star, Trash2 } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchFriends,
@@ -56,7 +56,7 @@ import AddToBinSheet from '../../components/AddToBinSheet'
 import AlbumThoughts from '../../components/AlbumThoughts'
 import NoComparisonYet from '../../components/NoComparisonYet'
 import { confirmDeleteAlbum, useDeleteAlbum } from '../../lib/useDeleteAlbum'
-import { colors, contentWidth, fitType, fonts, radii, spacing, useColors, scoreColor } from '../../theme/tokens'
+import { colors, contentWidth, fitType, fonts, pageAlpha, radii, spacing, useColors, scoreColor } from '../../theme/tokens'
 import { scrollToTop } from '../../lib/scrollToTop'
 
 // The owner's face on someone else's cover (web's is 72 on a 380 cover).
@@ -528,25 +528,34 @@ export default function AlbumDetail() {
           <ArrowLeft size={18} color={tc.inkSecondary} />
           <Text style={styles.backText}>Back</Text>
         </Pressable>
-        {/* Whose rating this is — only on someone else's copy. */}
-        {owner && (
-          <Pressable style={styles.ownerTag} onPress={() => openProfile(owner.id)} hitSlop={8} accessibilityRole="link">
-            <View style={[styles.ownerPfp, { backgroundColor: ownerColor }]}>
-              {owner.avatarUrl ? (
-                <Image source={{ uri: owner.avatarUrl }} style={styles.ownerPfpImg} contentFit="cover" />
-              ) : (
-                <Text style={styles.ownerPfpInitial}>{owner.name[0]?.toUpperCase()}</Text>
-              )}
-            </View>
-            <Text style={[styles.ownerName, { color: ownerColor }]} numberOfLines={1}>
-              {owner.name}'s rating
-            </Text>
-          </Pressable>
-        )}
         {/* Every action travels in one right-hand cluster. Left to space-between
             they spread across the whole bar, and Compare drifts into the middle
             where it reads as a title rather than a control. */}
         <View style={styles.topBarRight}>
+        {/* Your copy, once anyone else has rated the record: its Pressd page
+            (the average rating), beside Compare — web's Average rating pill. */}
+        {/* On someone else's copy, always — the record has at least their rating. */}
+        {(isMine ? album.othersRaterCount > 0 : isRated) && (
+          <Pressable
+            style={styles.compareBtn}
+            onPress={() => router.push({ pathname: '/album/[id]', params: { id: String(albumId), community: '1' } })}
+            hitSlop={8}
+            accessibilityRole="link"
+          >
+            <Text style={styles.compareBtnText}>Average</Text>
+          </Pressable>
+        )}
+        {/* Someone else's copy of a record you've rated: on to yours. */}
+        {!isMine && album.viewerCopy?.status === 'rated' && (
+          <Pressable
+            style={styles.compareBtn}
+            onPress={() => router.push({ pathname: '/album/[id]', params: { id: String(album.viewerCopy!.id) } })}
+            hitSlop={8}
+            accessibilityRole="link"
+          >
+            <Text style={styles.compareBtnText} numberOfLines={1}>My rating</Text>
+          </Pressable>
+        )}
         {canCompare && (
           // On someone else's rating of a record you've rated too, Compare means
           // you against them (FriendCompare), as web's album page; on your own
@@ -590,7 +599,9 @@ export default function AlbumDetail() {
         {/* Add to bin… on any copy of a record a bin can hold: an album or EP
             that's out. A single (two songs or fewer) or a copy with no songs
             yet has nothing to offer a bin, and the server would refuse it. */}
-        {canBin && (
+        {/* Your own copy only (Jack, November 2026): someone else's rating page
+            is theirs; their record reaches a bin from its Pressd page. */}
+        {canBin && isMine && (
           <Pressable
             style={styles.shareBtn}
             onPress={() => {
@@ -601,23 +612,6 @@ export default function AlbumDetail() {
             accessibilityLabel="Add to bin…"
           >
             <FolderPlus size={17} color={tc.green} />
-          </Pressable>
-        )}
-        {/* Sits last in the bar, away from Back and Compare — destructive, so
-            it shouldn't be adjacent to anything you tap on the way in. */}
-        {isMine && (
-          <Pressable
-            style={styles.deleteBtn}
-            onPress={confirmDelete}
-            disabled={deleting}
-            hitSlop={10}
-            accessibilityLabel="Delete album from your library"
-          >
-            {deleting ? (
-              <VinylSpinner size="small" color={DANGER} />
-            ) : (
-              <Trash2 size={17} color={DANGER} />
-            )}
           </Pressable>
         )}
         </View>
@@ -794,43 +788,17 @@ export default function AlbumDetail() {
             <Text style={styles.ctaText}>{cta}</Text>
           </Pressable>
         )}
-        {/* Someone else's rating of a record you've rated too: compare the two,
-            or go to yours. */}
-        {!isMine && canCompareFriend && (
-          <View style={styles.ctaRow}>
-            <Pressable
-              style={({ pressed }) => [styles.cta, styles.ctaInRow, pressed && { backgroundColor: colors.greenPressed }]}
-              onPress={() => router.push({ pathname: '/album/[id]', params: { id: String(albumId), compare: '1' } })}
-            >
-              <Text style={styles.ctaText} numberOfLines={1}>Compare with {owner?.name}</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.cta, styles.ctaInRow, pressed && { backgroundColor: colors.greenPressed }]}
-              onPress={() => router.push({ pathname: '/album/[id]', params: { id: String(album.viewerCopy!.id) } })}
-            >
-              <Pencil size={17} color="#fff" />
-              <Text style={styles.ctaText} numberOfLines={1}>Your rating</Text>
-            </Pressable>
-          </View>
-        )}
-        {/* Someone else's copy of a record you hold: on to your copy, never a
-            second one of the same record. */}
-        {!isMine && album.viewerCopy && !canCompareFriend && (
+        {/* Someone else's copy of a record you hold but haven't finished: on to
+            your copy, never a second one of the same record. Rated, it's My
+            rating in the bar above. */}
+        {!isMine && album.viewerCopy && album.viewerCopy.status !== 'rated' && (
           <Pressable
             style={({ pressed }) => [styles.cta, pressed && { backgroundColor: colors.greenPressed }]}
-            onPress={() =>
-              album.viewerCopy!.status === 'rated'
-                ? router.push({ pathname: '/album/[id]', params: { id: String(album.viewerCopy!.id) } })
-                : router.push({ pathname: '/rate/[id]', params: { id: String(album.viewerCopy!.id) } })
-            }
+            onPress={() => router.push({ pathname: '/rate/[id]', params: { id: String(album.viewerCopy!.id) } })}
           >
             <Pencil size={17} color="#fff" />
             <Text style={styles.ctaText}>
-              {album.viewerCopy.status === 'rated'
-                ? 'Your rating'
-                : album.viewerCopy.status === 'listening'
-                  ? 'Continue rating'
-                  : 'Rate this album'}
+              {album.viewerCopy.status === 'listening' ? 'Continue rating' : 'Rate this album'}
             </Text>
           </Pressable>
         )}
@@ -897,6 +865,13 @@ export default function AlbumDetail() {
           hasReview={!!album.review}
           canWriteReview={isMine && album.status === 'rated'}
           onWriteReview={() => setReviewEditing(true)}
+          // Someone else's review leads, above the room and the tracks (Jack,
+          // November 2026); yours stays under the tracks, where you edit it.
+          lead={owner && album.review ? {
+            author: { id: owner.id, name: owner.name, avatarUrl: owner.avatarUrl },
+            score: album.status === 'rated' ? album.score : null,
+            body: album.review,
+          } : undefined}
         />
 
         {sorted.length > 0 && <Text style={styles.sectionLabel}>TRACKS</Text>}
@@ -918,15 +893,34 @@ export default function AlbumDetail() {
           )
         })}
 
-        <ReviewSection
-          album={album}
-          editable={isMine}
-          ownerId={owner?.id}
-          editing={reviewEditing}
-          onEditingChange={setReviewEditing}
-        />
+        {/* Yours, to read and edit; someone else's leads above, in AlbumThoughts. */}
+        {isMine && (
+          <ReviewSection
+            album={album}
+            editable
+            editing={reviewEditing}
+            onEditingChange={setReviewEditing}
+          />
+        )}
 
         {(isMine || isFriendsCopy) && <CommentThread albumId={albumId} canComment={!isMine} />}
+
+        {/* Deleting your copy sits at the foot of the page, under the comments
+            (Jack, November 2026): it has no undo, so it stays away from the
+            controls you reach for on the way in. */}
+        {isMine && (
+          <Pressable
+            style={({ pressed }) => [styles.footDelete, pressed && { opacity: 0.6 }]}
+            onPress={confirmDelete}
+            disabled={deleting}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Delete album from your library"
+          >
+            {deleting ? <VinylSpinner size="small" color={DANGER} /> : <Trash2 size={15} color={DANGER} />}
+            <Text style={styles.footDeleteText}>Delete from library</Text>
+          </Pressable>
+        )}
       </Animated.ScrollView>
       </SafeAreaView>
 
@@ -1661,7 +1655,17 @@ function FriendCompare({
             <ArrowLeft size={18} color={tc.inkSecondary} />
             <Text style={styles.backText}>Back</Text>
           </Pressable>
-          {/* No "{name}'s rating" tag here: the comparison below names them. */}
+          {/* No "{name}'s rating" tag here: the comparison below names them. The
+              two ways on sit at the right, as on every album page's bar (they
+              ended the page until November 2026). */}
+          <View style={styles.topBarRight}>
+            <Pressable style={styles.compareBtn} onPress={onOpenAverage} hitSlop={8} accessibilityRole="link">
+              <Text style={styles.compareBtnText} numberOfLines={1}>Average</Text>
+            </Pressable>
+            <Pressable style={styles.compareBtn} onPress={onOpenMine} hitSlop={8} accessibilityRole="link">
+              <Text style={styles.compareBtnText} numberOfLines={1}>My rating</Text>
+            </Pressable>
+          </View>
         </View>
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -1763,28 +1767,10 @@ function FriendCompare({
             </View>
           ))}
 
-          {/* Same fork the userbase comparison offers, so both compare screens
-              lead the same two places. */}
-          <View style={styles.cmpFork}>
-            <ForkBtn label="Your rating" onPress={onOpenMine} />
-            <ForkBtn label="Average rating" onPress={onOpenAverage} />
-          </View>
-
           {showComments && <CommentThread albumId={theirs.id} />}
         </ScrollView>
       </SafeAreaView>
     </View>
-  )
-}
-
-/** One exit off a comparison — half of the pair both compare screens end on. */
-function ForkBtn({ label, onPress }: { label: string; onPress: () => void }) {
-  const tc = useColors()
-  return (
-    <Pressable style={[styles.cmpForkBtn, { borderColor: tc.border }]} onPress={onPress} hitSlop={6}>
-      <Text style={styles.cmpForkText} numberOfLines={1}>{label}</Text>
-      <ChevronRight size={15} color={tc.green} />
-    </Pressable>
   )
 }
 
@@ -1933,6 +1919,9 @@ function outLine(date: string): string {
   return `Out ${when} · ${rel}`
 }
 
+// The top bar's controls: the page colour at 60%.
+const CHIP_BG = pageAlpha(0.6)
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   screen: { flex: 1, backgroundColor: 'transparent' },
@@ -1951,6 +1940,11 @@ const styles = StyleSheet.create({
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 },
   // Two word-labels ride this bar in the comparison; at a large text size they
   // give way rather than pushing Back off the screen.
+  footDelete: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    alignSelf: 'center', marginTop: spacing.xxl, paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
+  },
+  footDeleteText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: DANGER },
   compareBtnFlex: { flexShrink: 1, minWidth: 0 },
   backText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.inkSecondary },
   ownerTag: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
@@ -2041,20 +2035,6 @@ const styles = StyleSheet.create({
   cmpTrackTitle: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.ink },
   cmpTrackScore: { fontFamily: fonts.bodyBold, fontSize: 15, width: 40, textAlign: 'right' },
 
-  cmpFork: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
-  cmpForkBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-    backgroundColor: colors.raised,
-    borderWidth: 1,
-    borderRadius: radii.pill,
-    paddingVertical: 11,
-    paddingHorizontal: spacing.sm,
-  },
-  cmpForkText: { fontFamily: fonts.bodySemiBold, fontSize: 13.5, color: colors.green, flexShrink: 1 },
 
   head: { alignItems: 'center', marginTop: spacing.xxl },
   art: { width: 148, height: 148, borderRadius: radii.lg },
@@ -2106,9 +2086,14 @@ const styles = StyleSheet.create({
   // middle ground is a stronger tint of their own colour plus a border, so the
   // artwork still shows through the control.
   compareBtn: {
-    backgroundColor: 'rgba(45,106,79,0.20)',
-    borderWidth: 1,
-    borderColor: 'rgba(45,106,79,0.38)',
+    backgroundColor: CHIP_BG,
+    // A veil of the page colour, with a soft shadow, so the controls stand off
+    // the cover's wash behind the bar without sitting on it as solid tiles
+    // (Jack, November 2026: between the old tint and an opaque chip).
+    shadowColor: '#1c1917',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
     borderRadius: radii.pill,
     paddingHorizontal: 14,
     // Matches the 34pt icon buttons beside it so the cluster sits on one line
@@ -2117,16 +2102,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  compareBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
+  compareBtnText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.green },
   shareBtn: {
     width: 34,
     height: 34,
     borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(45,106,79,0.20)',
-    borderWidth: 1,
-    borderColor: 'rgba(45,106,79,0.38)',
+    backgroundColor: CHIP_BG,
+    // A veil of the page colour, with a soft shadow, so the controls stand off
+    // the cover's wash behind the bar without sitting on it as solid tiles
+    // (Jack, November 2026: between the old tint and an opaque chip).
+    shadowColor: '#1c1917',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
   // A warm glow around the cover rather than a stroke on it. A border sits on
   // the artwork and reads as a frame someone put there; light coming off the
@@ -2202,9 +2192,14 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(249,115,22,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(249,115,22,0.40)',
+    backgroundColor: CHIP_BG,
+    // A veil of the page colour, with a soft shadow, so the controls stand off
+    // the cover's wash behind the bar without sitting on it as solid tiles
+    // (Jack, November 2026: between the old tint and an opaque chip).
+    shadowColor: '#1c1917',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
   deleteBtn: {
     width: 34,
@@ -2212,9 +2207,14 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(185,28,28,0.16)',
-    borderWidth: 1,
-    borderColor: 'rgba(185,28,28,0.34)',
+    backgroundColor: CHIP_BG,
+    // A veil of the page colour, with a soft shadow, so the controls stand off
+    // the cover's wash behind the bar without sitting on it as solid tiles
+    // (Jack, November 2026: between the old tint and an opaque chip).
+    shadowColor: '#1c1917',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
   raterLine: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 4 },
 
