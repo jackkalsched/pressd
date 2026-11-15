@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Ban, Check, Clock, Link2, MapPin, MoreHorizontal, Pencil, Settings, UserMinus, UserPlus } from 'lucide-react'
-import { acceptFriendRequest, addFriend, blockUser, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, fetchOverlap, getInviteLink, removeFriend, unblockUser } from '../api'
+import { acceptFriendRequest, addFriend, blockUser, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, fetchOverlap, removeFriend, unblockUser } from '../api'
 import CountUp from '../components/CountUp'
 import { useUser } from '../context/UserContext'
 import Library from './Library'
@@ -46,7 +46,6 @@ export default function FriendProfile() {
   const [busy, setBusy] = useState(false)
   // The banner's pencil and gear: Edit profile and Settings, one dialog in two modes.
   const [sheet, setSheet] = useState<SettingsMode | null>(null)
-  const [shared, setShared] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   async function toggleBlock() {
     const name = profile?.name ?? 'this person'
@@ -143,24 +142,6 @@ export default function FriendProfile() {
   // Artists are folded on case and spacing, so one artist's records don't count twice.
   const artistCount = new Set(rated.flatMap((a) => [a.artist, ...a.extraArtists].map((n) => n.trim().toLowerCase()))).size
   const albumScores = rated.flatMap((a) => (a.score != null ? [a.score] : []))
-
-  /** Your invite link, not this page's address: a profile is behind sign-in,
-   *  and the invite both signs someone up and makes you friends. The system
-   *  share sheet where there is one, else the clipboard. */
-  async function shareProfile() {
-    if (!activeUser) return
-    try {
-      const { link } = await getInviteLink(activeUser.id)
-      const text = `Compare music taste with me on Pressd`
-      if (navigator.share) {
-        await navigator.share({ title: 'Pressd', text, url: link })
-      } else {
-        await navigator.clipboard.writeText(link)
-        setShared(true)
-        setTimeout(() => setShared(false), 2000)
-      }
-    } catch { /* dismissed, or no clipboard — nothing to undo */ }
-  }
 
   // Favorite genres: most common genre / subgenre tags across rated albums
   const topGenres = topTags(rated.map(a => a.genre), 3)
@@ -357,16 +338,9 @@ export default function FriendProfile() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2.5 pt-4 md:pt-8">
-          {isSelf ? (
-            <>
-              <button
-                onClick={shareProfile}
-                className="flex h-11 items-center gap-2 rounded-full bg-(--c-green-fill) px-5 text-[14.5px] font-semibold text-white shadow-[0_10px_24px_-10px_rgba(45,106,79,0.75)] hover:bg-(--c-green-fill-hover)"
-              >
-                {shared ? <><Check size={16} className="pop" /> Link copied</> : 'Share profile'}
-              </button>
-            </>
-          ) : (
+          {/* Your own profile has no button here: inviting lives in the sidebar's
+              Invite (and iPhone's side menu), so a second Share profile was a duplicate. */}
+          {isSelf ? null : (
             <>
               <button
                 // Friends opens the removal prompt; the others add or accept.

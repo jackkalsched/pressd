@@ -1078,9 +1078,9 @@ the album-score distribution (`ScoreHistogram`, no axis) under the avatar, and a
 row between two rules in mobile's order: Avg score, Albums, Artists (distinct,
 case-folded), Songs and Friends — each counting up from zero as the page loads, iPhone's
 `CountUp` ported line for line (`components/CountUp.tsx`: 1.3s, quintic ease-out, straight to
-the value under reduced motion). When it's you, the friend button becomes **Share profile** (your invite link,
-through the share sheet or the clipboard — a profile itself is behind sign-in), and the
-banner carries mobile's pencil and gear, opening `components/SettingsDialog.tsx` (which
+the value under reduced motion). When it's you, there is no button there (a **Share profile** button sent your invite
+link until November 2026; inviting lives in the sidebar's Invite and iPhone's side menu, so
+it was a duplicate), and the banner carries mobile's pencil and gear, opening `components/SettingsDialog.tsx` (which
 was the Edit Profile modal inside `Layout.tsx`) in `mode` `profile` — photo, banner,
 username, bio, location — or `settings` — phone, Google link, the tutorial replay,
 sign-out. Every profile now shows **the shelf**
