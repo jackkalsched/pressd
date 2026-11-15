@@ -479,7 +479,7 @@ export default function ForYou() {
             <section className="mb-9 flow-root">
               <div className="flex items-baseline justify-between mb-4">
                 <h2 className={SECTION_LABEL}>Rate this next</h2>
-                <button onClick={() => navigate('/library')} className="text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) flex items-center gap-1">Browse all <ArrowRight size={12} /></button>
+                <button onClick={() => navigate('/library?tab=to_listen')} className="text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) flex items-center gap-1">Browse all <ArrowRight size={12} /></button>
               </div>
               <div className="flex flex-col md:flex-row gap-5">
                 {(suggestion || pick) && (
@@ -520,7 +520,8 @@ export default function ForYou() {
                   {restQueued.slice(0, 12).map((a) => (
                     <button
                       key={a.id}
-                      onClick={() => navigate(`/rate/${a.id}`)}
+                      // The album's page, not the rating flow: look first, then rate from there.
+                      onClick={() => navigate(`/album/${a.id}`)}
                       className="text-left group"
                       style={{ width: 172, flexShrink: 0, scrollSnapAlign: 'start' }}
                     >
@@ -903,7 +904,15 @@ function PickCard({
           )}
         </div>
       </div>
-      <p className="mt-2.5 mb-0 font-bold text-[14px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{pick.albumName}</p>
+      {/* The title opens the record's Pressd page (by name — a pick isn't in your library);
+          the cover keeps its Rate now / To listen buttons. */}
+      <Link
+        to={`/album/community?${new URLSearchParams({ name: pick.albumName, artist: pick.artist }).toString()}`}
+        className="mt-2.5 mb-0 block font-bold text-[14px] truncate text-(--c-1c1917) hover:text-(--c-2d6a4f) hover:underline underline-offset-2"
+        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+      >
+        {pick.albumName}
+      </Link>
       <p className="m-0 mt-0.5 text-[12px] text-(--c-8a7f72) truncate">{pick.artist}{pick.year ? ` · ${pick.year}` : ''}</p>
       <div className="mt-2 flex items-center gap-2">
         <span className="font-display text-[14px] font-bold leading-none tabular-nums"><PredictedScore value={pick.predictedScore} prefix="~" sparkle={false} /></span>

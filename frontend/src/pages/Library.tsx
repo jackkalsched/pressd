@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { X, Search } from 'lucide-react'
 import { fetchAlbums, enrichCovers } from '../api'
 import AlbumCard from '../components/AlbumCard'
@@ -18,7 +19,13 @@ export default function Library({ embedded = false }: { embedded?: boolean } = {
   const { viewingUser, isViewingFriend } = useUser()
   const userId = viewingUser!.id
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<AlbumStatus>('rated')
+  // `?tab=` opens a shelf directly — For You's Rate this next "Browse all" lands
+  // on To Listen. Anything else opens Rated, as before.
+  const [params] = useSearchParams()
+  const [activeTab, setActiveTab] = useState<AlbumStatus>(() => {
+    const t = params.get('tab')
+    return TABS.some((x) => x.key === t) ? (t as AlbumStatus) : 'rated'
+  })
   const [toListenSearch, setToListenSearch] = useState('')
 
   // Silently fill in missing album art from iTunes on mount
