@@ -43,11 +43,7 @@ export default function Library({ embedded = false }: { embedded?: boolean } = {
     queryFn: () => fetchAlbums({ status: activeTab, userId, excludeSingles: true }),
   })
 
-  const { data: rated = [] } = useQuery({ queryKey: ['albums', 'rated', userId, 'library'], queryFn: () => fetchAlbums({ status: 'rated', userId, excludeSingles: true }) })
-  const { data: listening = [] } = useQuery({ queryKey: ['albums', 'listening', userId, 'library'], queryFn: () => fetchAlbums({ status: 'listening', userId, excludeSingles: true }) })
-  const { data: toListen = [] } = useQuery({ queryKey: ['albums', 'to_listen', userId, 'library'], queryFn: () => fetchAlbums({ status: 'to_listen', userId, excludeSingles: true }) })
 
-  const counts = { rated: rated.length, listening: listening.length, to_listen: toListen.length }
 
   const [toListenSort, setToListenSort] = useState<'predicted' | 'artist' | 'added'>('predicted')
   const [ratedSearch, setRatedSearch] = useState('')
@@ -81,21 +77,20 @@ export default function Library({ embedded = false }: { embedded?: boolean } = {
         </div>
       )}
 
-      <div className="flex gap-1 mb-8 border-b border-(--c-e2e2e2)">
+      {/* Rated / Listening / To Listen as pill chips, the active one filled green — iPhone's. */}
+      <div className="flex gap-2 mb-8">
         {TABS.map(({ key, label }) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            aria-pressed={activeTab === key}
+            className={`rounded-full px-4 py-1.5 text-[13.5px] font-medium transition-colors ${
               activeTab === key
-                ? 'border-(--c-2d6a4f) text-(--c-2d6a4f)'
-                : 'border-transparent text-(--c-777) hover:text-(--c-111)'
+                ? 'bg-(--c-green-fill) text-white'
+                : 'text-(--c-a8998a) hover:text-(--c-1c1917) hover:bg-(--c-efe9e0)'
             }`}
           >
             {label}
-            <span className="ml-2 text-xs bg-(--c-efefef) text-(--c-777) px-1.5 py-0.5 rounded-full">
-              {counts[key]}
-            </span>
           </button>
         ))}
       </div>
@@ -162,9 +157,9 @@ export default function Library({ embedded = false }: { embedded?: boolean } = {
       ) : visibleAlbums.length === 0 ? (
         <div className="text-center py-24 text-(--c-aaa)">
           <p className="text-lg">{q ? 'No matches found.' : 'Nothing here yet.'}</p>
-          {!q && activeTab === 'to_listen' && <p className="text-sm mt-2">Click "Add Album" to queue something up.</p>}
-          {!q && activeTab === 'listening' && <p className="text-sm mt-2">Click "Add Album" and choose Rate Now.</p>}
-          {!q && activeTab === 'rated' && <p className="text-sm mt-2">Finish rating an album to see it here.</p>}
+          {!q && !isViewingFriend && activeTab === 'to_listen' && <p className="text-sm mt-2">Click "Add Album" to queue something up.</p>}
+          {!q && !isViewingFriend && activeTab === 'listening' && <p className="text-sm mt-2">Click "Add Album" and choose Rate Now.</p>}
+          {!q && !isViewingFriend && activeTab === 'rated' && <p className="text-sm mt-2">Finish rating an album to see it here.</p>}
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 items-start">

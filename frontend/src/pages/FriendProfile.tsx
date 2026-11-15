@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Ban, Check, Clock, Link2, MapPin, MoreHorizontal, Pencil, Settings, UserMinus, UserPlus } from 'lucide-react'
 import { acceptFriendRequest, addFriend, blockUser, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, fetchOverlap, removeFriend, unblockUser } from '../api'
+import UnderlineTabs from '../components/UnderlineTabs'
 import CountUp from '../components/CountUp'
 import { useUser } from '../context/UserContext'
 import Library from './Library'
@@ -471,20 +472,9 @@ export default function FriendProfile() {
       )}
 
       {/* ── Tab switcher ─────────────────────────────────────────── */}
-      <div ref={tabsRef} className="flex items-center border-t border-(--c-e8e2d9) pt-5 mb-6">
-        <div className="flex items-center gap-1 bg-(--c-efe9e0) rounded-xl p-1 shrink-0">
-          {tabs.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors ${
-                tab === key ? 'bg-(--c-fff) text-(--c-1c1917) shadow-sm' : 'text-(--c-78716c) hover:text-(--c-1c1917)'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+      {/* Library / Stats / Rankings — underline tabs, no segmented box, as on iPhone. */}
+      <div ref={tabsRef} className="flex items-center border-t border-(--c-e8e2d9) pt-6 mb-6">
+        <UnderlineTabs tabs={tabs} value={tab} onChange={setTab} />
       </div>
 
       {/* ── Tab content (read-only, driven by viewing context) ───── */}
