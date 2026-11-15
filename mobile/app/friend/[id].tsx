@@ -52,14 +52,16 @@ import { OverlapPill } from '../../components/TasteOverlap'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, useScoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 import { scrollToTop, useCompactBar } from '../../lib/scrollToTop'
+import ProfileBins from '../../components/ProfileBins'
 
 const GAP = 10
 
-type Tab = 'library' | 'stats' | 'ratings'
+type Tab = 'library' | 'stats' | 'ratings' | 'bins'
 const TABS: { key: Tab; label: string }[] = [
   { key: 'library', label: 'Library' },
   { key: 'stats', label: 'Stats' },
   { key: 'ratings', label: 'Rankings' },
+  { key: 'bins', label: 'Bins' },
 ]
 
 
@@ -290,6 +292,8 @@ export default function FriendProfile() {
 
   const listData: (Album | ArtistRank)[] = isGrid
     ? rated
+    : tab !== 'ratings'
+    ? []
     : rankMode === 'albums'
     ? rankedAlbums
     : rankedArtists
@@ -411,6 +415,7 @@ export default function FriendProfile() {
             </View>
 
             {tab === 'stats' && <StatsView userId={fid} ownerName={person.name} />}
+            {tab === 'bins' && <ProfileBins userId={fid} isSelf={false} name={person.name} />}
 
             {/* Albums/Artists pills + the metric menu — the same controls your
                 own Ratings tab has, so a friend's board sorts the same way. */}
@@ -476,7 +481,7 @@ export default function FriendProfile() {
           return <RatingRow album={album} rank={index + 1} onPress={() => openAlbum(album)} />
         }}
         ListEmptyComponent={
-          tab === 'stats' ? null : (
+          tab === 'stats' || tab === 'bins' ? null : (
             <Text style={styles.empty}>
               {tab === 'ratings' && rq ? 'Nothing matches your search.' : 'No rated albums yet.'}
             </Text>

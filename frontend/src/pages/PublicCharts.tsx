@@ -193,7 +193,7 @@ export default function PublicCharts() {
         </div>
 
         {isLoading ? (
-          <div className="state"><VinylSpinner size={22} /></div>
+          <div className="state"><VinylSpinner size={48} /></div>
         ) : isError ? (
           <div className="state">Couldn't load the charts just now. Please try again.</div>
         ) : items.length === 0 ? (

@@ -9,8 +9,10 @@
 //   1d  a plate presses the disc, which squashes and sends out a ring
 //   1e  green grooves fill from the label outward
 //   1f  the record slides out of a Pressd sleeve, spinning, and tucks back in
-// Below SMALL_MAX (a button's or a row's spinner) it is always 1b: a tonearm or
-// a sleeve at 15px is a smudge. Under prefers-reduced-motion it is 1b, still.
+// At or below SMALL_MAX (a button's or a row's wait) it isn't a record at all
+// but three dots in the surrounding text colour, pulsing in turn: the record is
+// for a page's or a section's wait, not a tap's (Jack, November 2026). Under
+// prefers-reduced-motion the record is 1b, still, and the dots hold still.
 //
 // Each variant is drawn at the handoff's reference disc (S = 120) and scaled
 // into a `size` square, so a spinner keeps the footprint it always had and the
@@ -128,6 +130,27 @@ function Stage({ variant }: { variant: VinylVariant }) {
   }
 }
 
+/** A small wait: three dots across the `size` square, in `currentColor`. */
+function BusyDots({ size, className, label }: { size: number; className?: string; label: string }) {
+  const dot = Math.max(3, Math.round(size / 5))
+  return (
+    <span
+      className={`relative inline-flex shrink-0 items-center justify-center align-middle ${className ?? ''}`}
+      style={{ width: size, height: size, gap: Math.max(2, dot / 2) }}
+      role="status"
+      aria-label={label}
+    >
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="busy-dot block rounded-full bg-current"
+          style={{ width: dot, height: dot, animationDelay: `${i * 160}ms` }}
+        />
+      ))}
+    </span>
+  )
+}
+
 export default function VinylSpinner({
   size = 18,
   className,
@@ -142,6 +165,7 @@ export default function VinylSpinner({
   variant?: VinylVariant
 }) {
   const [picked] = useState(() => variant ?? pick(size))
+  if (size <= SMALL_MAX && !variant) return <BusyDots size={size} className={className} label={label} />
   const [w, h] = BOX[picked]
   const k = size / Math.max(w, h)
   return (

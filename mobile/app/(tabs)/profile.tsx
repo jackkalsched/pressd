@@ -37,17 +37,19 @@ import AnchoredMenu from '../../components/AnchoredMenu'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor, useScoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
 import { scrollToTop, useCompactBar, useTabScrollToTop } from '../../lib/scrollToTop'
+import ProfileBins from '../../components/ProfileBins'
 
 const GAP = 10
 // The recommendation accent, shared with the Recommend control on album detail.
 const RECOMMEND = '#f97316'
 
 
-type Tab = 'library' | 'stats' | 'ratings'
+type Tab = 'library' | 'stats' | 'ratings' | 'bins'
 const TABS: { key: Tab; label: string }[] = [
   { key: 'library', label: 'Library' },
   { key: 'stats', label: 'Stats' },
   { key: 'ratings', label: 'Rankings' },
+  { key: 'bins', label: 'Bins' },
 ]
 
 const STATUSES: { key: AlbumStatus; label: string }[] = [
@@ -488,6 +490,7 @@ export default function Profile() {
 
             {/* Stats sub-tab renders in the header so it scrolls as one page */}
             {tab === 'stats' && <StatsView userId={user.id} />}
+            {tab === 'bins' && <ProfileBins userId={user.id} isSelf name={user.name} />}
           </View>
         }
         renderItem={({ item, index }: { item: Album | ArtistRank; index: number }) =>
@@ -530,7 +533,7 @@ export default function Profile() {
         ListFooterComponent={searchFocused ? <View style={{ height: Dimensions.get('window').height }} /> : null}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
-          tab === 'stats' ? null : isGrid && gridLoading ? (
+          tab === 'stats' || tab === 'bins' ? null : isGrid && gridLoading ? (
             <VinylSpinner size={48} style={{ marginTop: spacing.xxl }} />
           ) : isGrid ? (
             <Text style={styles.emptyText}>

@@ -11,8 +11,11 @@
 //   1d  a plate presses the disc, which squashes and sends out a ring
 //   1e  green grooves fill from the label outward
 //   1f  the record slides out of a Pressd sleeve, spinning, and tucks back in
-// At or below SMALL_MAX (a button's or a row's spinner) it is always 1b: a
-// tonearm or a sleeve at 20pt is a smudge. Under Reduce Motion it is 1b, still.
+// At or below SMALL_MAX (a button's or a row's wait — 'small' included) it isn't
+// a record at all but three dots in the caller's `color` (else muted ink),
+// pulsing in turn: the record is for a page's or a section's wait, not a tap's
+// (Jack, November 2026). Under Reduce Motion the record is 1b, still, and the
+// dots hold still.
 //
 // Each variant is drawn at the handoff's reference disc (S = 120) and scaled
 // into a `size` square, so a spinner keeps the footprint it always had and the
@@ -36,7 +39,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 import Svg, { Circle, G, Path } from 'react-native-svg'
-import { fonts, useIsDark } from '../theme/tokens'
+import { fonts, useColors, useIsDark } from '../theme/tokens'
 
 export type VinylVariant = '1b' | '1c' | '1d' | '1e' | '1f'
 const VARIANTS: VinylVariant[] = ['1b', '1c', '1d', '1e', '1f']
@@ -328,8 +331,56 @@ function Stage({ variant, k }: { variant: VinylVariant; k: number }) {
   }
 }
 
+/** A small wait: three dots across the `px` square, pulsing in turn. */
+function BusyDots({ px, color, style, accessibilityLabel }: {
+  px: number
+  color?: ColorValue
+  style?: StyleProp<ViewStyle>
+  accessibilityLabel: string
+}) {
+  const tc = useColors()
+  const [t] = useState(() => new Animated.Value(0))
+  useEffect(() => {
+    if (reduceMotion) return
+    const loop = Animated.loop(Animated.timing(t, { toValue: 1, duration: 1000, easing: Easing.linear, useNativeDriver: true }))
+    loop.start()
+    return () => loop.stop()
+  }, [t])
+  const dot = Math.max(3, Math.round(px / 5))
+  const fill = color ?? tc.inkMuted
+  return (
+    <View
+      style={[{ minWidth: px, minHeight: px, alignItems: 'center', justifyContent: 'center' }, style]}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={accessibilityLabel}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Math.max(2, dot / 2) }} pointerEvents="none">
+        {[0, 0.16, 0.32].map((d) => {
+          // Each dot peaks 40% into its own turn, the turns 160ms apart (web's
+          // busy-dot), fading over 0.4 of a turn either side of its peak.
+          const p = (0.4 + d) % 1
+          const glow = (x: number) => {
+            const dist = Math.min(Math.abs(x - p), 1 - Math.abs(x - p))
+            return 0.25 + 0.75 * Math.max(0, 1 - dist / 0.4)
+          }
+          const input = Array.from({ length: 21 }, (_, i) => i / 20)
+          const opacity = reduceMotion ? 0.6 : t.interpolate({ inputRange: input, outputRange: input.map(glow) })
+          return (
+            <Animated.View
+              key={d}
+              style={{ width: dot, height: dot, borderRadius: dot / 2, backgroundColor: fill, opacity }}
+            />
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
 export default function VinylSpinner({
   size = 'small',
+  color,
   style,
   accessibilityLabel = 'Loading',
   variant,
@@ -344,6 +395,7 @@ export default function VinylSpinner({
 }) {
   const px = typeof size === 'number' ? size : SIZES[size]
   const [picked] = useState(() => variant ?? pick(px))
+  if (px <= SMALL_MAX && !variant) return <BusyDots px={px} color={color} style={style} accessibilityLabel={accessibilityLabel} />
   const [w, h] = BOX[picked]
   const k = px / Math.max(w, h)
 

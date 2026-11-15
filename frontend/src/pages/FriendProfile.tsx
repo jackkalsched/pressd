@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Ban, Check, Clock, Link2, MapPin, MoreHorizontal, Pencil, Settings, UserMinus, UserPlus } from 'lucide-react'
 import { acceptFriendRequest, addFriend, blockUser, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, fetchOverlap, removeFriend, unblockUser } from '../api'
 import UnderlineTabs from '../components/UnderlineTabs'
+import ProfileBins from '../components/ProfileBins'
 import CountUp from '../components/CountUp'
 import { useUser } from '../context/UserContext'
 import Library from './Library'
@@ -19,7 +20,7 @@ import Stats from './Stats'
 import Ratings from './Ratings'
 import VinylSpinner from '../components/VinylSpinner'
 
-type Tab = 'library' | 'stats' | 'ratings'
+type Tab = 'library' | 'stats' | 'ratings' | 'bins'
 
 function avatarColor(name: string): string {
   const colors = ['var(--c-2d6a4f)', 'var(--c-1d4ed8)', 'var(--c-7c3aed)', 'var(--c-b45309)', 'var(--c-0f766e)', 'var(--c-be185d)', 'var(--c-c2410c)']
@@ -238,6 +239,7 @@ export default function FriendProfile() {
     { key: 'library', label: 'Library' },
     { key: 'stats', label: 'Stats' },
     { key: 'ratings', label: 'Rankings' },
+    { key: 'bins', label: 'Bins' },
   ]
 
   return (
@@ -481,7 +483,7 @@ export default function FriendProfile() {
       )}
 
       {/* ── Tab switcher ─────────────────────────────────────────── */}
-      {/* Library / Stats / Rankings — underline tabs, no segmented box, as on iPhone. */}
+      {/* Library / Stats / Rankings / Bins — underline tabs, no segmented box, as on iPhone. */}
       <div ref={tabsRef} className="flex items-center border-t border-(--c-e8e2d9) pt-6 mb-6">
         <UnderlineTabs tabs={tabs} value={tab} onChange={setTab} />
       </div>
@@ -490,6 +492,7 @@ export default function FriendProfile() {
       {tab === 'library' && <Library embedded />}
       {tab === 'stats' && <Stats embedded />}
       {tab === 'ratings' && <Ratings embedded />}
+      {tab === 'bins' && person && <ProfileBins userId={fid} isSelf={isSelf} name={person.name} />}
       </div>
       {sheet && <SettingsDialog mode={sheet} onClose={() => setSheet(null)} />}
       {friendsOpen && person && (
