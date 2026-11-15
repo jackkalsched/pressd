@@ -964,6 +964,8 @@ export interface ChartItem {
 
 export interface ChartFacets {
   genres: string[]
+  /** Every subgenre on a rated album, most-carried first (absent from older servers). */
+  subgenres?: string[]
   decades: number[]
   years: number[]
 }
@@ -976,6 +978,7 @@ export interface ChartsResponse {
 export async function fetchCharts(params?: {
   period?: 'week' | 'all'
   genre?: string
+  subgenre?: string
   decade?: number
   year?: number
   artist?: string
@@ -983,6 +986,7 @@ export async function fetchCharts(params?: {
   const qs = new URLSearchParams()
   if (params?.period) qs.set('period', params.period)
   if (params?.genre) qs.set('genre', params.genre)
+  if (params?.subgenre) qs.set('subgenre', params.subgenre)
   if (params?.decade) qs.set('decade', String(params.decade))
   if (params?.year) qs.set('year', String(params.year))
   if (params?.artist) qs.set('artist', params.artist)

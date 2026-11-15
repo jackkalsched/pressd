@@ -17,6 +17,7 @@ import {
 } from 'react-native'
 import VinylSpinner from '../../components/VinylSpinner'
 import PredictedScore from '../../components/PredictedScore'
+import GenreLinks from '../../components/GenreLinks'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -653,13 +654,15 @@ export default function AlbumDetail() {
             {album.year ? ` · ${album.year}` : ''}
           </Text>
           {isUnreleased(album.releaseDate) && <Text style={styles.releaseLine}>{outLine(album.releaseDate!)}</Text>}
-          {album.genre && <Text style={styles.genre}>{album.genre}</Text>}
-          {(() => {
-            const subs = [album.subGenre1, album.subGenre2, album.subGenre3].filter(Boolean)
-            return subs.length > 0 ? (
-              <Text style={styles.subGenres}>{subs.join(' · ')}</Text>
-            ) : null
-          })()}
+          {/* Each tag opens the copy owner's ranking in it — yours on your own. */}
+          <GenreLinks
+            genre={album.genre}
+            subs={[album.subGenre1, album.subGenre2, album.subGenre3].filter(Boolean) as string[]}
+            userId={album.userId ?? undefined}
+            owner={isMine ? undefined : album.owner?.name}
+            genreStyle={styles.genre}
+            subStyle={styles.subGenres}
+          />
         </View>
 
         <View style={styles.scoreBlock}>
@@ -1122,8 +1125,7 @@ function CommunityAlbum({
                   <Text style={styles.artistLink} onPress={() => onOpenArtist(data.artist)}>{data.artist}</Text>
                   {data.year ? ` · ${data.year}` : ''}
                 </Text>
-                {data.genre && <Text style={styles.cmpGenre}>{data.genre}</Text>}
-                {subs.length > 0 && <Text style={styles.cmpSubGenres}>{subs.join(' · ')}</Text>}
+                <GenreLinks genre={data.genre} subs={subs} charts genreStyle={styles.cmpGenre} subStyle={styles.cmpSubGenres} />
               </View>
             </View>
 
@@ -1232,8 +1234,8 @@ function CommunityAlbum({
               {data.year ? ` · ${data.year}` : ''}
             </Text>
             {upcomingDate && <Text style={styles.releaseLine}>{outLine(upcomingDate)}</Text>}
-            {data.genre && <Text style={styles.genre}>{data.genre}</Text>}
-            {subs.length > 0 && <Text style={styles.subGenres}>{subs.join(' · ')}</Text>}
+            {/* The record's Pressd page: each tag opens your own ranking in it. */}
+            <GenreLinks genre={data.genre} subs={subs} charts genreStyle={styles.genre} subStyle={styles.subGenres} />
           </View>
 
           {/* Pressd average and — when the model has a read on it and you
@@ -1658,13 +1660,14 @@ function FriendCompare({
                 <Text style={styles.artistLink} onPress={() => onOpenArtist(theirs.artist)}>{theirs.artist}</Text>
                 {theirs.year ? ` · ${theirs.year}` : ''}
               </Text>
-              {theirs.genre && <Text style={styles.cmpGenre}>{theirs.genre}</Text>}
-              {(() => {
-                const subs = [theirs.subGenre1, theirs.subGenre2, theirs.subGenre3].filter(Boolean)
-                return subs.length > 0 ? (
-                  <Text style={styles.cmpSubGenres}>{subs.join(' · ')}</Text>
-                ) : null
-              })()}
+              <GenreLinks
+                genre={theirs.genre}
+                subs={[theirs.subGenre1, theirs.subGenre2, theirs.subGenre3].filter(Boolean) as string[]}
+                userId={theirs.userId ?? undefined}
+                owner={owner.name}
+                genreStyle={styles.cmpGenre}
+                subStyle={styles.cmpSubGenres}
+              />
             </View>
           </View>
 

@@ -498,6 +498,16 @@ The rater bar (November 2026) applies to yesterday's board too, so a record that
 crosses it today reads as new rather than as a climb. With ~30 raters it leaves about
 ten records on each board. The public charts (`public.py`) don't apply it.
 
+Filters: period, genre, **subgenre** (any of a copy's three slots, exact match; `facets.subgenres`
+lists every one, most-carried first, and both clients search it as you type — web a datalist,
+iPhone matches under the filter row), decade, year, artist. **An album's genre and subgenre tags
+are links** (November 2026): on a person's copy, to that person's ranking in the tag (web
+`TagBoard`, iPhone `app/genre/[tag]`); on a record's Pressd page, to Charts filtered to the tag,
+all time — web `/charts?period=all&genre=…|subgenre=…` (`lib/tagLinks.ts`; Charts remounts on new
+params), iPhone the Charts tab with the same params plus `t`, a tap stamp the mounted tab resets
+its filters on (`components/GenreLinks.tsx`). The rater bar still applies, so a niche tag's board
+can be empty.
+
 ### Journey: taste overlap
 
 ```

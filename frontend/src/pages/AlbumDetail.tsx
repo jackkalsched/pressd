@@ -44,6 +44,7 @@ import VinylSpinner from '../components/VinylSpinner'
 import PredictedScore from '../components/PredictedScore'
 import { useTracklistFill } from '../lib/useTracklistFill'
 import { outLine } from '../lib/upcoming'
+import { tagBoardHref, type TagKind } from '../lib/tagLinks'
 
 function possessive(name: string): string {
   return name.endsWith('s') ? `${name}’` : `${name}’s`
@@ -247,6 +248,9 @@ export default function AlbumDetail() {
 
   const own = isOwn
   const ownerName = own ? (activeUser?.name ?? 'You') : (album.owner?.name ?? viewingUser?.name ?? 'Their')
+  // A tag opens the copy owner's ranking in it (yours on your own copy).
+  const tagHref = (kind: TagKind, tag: string) =>
+    tagBoardHref(kind, tag, album.userId ?? activeUser?.id ?? 0, own ? undefined : album.owner?.name ?? viewingUser?.name)
   const canSeeComments = own || myFriends.some(f => f.id === album.userId)
   const rated = album.status === 'rated'
   const ratedSongs = album.songs.filter((s) => s.score !== null)
@@ -472,10 +476,10 @@ export default function AlbumDetail() {
               {(album.genre || subs.length > 0) && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {album.genre && (
-                    <span className="rounded-full bg-(--c-2d6a4f)/10 px-2.5 py-1 text-[11.5px] font-semibold text-(--c-2d6a4f)">{album.genre}</span>
+                    <Link to={tagHref('genre', album.genre)} className="rounded-full bg-(--c-2d6a4f)/10 px-2.5 py-1 text-[11.5px] font-semibold text-(--c-2d6a4f) transition-colors hover:bg-(--c-2d6a4f)/20">{album.genre}</Link>
                   )}
                   {subs.map((s) => (
-                    <span key={s} className="rounded-full bg-(--c-efebe5) px-2.5 py-1 text-[11.5px] font-medium text-(--c-78716c)">{s}</span>
+                    <Link key={s} to={tagHref('subgenre', s)} className="rounded-full bg-(--c-efebe5) px-2.5 py-1 text-[11.5px] font-medium text-(--c-78716c) transition-colors hover:bg-(--c-e6e0d7) hover:text-(--c-1c1917)">{s}</Link>
                   ))}
                 </div>
               )}

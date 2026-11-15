@@ -226,6 +226,7 @@ MIN_CHART_RATERS = {"week": 3, "all": 5}
 def charts(
     period: str = Query("week", pattern="^(week|all)$"),
     genre: str | None = Query(default=None),
+    subgenre: str | None = Query(default=None),
     decade: int | None = Query(default=None),   # e.g. 2020 for the 2020s
     year: int | None = Query(default=None),
     artist: str | None = Query(default=None),
@@ -238,7 +239,8 @@ def charts(
     "week" only counts copies rated in the last 7 days, "all" counts everything —
     and a record charts only once MIN_CHART_RATERS people have rated it in that
     period.
-    Optional filters by genre, decade, and/or year. Each entry carries its
+    Optional filters by genre, subgenre, decade, and/or year (an album's tags open
+    the board filtered to one, from both apps). Each entry carries its
     day-over-day rank movement (the ranking as it stood at the end of yesterday,
     excluding copies first rated today), and the response includes the filter
     facets available across the whole catalog.
@@ -248,22 +250,28 @@ def charts(
         select(
             Album.id, Album.album_name, Album.artist, Album.year, Album.genre,
             Album.score, Album.date_rated, Album.user_id, Album.album_art_url,
+            Album.sub_genre1, Album.sub_genre2, Album.sub_genre3,
         ).where(Album.status == "rated", Album.score.is_not(None))
     ).all()
 
     # Facets from the full catalog, independent of the active filter so the
     # chip row stays stable as you switch filters.
     genre_counts: dict[str, int] = {}
+    sub_counts: dict[str, int] = {}
     decades: set[int] = set()
     years: set[int] = set()
     for r in rows:
         if r.genre:
             genre_counts[r.genre] = genre_counts.get(r.genre, 0) + 1
+        for sg in {x for x in (r.sub_genre1, r.sub_genre2, r.sub_genre3) if x}:
+            sub_counts[sg] = sub_counts.get(sg, 0) + 1
         if r.year:
             decades.add((r.year // 10) * 10)
             years.add(r.year)
     facets = {
         "genres": [g for g, _ in sorted(genre_counts.items(), key=lambda kv: kv[1], reverse=True)[:8]],
+        # Every subgenre, most-carried first: the clients search this list.
+        "subgenres": [g for g, _ in sorted(sub_counts.items(), key=lambda kv: (-kv[1], kv[0]))],
         "decades": sorted(decades, reverse=True),
         "years": sorted(years, reverse=True)[:15],
     }
@@ -271,6 +279,10 @@ def charts(
     # Active filter (one dimension at a time).
     def keep(r) -> bool:
         if genre and (r.genre or "").lower() != genre.lower():
+            return False
+        if subgenre and subgenre.lower() not in {
+            (x or "").lower() for x in (r.sub_genre1, r.sub_genre2, r.sub_genre3)
+        }:
             return False
         if decade and (r.year is None or (r.year // 10) * 10 != decade):
             return False

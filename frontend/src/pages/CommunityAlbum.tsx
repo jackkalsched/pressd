@@ -35,6 +35,7 @@ import {
 import type { CommunityAlbum as CommunityAlbumData, CommunityTrack, SpotifyAlbumResult } from '../api'
 import { isUnreleased, songScoreColor } from '../types'
 import { outLine } from '../lib/upcoming'
+import { chartHref } from '../lib/tagLinks'
 import { Cover } from '../components/covers'
 import RecommendModal from '../components/RecommendModal'
 import AddToBinMenu from '../components/AddToBinMenu'
@@ -288,10 +289,10 @@ export default function CommunityAlbum() {
               {(shown.genre || subs.length > 0) && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {shown.genre && (
-                    <span className="rounded-full bg-(--c-2d6a4f)/10 px-2.5 py-1 text-[11.5px] font-semibold text-(--c-2d6a4f)">{shown.genre}</span>
+                    <Link to={chartHref('genre', shown.genre)} className="rounded-full bg-(--c-2d6a4f)/10 px-2.5 py-1 text-[11.5px] font-semibold text-(--c-2d6a4f) transition-colors hover:bg-(--c-2d6a4f)/20">{shown.genre}</Link>
                   )}
                   {subs.map((s) => (
-                    <span key={s} className="rounded-full bg-(--c-efebe5) px-2.5 py-1 text-[11.5px] font-medium text-(--c-78716c)">{s}</span>
+                    <Link key={s} to={chartHref('subgenre', s)} className="rounded-full bg-(--c-efebe5) px-2.5 py-1 text-[11.5px] font-medium text-(--c-78716c) transition-colors hover:bg-(--c-e6e0d7) hover:text-(--c-1c1917)">{s}</Link>
                   ))}
                 </div>
               )}
