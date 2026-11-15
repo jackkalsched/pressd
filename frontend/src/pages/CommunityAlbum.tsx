@@ -278,7 +278,7 @@ export default function CommunityAlbum() {
               </div>
               <h1 className="font-display m-0 mt-6 text-[34px] font-bold leading-tight text-(--c-1c1917)">{shown.album_name}</h1>
               <p className="m-0 mt-1.5 text-[15px] text-(--c-57534e)">
-                <Link to={`/artist/${encodeURIComponent(shown.artist)}`} className="font-semibold text-(--c-1c1917) hover:text-(--c-2d6a4f) hover:underline underline-offset-2">
+                <Link to={`/artist/${encodeURIComponent(shown.artist)}?mode=pressd`} className="font-semibold text-(--c-1c1917) hover:text-(--c-2d6a4f) hover:underline underline-offset-2">
                   {shown.artist}
                 </Link>
                 {shown.year ? ` · ${shown.year}` : ''}

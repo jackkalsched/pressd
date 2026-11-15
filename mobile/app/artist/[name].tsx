@@ -196,6 +196,8 @@ export default function ArtistPage() {
   const pctv = (v: number | null) => (v != null ? `${(v * 100).toFixed(1)}%` : '—')
 
   const p = data.percentiles
+  // Pressd avg, for an artist short of what the userbase has in common.
+  const thin = mode === 'pressd' && data.small_sample
   // Only present in compare mode; every bar reads it optionally, so the same
   // markup serves all three scopes.
   const gp = data.global?.percentiles
@@ -203,7 +205,10 @@ export default function ArtistPage() {
   return (
     <View style={[styles.root, { backgroundColor: hero[0] }]}>
       <StatusBar style="light" />
-      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
+      {/* Grows to the screen, so a short page (an artist with few records) runs
+          its fill to the bottom instead of stopping over the artist's colour,
+          which is only there for the overscroll. */}
+      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Hero — bleeds under the status bar, so the safe-area inset is padding
             here rather than a SafeAreaView edge. */}
         <View
@@ -330,7 +335,7 @@ export default function ArtistPage() {
               a Song+ rank is a position in one league table, and holding yours
               against the userbase's would be two different tables. The row also
               repeated the same avg song score the comparison already shows. */}
-          {mode !== 'compare' && (
+          {mode !== 'compare' && !thin && (
             <View style={styles.statRow}>
               <StatCell
                 value={data.song_plus_rank != null ? `#${data.song_plus_rank}` : '—'}
@@ -352,7 +357,15 @@ export default function ArtistPage() {
 
           {/* Says why the ranks read "—" and the bars below are faded. The
               backend flags this under SMALL_SAMPLE (15) songs. */}
-          {data.small_sample && (
+          {/* Pressd avg counts only what the userbase shares — a song once three
+              people have scored it, an artist once fifteen such songs exist
+              (backend/common_ratings.py). Short of that its numbers would be one
+              or two people's, so the stats step aside for one line and the records. */}
+          {thin ? (
+            <Text style={[styles.sampleNote, styles.thinNote]}>
+              Not enough Pressd ratings for {data.artist}&rsquo;s stats yet.
+            </Text>
+          ) : data.small_sample && (
             <Text style={styles.sampleNote}>
               Rate at least {SMALL_SAMPLE} songs to see advanced stats!
             </Text>
@@ -367,7 +380,7 @@ export default function ArtistPage() {
           {/* Compare goes from the two song averages straight into the two
               score distributions; it has no percentile bars, and no "Where
               you split" list since November 2026 (Jack's call). */}
-          {mode !== 'compare' && (
+          {mode !== 'compare' && !thin && (
             <>
               <View style={styles.sectionHead}>
                 <Text style={styles.sectionLabel}>PERCENTILE RANKINGS</Text>
@@ -395,7 +408,7 @@ export default function ArtistPage() {
           )}
 
           {/* Distribution — same histogram as Profile → Stats */}
-          {data.song_scores.length > 0 && (
+          {data.song_scores.length > 0 && !thin && (
             <>
               <Text style={[styles.sectionLabel, styles.sectionSolo]}>SCORE DISTRIBUTION</Text>
               {/* Compare wants both distributions on one pair of axes; the
@@ -839,6 +852,7 @@ function RecordList({ label, albums, pooled, onOpen }: {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
   center: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
 
   hero: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm + FADE_TAIL, backgroundColor: colors.bg },
@@ -899,6 +913,7 @@ const styles = StyleSheet.create({
     color: colors.inkTertiary,
     marginTop: 6,
   },
+  thinNote: { fontSize: 14, lineHeight: 20, color: colors.inkSecondary, marginBottom: spacing.lg },
   sampleNote: {
     fontFamily: fonts.bodyMedium,
     fontSize: 12,

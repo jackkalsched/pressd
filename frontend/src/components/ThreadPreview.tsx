@@ -8,7 +8,7 @@
 // (discussions.thread_preview, which leaves spoilers out entirely), under the
 // lock, and the way in — the thread page, which offers Rate now.
 // A post flagged as a spoiler stays covered here as it does in the thread.
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Heart, Lock, MessageCircle } from 'lucide-react'
 import { fetchThreadPosts, fetchThreadPreview, resolveThread } from '../api'
@@ -85,8 +85,7 @@ export default function ThreadPreview({ album, artist, index = 0 }: {
                 className="group block rounded-2xl px-3 py-3 no-underline transition-colors hover:bg-(--c-f2eee7)"
               >
                 <div className="flex items-center gap-2">
-                  <Avatar name={p.author!.name} avatarUrl={p.author!.avatarUrl} size={22} />
-                  <span className="min-w-0 truncate text-[13px] font-semibold text-(--c-1c1917)">{p.author!.name}</span>
+                  <AuthorChip author={p.author!} />
                   {p.author!.score != null && (
                     <span
                       className="font-display ml-auto shrink-0 text-[14px] font-bold tabular-nums"
@@ -154,8 +153,7 @@ export function LockedPreviewPosts({ album, artist, index = 0, className = '' }:
             className="group block rounded-2xl px-3 py-3 no-underline transition-colors hover:bg-(--c-f2eee7)"
           >
             <div className="flex items-center gap-2">
-              <Avatar name={p.author.name} avatarUrl={p.author.avatarUrl} size={22} />
-              <span className="min-w-0 truncate text-[13px] font-semibold text-(--c-1c1917)">{p.author.name}</span>
+              <AuthorChip author={p.author} />
               {p.author.score != null && (
                 <span
                   className="font-display ml-auto shrink-0 text-[14px] font-bold tabular-nums"
@@ -170,5 +168,30 @@ export function LockedPreviewPosts({ album, artist, index = 0, className = '' }:
         </li>
       ))}
     </ul>
+  )
+}
+
+/** The author's face and name on a previewed post, opening their profile. The
+ *  card around it is a link into the room, and a link can't hold another, so
+ *  this one goes by hand and keeps the card's click from firing. */
+function AuthorChip({ author }: { author: { id: number; name: string; avatarUrl?: string | null } }) {
+  const navigate = useNavigate()
+  const open = (e: React.SyntheticEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    navigate(`/u/${author.id}`)
+  }
+  return (
+    <span
+      role="link"
+      tabIndex={0}
+      aria-label={`Open ${author.name}'s profile`}
+      onClick={open}
+      onKeyDown={(e) => { if (e.key === 'Enter') open(e) }}
+      className="group/author flex min-w-0 cursor-pointer items-center gap-2"
+    >
+      <Avatar name={author.name} avatarUrl={author.avatarUrl} size={22} />
+      <span className="min-w-0 truncate text-[13px] font-semibold text-(--c-1c1917) group-hover/author:underline underline-offset-2">{author.name}</span>
+    </span>
   )
 }

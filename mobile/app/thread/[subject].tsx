@@ -4,7 +4,7 @@
 // same thing (you finished it), so a locked thread shows the lock instead of
 // its contents. PLAN_discussions.md §4, §5, §6.
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
-import { DynamicColorIOS, Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type View as RNView } from 'react-native'
+import { Animated, DynamicColorIOS, Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type View as RNView } from 'react-native'
 import VinylSpinner from '../../components/VinylSpinner'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -12,7 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as Clipboard from 'expo-clipboard'
 import * as haptics from '../../lib/haptics'
-import { ArrowLeft, ChevronDown, ChevronUp, FileText, Lock, Send, Triangle } from 'lucide-react-native'
+import { ArrowLeft, ChevronDown, ChevronUp, FileText, Lock, Send, Trash2, Triangle } from 'lucide-react-native'
 import {
   copyAlbumToLibrary,
   createThreadPost,
@@ -20,6 +20,7 @@ import {
   fetchThreadPreview,
   flagSpoiler,
   reportPost,
+  deletePost,
   replyToPost,
   resolveThread,
   fetchReplies,
@@ -35,10 +36,9 @@ import AnchoredMenu from '../../components/AnchoredMenu'
 import Avatar from '../../components/Avatar'
 import FullReviewSheet from '../../components/FullReviewSheet'
 import { useOpenProfile } from '../../lib/useOpenProfile'
-import VoteButtons from '../../components/VoteButtons'
+import VoteButtons, { ReplyBubble } from '../../components/VoteButtons'
 import { threadKey } from '../../lib/refresh'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, useScoreColor, scoreColor } from '../../theme/tokens'
-import { scrollToTop } from '../../lib/scrollToTop'
 
 // Matches the red For You uses for a worst track.
 const DOWN = '#e0492b'
@@ -58,12 +58,22 @@ const LOCKED_COPY: Record<string, string> = {
 export default function ThreadScreen() {
   const scrollRef = useRef<ScrollView>(null)
   const tc = useColors()
-  const { subject, artist, album, title } = useLocalSearchParams<{
+  const { subject, artist, album, title, post: postParam } = useLocalSearchParams<{
     subject: string
     artist?: string
     album?: string
     title?: string
+    /** Arriving from a review's reply count (For You): scroll to this post. */
+    post?: string
   }>()
+  const linkedPost = Number(postParam) || null
+  const scrolledTo = useRef<number | null>(null)
+  const scrollToPost = useCallback((id: number, y: number) => {
+    if (scrolledTo.current === id) return
+    scrolledTo.current = id
+    // After the posts above it have laid out, so the offset holds.
+    setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, y - spacing.xl), animated: true }), 300)
+  }, [])
   const router = useRouter()
   const queryClient = useQueryClient()
   const insets = useSafeAreaInsets()
@@ -72,15 +82,39 @@ export default function ThreadScreen() {
   // height, and the inset on top of that leaves a strip of background floating
   // above the keys.
   const [keyboardUp, setKeyboardUp] = useState(false)
+
+  // A reply is written in a box right under the post it answers, not in the
+  // bar at the foot (Jack, November 2026). Once the keyboard is up, the list
+  // scrolls just far enough to keep that box above it.
+  const offset = useRef(0)
+  const keyboardTop = useRef<number | null>(null)
+  const replyBox = useRef<RNView | null>(null)
+  const liftReplyBox = useCallback(() => {
+    setTimeout(() => {
+      const top = keyboardTop.current
+      if (top == null) return
+      replyBox.current?.measureInWindow((_x, y, _w, h) => {
+        const over = y + h + spacing.md - top
+        if (over > 0) scrollRef.current?.scrollTo({ y: offset.current + over, animated: true })
+      })
+    }, 80) // after KeyboardAvoidingView has re-laid the list out
+  }, [])
   useEffect(() => {
     const show = Keyboard.addListener('keyboardWillShow', () => setKeyboardUp(true))
     const hide = Keyboard.addListener('keyboardWillHide', () => setKeyboardUp(false))
-    return () => { show.remove(); hide.remove() }
-  }, [])
+    const shown = Keyboard.addListener('keyboardDidShow', (e) => {
+      keyboardTop.current = e.endCoordinates.screenY
+      liftReplyBox()
+    })
+    const hidden = Keyboard.addListener('keyboardDidHide', () => { keyboardTop.current = null })
+    return () => { show.remove(); hide.remove(); shown.remove(); hidden.remove() }
+  }, [liftReplyBox])
   const composerPad = keyboardUp ? spacing.md : Math.max(insets.bottom, spacing.md)
   const [sort, setSort] = useState<ThreadSort>('popular')
   const [draft, setDraft] = useState('')
   const [replyTo, setReplyTo] = useState<DiscussionPost | null>(null)
+  // Its own draft, so starting a reply doesn't eat a post being written below.
+  const [replyDraft, setReplyDraft] = useState('')
 
   const ref: SubjectRef = {
     subjectType: (subject as SubjectType) ?? 'album',
@@ -111,14 +145,19 @@ export default function ThreadScreen() {
 
   const send = useMutation({
     mutationFn: async () => {
-      const body = draft.trim()
+      const body = (replyTo ? replyDraft : draft).trim()
       if (!body) return
       if (replyTo) await replyToPost(replyTo.id, body)
       else await createThreadPost(ref, body)
     },
     onSuccess: () => {
-      setDraft('')
-      setReplyTo(null)
+      if (replyTo) {
+        queryClient.invalidateQueries({ queryKey: ['replies', replyTo.id] })
+        setReplyDraft('')
+        setReplyTo(null)
+      } else {
+        setDraft('')
+      }
       haptics.light()
       invalidate()
     },
@@ -135,17 +174,30 @@ export default function ThreadScreen() {
           <Pressable onPress={() => router.back()} hitSlop={10} style={styles.backBtn}>
             <ArrowLeft size={18} color={tc.inkSecondary} />
           </Pressable>
-          {meta?.artUrl ? (
-            <Image source={{ uri: meta.artUrl }} style={styles.art} contentFit="cover" />
-          ) : null}
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.topTitle} numberOfLines={1} onPress={() => scrollToTop(scrollRef)} accessibilityRole="button" accessibilityHint="Scrolls to the top">
-              {meta?.title || title || 'Discussion'}
-            </Text>
-            {!!meta?.subtitle && (
-              <Text style={styles.topSub} numberOfLines={1}>{meta.subtitle}</Text>
-            )}
-          </View>
+          {/* The record opens its Pressd page (the community view, by name). */}
+          <Pressable
+            style={styles.topRecord}
+            disabled={subject !== 'album' || !album}
+            onPress={() => router.push({
+              pathname: '/album/[id]',
+              // The id segment goes unused once name and artist are present.
+              params: { id: '0', name: album!, ...(artist ? { artist } : {}) },
+            })}
+            accessibilityRole="link"
+            accessibilityLabel={`Open ${meta?.title || title || 'the album'} on Pressd`}
+          >
+            {meta?.artUrl ? (
+              <Image source={{ uri: meta.artUrl }} style={styles.art} contentFit="cover" />
+            ) : null}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.topTitle} numberOfLines={1}>
+                {meta?.title || title || 'Discussion'}
+              </Text>
+              {!!meta?.subtitle && (
+                <Text style={styles.topSub} numberOfLines={1}>{meta.subtitle}</Text>
+              )}
+            </View>
+          </Pressable>
         </View>
 
         {metaLoading ? (
@@ -184,6 +236,8 @@ export default function ThreadScreen() {
             <ScrollView
               ref={scrollRef}
               contentContainerStyle={styles.list}
+              onScroll={(e) => { offset.current = e.nativeEvent.contentOffset.y }}
+              scrollEventThrottle={16}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
@@ -197,29 +251,63 @@ export default function ThreadScreen() {
                 </Text>
               ) : (
                 posts.map((p) => (
-                  <PostRow key={p.id} post={p} onChanged={invalidate} onReply={setReplyTo} />
+                  <PostRow
+                    key={p.id}
+                    post={p}
+                    highlighted={p.id === linkedPost}
+                    onLayoutY={p.id === linkedPost ? (y) => scrollToPost(p.id, y) : undefined}
+                    onChanged={invalidate}
+                    onReply={(post) => {
+                      if (replyTo?.id !== post.id) setReplyDraft('')
+                      setReplyTo(post)
+                    }}
+                    replyBox={replyTo?.id === p.id ? (
+                      <View ref={replyBox} style={styles.inlineReply}>
+                        <View style={styles.replyBanner}>
+                          <Text style={styles.replyBannerText} numberOfLines={1}>
+                            Replying to {p.author?.name ?? 'this post'}
+                          </Text>
+                          <Pressable onPress={() => { setReplyTo(null); setReplyDraft('') }} hitSlop={10}>
+                            <Text style={styles.replyCancel}>Cancel</Text>
+                          </Pressable>
+                        </View>
+                        <View style={styles.composerRow}>
+                          <TextInput
+                            style={styles.input}
+                            value={replyDraft}
+                            onChangeText={setReplyDraft}
+                            onFocus={liftReplyBox}
+                            placeholder="Write a reply…"
+                            placeholderTextColor={tc.inkMuted}
+                            multiline
+                            maxLength={4000}
+                            autoFocus
+                          />
+                          <Pressable
+                            onPress={() => send.mutate()}
+                            disabled={!replyDraft.trim() || send.isPending}
+                            style={[styles.sendBtn, (!replyDraft.trim() || send.isPending) && styles.sendOff]}
+                            hitSlop={8}
+                          >
+                            <Send size={17} color={replyDraft.trim() ? '#fff' : tc.inkMuted} />
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : null}
+                  />
                 ))
               )}
             </ScrollView>
 
-            {meta?.canPost && (
+            {/* The foot bar is for new posts; a reply has its box under its post. */}
+            {meta?.canPost && !replyTo && (
               <View style={[[styles.composer, { borderColor: tc.border }], { paddingBottom: composerPad }]}>
-                {replyTo && (
-                  <View style={styles.replyBanner}>
-                    <Text style={styles.replyBannerText} numberOfLines={1}>
-                      Replying to {replyTo.author?.name ?? 'a post'}
-                    </Text>
-                    <Pressable onPress={() => setReplyTo(null)} hitSlop={10}>
-                      <Text style={styles.replyCancel}>Cancel</Text>
-                    </Pressable>
-                  </View>
-                )}
                 <View style={styles.composerRow}>
                   <TextInput
                     style={styles.input}
                     value={draft}
                     onChangeText={setDraft}
-                    placeholder={replyTo ? 'Write a reply…' : 'Say something about this record…'}
+                    placeholder="Say something about this record…"
                     placeholderTextColor={tc.inkMuted}
                     multiline
                     maxLength={4000}
@@ -512,16 +600,40 @@ function FullReviewPill({
   )
 }
 
+/** A green wash behind the post a link opened the room on, fading once it's in
+ *  view — the album page's song highlight, on a post. */
+function PostWash() {
+  const [fade] = useState(() => new Animated.Value(1))
+  useEffect(() => {
+    const run = Animated.sequence([
+      Animated.delay(900),
+      Animated.timing(fade, { toValue: 0, duration: 1500, useNativeDriver: true }),
+    ])
+    run.start()
+    return () => run.stop()
+  }, [fade])
+  return <Animated.View pointerEvents="none" style={[styles.postWash, { opacity: fade }]} />
+}
+
 /** One post. Long-press opens the actions from the design review:
  *  Reply, Copy text, Flag as spoiler, Report — deliberately no Block. */
 function PostRow({
   post,
   onChanged,
   onReply,
+  replyBox,
+  highlighted = false,
+  onLayoutY,
 }: {
+  /** The post a link opened the room on: washed green, fading. */
+  highlighted?: boolean
+  /** Its offset in the list, for scrolling to it. */
+  onLayoutY?: (y: number) => void
   post: DiscussionPost
   onChanged: () => void
   onReply: (p: DiscussionPost) => void
+  /** The reply being written to this post, drawn right under it. */
+  replyBox?: React.ReactNode
 }) {
   const tc = useColors()
   const openProfile = useOpenProfile()
@@ -545,8 +657,44 @@ function PostRow({
   const system = post.kind === 'system'
   const hidden = post.isSpoiler && !revealed && !system
 
+  // Your own post or reply can be deleted (a tombstone stays, for the replies
+  // under it). A review takes the review on your copy with it, and the pages
+  // that show it are refreshed.
+  const queryClient = useQueryClient()
+  function confirmDelete(target: DiscussionPost) {
+    const review = target.kind === 'review'
+    Alert.alert(
+      review ? 'Delete your review?' : target.parentId ? 'Delete your reply?' : 'Delete your post?',
+      review ? 'It comes off your album page too.' : undefined,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deletePost(target.id)
+            } catch (e) {
+              Alert.alert('Could not delete', e instanceof Error ? e.message : '')
+              return
+            }
+            haptics.light()
+            queryClient.invalidateQueries({ queryKey: ['replies', post.id] })
+            if (review) {
+              for (const queryKey of [['album'], ['albums'], ['feed'], ['top-reviews'], ['reviews'], ['threadPreview']]) {
+                queryClient.invalidateQueries({ queryKey })
+              }
+            }
+            onChanged()
+          },
+        },
+      ],
+    )
+  }
+
   async function onSelect(value: string | number) {
     setMenu(false)
+    if (value === 'delete') return afterMenu(() => confirmDelete(post))
     if (value === 'reply') return onReply(post)
     if (value === 'review') return afterMenu(() => setReviewOf(post.id))
     if (value === 'copy') {
@@ -578,7 +726,12 @@ function PostRow({
   }
 
   return (
-    <View ref={anchor} style={[[styles.post, { borderColor: tc.border }], system && styles.postSystem]}>
+    <View
+      ref={anchor}
+      style={[[styles.post, { borderColor: tc.border }], system && styles.postSystem]}
+      onLayout={onLayoutY ? (e) => onLayoutY(e.nativeEvent.layout.y) : undefined}
+    >
+      {highlighted && <PostWash />}
       {system ? (
         <Text style={styles.systemLabel}>PRESS&rsquo;D</Text>
       ) : (
@@ -626,24 +779,23 @@ function PostRow({
           <VoteButtons
             postId={post.id}
             likes={post.likeCount}
-            dislikes={post.dislikeCount}
             myVote={post.myVote}
           />
-          <Pressable onPress={() => onReply(post)} hitSlop={8}>
-            <Text style={styles.replyText}>Reply</Text>
-          </Pressable>
-          {post.replyCount > 0 && (
-            <Pressable onPress={() => setOpen((v) => !v)} hitSlop={8} style={styles.disclosure}>
-              <Text style={styles.replyToggle}>
-                {post.replyCount} {post.replyCount === 1 ? 'reply' : 'replies'}
-              </Text>
-              {open
-                ? <ChevronUp size={13} color={tc.green} />
-                : <ChevronDown size={13} color={tc.green} />}
-            </Pressable>
-          )}
+          {/* The bubble opens the replies and starts one of your own; open, it
+              folds them away. */}
+          <ReplyBubble
+            count={post.replyCount}
+            open={open}
+            onPress={() => {
+              if (open) { setOpen(false); return }
+              if (post.replyCount > 0) setOpen(true)
+              onReply(post)
+            }}
+          />
         </View>
       )}
+
+      {replyBox}
 
       {/* Closed, a post with replies shows the first one, cut to two lines,
           and how many more there are: a conversation under a review reads as
@@ -655,10 +807,17 @@ function PostRow({
           accessibilityRole="button"
           accessibilityLabel={`Show ${post.replyCount} ${post.replyCount === 1 ? 'reply' : 'replies'}`}
         >
-          <View style={styles.previewHead}>
+          <Pressable
+            style={styles.previewHead}
+            onPress={() => preview.author && openProfile(preview.author.id)}
+            disabled={!preview.author}
+            hitSlop={6}
+            accessibilityRole="link"
+            accessibilityLabel={`View ${preview.author?.name ?? 'their'}'s profile`}
+          >
             <Avatar name={preview.author?.name ?? '?'} avatarUrl={preview.author?.avatarUrl} size={18} />
             <Text style={styles.previewAuthor} numberOfLines={1}>{preview.author?.name ?? 'Unknown'}</Text>
-          </View>
+          </Pressable>
           <Text style={styles.previewBody} numberOfLines={2}>{preview.body}</Text>
           {post.replyCount > 1 && (
             <Text style={styles.previewMore}>View all {post.replyCount} replies</Text>
@@ -705,10 +864,20 @@ function PostRow({
                       <VoteButtons
                         postId={r.id}
                         likes={r.likeCount}
-                        dislikes={r.dislikeCount}
                         myVote={r.myVote}
                         compact
                       />
+                      {r.canDelete && (
+                        <Pressable
+                          onPress={() => confirmDelete(r)}
+                          hitSlop={10}
+                          style={styles.replyDelete}
+                          accessibilityRole="button"
+                          accessibilityLabel="Delete your reply"
+                        >
+                          <Trash2 size={14} color={tc.inkTertiary} />
+                        </Pressable>
+                      )}
                     </View>
                   </>
                 )}
@@ -731,8 +900,12 @@ function PostRow({
             ? [{ key: 'review', value: 'review', label: `Access ${post.author?.name ?? 'their'}'s full review`, selected: false }]
             : []),
           { key: 'copy', value: 'copy', label: 'Copy text', selected: false },
-          { key: 'spoiler', value: 'spoiler', label: 'Flag as spoiler', selected: false },
-          { key: 'report', value: 'report', label: 'Report post', selected: false },
+          ...(post.canDelete
+            ? [{ key: 'delete', value: 'delete', label: post.kind === 'review' ? 'Delete review' : 'Delete post', selected: false }]
+            : [
+                { key: 'spoiler', value: 'spoiler', label: 'Flag as spoiler', selected: false },
+                { key: 'report', value: 'report', label: 'Report post', selected: false },
+              ]),
         ]}
       />
     </View>
@@ -749,6 +922,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg, paddingBottom: spacing.md,
   },
   backBtn: { paddingVertical: 4 },
+  topRecord: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   art: { width: 34, height: 34, borderRadius: radii.sm, backgroundColor: colors.inset },
   topTitle: { fontFamily: fonts.display, fontSize: 17, color: colors.ink },
   topSub: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary },
@@ -844,8 +1018,7 @@ const styles = StyleSheet.create({
   postAuthor: { flex: 1, minWidth: 0, fontFamily: fonts.bodySemiBold, fontSize: 17, color: colors.ink },
   postBody: { fontFamily: fonts.body, fontSize: 15, color: colors.ink, lineHeight: 22 },
   postHidden: { color: colors.inkMuted, fontStyle: 'italic' },
-  postActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginTop: spacing.sm },
-  replyText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkTertiary },
+  postActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
   disclosure: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   replyToggle: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },
   // Indented and ruled on the left so a reply reads as hanging off the post
@@ -863,11 +1036,17 @@ const styles = StyleSheet.create({
   replyScore: { fontFamily: fonts.display, fontSize: 13 },
   replyBody: { fontFamily: fonts.body, fontSize: 14, color: colors.ink, lineHeight: 20 },
   replyActions: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  replyDelete: { marginLeft: spacing.md, padding: 2 },
   tombstone: {
     fontFamily: fonts.body, fontSize: 13, color: colors.inkMuted, fontStyle: 'italic',
     paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth,
   },
 
+  postWash: {
+    position: 'absolute', top: 0, bottom: 0, left: -spacing.sm, right: -spacing.sm,
+    borderRadius: radii.sm, backgroundColor: colors.greenSoft,
+  },
+  inlineReply: { marginTop: spacing.md, gap: spacing.sm },
   composer: { borderTopWidth: StyleSheet.hairlineWidth, padding: spacing.md, gap: spacing.sm },
   replyBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   replyBannerText: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, flexShrink: 1 },

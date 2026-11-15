@@ -18,6 +18,7 @@ import { useUser } from '../context/UserContext'
 import VinylSpinner from '../components/VinylSpinner'
 import PredictedScore from '../components/PredictedScore'
 import BinCard from '../components/BinCard'
+import { threadPath } from '../lib/threads'
 
 // ── small helpers ─────────────────────────────────────────────────────────────
 
@@ -427,7 +428,8 @@ export default function ForYou() {
                     // The record, as the whole of Pressd rated it; the comments
                     // live on the reviewer's own copy.
                     onOpen={() => navigate(`/album/${rv.album_id}/community`)}
-                    onOpenComments={() => navigate(`/album/${rv.album_id}`)}
+                    // The reply count opens the room at this review's post.
+                    onOpenComments={() => navigate(threadPathTo(rv))}
                     onOpenAuthor={() => navigate(`/u/${rv.author.id}`)}
                     onLike={() => handleLikeTop(rv.album_id)}
                   />
@@ -928,6 +930,12 @@ function PickCard({
 /** A userbase-wide review. Unlike a friend's, the author may be a stranger, so
  *  their name links through to their profile and the card carries the album's
  *  best and worst track — the context a reader has no other way to get. */
+/** A review's room, at its post when it has one (Thread's `?post=`). */
+function threadPathTo(rv: TopReview): string {
+  const path = threadPath('album', rv.artist, rv.album_name)
+  return rv.post_id ? `${path}${path.includes('?') ? '&' : '?'}post=${rv.post_id}` : path
+}
+
 function TopReviewCard({ rv, onOpen, onOpenComments, onOpenAuthor, onLike }: {
   rv: TopReview
   onOpen: () => void

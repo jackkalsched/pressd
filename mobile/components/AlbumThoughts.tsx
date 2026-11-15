@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, Lock, MessageCircle, MessageCirclePlus } from 'lucide-react-native'
 import { fetchThreadPreview, resolveThread } from '../lib/api'
+import { useOpenProfile } from '../lib/useOpenProfile'
 import { threadKey } from '../lib/refresh'
 import { colors, fonts, spacing, NUM_SCALE_CAP, scoreColor, useColors } from '../theme/tokens'
 import Avatar from './Avatar'
@@ -34,6 +35,7 @@ export default function AlbumThoughts({
 }) {
   const tc = useColors()
   const router = useRouter()
+  const openProfile = useOpenProfile()
   const { data: meta } = useQuery({
     queryKey: threadKey('album', artist, album),
     queryFn: () => resolveThread({ subjectType: 'album', artist, album }),
@@ -71,6 +73,7 @@ export default function AlbumThoughts({
 
   return (
     <>
+      {previews.length > 0 && <View style={styles.previewsGap} />}
       {previews.map((p) => (
         <Pressable
           key={p.id}
@@ -78,8 +81,17 @@ export default function AlbumThoughts({
           style={({ pressed }) => [styles.preview, { borderColor: tc.border }, pressed && { opacity: 0.6 }]}
         >
           <View style={styles.previewHead}>
-            <Avatar name={p.author.name} avatarUrl={p.author.avatarUrl} size={22} />
-            <Text style={styles.previewAuthor} numberOfLines={1}>{p.author.name}</Text>
+            {/* The face and name open their profile; the rest of the card, the room. */}
+            <Pressable
+              onPress={() => openProfile(p.author.id)}
+              hitSlop={6}
+              style={styles.previewWho}
+              accessibilityRole="link"
+              accessibilityLabel={`View ${p.author.name}'s profile`}
+            >
+              <Avatar name={p.author.name} avatarUrl={p.author.avatarUrl} size={22} />
+              <Text style={styles.previewAuthor} numberOfLines={1}>{p.author.name}</Text>
+            </Pressable>
             {p.author.score != null && (
               <Text style={[styles.previewScore, { color: scoreColor(p.author.score) }]} maxFontSizeMultiplier={NUM_SCALE_CAP}>
                 {p.author.score.toFixed(2)}
@@ -126,9 +138,12 @@ const styles = StyleSheet.create({
   },
   label: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.green },
   labelLocked: { color: colors.inkMuted },
+  // Room between the buttons above and the first review.
+  previewsGap: { height: spacing.lg },
   preview: { paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth },
   previewHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: 6 },
-  previewAuthor: { flex: 1, minWidth: 0, fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.ink },
+  previewWho: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  previewAuthor: { flexShrink: 1, minWidth: 0, fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.ink },
   previewScore: { fontFamily: fonts.display, fontSize: 15 },
   previewBody: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSecondary, lineHeight: 20 },
 })
