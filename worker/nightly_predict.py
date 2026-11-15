@@ -52,6 +52,7 @@ from worker import runlog
 # Tier 1 gates all prediction output. The threshold and the reasoning behind it
 # live in backend/scoring.py, which the web service also enforces when serving.
 from backend.scoring import MIN_RATED_ALBUMS  # noqa: E402
+from backend.user_bins import COUNTING_ENTRY_JOIN  # noqa: E402
 
 # Retained for reporting only — fit_for_user now decides how much of the
 # personal model to trust, on a ramp rather than a cliff.
@@ -265,9 +266,9 @@ def catalog_gap(con, user_id: int, catalog, frame=None) -> int:
     # this user through the catalog stage every night for nothing.
     in_frame = (set(frame["track_id"].dropna().astype(int))
                 if frame is not None and "track_id" in frame.columns else set())
-    songs = {r[0] for r in con.execute(text("""
+    songs = {r[0] for r in con.execute(text(f"""
         SELECT DISTINCT e.track_id FROM binentry e
-        JOIN bin b ON b.id = e.bin_id
+        {COUNTING_ENTRY_JOIN}
         WHERE b.item_type = 'song' AND e.track_id IS NOT NULL
           AND NOT EXISTS (SELECT 1 FROM songprediction sp
                           WHERE sp.user_id = :u AND sp.track_id = e.track_id)
@@ -354,10 +355,17 @@ def run_user(user_id: int, skip_llm: bool = False, pooled=None,
         if previous == (rated_albums, rated_songs) and not force:
             gap = catalog_gap(con, user_id, catalog, frame)
             if not gap:
+                # No refit, but what left the catalog still leaves their picks
+                # tonight (catalog_predict.prune_predictions) — a hidden bin's
+                # records would otherwise wait for this user's next rating.
+                from worker.catalog_predict import prune_predictions
+                pruned = prune_predictions(con, user_id, catalog)
+                con.commit()
                 print(f"[nightly_predict] user {user_id}: no new ratings since last run "
                       f"({rated_albums} albums / {rated_songs} songs) — skipped, "
-                      f"{synced} album rows synced from the catalog")
-                return {"user_id": user_id, "status": "unchanged", "synced": synced}
+                      f"{synced} album rows synced from the catalog, pruned {pruned}")
+                return {"user_id": user_id, "status": "unchanged", "synced": synced,
+                        "pruned": pruned}
     if previous == (rated_albums, rated_songs) and not force:
         # Nothing of theirs changed, but the catalog has records they have no
         # prediction for — a bin's, newly analysed, or anyone's new import.

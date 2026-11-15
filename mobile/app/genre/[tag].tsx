@@ -23,11 +23,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react-native'
-import { fetchTagRecords, type TagRecord } from '../../lib/api'
+import { fetchProfile, fetchTagRecords, type TagRecord } from '../../lib/api'
 import { avatarColor } from '@pressd/shared/types'
 import { revealStyle } from '../../lib/scrollReveal'
 import { colors, contentWidth, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
+import Avatar from '../../components/Avatar'
 import { scrollToTop } from '../../lib/scrollToTop'
 
 // Podium proportions and numeral caps copied from Charts deliberately: the two
@@ -61,6 +62,15 @@ export default function TagRecordsBoard() {
   const ownerName = owner ? decodeURIComponent(owner) : ''
   const router = useRouter()
   const insets = useSafeAreaInsets()
+
+  // Whose ranking this is: their picture beside the kicker. The profile's own
+  // cache key, so arriving from a profile costs nothing.
+  const { data: person } = useQuery({
+    queryKey: ['profile', uid],
+    queryFn: () => fetchProfile(uid),
+    enabled: uid > 0,
+    staleTime: 5 * 60_000,
+  })
 
   const { data, isLoading } = useQuery({
     queryKey: ['tag-records', uid, tagKind, label],
@@ -141,13 +151,15 @@ export default function TagRecordsBoard() {
                 <ArrowLeft size={18} color={tc.inkSecondary} />
                 <Text style={styles.backText}>Back</Text>
               </Pressable>
-              <Text style={styles.kicker}>{kicker}</Text>
+              <View style={styles.kickerRow}>
+                {person && <Avatar name={person.name} avatarUrl={person.avatar_url} size={28} />}
+                <Text style={styles.kickerText}>{kicker}</Text>
+              </View>
               <View style={styles.masthead}>
                 <Text style={styles.title} numberOfLines={2} onPress={() => scrollToTop(scrollRef)}>{label}</Text>
                 {data && (
                   <Text style={styles.count}>
                     {data.count} {data.count === 1 ? 'RECORD' : 'RECORDS'}
-                    {data.avg_score != null ? ` · ${data.avg_score.toFixed(2)} AVG` : ''}
                   </Text>
                 )}
               </View>
@@ -296,13 +308,8 @@ const styles = StyleSheet.create({
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
   backText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.inkSecondary },
 
-  kicker: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 11,
-    letterSpacing: 1.4,
-    color: colors.inkTertiary,
-    marginTop: spacing.md,
-  },
+  kickerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
+  kickerText: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.4, color: colors.inkTertiary },
   // A tag name can be two words long, so the title takes what it needs and the
   // count is the side that gives way.
   masthead: {

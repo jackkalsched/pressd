@@ -400,3 +400,28 @@ def test_failed_refresh_leaves_the_session_usable(monkeypatch, capsys):
         _refresh(Store(session), 1, {2})
         assert session.execute(text("SELECT COUNT(*) FROM tasteoverlap")).scalar() == 0   # rolled back
     assert "refresh failed for user 1" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------- refresh after the reply
+
+def test_a_profile_answers_from_stored_numbers_and_refreshes_later():
+    later = []
+    store = FakeStore(rows={2: (63.4, None)})
+    out = profile_overlap(store, 1, 2, later=lambda me, others: later.append((me, set(others))))
+    assert out["percent"] == 63                 # the stored pair, served at once
+    assert store.refreshed == []                # nothing recomputed inside the request
+    assert later == [(1, {2})]                  # the recompute is handed off
+
+
+def test_a_friends_list_answers_from_stored_numbers_and_refreshes_later():
+    later = []
+    store = FakeStore(friends={2: [3, 4, 1]}, percents={3: 41.6, 4: 88.2})
+    out = friends_overlap(store, 1, 2, later=lambda me, others: later.append((me, set(others))))
+    assert [(r["user"]["id"], r["percent"]) for r in out] == [(1, None), (4, 88), (3, 42)]
+    assert store.refreshed == [] and later == [(1, {3, 4})]
+
+
+def test_no_friends_hands_nothing_off():
+    later = []
+    assert friends_overlap(FakeStore(), 1, 2, later=lambda me, others: later.append(others)) == []
+    assert later == []

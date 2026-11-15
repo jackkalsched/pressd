@@ -17,7 +17,7 @@ import {
 import VinylSpinner from '../../components/VinylSpinner'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronDown, Triangle, X } from 'lucide-react-native'
 import { fetchCharts, type ChartItem } from '../../lib/api'
 import { avatarColor } from '@pressd/shared/types'
@@ -88,20 +88,40 @@ export default function Charts() {
   const insets = useSafeAreaInsets()
   const [period, setPeriod] = useState<'week' | 'all'>('week')
   const [genre, setGenre] = useState<string | null>(null)
+  const [subgenre, setSubgenre] = useState<string | null>(null)
+  const [subText, setSubText] = useState('')
   const [decade, setDecade] = useState<number | null>(null)
   const [yearText, setYearText] = useState('')
   const [artistText, setArtistText] = useState('')
+
+  // An album's genre or subgenre tag opens this tab filtered to it, all time
+  // (components/GenreLinks.tsx; `t` makes each tap new). The tab stays mounted,
+  // so each new set of params resets the filters to it as it arrives.
+  const linked = useLocalSearchParams<{ genre?: string; subgenre?: string; period?: string; t?: string }>()
+  const linkKey = linked.t ?? ''
+  const [appliedKey, setAppliedKey] = useState('')
+  if (linkKey && linkKey !== appliedKey) {
+    setAppliedKey(linkKey)
+    setPeriod(linked.period === 'all' ? 'all' : 'week')
+    setGenre(linked.genre || null)
+    setSubgenre(linked.subgenre || null)
+    setSubText(linked.subgenre ?? '')
+    setDecade(null)
+    setYearText('')
+    setArtistText('')
+  }
   const year = /^\d{4}$/.test(yearText) ? Number(yearText) : null
   // Matched as a substring server-side, so it narrows as you type — but debounce
   // it, or every keystroke is its own request and its own cache entry.
   const artist = useDebounced(artistText.trim(), 300)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['charts', period, genre ?? '', decade ?? '', year ?? '', artist],
+    queryKey: ['charts', period, genre ?? '', subgenre ?? '', decade ?? '', year ?? '', artist],
     queryFn: () =>
       fetchCharts({
         period,
         genre: genre ?? undefined,
+        subgenre: subgenre ?? undefined,
         decade: decade ?? undefined,
         year: year ?? undefined,
         artist: artist || undefined,
@@ -113,6 +133,22 @@ export default function Charts() {
   const podium = items.slice(0, 3)
   const rest = items.slice(3)
   const facets = data?.facets
+
+  // The subgenre field searches the catalog's subgenres: while what's typed
+  // isn't one yet, the matches show under the filters, and a tap picks one.
+  const subQuery = subText.trim().toLowerCase()
+  const subMatches = useMemo(() => {
+    if (!subQuery || subgenre?.toLowerCase() === subQuery) return []
+    return (facets?.subgenres ?? []).filter((g) => g.toLowerCase().includes(subQuery)).slice(0, 8)
+  }, [facets?.subgenres, subQuery, subgenre])
+  function typeSubgenre(t: string) {
+    setSubText(t)
+    const hit = (facets?.subgenres ?? []).find((g) => g.toLowerCase() === t.trim().toLowerCase())
+    setSubgenre(t.trim() ? (hit ?? null) : null)
+  }
+  // The genre linked to may be outside the eight most-carried the menu offers.
+  const genreList = genre && !(facets?.genres ?? []).some((g) => g.toLowerCase() === genre.toLowerCase())
+    ? [genre, ...(facets?.genres ?? [])] : (facets?.genres ?? [])
 
   // The chart ranks albums across the whole userbase, so entries open the
   // averaged view rather than one person's copy.
@@ -210,10 +246,28 @@ export default function Charts() {
                 active={genre != null}
                 options={[
                   { key: 'all', label: 'All genres', value: '', selected: genre == null },
-                  ...(facets?.genres ?? []).map((g) => ({ key: g, label: g, value: g, selected: genre === g })),
+                  ...genreList.map((g) => ({ key: g, label: g, value: g, selected: genre === g })),
                 ]}
                 onSelect={(v) => setGenre(v ? String(v) : null)}
               />
+              {/* Subgenre search */}
+              <View style={[styles.filterBtn, subgenre ? styles.filterBtnOn : null]}>
+                <TextInput
+                  style={[styles.artistInput, subgenre ? styles.filterTextOn : null]}
+                  value={subText}
+                  onChangeText={typeSubgenre}
+                  placeholder="Subgenre"
+                  placeholderTextColor={tc.inkTertiary}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                />
+                {subText ? (
+                  <Pressable onPress={() => typeSubgenre('')} hitSlop={6}>
+                    <X size={13} color={subgenre ? tc.green : tc.inkTertiary} />
+                  </Pressable>
+                ) : null}
+              </View>
               <FilterDropdown
                 title="Decade"
                 display={decade != null ? `${decade}s` : 'Decade'}
@@ -262,6 +316,16 @@ export default function Charts() {
                 ) : null}
               </View>
             </ScrollView>
+
+            {subMatches.length > 0 && (
+              <View style={styles.subMatches}>
+                {subMatches.map((g) => (
+                  <Pressable key={g} onPress={() => typeSubgenre(g)} style={styles.subMatch} accessibilityRole="button">
+                    <Text style={styles.filterText}>{g}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
 
             {isLoading && items.length === 0 ? (
               <VinylSpinner size={48} style={{ marginTop: spacing.xxl }} />
@@ -519,6 +583,8 @@ const styles = StyleSheet.create({
   filterBtnOn: { backgroundColor: colors.greenSoft },
   filterText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.inkSecondary },
   filterTextOn: { color: colors.green },
+  subMatches: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
+  subMatch: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.inset },
   yearInput: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.inkSecondary, minWidth: 42, padding: 0 },
   // Wider than the year field — it holds a name, not four digits.
   artistInput: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.inkSecondary, minWidth: 96, padding: 0 },

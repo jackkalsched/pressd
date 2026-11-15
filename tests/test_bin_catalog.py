@@ -84,3 +84,42 @@ def test_pick_bin_records_falls_back_to_the_artists_genre():
             _row(2, "Bon Iver", "22, A Million", "bon iver||22 a million", 3, tl=alt)]
     got = {r["bin_entry_id"]: r["genre"] for r in pick_bin_records(rows, [], {"radiohead": "Rock"})}
     assert got == {1: "Rock", 2: None}
+
+
+def test_every_bin_reader_skips_hidden_bins():
+    import inspect
+    import song_score_model
+    from backend import tracklink
+    from theme_predictor import global_factors
+    from worker import audio_ingest, catalog_predict, nightly_predict
+    for fn in (catalog_predict.bin_records, audio_ingest.tracks_needing_audio,
+               tracklink.link_bin_entries, global_factors.albums_missing_factors,
+               catalog_predict.song_bin_tracks, nightly_predict.catalog_gap):
+        assert "COUNTING_ENTRY_JOIN" in inspect.getsource(fn), fn.__name__
+    from backend.user_bins import COUNTING_ENTRY_JOIN
+    assert "hidden_at IS NULL" in COUNTING_ENTRY_JOIN
+    assert COUNTING_ENTRY_JOIN in song_score_model._BIN_SQL.text
+
+
+def test_audio_queue_puts_curated_bins_first():
+    import inspect
+    from worker import audio_ingest
+    assert "b.kind <> 'curated'" in inspect.getsource(audio_ingest.tracks_needing_audio)
+
+
+def test_stale_predictions_drop_what_left_the_catalog():
+    from worker.catalog_predict import stale_predictions
+    albums, songs = stale_predictions(
+        have_albums={"a||kept", "b||hidden bin", "c||my copy"},
+        have_songs={1, 2},
+        catalog_keys={"a||kept", "d||new"},
+        own_keys={"c||my copy"},
+        song_tracks={1},
+    )
+    assert albums == {"b||hidden bin"}     # neither in the catalog nor the user's own
+    assert songs == {2}                    # no song bin names it any more
+
+
+def test_stale_predictions_never_wipe_on_an_empty_catalog():
+    from worker.catalog_predict import stale_predictions
+    assert stale_predictions({"a||x"}, {1}, set(), set(), set()) == (set(), set())

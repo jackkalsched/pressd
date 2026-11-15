@@ -305,6 +305,8 @@ def init_db():
             "ALTER TABLE pressuser ADD COLUMN IF NOT EXISTS shelf TEXT",
             "UPDATE pressuser SET shelf = '[' || favorite_album_id || ',null,null,null,null]' "
             "WHERE shelf IS NULL AND favorite_album_id IS NOT NULL",
+            # ── A user bin's own picture (BinCover); null shows its entries' covers.
+            "ALTER TABLE bin ADD COLUMN IF NOT EXISTS cover_url TEXT",
             # ── A review's likes are its thread post's up-votes (social.toggle_like).
             #    Likes given in the feed before that move onto the post — an
             #    up-vote each, dated when they were given — and leave the old

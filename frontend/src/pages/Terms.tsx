@@ -5,7 +5,7 @@
 import { Link } from 'react-router-dom'
 import LegalPage from '../components/LegalPage'
 
-const UPDATED = 'November 12, 2026'
+const UPDATED = 'November 13, 2026'
 const CONTACT = 'pressdmusicapp@gmail.com'
 
 export default function Terms() {
@@ -30,7 +30,7 @@ export default function Terms() {
 
       <h2>What you post</h2>
       <p>
-        Your ratings, reviews, posts, replies, profile picture, banner and bio are yours. By posting
+        Your ratings, reviews, posts, replies, bins, profile picture, banner and bio are yours. By posting
         them on Pressd you give us permission to store and display them inside Pressd — on your
         profile, on a record’s page and discussion, in friends’ feeds and in userbase-wide views
         such as charts and averages — for as long as they’re on your account.
@@ -45,8 +45,17 @@ export default function Terms() {
       <p>
         Profiles on Pressd are visible to anyone signed in. You can block anyone: the two of you
         then stop seeing each other’s reviews and activity, and any friendship between you ends.
-        You can report a post in a discussion; posts reported by enough people are hidden. We may
+        You can report a post in a discussion, or someone’s bin; posts and bins reported by enough
+        people are hidden. We may
         remove content or suspend accounts that break these terms or the guidelines.
+      </p>
+
+      <h2>Bins</h2>
+      <p>
+        A bin is a list of albums you make. It starts private, seen only by you; you can make it
+        public, so anyone signed in can find and open it, and private again at any time. Every
+        album in any bin, private ones included, helps Pressd decide which records to predict
+        scores for.
       </p>
 
       <h2>Music information</h2>
@@ -68,7 +77,9 @@ export default function Terms() {
       <p>
         You can delete your account at any time from Settings. Deleting it removes your library,
         ratings, reviews and friends; posts in discussions are removed from your name so the
-        replies under them still make sense. We may close accounts that break these terms.
+        replies under them still make sense. Your private bins are deleted; your public bins stay
+        on Pressd, with their notes and pictures, shown as made by a former Pressd member rather
+        than under your name. We may close accounts that break these terms.
       </p>
 
       <h2>No warranty</h2>

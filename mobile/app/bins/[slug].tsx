@@ -9,17 +9,25 @@
 // unlocked), each with your score or where it sits in your library, or Rate
 // now / Add. The header holds how far through it you are.
 //
+// A user bin (spec 2026-11-13) reads the same, with its own picture in place of
+// the fan when it has one, its maker and description under the title, and the
+// owner's note under each record. Its owner gets Edit, which swaps the page for
+// components/BinEditor.tsx; anyone else's has a "…" with Report.
+//
 // A record always opens as its Pressd page (the community view): through your
 // copy's id when you have one, otherwise by name, which handles a record
 // nobody on Pressd has rated yet.
 import { useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Alert, FlatList, LayoutAnimation, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { AccessibilityInfo, ActionSheetIOS, Alert, FlatList, LayoutAnimation, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ArrowUpDown, Bookmark, ChevronDown, Star } from 'lucide-react-native'
-import { addBinEntry, fetchBin, type BinEntry } from '../../lib/api'
+import { ArrowLeft, ArrowUpDown, Bookmark, ChevronDown, Lock, MoreHorizontal, Pencil, Star } from 'lucide-react-native'
+import { addBinEntry, fetchBin, reportBin, type BinEntry } from '../../lib/api'
+import { binErrorText } from '../../lib/bins'
+import { useOpenProfile } from '../../lib/useOpenProfile'
+import BinEditor from '../../components/BinEditor'
 import { BIN_SORT_DIR, binEntryMatches, binSortLabel, sortBinEntries, type BinSort, type BinSortDir } from '@pressd/shared/binSort'
 import BinSearch from '../../components/BinSearch'
 import PredictedScore from '../../components/PredictedScore'
@@ -104,7 +112,10 @@ export default function BinPage() {
   const insets = useSafeAreaInsets()
   const queryClient = useQueryClient()
   const { user } = useAuth()
-  const { slug } = useLocalSearchParams<{ slug: string }>()
+  const openProfile = useOpenProfile()
+  // A bin made a moment ago opens in edit mode (`edit=1`), to add albums.
+  const { slug, edit } = useLocalSearchParams<{ slug: string; edit?: string }>()
+  const [editing, setEditing] = useState(edit === '1')
   const list = useRef<FlatList<BinEntry>>(null)
   const [sort, setSort] = useState<BinSort>('list')
   const [dir, setDir] = useState<BinSortDir>('asc')
@@ -175,11 +186,48 @@ export default function BinPage() {
       refresh()
       if (status === 'listening') router.push({ pathname: '/rate/[id]', params: { id: String(r.albumId) } })
       else success()
-    } catch {
-      Alert.alert('Couldn’t add that record', 'Try again in a moment.')
+    } catch (err) {
+      Alert.alert('Couldn’t add that record', binErrorText(err, 'Try again in a moment.'))
     } finally {
       setBusy(null)
     }
+  }
+
+  // Someone else's user bin: Report, behind a "…". A bin you report leaves
+  // your lists at once (the server's rule), so the page goes with it.
+  function more(title: string) {
+    selection()
+    ActionSheetIOS.showActionSheetWithOptions(
+      { options: ['Report bin', 'Cancel'], destructiveButtonIndex: 0, cancelButtonIndex: 1 },
+      (i) => {
+        if (i !== 0) return
+        Alert.prompt(
+          `Report “${title}”?`,
+          'What’s wrong with it? (optional)',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Report',
+              style: 'destructive',
+              onPress: async (reason?: string) => {
+                try {
+                  await reportBin(slug!, reason?.trim() || undefined)
+                  success()
+                  if (router.canGoBack()) router.back()
+                  else router.replace('/bins')
+                  queryClient.removeQueries({ queryKey: ['bin', slug] })
+                  queryClient.invalidateQueries({ queryKey: ['bins'] })
+                  queryClient.invalidateQueries({ queryKey: ['search'] })
+                } catch (e) {
+                  Alert.alert('Couldn’t send that report', binErrorText(e, 'Try again in a moment.'))
+                }
+              },
+            },
+          ],
+          'plain-text',
+        )
+      },
+    )
   }
 
   const back = (
@@ -214,6 +262,38 @@ export default function BinPage() {
     )
   }
 
+  if (editing && data.canEdit) {
+    return <BinEditor bin={data} onDone={() => setEditing(false)} />
+  }
+
+  // Top right, on the banner: Edit on your own bin; on someone else's, the "…"
+  // with Report. Pressd's bins have neither.
+  const floatingActions = data.canEdit ? (
+    <Pressable
+      onPress={() => {
+        selection()
+        setEditing(true)
+      }}
+      hitSlop={10}
+      style={[styles.floatEdit, { top: insets.top + 6 }]}
+      accessibilityRole="button"
+      accessibilityLabel="Edit bin"
+    >
+      <Pencil size={14} color={CREAM} />
+      <Text style={styles.floatEditText}>Edit</Text>
+    </Pressable>
+  ) : data.kind === 'user' ? (
+    <Pressable
+      onPress={() => more(data.title)}
+      hitSlop={10}
+      style={[styles.floatMore, { top: insets.top + 6 }]}
+      accessibilityRole="button"
+      accessibilityLabel="More"
+    >
+      <MoreHorizontal size={20} color={CREAM} />
+    </Pressable>
+  ) : null
+
   const SORTS: BinSort[] = ['list', 'pressd', 'raters', 'yours', 'unrated']
   // A song's scores are one decimal; an album's two.
   const places = data.itemType === 'song' ? 1 : 2
@@ -231,8 +311,11 @@ export default function BinPage() {
   }
 
   const bannerH = BANNER + insets.top
-  // The fan: the list's first three records, its first in front.
-  const [front, left, right] = [data.covers[0], data.covers[1], data.covers[2]]
+  // The fan: the list's first three records, its first in front — or, on a
+  // user bin with its own picture, that picture alone.
+  const own = data.coverUrl
+  const [front, left, right] = own ? [own, undefined, undefined] : [data.covers[0], data.covers[1], data.covers[2]]
+  const empty = data.entries.length === 0
   const header = (
     <View>
       {/* The banner: the lead record blurred into a wash, and over it the
@@ -275,8 +358,39 @@ export default function BinPage() {
           >
             {data.title}
           </Text>
+          {data.kind === 'user' && (
+            <View style={styles.byRow}>
+              {data.owner ? (
+                <Text style={styles.by}>
+                  by{' '}
+                  <Text
+                    style={styles.byName}
+                    onPress={() => {
+                      selection()
+                      openProfile(data.owner!.id)
+                    }}
+                    accessibilityRole="link"
+                  >
+                    {data.owner.name}
+                  </Text>
+                </Text>
+              ) : (
+                <Text style={styles.by}>by a former Pressd member</Text>
+              )}
+              {data.visibility === 'private' && (
+                <View style={styles.privateChip}>
+                  <Lock size={11} color={tc.inkSecondary} strokeWidth={2.4} />
+                  <Text style={styles.privateText}>Private</Text>
+                </View>
+              )}
+            </View>
+          )}
+          {data.kind === 'user' && !!data.description && (
+            <Text style={styles.description}>{data.description}</Text>
+          )}
         </View>
-        <BinProgress entries={data.entries} />
+        {!empty && <BinProgress entries={data.entries} />}
+      {!empty && (
       <View style={styles.controls}>
         {/* Searching squeezes the sort down to its icon, and that icon folds
             search away again. One pressable either way, so the change
@@ -321,6 +435,7 @@ export default function BinPage() {
           fieldStyle={styles.search}
         />
       </View>
+      )}
       </View>
     </View>
   )
@@ -335,7 +450,11 @@ export default function BinPage() {
         ListHeaderComponent={header}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        ListEmptyComponent={query ? <Text style={styles.empty}>Nothing in this bin matches “{query.trim()}”.</Text> : null}
+        ListEmptyComponent={
+          query ? <Text style={styles.empty}>Nothing in this bin matches “{query.trim()}”.</Text>
+            : empty ? <Text style={[styles.empty, styles.emptyBin]}>No albums in this bin yet.</Text>
+            : null
+        }
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl }}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={tc.green} />}
         ItemSeparatorComponent={RankRule}
@@ -362,6 +481,9 @@ export default function BinPage() {
                 <Text style={styles.rowTitle} numberOfLines={2}>{e.songTitle ?? e.albumName}</Text>
                 <Text style={styles.rowArtist} numberOfLines={1}>{e.artist}</Text>
                 {details(e) !== '' && <Text style={styles.rowDetails} numberOfLines={1}>{details(e)}</Text>}
+                {/* The owner's note. Pressd's own blurbs stay off iPhone's
+                    rows; a note is the maker's own words about the pick. */}
+                {!!e.note && <Text style={styles.rowNote} numberOfLines={2}>{e.note}</Text>}
 
                 <View style={styles.rowFoot}>
                   <View style={styles.figures}>
@@ -423,6 +545,7 @@ export default function BinPage() {
         }}
       />
       {floatingBack}
+      {floatingActions}
       <AnchoredMenu
         visible={sortOpen}
         anchorRef={sortRef}
@@ -444,6 +567,15 @@ const styles = StyleSheet.create({
     position: 'absolute', left: spacing.lg, width: 36, height: 36, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(12,10,8,0.42)',
   },
+  floatMore: {
+    position: 'absolute', right: spacing.lg, width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(12,10,8,0.42)',
+  },
+  floatEdit: {
+    position: 'absolute', right: spacing.lg, height: 36, paddingHorizontal: 14, borderRadius: 18,
+    flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(12,10,8,0.42)',
+  },
+  floatEditText: { fontFamily: fonts.bodySemiBold, fontSize: 13.5, color: CREAM },
   banner: { overflow: 'hidden', backgroundColor: '#171615' },
   // Held down a little so the fan stands out of its own blurred colour.
   wash: { backgroundColor: 'rgba(14,12,10,0.28)' },
@@ -465,10 +597,23 @@ const styles = StyleSheet.create({
   // The bare mark on the page, no chip behind it (Jack's call).
   mark: { width: 40, height: 40 * (126 / 232) },
   title: { fontFamily: fonts.displayBlack, fontSize: 32, lineHeight: 38, color: colors.ink, textAlign: 'center' },
+  byRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: spacing.sm },
+  by: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary },
+  byName: { fontFamily: fonts.bodyBold, color: colors.ink },
+  privateChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 9, paddingVertical: 3, borderRadius: radii.pill, backgroundColor: colors.inset,
+  },
+  privateText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.inkSecondary },
+  description: {
+    marginTop: spacing.xs, fontFamily: fonts.body, fontSize: 15, lineHeight: 22,
+    color: colors.inkSecondary, textAlign: 'center',
+  },
   controls: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg },
   // Open, the field takes the rest of the row from the squished sort.
   search: { flex: 1 },
   empty: { paddingHorizontal: spacing.lg, paddingVertical: spacing.xl, fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary },
+  emptyBin: { textAlign: 'center' },
   sortBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, overflow: 'hidden',
     height: 36, paddingHorizontal: 13, borderRadius: radii.pill, borderWidth: 1,
@@ -494,6 +639,7 @@ const styles = StyleSheet.create({
   rowTitle: { fontFamily: fonts.bodyBold, fontSize: 17, lineHeight: 21, color: colors.ink },
   rowArtist: { marginTop: 3, fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkSecondary },
   rowDetails: { marginTop: 2, fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.inkTertiary },
+  rowNote: { marginTop: 6, fontFamily: fonts.body, fontSize: 13, lineHeight: 17, color: colors.inkSecondary },
   rowFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginTop: spacing.md },
   figures: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.lg, flexShrink: 1 },
   figure: { minWidth: 44 },

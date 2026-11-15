@@ -3,7 +3,7 @@
 import type { SearchSong } from './types'
 
 export type RecentItem = {
-  kind: 'person' | 'album' | 'artist' | 'song' | 'catalog'
+  kind: 'person' | 'album' | 'artist' | 'song' | 'catalog' | 'bin'
   key: string
   label: string
   sub?: string

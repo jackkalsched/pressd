@@ -321,6 +321,8 @@ export default function Profile() {
         ListHeaderComponent={
           <View>
             <ProfileBanner
+              // Your own ranking: no owner, which the board reads as "yours" (StatsView's rule).
+              onTagPress={(tag, kind) => router.push({ pathname: '/genre/[tag]', params: { tag: encodeURIComponent(tag), kind, userId: String(user.id) } })}
               name={user.name}
               avatarUrl={user.avatarUrl}
               avg={summary?.avg_album_score ?? null}

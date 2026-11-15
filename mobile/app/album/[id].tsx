@@ -17,12 +17,13 @@ import {
 } from 'react-native'
 import VinylSpinner from '../../components/VinylSpinner'
 import PredictedScore from '../../components/PredictedScore'
+import GenreLinks from '../../components/GenreLinks'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as haptics from '../../lib/haptics'
-import { ArrowLeft, Check, ChevronRight, Heart, Pencil, Share2, Star, Trash2 } from 'lucide-react-native'
+import { ArrowLeft, Check, ChevronRight, FolderPlus, Heart, Pencil, Share2, Star, Trash2 } from 'lucide-react-native'
 import {
   fetchAlbum,
   fetchFriends,
@@ -49,6 +50,7 @@ import AlbumBackdrop from '../../components/AlbumBackdrop'
 import BangSkip from '../../components/BangSkip'
 import ShareCard from '../../components/ShareCard'
 import RecommendSheet from '../../components/RecommendSheet'
+import AddToBinSheet from '../../components/AddToBinSheet'
 import AlbumThoughts from '../../components/AlbumThoughts'
 import NoComparisonYet from '../../components/NoComparisonYet'
 import { confirmDeleteAlbum, useDeleteAlbum } from '../../lib/useDeleteAlbum'
@@ -290,6 +292,7 @@ export default function AlbumDetail() {
   // Above the early returns for the same reason useDeleteAlbum is.
   const [sharing, setSharing] = useState(false)
   const [recommending, setRecommending] = useState(false)
+  const [binning, setBinning] = useState(false)
   const [copying, setCopying] = useState<'listening' | 'to_listen' | null>(null)
   const [copyError, setCopyError] = useState<string | null>(null)
   // Held here rather than inside ReviewSection: the button that opens the
@@ -396,6 +399,10 @@ export default function AlbumDetail() {
   // copy and somebody sent it. On a friend's copy the sender is their business,
   // not yours, so the page stays ordinary.
   const wasRecommended = isMine && !!album.recommendedByName
+  const canBin = album.songs.length > 2 && !isUnreleased(album.releaseDate)
+  // Your copy of the record goes by its id — this one, or yours in another
+  // edition; anyone else's is resolved from the catalogs by name.
+  const binAlbumId = isMine ? album.id : album.viewerCopy?.id ?? null
   const recWhen = album.recommendedAt ? relativeDay(album.recommendedAt) : null
 
   // Compare is offered wherever a comparison exists to make, so the control is
@@ -473,8 +480,12 @@ export default function AlbumDetail() {
     queryClient.invalidateQueries({ queryKey: ['community-by-name', name, artist] })
   }
 
-  // Both of you finished this album → the side-by-side comparison view.
-  if (owner && myAlbum && album.status === 'rated' && myAlbum.status === 'rated' &&
+  // Both of you finished this album → the side-by-side comparison, when asked
+  // for (`compare`). Opening someone's rating shows their rating first, with
+  // Compare and Your rating to switch, as web's album page does.
+  const canCompareFriend = !!(owner && myAlbum && album.status === 'rated' && myAlbum.status === 'rated' &&
+    album.score != null && myAlbum.score != null)
+  if (compare === '1' && owner && myAlbum && album.status === 'rated' && myAlbum.status === 'rated' &&
       album.score != null && myAlbum.score != null) {
     return (
       <FriendCompare
@@ -531,13 +542,22 @@ export default function AlbumDetail() {
             where it reads as a title rather than a control. */}
         <View style={styles.topBarRight}>
         {canCompare && (
-          <Pressable style={styles.compareBtn} onPress={openCompare} hitSlop={8}>
+          // On someone else's rating of a record you've rated too, Compare means
+          // you against them (FriendCompare), as web's album page; on your own
+          // copy, you against the Pressd average.
+          <Pressable
+            style={styles.compareBtn}
+            onPress={!isMine && canCompareFriend
+              ? () => router.push({ pathname: '/album/[id]', params: { id: String(albumId), compare: '1' } })
+              : openCompare}
+            hitSlop={8}
+          >
             <Text style={styles.compareBtnText}>Compare</Text>
           </Pressable>
         )}
-        {/* Any finished album can be shared, not just your own — a friend's
-            rating is worth passing on too, and the card names whose it is. */}
-        {album.status === 'rated' && album.score != null && (
+        {/* Only your own finished album can be shared: the card is your rating
+            to post, never someone else's (Jack, November 2026). */}
+        {isMine && album.status === 'rated' && album.score != null && (
           <Pressable
             style={styles.shareBtn}
             onPress={() => setSharing(true)}
@@ -559,6 +579,22 @@ export default function AlbumDetail() {
             accessibilityLabel={`Recommend ${album.albumName} to a friend`}
           >
             <Star size={17} color={RECOMMEND} fill={RECOMMEND} />
+          </Pressable>
+        )}
+        {/* Add to bin… on any copy of a record a bin can hold: an album or EP
+            that's out. A single (two songs or fewer) or a copy with no songs
+            yet has nothing to offer a bin, and the server would refuse it. */}
+        {canBin && (
+          <Pressable
+            style={styles.shareBtn}
+            onPress={() => {
+              haptics.selection()
+              setBinning(true)
+            }}
+            hitSlop={10}
+            accessibilityLabel="Add to bin…"
+          >
+            <FolderPlus size={17} color={tc.green} />
           </Pressable>
         )}
         {/* Sits last in the bar, away from Back and Compare — destructive, so
@@ -618,13 +654,15 @@ export default function AlbumDetail() {
             {album.year ? ` · ${album.year}` : ''}
           </Text>
           {isUnreleased(album.releaseDate) && <Text style={styles.releaseLine}>{outLine(album.releaseDate!)}</Text>}
-          {album.genre && <Text style={styles.genre}>{album.genre}</Text>}
-          {(() => {
-            const subs = [album.subGenre1, album.subGenre2, album.subGenre3].filter(Boolean)
-            return subs.length > 0 ? (
-              <Text style={styles.subGenres}>{subs.join(' · ')}</Text>
-            ) : null
-          })()}
+          {/* Each tag opens the copy owner's ranking in it — yours on your own. */}
+          <GenreLinks
+            genre={album.genre}
+            subs={[album.subGenre1, album.subGenre2, album.subGenre3].filter(Boolean) as string[]}
+            userId={album.userId ?? undefined}
+            owner={isMine ? undefined : album.owner?.name}
+            genreStyle={styles.genre}
+            subStyle={styles.subGenres}
+          />
         </View>
 
         <View style={styles.scoreBlock}>
@@ -736,9 +774,28 @@ export default function AlbumDetail() {
             <Text style={styles.ctaText}>{cta}</Text>
           </Pressable>
         )}
+        {/* Someone else's rating of a record you've rated too: compare the two,
+            or go to yours. */}
+        {!isMine && canCompareFriend && (
+          <View style={styles.ctaRow}>
+            <Pressable
+              style={({ pressed }) => [styles.cta, styles.ctaInRow, pressed && { backgroundColor: colors.greenPressed }]}
+              onPress={() => router.push({ pathname: '/album/[id]', params: { id: String(albumId), compare: '1' } })}
+            >
+              <Text style={styles.ctaText} numberOfLines={1}>Compare with {owner?.name}</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.cta, styles.ctaInRow, pressed && { backgroundColor: colors.greenPressed }]}
+              onPress={() => router.push({ pathname: '/album/[id]', params: { id: String(album.viewerCopy!.id) } })}
+            >
+              <Pencil size={17} color="#fff" />
+              <Text style={styles.ctaText} numberOfLines={1}>Your rating</Text>
+            </Pressable>
+          </View>
+        )}
         {/* Someone else's copy of a record you hold: on to your copy, never a
             second one of the same record. */}
-        {!isMine && album.viewerCopy && (
+        {!isMine && album.viewerCopy && !canCompareFriend && (
           <Pressable
             style={({ pressed }) => [styles.cta, pressed && { backgroundColor: colors.greenPressed }]}
             onPress={() =>
@@ -857,6 +914,15 @@ export default function AlbumDetail() {
         visible={recommending}
         onClose={() => setRecommending(false)}
       />
+      {canBin && (
+        <AddToBinSheet
+          visible={binning}
+          onClose={() => setBinning(false)}
+          ownAlbumId={binAlbumId}
+          albumName={album.albumName}
+          artist={album.artist}
+        />
+      )}
     </View>
   )
 }
@@ -913,6 +979,9 @@ function CommunityAlbum({
   const [queuing, setQueuing] = useState(false)
   const [queued, setQueued] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [binning, setBinning] = useState(false)
+  // Add to bin… on a record a bin can hold: an album or EP that's out.
+  const canBin = data.tracks.length > 2 && !upcomingDate
   const notRated = data.your_status !== 'rated'
   const inLibrary = data.your_album_id != null
   // Someone other than you has to have rated it. Without that check the button
@@ -965,6 +1034,19 @@ function CommunityAlbum({
             <Text style={styles.compareBtnText} numberOfLines={1}>Average Rating</Text>
           </Pressable>
         ) : null}
+        {canBin && (
+          <Pressable
+            style={styles.shareBtn}
+            onPress={() => {
+              haptics.selection()
+              setBinning(true)
+            }}
+            hitSlop={10}
+            accessibilityLabel="Add to bin…"
+          >
+            <FolderPlus size={17} color={tc.green} />
+          </Pressable>
+        )}
         {/* Removing an unrated copy lives here rather than on the library tile:
             a 12px target in a grid is a bad place for something with no undo,
             and by this point you're looking at the record you'd be deleting.
@@ -1043,8 +1125,7 @@ function CommunityAlbum({
                   <Text style={styles.artistLink} onPress={() => onOpenArtist(data.artist)}>{data.artist}</Text>
                   {data.year ? ` · ${data.year}` : ''}
                 </Text>
-                {data.genre && <Text style={styles.cmpGenre}>{data.genre}</Text>}
-                {subs.length > 0 && <Text style={styles.cmpSubGenres}>{subs.join(' · ')}</Text>}
+                <GenreLinks genre={data.genre} subs={subs} charts genreStyle={styles.cmpGenre} subStyle={styles.cmpSubGenres} />
               </View>
             </View>
 
@@ -1119,6 +1200,15 @@ function CommunityAlbum({
             })}
           </ScrollView>
         </SafeAreaView>
+        {canBin && (
+          <AddToBinSheet
+            visible={binning}
+            onClose={() => setBinning(false)}
+            ownAlbumId={data.your_album_id ?? null}
+            albumName={data.album_name}
+            artist={data.artist}
+          />
+        )}
       </View>
     )
   }
@@ -1144,8 +1234,8 @@ function CommunityAlbum({
               {data.year ? ` · ${data.year}` : ''}
             </Text>
             {upcomingDate && <Text style={styles.releaseLine}>{outLine(upcomingDate)}</Text>}
-            {data.genre && <Text style={styles.genre}>{data.genre}</Text>}
-            {subs.length > 0 && <Text style={styles.subGenres}>{subs.join(' · ')}</Text>}
+            {/* The record's Pressd page: each tag opens your own ranking in it. */}
+            <GenreLinks genre={data.genre} subs={subs} charts genreStyle={styles.genre} subStyle={styles.subGenres} />
           </View>
 
           {/* Pressd average and — when the model has a read on it and you
@@ -1349,6 +1439,15 @@ function CommunityAlbum({
           })}
         </ScrollView>
       </SafeAreaView>
+      {canBin && (
+        <AddToBinSheet
+          visible={binning}
+          onClose={() => setBinning(false)}
+          ownAlbumId={data.your_album_id ?? null}
+          albumName={data.album_name}
+          artist={data.artist}
+        />
+      )}
     </View>
   )
 }
@@ -1561,13 +1660,14 @@ function FriendCompare({
                 <Text style={styles.artistLink} onPress={() => onOpenArtist(theirs.artist)}>{theirs.artist}</Text>
                 {theirs.year ? ` · ${theirs.year}` : ''}
               </Text>
-              {theirs.genre && <Text style={styles.cmpGenre}>{theirs.genre}</Text>}
-              {(() => {
-                const subs = [theirs.subGenre1, theirs.subGenre2, theirs.subGenre3].filter(Boolean)
-                return subs.length > 0 ? (
-                  <Text style={styles.cmpSubGenres}>{subs.join(' · ')}</Text>
-                ) : null
-              })()}
+              <GenreLinks
+                genre={theirs.genre}
+                subs={[theirs.subGenre1, theirs.subGenre2, theirs.subGenre3].filter(Boolean) as string[]}
+                userId={theirs.userId ?? undefined}
+                owner={owner.name}
+                genreStyle={styles.cmpGenre}
+                subStyle={styles.cmpSubGenres}
+              />
             </View>
           </View>
 

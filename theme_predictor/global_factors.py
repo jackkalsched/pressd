@@ -25,6 +25,7 @@ import json
 from sqlalchemy import text
 
 from .personalize import GLOBAL_REF_MU, GLOBAL_REF_SD
+from backend.user_bins import COUNTING_ENTRY_JOIN
 
 # The example set is pooled across users, so it has to be put on one scale
 # first: each user's ratings are z-scored within their own distribution and
@@ -276,10 +277,10 @@ def albums_missing_factors(con, limit: int | None = None,
             " WHERE subject_key IN (SELECT subject_key FROM binentry)")).fetchall()
         if album_key(artist, album_name) in have
     }
-    for _eid, artist, album_name, year, tl_json, subject in con.execute(text("""
+    for _eid, artist, album_name, year, tl_json, subject in con.execute(text(f"""
         SELECT e.id, e.artist, e.album_name, e.year, e.tracklist_json, e.subject_key
-        FROM binentry e JOIN bin b ON b.id = e.bin_id
-        WHERE e.tracklist_json IS NOT NULL AND b.hidden_at IS NULL
+        FROM binentry e {COUNTING_ENTRY_JOIN}
+        WHERE e.tracklist_json IS NOT NULL
         ORDER BY b.sort_order, b.id, e.position
     """)).fetchall():
         if subject in measured:

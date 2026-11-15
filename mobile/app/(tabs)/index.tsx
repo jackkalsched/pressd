@@ -137,8 +137,10 @@ export default function ForYou() {
     })
   }
   const { data: bins = [] } = useQuery({
-    queryKey: ['bins', userId],
-    queryFn: fetchBins,
+    // At least one of Pressd's, the rest public community bins at random,
+    // re-drawn by the server on each load (spec 2026-11-13 §7).
+    queryKey: ['bins', 'for_you', userId],
+    queryFn: () => fetchBins('for_you'),
     enabled: userId > 0,
   })
 
@@ -723,14 +725,12 @@ function ReviewCell({ review, first, onOpen, onOpenUser, onLike }: { review: Top
   return (
     <View style={[styles.review, !first && [styles.hairline, { borderColor: tc.border }]]}>
       <Pressable onPress={onOpen}>
-        {/* Reviewer identity leads, bigger than the album */}
+        {/* The record leads, with the reviewer's score for it */}
         <View style={styles.reviewHead}>
-          <Pressable onPress={() => onOpenUser(review.author.id)} accessibilityRole="button" accessibilityLabel={`View ${review.author.name}'s profile`}>
-            <Cover uri={review.author.avatar_url} seed={review.author.name} size={38} radius={19} />
-          </Pressable>
+          <Cover uri={review.album_art_url} seed={review.album_name} size={44} />
           <View style={styles.mediaText}>
-            <Text style={styles.reviewAuthor} numberOfLines={1} onPress={() => onOpenUser(review.author.id)}>{review.author.name}</Text>
-            <Text style={styles.reviewOn} numberOfLines={1}>reviewed {review.album_name}</Text>
+            <Text style={styles.reviewAlbum} numberOfLines={1}>{review.album_name}</Text>
+            <Text style={styles.reviewArtist} numberOfLines={1}>{review.artist}</Text>
           </View>
           {review.score != null && (
             <Text style={[styles.reviewScore, { color: scoreColor(review.score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{review.score.toFixed(2)}</Text>
@@ -760,23 +760,25 @@ function ReviewCell({ review, first, onOpen, onOpenUser, onLike }: { review: Top
           </View>
         )}
 
-        {/* Album cover + name, smaller than the reviewer */}
+        {/* Who wrote it, along the foot */}
         <View style={styles.reviewAlbumRow}>
-          <Cover uri={review.album_art_url} seed={review.album_name} size={40} />
+          <Pressable onPress={() => onOpenUser(review.author.id)} accessibilityRole="button" accessibilityLabel={`View ${review.author.name}'s profile`}>
+            <Cover uri={review.author.avatar_url} seed={review.author.name} size={30} radius={15} />
+          </Pressable>
           <View style={styles.mediaText}>
-            <Text style={styles.reviewAlbum} numberOfLines={1}>{review.album_name}</Text>
-            <Text style={styles.reviewArtist} numberOfLines={1}>{review.artist}</Text>
+            <Text style={styles.reviewAuthorFoot} numberOfLines={1} onPress={() => onOpenUser(review.author.id)}>{review.author.name}</Text>
+          </View>
+          {/* Like and replies on the reviewer's line, at its right edge; their
+              own Pressables take the tap before the cell's. */}
+          <View style={styles.reviewActions}>
+            <LikeButton liked={!!review.liked_by_me} count={review.like_count} onToggle={onLike} />
+            <Pressable style={styles.reviewAction} onPress={onOpen} hitSlop={8}>
+              <MessageCircle size={15} color={tc.inkMuted} />
+              <Text style={styles.reviewActionText}>{review.comment_count}</Text>
+            </Pressable>
           </View>
         </View>
       </Pressable>
-
-      <View style={styles.reviewActions}>
-        <LikeButton liked={!!review.liked_by_me} count={review.like_count} onToggle={onLike} />
-        <Pressable style={styles.reviewAction} onPress={onOpen} hitSlop={8}>
-          <MessageCircle size={15} color={tc.inkMuted} />
-          <Text style={styles.reviewActionText}>{review.comment_count}</Text>
-        </Pressable>
-      </View>
     </View>
   )
 }
@@ -905,10 +907,10 @@ const styles = StyleSheet.create({
   spotStrong: { fontFamily: fonts.bodyBold, color: colors.ink },
 
   suggestWhy: { fontFamily: fonts.body, fontSize: 12, color: colors.inkMuted, fontStyle: 'italic', marginTop: 6 },
-  predict: { alignItems: 'center', minWidth: 52 },
+  predict: { alignItems: 'center', minWidth: 68 },
   // Scores are Playfair, as everywhere else in the app (CLAUDE.md §12).
-  predictScore: { fontFamily: fonts.display, fontSize: 22 },
-  predictLabel: { fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 0.8, color: colors.inkMuted, marginTop: 1 },
+  predictScore: { fontFamily: fonts.display, fontSize: 30 },
+  predictLabel: { fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 0.8, color: colors.inkMuted, marginTop: 2 },
   suggestCta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.md },
   textCtaLabel: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.green },
   mastheadIcons: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
@@ -930,8 +932,8 @@ const styles = StyleSheet.create({
   trendRowPressed: { opacity: 0.5 },
   trendCount: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted, marginTop: 3 },
   rank: { fontFamily: fonts.display, fontSize: 16, color: colors.inkMuted, width: 20, textAlign: 'center' },
-  scorePill: { borderRadius: radii.sm, paddingHorizontal: 8, paddingVertical: 4, minWidth: 46, alignItems: 'center' },
-  scorePillText: { fontFamily: fonts.display, fontSize: 14 },
+  scorePill: { borderRadius: radii.sm, paddingHorizontal: 10, paddingVertical: 5, minWidth: 54, alignItems: 'center' },
+  scorePillText: { fontFamily: fonts.display, fontSize: 17 },
 
   // Review cell — reviewer leads (bigger), album secondary, smaller quote
   review: { paddingVertical: spacing.lg },
@@ -941,15 +943,16 @@ const styles = StyleSheet.create({
   reviewScore: { fontFamily: fonts.display, fontSize: 20 },
   reviewQuote: { fontFamily: fonts.displayRegular, fontSize: 15, lineHeight: 22, color: colors.ink, marginTop: spacing.md },
   reviewAlbumRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
-  reviewAlbum: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink },
-  reviewArtist: { fontFamily: fonts.body, fontSize: 12, color: colors.inkTertiary, marginTop: 1 },
+  reviewAlbum: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.ink },
+  reviewArtist: { fontFamily: fonts.body, fontSize: 13, color: colors.inkTertiary, marginTop: 1 },
+  reviewAuthorFoot: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.ink },
 
   songNotes: { marginTop: spacing.md, gap: 5 },
   songNote: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   songNoteText: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkSecondary },
   songNoteScore: { fontFamily: fonts.display, fontSize: 12 },
 
-  reviewActions: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.md, paddingLeft: 38 + spacing.sm },
+  reviewActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, flexShrink: 0 },
   reviewAction: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   reviewActionText: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.inkTertiary },
 

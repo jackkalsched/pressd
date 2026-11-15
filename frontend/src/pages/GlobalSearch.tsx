@@ -1,4 +1,4 @@
-// Search Pressd: people, records, artists and songs in one call (GET /search/all),
+// Search Pressd: people, records, artists, songs and bins in one call (GET /search/all),
 // then the catalogs' albums that Pressd doesn't have yet — mobile's app/search.tsx,
 // laid out wide. Opened from the icon on For You; Esc or Cancel goes back.
 //
@@ -11,15 +11,16 @@ import { Check, Music, Plus, Search, Star, X } from 'lucide-react'
 import { pushRecent, recentKey, songTarget, type RecentItem } from '@pressd/shared/recentSearches'
 import { fetchArtistImage, importAlbum, resolveAlbum, searchAll, searchKnown } from '../api'
 import type { AlbumSearchResult } from '../api'
-import type { SearchAlbum, SearchArtist, SearchGroup, SearchPerson, SearchResults, SearchSong } from '../types'
+import type { SearchAlbum, SearchArtist, SearchBin, SearchGroup, SearchPerson, SearchResults, SearchSong } from '../types'
 import { songScoreColor } from '../types'
 import { useAlbumSearch } from '../hooks/useAlbumSearch'
 import { useUser } from '../context/UserContext'
 import { SECTION_LABEL } from '../components/albumView'
+import { BinMosaic } from '../components/BinCard'
 import Avatar from '../components/Avatar'
 import CoverImg from '../components/CoverImg'
 import TracklistLoader from '../components/TracklistLoader'
-import VinylSpinner from '../components/VinylSpinner'
+import SearchSkeleton, { SkeletonRows } from '../components/SearchSkeleton'
 import { stagger } from '../lib/format'
 
 const SHOWN = 4
@@ -31,6 +32,7 @@ type Target =
   | { kind: 'album'; albumId: number; community: boolean; track?: number }
   | { kind: 'artist'; name: string }
   | { kind: 'catalog'; album_name: string; artist: string; deezer: string | null }
+  | { kind: 'bin'; slug: string }
 
 const STATUS_LABEL = { listening: 'Listening', to_listen: 'To Listen' } as const
 
@@ -72,6 +74,8 @@ function hrefFor(t: Target): string {
     }
     case 'artist':
       return `/artist/${encodeURIComponent(t.name)}?mode=pressd`
+    case 'bin':
+      return `/bins/${encodeURIComponent(t.slug)}`
     case 'catalog': {
       // Look before you commit: the record's Pressd page by name, which may not
       // exist on Pressd yet — the Deezer id lets it resolve a tracklist.
@@ -123,7 +127,7 @@ export default function GlobalSearch() {
   }
 
   // ── Pressd ──
-  const { data: results, isLoading, isError, isPlaceholderData, isFetching } = useQuery({
+  const { data: results, isLoading, isError, isPlaceholderData } = useQuery({
     queryKey: ['search', userId, q],
     queryFn: () => searchAll(q),
     enabled: active && userId != null,
@@ -229,10 +233,11 @@ export default function GlobalSearch() {
   const albums = rows('albums')
   const artists = rows('artists')
   const songs = rows('songs')
+  const bins = rows('bins')
   const answered = results != null && !isPlaceholderData
   const nothingOnPressd =
     answered &&
-    results.people.length + results.albums.length + results.artists.length + results.songs.length === 0
+    results.people.length + results.albums.length + results.artists.length + results.songs.length + results.bins.length === 0
 
   const navItems: RecentItem[] = !active
     ? recents
@@ -241,6 +246,7 @@ export default function GlobalSearch() {
         ...albums.list.map(albumItem),
         ...artists.list.map(artistItem),
         ...songs.list.map(songItem),
+        ...bins.list.map(binItem),
         ...catalogShown.map(catalogItem),
       ]
   const navIndex = (item: RecentItem) => navItems.findIndex((n) => n.kind === item.kind && n.key === item.key)
@@ -289,9 +295,7 @@ export default function GlobalSearch() {
     return (
       <div className="mb-1.5 flex min-h-6 items-center justify-between">
         <p className={SECTION_LABEL}>{label}</p>
-        {pending ? (
-          <VinylSpinner size={18} />
-        ) : more || isOpen ? (
+        {pending ? null : more || isOpen ? (
           <button
             type="button"
             onClick={() => seeAll(g)}
@@ -328,9 +332,7 @@ export default function GlobalSearch() {
               className="h-12 w-full rounded-xl border border-(--c-e2dbd0) bg-(--c-fff) pl-11 pr-11 text-[15px] text-(--c-1c1917) transition-colors placeholder:text-(--c-a8998a) focus:border-(--c-2d6a4f) focus:outline-none"
             />
             <div className="absolute right-3.5 top-1/2 flex -translate-y-1/2 items-center">
-              {active && isFetching ? (
-                <VinylSpinner size={18} />
-              ) : query.length > 0 ? (
+              {query.length > 0 ? (
                 <button
                   type="button"
                   onClick={() => setQuery('')}
@@ -373,11 +375,8 @@ export default function GlobalSearch() {
           )
         ) : (
           <>
-            {isLoading && !results && (
-              <div className="mt-16 flex justify-center">
-                <VinylSpinner size={44} />
-              </div>
-            )}
+            {/* Skeleton rows in the results' shape until the first answer, not a spinner. */}
+            {isLoading && !results && <SearchSkeleton />}
             {isError && !isPlaceholderData && !results && (
               <p className="mt-10 text-center text-[14px] text-(--c-8a7f72)">Search isn&rsquo;t answering. Try again.</p>
             )}
@@ -385,7 +384,7 @@ export default function GlobalSearch() {
               <p className="mt-10 text-center text-[14px] text-(--c-8a7f72)">Nothing on Pressd matches &ldquo;{q}&rdquo;.</p>
             )}
 
-            <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-8 md:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-8 md:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
               {people.list.length > 0 && (
                 <section className="min-w-0">
                   {head('PEOPLE', 'people', people.more, expanded === 'people' && fullLoading)}
@@ -462,12 +461,33 @@ export default function GlobalSearch() {
                   </ul>
                 </section>
               )}
+
+              {bins.list.length > 0 && (
+                <section className="min-w-0">
+                  {head('BINS', 'bins', bins.more, expanded === 'bins' && fullLoading)}
+                  <ul className="m-0 -mx-3 list-none p-0">
+                    {bins.list.map((b, i) => (
+                      <Row
+                        key={b.slug}
+                        index={i}
+                        {...rowProps(binItem(b))}
+                        lead={<BinMosaic covers={b.covers} coverUrl={b.coverUrl} size={LEAD} rounded="rounded-md" />}
+                        title={b.title}
+                        sub={binSub(b)}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              )}
             </div>
 
             {(catalogPending || fresh.length > 0) && (
               <section className="mt-10">
                 {head('FROM THE CATALOGS', 'catalog', fresh.length > SHOWN, catalogPending)}
                 {pickError && <p className="m-0 mb-1.5 text-[13px] text-(--c-c0392b)">{pickError}</p>}
+                {catalogPending && catalogShown.length === 0 && (
+                  <div className="-mx-3 grid grid-cols-1 gap-x-10 md:grid-cols-2"><SkeletonRows count={2} /><SkeletonRows count={2} /></div>
+                )}
                 <ul className="m-0 -mx-3 grid list-none grid-cols-1 gap-x-10 p-0 md:grid-cols-2">
                   {catalogShown.map((r, i) => {
                     const done = shelved.includes(catalogKey(r))
@@ -588,6 +608,24 @@ function catalogItem(r: AlbumSearchResult): RecentItem {
       artist: r.artist,
       deezer: r.source === 'deezer' ? r.source_id : null,
     } satisfies Target,
+  }
+}
+
+/** "12 albums · by name": Pressd for its own, "a former Pressd member" for a
+ *  public bin whose maker left. */
+function binSub(b: SearchBin): string {
+  const by = b.kind === 'curated' ? 'Pressd' : b.ownerless || !b.ownerName ? 'a former Pressd member' : b.ownerName
+  return `${b.entryCount} ${b.entryCount === 1 ? 'album' : 'albums'} · by ${by}`
+}
+
+function binItem(b: SearchBin): RecentItem {
+  return {
+    kind: 'bin',
+    key: b.slug,
+    label: b.title,
+    sub: binSub(b),
+    artUrl: b.coverUrl ?? b.covers[0] ?? null,
+    target: { kind: 'bin', slug: b.slug } satisfies Target,
   }
 }
 

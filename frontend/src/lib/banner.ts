@@ -22,9 +22,19 @@ export function fitsBanner(img: HTMLImageElement): boolean {
 
 /** Draw a region of `img` at the stored size, as bare base64 JPEG. */
 export function renderBanner(img: HTMLImageElement, sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight): string {
+  return renderCrop(img, BANNER_W, BANNER_H, sx, sy, sw, sh)
+}
+
+/** A bin's own picture is stored square at 800×800 (backend/user_bins.py,
+ *  BIN_COVER_SIZE); framed in the same cropper as a banner. */
+export const BIN_COVER_PX = 800
+
+/** Draw a region of `img` at w×h, as bare base64 JPEG — what the server's
+ *  base64 upload routes (banners, bin covers) take. */
+export function renderCrop(img: HTMLImageElement, w: number, h: number, sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight): string {
   const canvas = document.createElement('canvas')
-  canvas.width = BANNER_W
-  canvas.height = BANNER_H
-  canvas.getContext('2d')!.drawImage(img, sx, sy, sw, sh, 0, 0, BANNER_W, BANNER_H)
+  canvas.width = w
+  canvas.height = h
+  canvas.getContext('2d')!.drawImage(img, sx, sy, sw, sh, 0, 0, w, h)
   return canvas.toDataURL('image/jpeg', 0.85).split(',')[1]
 }

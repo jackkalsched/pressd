@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Ban, Check, Clock, Link2, MapPin, MoreHorizontal, Pencil, Settings, UserMinus, UserPlus } from 'lucide-react'
-import { acceptFriendRequest, addFriend, blockUser, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, fetchOverlap, getInviteLink, removeFriend, unblockUser } from '../api'
+import { acceptFriendRequest, addFriend, blockUser, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, fetchOverlap, removeFriend, unblockUser } from '../api'
+import UnderlineTabs from '../components/UnderlineTabs'
+import CountUp from '../components/CountUp'
 import { useUser } from '../context/UserContext'
 import Library from './Library'
 import { stagger } from '../lib/format'
@@ -45,7 +47,6 @@ export default function FriendProfile() {
   const [busy, setBusy] = useState(false)
   // The banner's pencil and gear: Edit profile and Settings, one dialog in two modes.
   const [sheet, setSheet] = useState<SettingsMode | null>(null)
-  const [shared, setShared] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   async function toggleBlock() {
     const name = profile?.name ?? 'this person'
@@ -143,22 +144,12 @@ export default function FriendProfile() {
   const artistCount = new Set(rated.flatMap((a) => [a.artist, ...a.extraArtists].map((n) => n.trim().toLowerCase()))).size
   const albumScores = rated.flatMap((a) => (a.score != null ? [a.score] : []))
 
-  /** Your invite link, not this page's address: a profile is behind sign-in,
-   *  and the invite both signs someone up and makes you friends. The system
-   *  share sheet where there is one, else the clipboard. */
-  async function shareProfile() {
-    if (!activeUser) return
-    try {
-      const { link } = await getInviteLink(activeUser.id)
-      const text = `Compare music taste with me on Pressd`
-      if (navigator.share) {
-        await navigator.share({ title: 'Pressd', text, url: link })
-      } else {
-        await navigator.clipboard.writeText(link)
-        setShared(true)
-        setTimeout(() => setShared(false), 2000)
-      }
-    } catch { /* dismissed, or no clipboard — nothing to undo */ }
+  // A taste pill's ranking: this person's records in that genre (TagBoard), as
+  // the Stats tab's genre rows link it. No owner on your own page.
+  const tagHref = (kind: 'genre' | 'subgenre', tag: string) => {
+    const q = new URLSearchParams({ user: String(fid) })
+    if (!isSelf && person?.name) q.set('owner', person.name)
+    return `/stats/${kind}/${encodeURIComponent(tag)}?${q.toString()}`
   }
 
   // Favorite genres: most common genre / subgenre tags across rated albums
@@ -356,16 +347,9 @@ export default function FriendProfile() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2.5 pt-4 md:pt-8">
-          {isSelf ? (
-            <>
-              <button
-                onClick={shareProfile}
-                className="flex h-11 items-center gap-2 rounded-full bg-(--c-green-fill) px-5 text-[14.5px] font-semibold text-white shadow-[0_10px_24px_-10px_rgba(45,106,79,0.75)] hover:bg-(--c-green-fill-hover)"
-              >
-                {shared ? <><Check size={16} className="pop" /> Link copied</> : 'Share profile'}
-              </button>
-            </>
-          ) : (
+          {/* Your own profile has no button here: inviting lives in the sidebar's
+              Invite (and iPhone's side menu), so a second Share profile was a duplicate. */}
+          {isSelf ? null : (
             <>
               <button
                 // Friends opens the removal prompt; the others add or accept.
@@ -443,7 +427,8 @@ export default function FriendProfile() {
           const figure = (
             <>
               <p className="font-display m-0 text-[30px] font-bold leading-none tabular-nums md:text-[36px]" style={{ color: st.color ?? 'var(--c-1c1917)' }}>
-                {st.value}
+                {/* Counts up from zero as the profile loads, as on iPhone. */}
+                <CountUp value={st.value} cacheKey={`${fid}:${st.label}`} />
               </p>
               <p className="m-0 mt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-(--c-a8998a)">{st.label}</p>
             </>
@@ -471,15 +456,16 @@ export default function FriendProfile() {
             {(topGenres.length > 0 || topSubgenres.length > 0) && (
               <div className="mt-4">
                 <div className="flex flex-wrap items-center gap-1.5">
+                  {/* Each pill opens this person's records in that genre, ranked (TagBoard). */}
                   {topGenres.map((g) => (
-                    <span key={g} className="text-xs font-semibold text-(--c-2d6a4f) bg-(--c-2d6a4f)/10 px-2.5 py-1 rounded-full">
+                    <Link key={g} to={tagHref('genre', g)} className="text-xs font-semibold text-(--c-2d6a4f) bg-(--c-2d6a4f)/10 px-2.5 py-1 rounded-full transition-colors hover:bg-(--c-2d6a4f)/20">
                       {g}
-                    </span>
+                    </Link>
                   ))}
                   {topSubgenres.map((g) => (
-                    <span key={g} className="text-xs font-medium text-(--c-78716c) bg-(--c-efe9e0) px-2.5 py-1 rounded-full">
+                    <Link key={g} to={tagHref('subgenre', g)} className="text-xs font-medium text-(--c-78716c) bg-(--c-efe9e0) px-2.5 py-1 rounded-full transition-colors hover:text-(--c-1c1917) hover:bg-(--c-e2dbd0)">
                       {g}
-                    </span>
+                    </Link>
                   ))}
                 </div>
               </div>
@@ -495,20 +481,9 @@ export default function FriendProfile() {
       )}
 
       {/* ── Tab switcher ─────────────────────────────────────────── */}
-      <div ref={tabsRef} className="flex items-center border-t border-(--c-e8e2d9) pt-5 mb-6">
-        <div className="flex items-center gap-1 bg-(--c-efe9e0) rounded-xl p-1 shrink-0">
-          {tabs.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors ${
-                tab === key ? 'bg-(--c-fff) text-(--c-1c1917) shadow-sm' : 'text-(--c-78716c) hover:text-(--c-1c1917)'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+      {/* Library / Stats / Rankings — underline tabs, no segmented box, as on iPhone. */}
+      <div ref={tabsRef} className="flex items-center border-t border-(--c-e8e2d9) pt-6 mb-6">
+        <UnderlineTabs tabs={tabs} value={tab} onChange={setTab} />
       </div>
 
       {/* ── Tab content (read-only, driven by viewing context) ───── */}

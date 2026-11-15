@@ -765,13 +765,15 @@ class Bin(SQLModel, table=True):
     title: str
     description: Optional[str] = None
     ranked: bool = Field(default=True)
-    visibility: str = Field(default="published", index=True)  # private | unlisted | published
+    visibility: str = Field(default="published", index=True)  # private | published (Pressd's: published)
     source_name: Optional[str] = None
     source_url: Optional[str] = None
     source_published: Optional[date] = None
     entry_count: int = Field(default=0)
     # Where it sits among Pressd's bins on For You and the index, lowest first.
     sort_order: int = Field(default=0)
+    # A user bin's own picture (BinCover); null shows the entries' covers.
+    cover_url: Optional[str] = None
     hidden_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
     created_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
     updated_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
@@ -871,6 +873,35 @@ class ContactInvite(SQLModel, table=True):
     inviter_id: int = Field(foreign_key="pressuser.id", index=True)
     phone_hash: str = Field(index=True)
     created_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
+
+
+class BinCover(SQLModel, table=True):
+    """The picture an owner uploaded for a user bin, stored as bytes like an
+    avatar (an <Image> can't carry a header, so it's served unauthenticated).
+    New table; create_all builds it and the last migration turns RLS on."""
+    bin_id: int = Field(foreign_key="bin.id", primary_key=True)
+    content_type: str
+    data: bytes = Field(sa_column=Column(LargeBinary))
+    updated_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
+
+
+class BinReport(SQLModel, table=True):
+    """One person's report of a published bin; REPORTS_TO_HIDE different people
+    hide it (user_bins). One per person, so a report can't be repeated."""
+    __table_args__ = (UniqueConstraint("user_id", "bin_id"),)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="pressuser.id", index=True)
+    bin_id: int = Field(foreign_key="bin.id", index=True)
+    reason: Optional[str] = None
+    created_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
+
+
+class BinView(SQLModel, table=True):
+    """That a person opened a bin: one row per (bin, person), refreshed on each
+    visit, so "popular" counts distinct viewers in a window, not page loads."""
+    bin_id: int = Field(foreign_key="bin.id", primary_key=True)
+    user_id: int = Field(foreign_key="pressuser.id", primary_key=True)
+    viewed_at: datetime = Field(default_factory=_now, sa_column=Column(DateTime(timezone=True)))
 
 
 # One set of genre tags per record, across every copy (backend/genre_sync.py):

@@ -65,7 +65,7 @@ frontend/         React 19 + Vite SPA        → Vercel
 mobile/           Expo SDK 57 iOS app        → TestFlight
 worker/           nightly ML pipeline        → GitHub Actions, 02:30 PT
 ops/launchd/      nightly audio ingest       → launchd on the Mac, from a deploy clone of main
-tests/            pytest, backend-only: taste overlap, the audio ingest's scheduler, upcoming releases, bins, the locked thread's preview (no DB connection)
+tests/            pytest, backend-only: taste overlap, the audio ingest's scheduler, upcoming releases, bins and user bins (`tests/test_user_bins.py`), the locked thread's preview (no DB connection)
 data/bins/        curated bins' source lists: <slug>.csv (the list as printed) + <slug>.json (title, source, overrides)
                   + <slug>.blurbs.json (Pressd's one-sentence blurbs by rank, worker/bin_blurbs.py)
 shared/           @pressd/shared — TS source consumed by frontend + mobile, no build
@@ -80,7 +80,7 @@ PLAN_*.md         gitignored design docs; code cites them by section
 |---|---|---|
 | `backend/main.py` | CORS, 17 routers, `init_db()` on startup, `/health` | 46 |
 | `backend/database.py` | engine + **the entire migration system** (§3) | 274 |
-| `backend/models.py` | 34 SQLModel tables | 722 |
+| `backend/models.py` | 38 SQLModel tables | 912 |
 | `backend/deps.py` | `current_user`, `viewable_user_id`, `thread_access` — the auth invariant | 148 |
 | `backend/scoring.py` | framework 1: the user's own album score | 267 |
 | `backend/global_rating.py` | framework 2: the userbase-pooled rating | 155 |
@@ -498,6 +498,16 @@ The rater bar (November 2026) applies to yesterday's board too, so a record that
 crosses it today reads as new rather than as a climb. With ~30 raters it leaves about
 ten records on each board. The public charts (`public.py`) don't apply it.
 
+Filters: period, genre, **subgenre** (any of a copy's three slots, exact match; `facets.subgenres`
+lists every one, most-carried first, and both clients search it as you type — web a datalist,
+iPhone matches under the filter row), decade, year, artist. **An album's genre and subgenre tags
+are links** (November 2026): on a person's copy, to that person's ranking in the tag (web
+`TagBoard`, iPhone `app/genre/[tag]`); on a record's Pressd page, to Charts filtered to the tag,
+all time — web `/charts?period=all&genre=…|subgenre=…` (`lib/tagLinks.ts`; Charts remounts on new
+params), iPhone the Charts tab with the same params plus `t`, a tap stamp the mounted tab resets
+its filters on (`components/GenreLinks.tsx`). The rater bar still applies, so a niche tag's board
+can be empty.
+
 ### Journey: taste overlap
 
 ```
@@ -608,7 +618,7 @@ spend a request on every open.
 
 ## 5. Module reference
 
-**`backend/models.py`** — 35 tables (`ContactInvite`, a texted contact invite by hashed number, §5 Finding friends; `Block` for blocking, §5; `Bin`, `BinEntry` and `BinTrack` for bins, §5; `SongPrediction`, a song bin's per-song predictions, §6.3; five for the taste overlap: `TasteItem`, `TasteUser`, `TasteOverlap`, `OverlapSheet`, `OverlapEvent`; the first three written nightly by `worker/taste_nightly.py` and for one caller by the live path, all five served by `routers/overlap.py`). `Album` is a **per-user copy**, not a record
+**`backend/models.py`** — 38 tables (`ContactInvite`, a texted contact invite by hashed number, §5 Finding friends; `Block` for blocking, §5; `Bin`, `BinEntry`, `BinTrack`, `BinCover`, `BinReport` and `BinView` for bins, §5; `SongPrediction`, a song bin's per-song predictions, §6.3; five for the taste overlap: `TasteItem`, `TasteUser`, `TasteOverlap`, `OverlapSheet`, `OverlapEvent`; the first three written nightly by `worker/taste_nightly.py` and for one caller by the live path, all five served by `routers/overlap.py`). `Album` is a **per-user copy**, not a record
 (`:89`); anything "global" must pool copies. `Song` carries `track_id` into the global
 `Track`, so audio is analyzed once and shared (`:258-260`) — that split is what makes
 the ML affordable. A mapper event keeps `Album.subject_key` in step with artist+name on
@@ -744,8 +754,8 @@ There is **no "add the whole bin"** — Jack removed it (November 2026); records
 a time. A copy comes from the stored tracklist through `albums.create_copy` — the same
 insert as an import, no outbound call — and **doesn't remember the bin** (Jack's call).
 
-⚠️ **Rule (Jack, November 2026): every album in a bin must be considered for every user's
-picks predictions** — the nightly `catalog_predict` must score bin records into
+⚠️ **Rule (Jack, November 2026): every album in a bin — a user's, private ones included — must
+be considered for every user's picks predictions** (the one exception, a bin hidden by reports, is under *User bins* below) — the nightly `catalog_predict` must score bin records into
 `albumprediction` whether or not anyone has added them, so a bin's For you order and
 `/discover/picks` can offer them. **Met since 2026-11-12, as audio arrives:** a bin entry
 is a catalog record. (1) Its stored tracklist is on `Track`s through
@@ -755,7 +765,7 @@ search) links to the same tracks and their audio; a song entry's `BinEntry.track
 song's track (`song_position`: `match_title`, then the letters without spaces, then the one
 title that opens with it). `import_bin` runs it after every write, the nightly ingest as a
 backstop; idempotent. (2) The audio ingest queues those tracks **after every library track,
-at most `BIN_TRACKS_PER_RUN` (700) a night** (`tracks_needing_audio`), searched by the
+curated bins' before user bins', at most `BIN_TRACKS_PER_RUN` (700) a night** (`tracks_needing_audio`), searched by the
 entry's artist and title, record by record — capped because predictions start only when
 the ingest ends. (3) Claude's `albumfactors` by the entry's `album_key`
 (`albums_missing_factors` lists bin records after the library's, skipping one a measured
@@ -771,7 +781,7 @@ by subject key when another edition's copy stands for it; on a **song bin**, the
 2026-11-12: 297 entries linked, 3,672 songs on 3,597 tracks (2,770 new, needing audio;
 786 already analysed); 195 of 197 song entries on their track (*Blackstar*'s "★" and an
 R.E.M. compilation that doesn't hold "Imitation of Life" are not). A private bin
-will be a 404 to anyone but its owner; `delete_own_account` deletes a user's bins.
+is a 404 to anyone but its owner; `delete_own_account` handles a user's bins as *User bins* says.
 Surfaces: For You's **BINS** section (up to three `BinCard`s, "See all →") on both
 platforms — a Pressd bin's card carries the full-colour Pressd mark on a cream chip in
 the collage's lower-right corner (`BinMosaic`'s `pressd`); web's sidebar **Bins** (`/bins`: sections from `binSections` (`shared/src/binSort.ts`, both platforms) — **Pressd Official** (curated) then **From the community**, empty ones hidden — each bin a square `BinPoster` — the 2×2 of covers is the whole card, the title, source and progress in white over a dark fade at its foot, the Pressd chip top-right, two to four across; For You keeps the compact `BinCard` row; `/bins/:slug`: the banner, the centred title and progress, then the
@@ -843,8 +853,85 @@ by `match_title`: your score once given (status rated), else the album's place i
 library; the PRESSD figure is the plain mean of everyone's scores for it, one decimal as song
 scores are; `track_id` when any copy holds it, so a tap opens the album's Pressd page with the
 song highlighted (`track`). Progress counts scored songs. Rate now / Add act on the album.
-Later phases (spec §7): user bins with Library → Bins (own bins only), then following and
-"where Pressd disagrees".
+Later: song bins by users, a Bins shelf in Library and on profiles, copying a bin, "where
+Pressd disagrees".
+
+**User bins (November 2026, spec `docs/superpowers/specs/2026-11-13-user-bins-design.md`).** Anyone
+makes bins of albums and EPs (`kind` user, `owner_id` set). **A bin is how the app learns which albums
+to predict**, not a social surface: no likes, comments, follows or notifications (Jack). Rules and
+limits in `backend/user_bins.py`: `MAX_ENTRIES` 100 a bin, `MAX_BINS_PER_USER` 25, `TITLE_MAX` 80,
+`DESCRIPTION_MAX` 500, `NOTE_MAX` 280 (a note per album; `BinEntry.note` is the curated `blurb` on a
+Pressd bin and the user's `note` on theirs, the payload carrying both keys with the other null),
+`ranked` (the list's order is the rank), `visibility` **private** (the default) or **published** — no
+unlisted level. Never an unreleased album and never a single (`addable_release`; also refused on a
+"- Single" title or a future year with no date). An entry is a **record** by `subject_key`, one per
+bin, from the caller's library (`album_id`) or a resolved catalog release stored as `tracklist_json`
+like a curated entry, its numbers checked on the way in. The slug is random (`new_slug`). Cover: the
+2×2 of the first four albums, or an uploaded square (`BinCover`, `BIN_COVER_SIZE` 800×800, base64 JSON
+`{data}` through `_normalize_image` as a banner is — multipart would need `python-multipart`, which
+isn't installed; `Bin.cover_url` holds the address, `DELETE` goes back to the mosaic).
+
+**What counts.** Every bin feeds predictions, private ones too, **except one hidden by reports**
+(`hidden_at`): one rule, `user_bins.COUNTING_ENTRY_JOIN` (`JOIN bin b … b.hidden_at IS NULL`), is in
+every reader of `binentry` — seven: `tracklink.link_bin_entries` and its song-entry backfill,
+`catalog_predict.bin_records` and `song_bin_tracks`, `audio_ingest.tracks_needing_audio`,
+`nightly_predict.catalog_gap` (else a hidden bin's songs force the catalog stage every night) and
+`song_score_model.bin_frames`. A new reader of `binentry` joins it. The audio queue orders curated
+bins' tracks first, then user bins' (`b.kind <> 'curated'`), inside the same `BIN_TRACKS_PER_RUN`
+cap, so users' lists can't starve Pressd's. `link_bin_entries` runs after an entry's commit on its
+own `engine.connect()` (it commits its connection); a failure is logged and the nightly backstop
+links it a night later.
+
+**Visibility, reports, popularity.** `can_view` (and its SQL copies in `routers/bins.py` and
+`search_all.BIN_SEARCH_SQL`): the owner sees their own bin whatever its state; anyone else sees only a
+published, unhidden bin whose owner isn't blocked either way and which they haven't reported. Every
+other route is a 404, owner writes included, so a private bin can't be probed. `POST
+/bins/{slug}/report` (`BinReport`, one per person and bin, reason up to `DESCRIPTION_MAX`; Pressd's
+bins and your own can't be reported): the bin leaves the reporter's lists at once, and
+`REPORTS_TO_HIDE` (5) distinct reporters set `hidden_at`. Blocking hides each other's bins.
+**From the community is ordered by popularity** (Jack): distinct people who opened the bin in the last
+`POPULAR_DAYS` (30), the owner not counted — `BinView (bin_id, user_id)`, one row refreshed by `GET
+/bins/{slug}` for a user bin you don't own; ties and unopened bins newest first (`community_order`).
+The count is never sent.
+
+**Endpoints** (`routers/bins.py`): `GET /bins?scope=curated|mine|community|for_you` (cards; community
+leaves out your own), `POST /bins`, `PATCH`/`DELETE /bins/{slug}`, `GET /bins/{slug}` (adds `owner`,
+`can_edit`, `description`, `ranked`), `POST /bins/{slug}/entries` (`album_id`, or a release),
+`PATCH`/`DELETE /bins/{slug}/entries/{id}` (note / remove), `PUT /bins/{slug}/order`
+(`validate_order`: exactly the bin's own ids), `POST`/`GET`/`DELETE /bins/{slug}/cover` (the GET is
+unauthenticated, for `<img>`), `POST /bins/{slug}/report`; Pressd's `POST /bins/{slug}/entries/{id}/add`
+is unchanged. `for_you` is `for_you_pick`: Pressd's first bin always, then random community bins
+(re-drawn per load), curated filling a shortfall. A write to an entry returns a partial `BinEntry`
+(no genre or Pressd figures), so clients invalidate and refetch rather than replace cached entries.
+
+**Account deletion** (`delete_own_account`): the user's reports and views go; **private bins are
+deleted whole** (reports, views, cover, `bintrack`, entries, bin); **published bins stay, ownerless**
+(`owner_id` null), credited as "a former Pressd member" with their notes, description and cover — as
+recommendations sent stay with their recipients. Open: Jack may prefer them gone, which is one
+`DELETE`. This also fixes the old order bug (`binentry` deleted before its `bintrack` rows).
+
+**Surfaces, both platforms.** The Bins page has **Your bins**, **Pressd Official**, **From the
+community** (`shared/src/binSort.ts` `binSections(bins, me)`, in that order, empty ones left out), and
+a New bin button (web) / + (iPhone). Web: `NewBinDialog`, `BinEditor`, `AddToBinMenu`
+(`frontend/src/components/`), `lib/bins.ts` (the limits restated — change both —, `binByline`,
+`binErrorText`), `lib/useSlideRows.ts` (the FLIP slide shared by Sort by and drag-to-reorder),
+`BannerCropper`'s square mode for a cover, and `pages/Bin.tsx` opening in edit mode on `?edit=1` (a
+bin just made, to add albums). iPhone: `NewBinSheet`, `BinEditor` (reorder by arrows — a drag would
+need a gesture module this build lacks — with in-flight writes counted so one landing never frees
+Done under another), `AddToBinSheet` and `mobile/lib/bins.ts`. The editor sets title, description,
+ranked, visibility, cover, order, remove and a note per row (shown where blurbs show; iPhone shows
+notes under rows too), and adds albums from your library or a catalog search (Add an album's).
+**Add to bin** is on an album page (web's menu; iPhone's `FolderPlus` button in the top bar, on your
+copy and the community view, not on FriendCompare), never inside the rating flow. Someone else's
+public bin reads like a curated one — your progress, Sort by, search, Rate now / Add — with Report in
+a "…" menu. For You's BINS row is the `for_you` scope. **Search**: `/search/all` gains a **Bins**
+group (`bins`: the typed phrase matched case-insensitively in title or description — one `ILIKE`, with no accent or punctuation folding and no per-word matching, a known shortfall of spec §8a's `binCardMatches` rules) of Pressd's bins,
+published community bins and your own, private ones included, never anyone else's private bin; ranked
+yours, then Pressd's, then popularity. `SearchBin` carries `ownerless` (a former member), `coverUrl`
+and `covers`, drawn as the uploaded cover first, else the mosaic; a row says "N albums · by {name}".
+Terms and Community Guidelines describe bins, so change them with the product. `BIN_SEARCH_SQL` and
+the upsert / privacy paths have only been checked by tests that never open a database — run them
+against a non-production Postgres before release.
 
 **Blocking (`backend/blocks.py`, `Block`, November 2026).** Blocking someone — the "…" on their
 profile, both platforms (iPhone's round button in the banner's corner opens an action sheet; web's
@@ -874,7 +961,7 @@ out and **Delete account** (a confirm dialog, then `deleteOwnAccount`) — so a 
 delete their account. Support mail goes to **pressdmusicapp@gmail.com** (both apps and the privacy
 policy). The public legal pages — `/privacy`, `/terms`, `/guidelines` (`pages/Privacy.tsx`,
 `Terms.tsx`, `Guidelines.tsx`) — share `components/LegalPage.tsx`; the terms and guidelines describe
-blocking, reports and deletion as built, so change them with the product.
+blocking, reports, bins and deletion as built, so change them with the product.
 
 **`backend/routers/search_all.py`** (November 2026) — the single search box. `GET /search/all?q=&group=&limit=`
 returns `people`, `albums`, `artists`, `songs` (one key with `group`; `limit` 4, capped at 25; `q` under two
@@ -892,7 +979,7 @@ icon at the top right of For You's masthead, where the date was; pushed over the
 field focused, **Cancel** back. From two characters (200 ms debounce) it asks
 `searchAll` and draws People, Albums, Artists, Songs, then **From the catalogs**:
 `useAlbumSearch`'s hits minus every one `searchKnown` says Pressd has, held back until
-that check answers (a small spinner in the heading meanwhile). Each group shows four;
+that check answers (skeleton rows in the section meanwhile). Each group shows four;
 **See all** re-asks that one group (`searchAll(q, group)`) in place, **Show less** puts it
 back. Every row uses Add an album's row type (Plus Jakarta, no Playfair italic; scores in Playfair); albums and songs
 show the cover, artists their photo (`['artist-image', name]`, the artist page's cache),
@@ -999,9 +1086,11 @@ sidebar's name and the small-screen *Profile* button open it. The header: the ba
 strip, the avatar riding up over its edge, the name with "@handle" under it, the bio on its own line,
 the album-score distribution (`ScoreHistogram`, no axis) under the avatar, and a stat
 row between two rules in mobile's order: Avg score, Albums, Artists (distinct,
-case-folded), Songs and Friends. When it's you, the friend button becomes **Share profile** (your invite link,
-through the share sheet or the clipboard — a profile itself is behind sign-in), and the
-banner carries mobile's pencil and gear, opening `components/SettingsDialog.tsx` (which
+case-folded), Songs and Friends — each counting up from zero as the page loads, iPhone's
+`CountUp` ported line for line (`components/CountUp.tsx`: 1.3s, quintic ease-out, straight to
+the value under reduced motion). When it's you, there is no button there (a **Share profile** button sent your invite
+link until November 2026; inviting lives in the sidebar's Invite and iPhone's side menu, so
+it was a duplicate), and the banner carries mobile's pencil and gear, opening `components/SettingsDialog.tsx` (which
 was the Edit Profile modal inside `Layout.tsx`) in `mode` `profile` — photo, banner,
 username, bio, location — or `settings` — phone, Google link, the tutorial replay,
 sign-out. Every profile now shows **the shelf**
@@ -1193,7 +1282,12 @@ people appear only as `public_user`.
   theirs, or with each of yours on your own profile. 50 for a missing row; you, when
   you're in their list, first with `percent` null; the rest highest first, then by name.
   It runs the profile pill's live refresh (`mark_fresh=False`) over those friends, so the
-  list and the pills agree. Behind the **Friends** figure on both platforms: mobile's
+  list and the pills agree — **after the reply**: both endpoints answer from the stored pairs and hand
+  the recompute to a background task on its own session (`refresh_after_reply`, deduplicated per
+  caller and set of others), which the next open reads. Inline, a caller who'd rated since the night
+  reloaded their whole library on every profile and friends-list open (~2.7 s of a ~3 s list for a
+  6,000-song library, November 2026), since neither marks the caller fresh. The people sheet still
+  refreshes inline, and marks the caller fresh. Behind the **Friends** figure on both platforms: mobile's
   `FriendsSheet` (a bottom sheet in `PeopleSheet`'s manner, opened from `ProfileBanner`'s
   figure, which takes an `onPress`) and web's `FriendsDialog` (from `FriendProfile`'s stat
   row). A row opens that person's profile and shows their bio, one line, under the name.
@@ -1901,8 +1995,12 @@ for editing a review later, and both paths post into the thread through
 5. **Stats.** Closed, September 2026: web's Stats ranks genres and subgenres
    (`GenreBreakdown`, by count or by average), each row opening
    [TagBoard.tsx](frontend/src/pages/TagBoard.tsx) at `/stats/:kind/:tag?user=&owner=`
-   over `fetchTagRecords` — mobile's `app/genre/[tag].tsx`, plus each record's rank in
-   the whole library. Bang vs skip and most-rated artists came across with it.
+   over `fetchTagRecords` — mobile's `app/genre/[tag].tsx`. Both boards lead with the person's
+   picture, and since November 2026 show no average and no "#N of M overall" line; a profile's
+   genre and subgenre pills open them (web `FriendProfile`, iPhone `ProfileBanner`'s `onTagPress`).
+   Singles (≤ 2 songs) are left out of the boards and the breakdowns behind them
+   (`stats._single_ids`), so a bar's count still opens that many records. Bang vs skip and
+   most-rated artists came across with it.
 6. **Artist page.** Closed but for the photo on the page itself (web calls `fetchArtistImage`
    only for search's artist rows), October
    2026. Web has mobile's three scopes, as pills and `?mode=` in the URL: *mine*, *Pressd
@@ -2057,7 +2155,7 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   the name means the same on both); Plus Jakarta Sans for everything else (the web
   `body` face). A title that names an album keeps one face and sets the album in
   Playfair italic (web `<i>` inside `.font-display`; mobile `fonts.displayItalic`, a
-  loaded face, because iOS can't slant a custom font with `fontStyle`). Clash Display is the wordmark only, Milker (`.font-rating`, self-hosted in `public/fonts/`, Jack's license) web's rating figures only — Library's badges (`AlbumCard`), and For You's review cards and Trending (`ScorePill`'s `milker`), and Unbounded Bold (mobile `fonts.wide`, web `.font-wide`) the shelf's heading only. Web used DM Sans until September
+  loaded face, because iOS can't slant a custom font with `fontStyle`). Clash Display is the wordmark only, and Unbounded Bold (mobile `fonts.wide`, web `.font-wide`) the shelf's heading only. Web used DM Sans until September
   2026, share card included; don't bring a third face back.
 - **A taste overlap is coloured on the score scale**: `overlapScore(percent)`
   (`shared/src/types.ts`) puts 0% at a 1 (red) and 100% at a 10 (green), and each
@@ -2150,6 +2248,10 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   depends on its variant; `variant` fixes one. Web's keyframes are the handoff's, in
   `index.css` (`vl-*`); mobile runs each keyframe list as one `Animated` value
   (`useCycle`) with the same easing per segment. 1a, the old spinning light, is gone.
+  **The one exception is search** (both platforms' search screens, Jack, November 2026): it
+  shows skeleton rows in the results' own shape, pulsing (`SearchSkeleton` / `SkeletonRows`, one
+  per platform; still under reduced motion), until its first answer and while the catalogs are
+  checked, with no spinner in a heading or the field.
   Never `Loader2 animate-spin` on web or `ActivityIndicator` on mobile; mobile's
   takes `ActivityIndicator`'s props (`size` small/large/points, `color` ignored) and
   centres itself the same way. The drawing is duplicated across the two files; change both.

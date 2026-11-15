@@ -8,9 +8,9 @@
 // Reads /discover/charts (auth) rather than /public/charts, which is also what
 // unlocks the year filter the mobile Charts tab has.
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Triangle } from 'lucide-react'
+import { Triangle, X } from 'lucide-react'
 import { fetchCharts } from '../api'
 import type { ChartItem } from '../api'
 import { Cover, ScorePill, COVER_LIFT } from '../components/covers'
@@ -90,9 +90,19 @@ function Select({
   )
 }
 
+// An album's genre or subgenre tag opens the board already filtered to it
+// (`?genre=` / `?subgenre=`, with `period=all`: lib/tagLinks.ts). A tag followed
+// while the board is open is new params, and starts the board over from them.
 export default function Charts() {
-  const [period, setPeriod] = useState<'week' | 'all'>('week')
-  const [genre, setGenre] = useState<string | null>(null)
+  const [params] = useSearchParams()
+  return <ChartsBoard key={params.toString()} params={params} />
+}
+
+function ChartsBoard({ params }: { params: URLSearchParams }) {
+  const [period, setPeriod] = useState<'week' | 'all'>(params.get('period') === 'all' ? 'all' : 'week')
+  const [genre, setGenre] = useState<string | null>(params.get('genre'))
+  const [subgenre, setSubgenre] = useState<string | null>(params.get('subgenre'))
+  const [subText, setSubText] = useState(params.get('subgenre') ?? '')
   const [decade, setDecade] = useState<number | null>(null)
   const [yearText, setYearText] = useState('')
   const [artist, setArtist] = useState('')
@@ -100,11 +110,12 @@ export default function Charts() {
   const artistQuery = artist.trim()
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['charts', period, genre ?? '', decade ?? '', year ?? '', artistQuery],
+    queryKey: ['charts', period, genre ?? '', subgenre ?? '', decade ?? '', year ?? '', artistQuery],
     queryFn: () =>
       fetchCharts({
         period,
         genre: genre ?? undefined,
+        subgenre: subgenre ?? undefined,
         decade: decade ?? undefined,
         year: year ?? undefined,
         artist: artistQuery || undefined,
@@ -136,6 +147,20 @@ export default function Charts() {
     setYearText(String(BEST_OF_YEAR))
     setDecade(null)
   }
+
+  // The subgenre field searches the catalog's subgenres as you type (the
+  // datalist) and filters once what's typed names one of them.
+  const subgenres = data?.facets.subgenres ?? []
+  function typeSubgenre(v: string) {
+    setSubText(v)
+    if (!v.trim()) { setSubgenre(null); return }
+    const hit = subgenres.find((g) => g.toLowerCase() === v.trim().toLowerCase())
+    if (hit) setSubgenre(hit)
+  }
+  // The genre linked to may be outside the eight most-carried the menu offers.
+  const genreOptions = data?.facets.genres ?? []
+  const genreList = genre && !genreOptions.some((g) => g.toLowerCase() === genre.toLowerCase())
+    ? [genre, ...genreOptions] : genreOptions
 
   const items: ChartItem[] = data?.items ?? []
   const podium = items.slice(0, 3)
@@ -183,10 +208,34 @@ export default function Charts() {
           onChange={(v) => setGenre(v || null)}
         >
           <option value="">All genres</option>
-          {data?.facets.genres.map((g) => (
+          {genreList.map((g) => (
             <option key={g} value={g}>{g}</option>
           ))}
         </Select>
+
+        <span className="relative">
+          <input
+            value={subText}
+            onChange={(e) => typeSubgenre(e.target.value)}
+            list="chart-subgenres"
+            placeholder="Subgenre"
+            aria-label="Subgenre"
+            className={`w-[170px] ${fieldCls(subgenre !== null)} ${subText ? 'pr-7' : ''} placeholder:text-(--c-bbb)`}
+          />
+          {subText && (
+            <button
+              type="button"
+              aria-label="Clear subgenre"
+              onClick={() => typeSubgenre('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-(--c-aaa) hover:text-(--c-111)"
+            >
+              <X size={13} />
+            </button>
+          )}
+          <datalist id="chart-subgenres">
+            {subgenres.map((g) => <option key={g} value={g} />)}
+          </datalist>
+        </span>
 
         <Select
           label="Decade"

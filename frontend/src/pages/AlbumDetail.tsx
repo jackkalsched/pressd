@@ -27,8 +27,10 @@ import { useUser } from '../context/UserContext'
 import { songScoreColor, BANG_THRESHOLD, SKIP_THRESHOLD, EP_MAX_TRACKS, isUnreleased } from '../types'
 import type { Album } from '../types'
 import RecommendModal from '../components/RecommendModal'
+import AddToBinMenu from '../components/AddToBinMenu'
 import CommentThread from '../components/CommentThread'
 import AlbumThoughts from '../components/AlbumThoughts'
+import Avatar from '../components/Avatar'
 import ShareCardModal from '../components/ShareCard'
 import AlbumCompare from '../components/albumCompare'
 import CoverImg from '../components/CoverImg'
@@ -42,6 +44,7 @@ import VinylSpinner from '../components/VinylSpinner'
 import PredictedScore from '../components/PredictedScore'
 import { useTracklistFill } from '../lib/useTracklistFill'
 import { outLine } from '../lib/upcoming'
+import { tagBoardHref, type TagKind } from '../lib/tagLinks'
 
 function possessive(name: string): string {
   return name.endsWith('s') ? `${name}’` : `${name}’s`
@@ -245,6 +248,9 @@ export default function AlbumDetail() {
 
   const own = isOwn
   const ownerName = own ? (activeUser?.name ?? 'You') : (album.owner?.name ?? viewingUser?.name ?? 'Their')
+  // A tag opens the copy owner's ranking in it (yours on your own copy).
+  const tagHref = (kind: TagKind, tag: string) =>
+    tagBoardHref(kind, tag, album.userId ?? activeUser?.id ?? 0, own ? undefined : album.owner?.name ?? viewingUser?.name)
   const canSeeComments = own || myFriends.some(f => f.id === album.userId)
   const rated = album.status === 'rated'
   const ratedSongs = album.songs.filter((s) => s.score !== null)
@@ -279,6 +285,9 @@ export default function AlbumDetail() {
   // review sits with the record — under its title — rather than after the
   // tracks. Yours stays below, where you write and edit it.
   const reviewInRail = !own && rated && !!album.review
+  // Someone else's copy they haven't written about: the comments take the
+  // record's column instead, under the cover (Jack, November 2026).
+  const commentsInRail = !own && !reviewInRail && canSeeComments
 
   /** Someone else's copy into your library, at `status`. */
   async function importToLibrary(status: 'to_listen' | 'listening') {
@@ -372,7 +381,8 @@ export default function AlbumDetail() {
             {own && rated && album.othersRaterCount > 0 && (
               <Link to={`/album/${album.id}/community?compare=1`} className={PILL}>Compare</Link>
             )}
-            {rated && (
+            {/* Your own rating only — the card is yours to post (Jack, November 2026). */}
+            {own && rated && (
               <button onClick={() => setShowShareCard(true)} className={PILL}>
                 <Share2 size={13} /> Share card
               </button>
@@ -385,6 +395,16 @@ export default function AlbumDetail() {
               >
                 <Star size={12} fill={RECOMMEND} strokeWidth={0} /> Recommend
               </button>
+            )}
+            {/* A bin takes albums that are out and aren't singles
+                (backend/routers/bins.py refuses the rest), through your copy
+                when you hold one — iPhone's `canBin`. */}
+            {!isUnreleased(album.releaseDate) && album.songs.length > 2 && (
+              <AddToBinMenu
+                ownAlbumId={own ? album.id : (yourCopy?.id ?? null)}
+                albumName={album.albumName}
+                artist={album.artist}
+              />
             )}
             {/* Not out yet, or no songs: nothing to score until it is and they
                 arrive. */}
@@ -413,15 +433,29 @@ export default function AlbumDetail() {
         <div className="grid gap-10 lg:grid-cols-[380px_minmax(0,1fr)] xl:gap-16">
           {/* ── The record ─────────────────────────────────────────── */}
           <aside>
-            {/* Pinned while you scroll the tracks — unless a review sits in it,
-                which can run past the bottom of the window and be unreachable
-                while pinned. */}
-            <div className={reviewInRail ? '' : 'lg:sticky lg:top-8'}>
-              <div className="mx-auto w-full max-w-[380px] overflow-hidden rounded-[28px] shadow-[0_28px_60px_-28px_rgba(40,25,10,0.6)] pop-in">
-                {album.albumArtUrl ? (
-                  <CoverImg url={album.albumArtUrl} displayPx={380} loading="eager" alt="" className="block aspect-square w-full object-cover" />
-                ) : (
-                  <Cover artUrl={null} seed={album.artist} size={380} radius={0} fontSize={120} />
+            {/* Pinned while you scroll the tracks — unless a review or your own
+                discussion sits in it, which can run past the bottom of the window
+                and be unreachable while pinned. */}
+            <div className={reviewInRail || own || commentsInRail ? '' : 'lg:sticky lg:top-8'}>
+              <div className="relative mx-auto w-full max-w-[380px]">
+                <div className="overflow-hidden rounded-[28px] shadow-[0_28px_60px_-28px_rgba(40,25,10,0.6)] pop-in">
+                  {album.albumArtUrl ? (
+                    <CoverImg url={album.albumArtUrl} displayPx={380} loading="eager" alt="" className="block aspect-square w-full object-cover" />
+                  ) : (
+                    <Cover artUrl={null} seed={album.artist} size={380} radius={0} fontSize={120} />
+                  )}
+                </div>
+                {/* Someone else's copy: their face on the record's bottom-right corner, so the
+                    page reads as theirs at a glance. It opens their profile. */}
+                {!own && album.owner && (
+                  <Link
+                    to={`/u/${album.owner.id}`}
+                    title={`${album.owner.name}'s profile`}
+                    aria-label={`${album.owner.name}'s profile`}
+                    className="pop absolute -bottom-4 -right-3 rounded-full ring-4 ring-(--c-f9f8f6) shadow-[0_10px_24px_-10px_rgba(40,25,10,0.6)] transition-transform hover:scale-105"
+                  >
+                    <Avatar name={album.owner.name} avatarUrl={album.owner.avatarUrl} size={72} />
+                  </Link>
                 )}
               </div>
               <h1 className="font-display m-0 mt-6 text-[34px] font-bold leading-tight text-(--c-1c1917)">{album.albumName}</h1>
@@ -442,15 +476,36 @@ export default function AlbumDetail() {
               {(album.genre || subs.length > 0) && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {album.genre && (
-                    <span className="rounded-full bg-(--c-2d6a4f)/10 px-2.5 py-1 text-[11.5px] font-semibold text-(--c-2d6a4f)">{album.genre}</span>
+                    <Link to={tagHref('genre', album.genre)} className="rounded-full bg-(--c-2d6a4f)/10 px-2.5 py-1 text-[11.5px] font-semibold text-(--c-2d6a4f) transition-colors hover:bg-(--c-2d6a4f)/20">{album.genre}</Link>
                   )}
                   {subs.map((s) => (
-                    <span key={s} className="rounded-full bg-(--c-efebe5) px-2.5 py-1 text-[11.5px] font-medium text-(--c-78716c)">{s}</span>
+                    <Link key={s} to={tagHref('subgenre', s)} className="rounded-full bg-(--c-efebe5) px-2.5 py-1 text-[11.5px] font-medium text-(--c-78716c) transition-colors hover:bg-(--c-e6e0d7) hover:text-(--c-1c1917)">{s}</Link>
                   ))}
                 </div>
               )}
               {reviewInRail && (
                 <ReviewSection album={album} editable={false} authorName={ownerName} index={1} inRail />
+              )}
+              {commentsInRail && (
+                <section className="mt-10">
+                  <p className={`${SECTION_LABEL} mb-4`}>COMMENTS</p>
+                  <CommentThread albumId={album.id} />
+                </section>
+              )}
+              {/* Your own copy: your review, the record's discussion and the
+                  comments sit under the record, as the public page's discussion
+                  does (Jack, November 2026). */}
+              {own && (
+                <>
+                  <ReviewSection album={album} editable={album.status === 'rated'} authorName={ownerName} index={1} inRail />
+                  <AlbumThoughts album={album.albumName} artist={album.artist} />
+                  {canSeeComments && (
+                    <section className="mt-10">
+                      <p className={`${SECTION_LABEL} mb-4`}>COMMENTS</p>
+                      <CommentThread albumId={album.id} />
+                    </section>
+                  )}
+                </>
               )}
             </div>
           </aside>
@@ -473,10 +528,11 @@ export default function AlbumDetail() {
                   <p className="font-display m-0 text-[64px] font-bold leading-none tabular-nums" style={{ color: songScoreColor(album.score) }}>
                     {album.score.toFixed(2)}
                   </p>
-                  <p className="m-0 mt-2 text-[11px] font-bold tracking-[0.16em] text-(--c-44403c)">
+                  <p className="m-0 mt-4 flex items-center gap-2.5 text-[11px] font-bold tracking-[0.16em] text-(--c-44403c)">
+                    {!own && album.owner && <Avatar name={album.owner.name} avatarUrl={album.owner.avatarUrl} size={22} />}
                     {own ? 'YOUR SCORE' : `${possessive(ownerName).toUpperCase()} SCORE`}
                   </p>
-                  {ratedOn && <p className="m-0 mt-0.5 text-[13px] text-(--c-8a7f72)">Rated {ratedOn}</p>}
+                  {ratedOn && <p className="m-0 mt-2 text-[13px] text-(--c-8a7f72)">Rated {ratedOn}</p>}
                 </>
               ) : album.predictedScore != null ? (
                 <>
@@ -648,15 +704,17 @@ export default function AlbumDetail() {
             </>
             )}
 
-            {!reviewInRail && (
-              <ReviewSection album={album} editable={own && album.status === 'rated'} authorName={ownerName} index={1} />
+            {/* Someone else's copy keeps these under the rating; your own has
+                them in the record's column. */}
+            {!own && !reviewInRail && (
+              <ReviewSection album={album} editable={false} authorName={ownerName} index={1} />
             )}
 
             {/* The record's discussion: the step out from this copy to what
                 the whole userbase said. */}
-            <AlbumThoughts album={album.albumName} artist={album.artist} />
+            {!own && <AlbumThoughts album={album.albumName} artist={album.artist} />}
 
-            {canSeeComments && (
+            {!own && !commentsInRail && canSeeComments && (
               <section className="mt-12">
                 <p className={`${SECTION_LABEL} mb-4`}>COMMENTS</p>
                 <CommentThread albumId={album.id} />

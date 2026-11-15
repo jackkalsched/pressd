@@ -5,21 +5,29 @@
 // slider (or the wheel) to zoom; the frame is exactly what will be saved.
 //
 // Mobile does the same with the system picker's crop (`aspect: [24, 5]`).
+// A bin's own picture is framed here too, square (`width`/`height` 800).
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import { BANNER_H, BANNER_W, renderBanner } from '../lib/banner'
+import { BANNER_H, BANNER_W, renderCrop } from '../lib/banner'
 import VinylSpinner from './VinylSpinner'
-
-const ASPECT = BANNER_W / BANNER_H
 
 const MAX_ZOOM = 4
 
-export default function BannerCropper({ image, saving, onCancel, onSave }: {
+export default function BannerCropper({
+  image, saving, onCancel, onSave, width = BANNER_W, height = BANNER_H,
+  title = 'Frame your banner', saveLabel = 'Save banner',
+}: {
   image: HTMLImageElement
   saving: boolean
   onCancel: () => void
   onSave: (base64: string) => void
+  /** The stored size; the frame takes its shape. */
+  width?: number
+  height?: number
+  title?: string
+  saveLabel?: string
 }) {
+  const aspect = width / height
   const frameRef = useRef<HTMLDivElement>(null)
   const [frameW, setFrameW] = useState(0)
   const [zoom, setZoom] = useState(1)
@@ -35,7 +43,7 @@ export default function BannerCropper({ image, saving, onCancel, onSave }: {
     return () => ro.disconnect()
   }, [])
 
-  const frameH = frameW / ASPECT
+  const frameH = frameW / aspect
   const iw = image.naturalWidth
   const ih = image.naturalHeight
   // At zoom 1 the picture just covers the frame, the way the saved banner will.
@@ -63,15 +71,15 @@ export default function BannerCropper({ image, saving, onCancel, onSave }: {
 
   function save() {
     if (!scale) return
-    onSave(renderBanner(image, -at.x / scale, -at.y / scale, frameW / scale, frameH / scale))
+    onSave(renderCrop(image, width, height, -at.x / scale, -at.y / scale, frameW / scale, frameH / scale))
   }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm fade-in" onClick={saving ? undefined : onCancel} />
-      <div role="dialog" aria-modal="true" aria-labelledby="crop-title" className="relative w-full max-w-2xl rounded-3xl bg-(--c-f9f8f6) p-6 shadow-xl pop-in">
+      <div role="dialog" aria-modal="true" aria-labelledby="crop-title" className={`relative w-full ${width > height ? 'max-w-2xl' : 'max-w-md'} rounded-3xl bg-(--c-f9f8f6) p-6 shadow-xl pop-in`}>
         <div className="mb-4 flex items-center justify-between">
-          <h2 id="crop-title" className="font-display m-0 text-[24px] font-bold text-(--c-1c1917)">Frame your banner</h2>
+          <h2 id="crop-title" className="font-display m-0 text-[24px] font-bold text-(--c-1c1917)">{title}</h2>
           <button onClick={onCancel} disabled={saving} aria-label="Cancel" className="text-(--c-a8998a) hover:text-(--c-57534e)">
             <X size={18} />
           </button>
@@ -80,7 +88,7 @@ export default function BannerCropper({ image, saving, onCancel, onSave }: {
         <div
           ref={frameRef}
           className="relative w-full cursor-grab touch-none select-none overflow-hidden rounded-2xl bg-[#1c1917] active:cursor-grabbing"
-          style={{ aspectRatio: `${BANNER_W} / ${BANNER_H}` }}
+          style={{ aspectRatio: `${width} / ${height}` }}
           onPointerDown={(e) => {
             ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
             drag.current = { startX: e.clientX, startY: e.clientY, x: at.x, y: at.y }
@@ -137,7 +145,7 @@ export default function BannerCropper({ image, saving, onCancel, onSave }: {
             className="flex h-11 items-center gap-2 rounded-full bg-(--c-green-fill) px-6 text-[14.5px] font-semibold text-white hover:bg-(--c-green-fill-hover) disabled:opacity-60"
           >
             {saving && <VinylSpinner size={17} />}
-            Save banner
+            {saveLabel}
           </button>
         </div>
       </div>
