@@ -1035,11 +1035,26 @@ def artist_detail(
     return payload
 
 
+def _single_ids(session: Session, user_id: int) -> set[int]:
+    """The user's rated copies that are singles — one or two songs, the library's
+    `exclude_singles` rule (a copy with no tracklist yet isn't one). Left out of the
+    genre and subgenre breakdowns and the boards behind them, so a bar reading 63
+    still opens 63 records and a single never ranks among a genre's albums."""
+    counts = session.exec(
+        select(Song.album_id, func.count(Song.id))
+        .join(Album, Song.album_id == Album.id)
+        .where(Album.user_id == user_id, Album.status == "rated")
+        .group_by(Song.album_id)
+    ).all()
+    return {aid for aid, n in counts if 0 < n <= 2}
+
+
 @router.get("/genres")
 def genre_breakdown(user_id: int = Depends(viewable_user_id), session: Session = Depends(get_session)):
-    albums = session.exec(
+    singles = _single_ids(session, user_id)
+    albums = [a for a in session.exec(
         select(Album).where(Album.status == "rated").where(Album.user_id == user_id)
-    ).all()
+    ).all() if a.id not in singles]
 
     by_genre: dict[str, list[float]] = defaultdict(list)
     for a in albums:
@@ -1070,9 +1085,10 @@ def subgenre_breakdown(user_id: int = Depends(viewable_user_id), session: Sessio
     same tag twice on one album is still one album, or a sloppy tagging pass
     would inflate its own count.
     """
-    albums = session.exec(
+    singles = _single_ids(session, user_id)
+    albums = [a for a in session.exec(
         select(Album).where(Album.status == "rated").where(Album.user_id == user_id)
-    ).all()
+    ).all() if a.id not in singles]
 
     by_sub: dict[str, list[float]] = defaultdict(list)
     for a in albums:
@@ -1125,7 +1141,9 @@ def tag_records(
         # bar it draws opens the records it counted.
         return (a.genre or "Unknown").lower() == want
 
-    matched = [a for a in albums if carries(a)]
+    # Albums and EPs only: a single never ranks among a genre's records.
+    singles = _single_ids(session, user_id)
+    matched = [a for a in albums if carries(a) and a.id not in singles]
     # Ties broken by title so the order is stable between fetches rather than
     # reshuffling on every load, the way an unqualified sort on a float does.
     matched.sort(key=lambda a: (-(a.score or 0), a.album_name.lower()))

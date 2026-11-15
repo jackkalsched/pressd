@@ -63,6 +63,7 @@ export default function ProfileBanner({
   countKey,
   profile,
   onShelfSlotPress,
+  onTagPress,
 }: {
   name: string
   avatarUrl?: string | null
@@ -88,6 +89,8 @@ export default function ProfileBanner({
   /** Picks come from GET /users/{id}/profile; the row hides itself until the
    *  ten-album bar is cleared, so a new account never shows three empty slots. */
   profile?: Profile | null
+  /** A taste chip was tapped: the page opens that genre's ranking of this person's records. */
+  onTagPress?: (tag: string, kind: 'genre' | 'subgenre') => void
   /** Only your own page passes this: a slot was tapped, to fill or change it.
    *  On someone else's page a cover opens their copy of the album. */
   onShelfSlotPress?: (slot: number) => void
@@ -190,13 +193,18 @@ export default function ProfileBanner({
           // wrapped extras never flash on screen.
           <View style={[styles.chipsRow, { height: chipH || undefined, opacity: chipH ? 1 : 0 }]}>
             {tags.map((t, i) => (
-              <View
+              // A chip opens this person's records in that genre, ranked (app/genre/[tag]).
+              <Pressable
                 key={t.label}
-                style={[styles.chip, t.sub ? styles.chipSub : styles.chipGenre]}
+                style={({ pressed }) => [styles.chip, t.sub ? styles.chipSub : styles.chipGenre, pressed && { opacity: 0.6 }]}
                 onLayout={i === 0 ? (e) => setChipH(Math.ceil(e.nativeEvent.layout.height)) : undefined}
+                onPress={onTagPress ? () => onTagPress(t.label, t.sub ? 'subgenre' : 'genre') : undefined}
+                disabled={!onTagPress}
+                accessibilityRole="button"
+                accessibilityLabel={`${t.label}: ${possessive(name)} ranking`}
               >
                 <Text style={t.sub ? styles.chipSubText : styles.chipGenreText}>{t.label}</Text>
-              </View>
+              </Pressable>
             ))}
           </View>
         )}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Ban, Check, Clock, Link2, MapPin, MoreHorizontal, Pencil, Settings, UserMinus, UserPlus } from 'lucide-react'
 import { acceptFriendRequest, addFriend, blockUser, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, fetchOverlap, removeFriend, unblockUser } from '../api'
@@ -143,6 +143,14 @@ export default function FriendProfile() {
   // Artists are folded on case and spacing, so one artist's records don't count twice.
   const artistCount = new Set(rated.flatMap((a) => [a.artist, ...a.extraArtists].map((n) => n.trim().toLowerCase()))).size
   const albumScores = rated.flatMap((a) => (a.score != null ? [a.score] : []))
+
+  // A taste pill's ranking: this person's records in that genre (TagBoard), as
+  // the Stats tab's genre rows link it. No owner on your own page.
+  const tagHref = (kind: 'genre' | 'subgenre', tag: string) => {
+    const q = new URLSearchParams({ user: String(fid) })
+    if (!isSelf && person?.name) q.set('owner', person.name)
+    return `/stats/${kind}/${encodeURIComponent(tag)}?${q.toString()}`
+  }
 
   // Favorite genres: most common genre / subgenre tags across rated albums
   const topGenres = topTags(rated.map(a => a.genre), 3)
@@ -448,15 +456,16 @@ export default function FriendProfile() {
             {(topGenres.length > 0 || topSubgenres.length > 0) && (
               <div className="mt-4">
                 <div className="flex flex-wrap items-center gap-1.5">
+                  {/* Each pill opens this person's records in that genre, ranked (TagBoard). */}
                   {topGenres.map((g) => (
-                    <span key={g} className="text-xs font-semibold text-(--c-2d6a4f) bg-(--c-2d6a4f)/10 px-2.5 py-1 rounded-full">
+                    <Link key={g} to={tagHref('genre', g)} className="text-xs font-semibold text-(--c-2d6a4f) bg-(--c-2d6a4f)/10 px-2.5 py-1 rounded-full transition-colors hover:bg-(--c-2d6a4f)/20">
                       {g}
-                    </span>
+                    </Link>
                   ))}
                   {topSubgenres.map((g) => (
-                    <span key={g} className="text-xs font-medium text-(--c-78716c) bg-(--c-efe9e0) px-2.5 py-1 rounded-full">
+                    <Link key={g} to={tagHref('subgenre', g)} className="text-xs font-medium text-(--c-78716c) bg-(--c-efe9e0) px-2.5 py-1 rounded-full transition-colors hover:text-(--c-1c1917) hover:bg-(--c-e2dbd0)">
                       {g}
-                    </span>
+                    </Link>
                   ))}
                 </div>
               </div>

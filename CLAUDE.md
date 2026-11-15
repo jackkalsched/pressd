@@ -1985,8 +1985,12 @@ for editing a review later, and both paths post into the thread through
 5. **Stats.** Closed, September 2026: web's Stats ranks genres and subgenres
    (`GenreBreakdown`, by count or by average), each row opening
    [TagBoard.tsx](frontend/src/pages/TagBoard.tsx) at `/stats/:kind/:tag?user=&owner=`
-   over `fetchTagRecords` — mobile's `app/genre/[tag].tsx`, plus each record's rank in
-   the whole library. Bang vs skip and most-rated artists came across with it.
+   over `fetchTagRecords` — mobile's `app/genre/[tag].tsx`. Both boards lead with the person's
+   picture, and since November 2026 show no average and no "#N of M overall" line; a profile's
+   genre and subgenre pills open them (web `FriendProfile`, iPhone `ProfileBanner`'s `onTagPress`).
+   Singles (≤ 2 songs) are left out of the boards and the breakdowns behind them
+   (`stats._single_ids`), so a bar's count still opens that many records. Bang vs skip and
+   most-rated artists came across with it.
 6. **Artist page.** Closed but for the photo on the page itself (web calls `fetchArtistImage`
    only for search's artist rows), October
    2026. Web has mobile's three scopes, as pills and `?mode=` in the URL: *mine*, *Pressd

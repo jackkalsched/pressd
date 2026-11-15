@@ -3,9 +3,8 @@
 //
 // The web port of mobile/app/genre/[tag].tsx. Built as the Charts board rather
 // than a plain list — same podium, same ranked rows — because it answers the
-// same question at a smaller scope. A desktop row has room mobile's doesn't,
-// so each record also carries where it sits in the whole library: "#3 in
-// Hip-Hop" means more beside "#12 overall".
+// same question at a smaller scope: rank, cover, title and score, as on iPhone
+// (the "#12 of 400 overall" line and the average were removed, November 2026).
 //
 // Works for a friend's stats as well as your own: whose records to read and
 // whose name to head them with both arrive in the URL (?user=&owner=), so the
@@ -15,11 +14,12 @@ import { useMemo, type CSSProperties } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
-import { fetchAlbums, fetchSummary, fetchTagRecords } from '../api'
+import { fetchAlbums, fetchProfile, fetchTagRecords } from '../api'
 import { songScoreColor } from '../types'
 import { Cover, COVER_LIFT, ScorePill } from '../components/covers'
 import { useUser } from '../context/UserContext'
 import VinylSpinner from '../components/VinylSpinner'
+import Avatar from '../components/Avatar'
 
 /** The --i a staggered animation (rise-in in index.css) reads. */
 function stagger(i: number): CSSProperties {
@@ -50,7 +50,7 @@ export default function TagBoard() {
     staleTime: 5 * 60_000,
   })
 
-  // For "#12 overall" and the tag's lean against the whole library. Same keys
+  // For the tag's share of the library. Same keys
   // as Stats and the onboarding gate, so arriving from Stats costs nothing.
   const { data: rated = [] } = useQuery({
     // A library leaves singles out; its own cache entry, so the screens that
@@ -60,9 +60,11 @@ export default function TagBoard() {
     enabled: userId > 0,
     staleTime: 5 * 60_000,
   })
-  const { data: summary } = useQuery({
-    queryKey: ['stats', 'summary', userId],
-    queryFn: () => fetchSummary(userId),
+  // Whose ranking this is: their picture beside the title. The profile's own
+  // cache key, so arriving from a profile costs nothing.
+  const { data: owner } = useQuery({
+    queryKey: ['profile', userId],
+    queryFn: () => fetchProfile(userId),
     enabled: userId > 0,
     staleTime: 5 * 60_000,
   })
@@ -85,11 +87,9 @@ export default function TagBoard() {
   // Podium reads 2 · 1 · 3, with the winner raised in the middle, as Charts does.
   const podiumOrder = [podium[1], podium[0], podium[2]]
 
-  const libAvg = summary?.avg_album_score ?? null
-  const lean = data?.avg_score != null && libAvg != null ? data.avg_score - libAvg : null
   const share = data && libraryCount ? (data.count / libraryCount) * 100 : null
 
-  const kicker = `${isOwn ? 'Your' : possessive(ownerName)} top records · ${kind}`
+  const kicker = `${isOwn ? 'Your' : possessive(ownerName)} top records`
 
   function goBack() {
     if (window.history.state?.idx > 0) navigate(-1)
@@ -108,24 +108,17 @@ export default function TagBoard() {
 
         {/* ── Masthead ─────────────────────────────────────────────── */}
         <div className="flex flex-wrap items-end justify-between gap-6 pb-6 mb-8 border-b border-(--c-e8e2d9)">
-          <div className="min-w-0">
-            <p className="m-0 mb-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-(--c-2d6a4f)">{kicker}</p>
-            <h1 className="m-0 font-display text-4xl md:text-5xl font-bold text-(--c-1c1917) tracking-tight">{tag}</h1>
+          <div className="flex min-w-0 items-center gap-4">
+            {owner && <Avatar name={owner.name} avatarUrl={owner.avatar_url} size={56} />}
+            <div className="min-w-0">
+              <p className="m-0 mb-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-(--c-2d6a4f)">{kicker}</p>
+              <h1 className="m-0 font-display text-4xl md:text-5xl font-bold text-(--c-1c1917) tracking-tight">{tag}</h1>
+            </div>
           </div>
           {data && data.count > 0 && (
             <div className="flex flex-wrap gap-x-10 gap-y-4">
               <Stat label="Records" value={String(data.count)}
                 sub={share != null ? `${share.toFixed(share < 10 ? 1 : 0)}% of the library` : undefined} />
-              {data.avg_score != null && (
-                <Stat
-                  label="Avg score"
-                  value={data.avg_score.toFixed(2)}
-                  color={songScoreColor(data.avg_score)}
-                  sub={lean != null
-                    ? `${lean >= 0 ? '+' : '−'}${Math.abs(lean).toFixed(2)} vs ${isOwn ? 'your' : 'their'} ${libAvg!.toFixed(2)}`
-                    : undefined}
-                />
-              )}
               {items[0] && (
                 <Stat label="Best" value={items[0].score.toFixed(2)} color={songScoreColor(items[0].score)}
                   sub={items[0].album_name} />
@@ -173,9 +166,6 @@ export default function TagBoard() {
                     </p>
                     <div className="flex items-center justify-center gap-2 mt-2">
                       <ScorePill score={it.score} big />
-                      {overall.get(it.album_id) && (
-                        <span className="text-[11.5px] text-(--c-a8998a) tabular-nums">#{overall.get(it.album_id)} overall</span>
-                      )}
                     </div>
                   </Link>
                 ) : (
@@ -192,7 +182,7 @@ export default function TagBoard() {
                     key={it.album_id}
                     to={`/album/${it.album_id}`}
                     style={stagger(i + 4)}
-                    className="rise-in group grid grid-cols-[32px_44px_minmax(0,1fr)_auto] md:grid-cols-[44px_56px_minmax(0,1fr)_120px_auto] items-center gap-3 md:gap-4 px-1.5 py-3 border-b border-(--c-ededed) hover:bg-(--c-f2f0ec) active:bg-(--c-ebe7e0) transition-colors"
+                    className="rise-in group grid grid-cols-[32px_44px_minmax(0,1fr)_auto] md:grid-cols-[44px_56px_minmax(0,1fr)_auto] items-center gap-3 md:gap-4 px-1.5 py-3 border-b border-(--c-ededed) hover:bg-(--c-f2f0ec) active:bg-(--c-ebe7e0) transition-colors"
                   >
                     <span className="font-display text-[19px] text-(--c-aaa) tabular-nums text-center">{it.rank}</span>
                     <div className={`flex justify-center ${COVER_LIFT}`} style={{ willChange: 'transform' }}>
@@ -206,9 +196,6 @@ export default function TagBoard() {
                         {it.artist}{it.year ? ` · ${it.year}` : ''}
                       </p>
                     </div>
-                    <span className="hidden md:block text-xs text-(--c-aaa) whitespace-nowrap text-right tabular-nums">
-                      {overall.get(it.album_id) ? `#${overall.get(it.album_id)} of ${libraryCount} overall` : ''}
-                    </span>
                     <span className="flex justify-end">
                       <ScorePill score={it.score} />
                     </span>

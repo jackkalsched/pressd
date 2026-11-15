@@ -346,6 +346,7 @@ export default function FriendProfile() {
         ListHeaderComponent={
           <View>
             <ProfileBanner
+              onTagPress={(tag, kind) => router.push({ pathname: '/genre/[tag]', params: { tag: encodeURIComponent(tag), kind, userId: String(fid), owner: encodeURIComponent(person.name) } })}
               name={person.name}
               avatarUrl={person.avatarUrl}
               avg={summary?.avg_album_score ?? null}
