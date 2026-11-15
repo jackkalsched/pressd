@@ -425,10 +425,10 @@ export default function AlbumDetail() {
         <div className="grid gap-10 lg:grid-cols-[380px_minmax(0,1fr)] xl:gap-16">
           {/* ── The record ─────────────────────────────────────────── */}
           <aside>
-            {/* Pinned while you scroll the tracks — unless a review sits in it,
-                which can run past the bottom of the window and be unreachable
-                while pinned. */}
-            <div className={reviewInRail ? '' : 'lg:sticky lg:top-8'}>
+            {/* Pinned while you scroll the tracks — unless a review or your own
+                discussion sits in it, which can run past the bottom of the window
+                and be unreachable while pinned. */}
+            <div className={reviewInRail || own ? '' : 'lg:sticky lg:top-8'}>
               <div className="mx-auto w-full max-w-[380px] overflow-hidden rounded-[28px] shadow-[0_28px_60px_-28px_rgba(40,25,10,0.6)] pop-in">
                 {album.albumArtUrl ? (
                   <CoverImg url={album.albumArtUrl} displayPx={380} loading="eager" alt="" className="block aspect-square w-full object-cover" />
@@ -463,6 +463,21 @@ export default function AlbumDetail() {
               )}
               {reviewInRail && (
                 <ReviewSection album={album} editable={false} authorName={ownerName} index={1} inRail />
+              )}
+              {/* Your own copy: your review, the record's discussion and the
+                  comments sit under the record, as the public page's discussion
+                  does (Jack, November 2026). */}
+              {own && (
+                <>
+                  <ReviewSection album={album} editable={album.status === 'rated'} authorName={ownerName} index={1} inRail />
+                  <AlbumThoughts album={album.albumName} artist={album.artist} />
+                  {canSeeComments && (
+                    <section className="mt-10">
+                      <p className={`${SECTION_LABEL} mb-4`}>COMMENTS</p>
+                      <CommentThread albumId={album.id} />
+                    </section>
+                  )}
+                </>
               )}
             </div>
           </aside>
@@ -660,15 +675,17 @@ export default function AlbumDetail() {
             </>
             )}
 
-            {!reviewInRail && (
-              <ReviewSection album={album} editable={own && album.status === 'rated'} authorName={ownerName} index={1} />
+            {/* Someone else's copy keeps these under the rating; your own has
+                them in the record's column. */}
+            {!own && !reviewInRail && (
+              <ReviewSection album={album} editable={false} authorName={ownerName} index={1} />
             )}
 
             {/* The record's discussion: the step out from this copy to what
                 the whole userbase said. */}
-            <AlbumThoughts album={album.albumName} artist={album.artist} />
+            {!own && <AlbumThoughts album={album.albumName} artist={album.artist} />}
 
-            {canSeeComments && (
+            {!own && canSeeComments && (
               <section className="mt-12">
                 <p className={`${SECTION_LABEL} mb-4`}>COMMENTS</p>
                 <CommentThread albumId={album.id} />
