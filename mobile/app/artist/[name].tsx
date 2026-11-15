@@ -11,7 +11,8 @@ import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { StatusBar } from 'expo-status-bar'
 import Svg, { Defs, Pattern, Rect } from 'react-native-svg'
-import { ArrowLeft } from 'lucide-react-native'
+import { ArrowLeft, Info, X } from 'lucide-react-native'
+import { ARTIST_METRICS, ARTIST_METRICS_FOOT } from '@pressd/shared/artistMetrics'
 import { fetchArtistDetail, fetchAlbumColor, fetchArtistImage, fetchSimilarArtistComparisons } from '../../lib/api'
 import type { ArtistPopulation } from '@pressd/shared/api'
 import { useAuth } from '../../lib/auth'
@@ -95,6 +96,7 @@ function ordinal(n: number): string {
 export default function ArtistPage() {
   const scrollRef = useRef<ScrollView>(null)
   const sc = useScoreColor()
+  const tc = useColors()
   const { name, mode: modeParam } = useLocalSearchParams<{ name: string; mode?: string }>()
   const artist = decodeURIComponent(name ?? '')
   const router = useRouter()
@@ -159,6 +161,8 @@ export default function ArtistPage() {
   // out and the point the dissolve begins.
   const [catalogY, setCatalogY] = useState<number | null>(null)
   const [heroHeight, setHeroHeight] = useState<number | null>(null)
+  // The ⓘ beside PERCENTILE RANKINGS opens a notecard of what each metric means.
+  const [explain, setExplain] = useState(false)
   const photoHeight = heroHeight
   const pageRgb = usePageRgb()
   const anchor = photoHeight && catalogY != null ? clamp01(catalogY / photoHeight) : 0.66
@@ -383,8 +387,39 @@ export default function ArtistPage() {
           {mode !== 'compare' && !thin && (
             <>
               <View style={styles.sectionHead}>
-                <Text style={styles.sectionLabel}>PERCENTILE RANKINGS</Text>
+                <View style={styles.headWithInfo}>
+                  <Text style={styles.sectionLabel}>PERCENTILE RANKINGS</Text>
+                  <Pressable
+                    onPress={() => setExplain((v) => !v)}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel="What these metrics mean"
+                    accessibilityState={{ expanded: explain }}
+                  >
+                    <Info size={15} color={explain ? tc.green : tc.inkMuted} />
+                  </Pressable>
+                </View>
               </View>
+              {explain && (
+                <View style={[styles.metricsCard, { borderColor: tc.border }]}>
+                  <Pressable
+                    onPress={() => setExplain(false)}
+                    hitSlop={10}
+                    style={styles.metricsClose}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close"
+                  >
+                    <X size={15} color={tc.inkTertiary} />
+                  </Pressable>
+                  {ARTIST_METRICS.map((m) => (
+                    <View key={m.name} style={styles.metricRow}>
+                      <Text style={styles.metricName}>{m.name}</Text>
+                      <Text style={styles.metricMeaning}>{m.meaning}</Text>
+                    </View>
+                  ))}
+                  <Text style={styles.metricsFoot}>{ARTIST_METRICS_FOOT}</Text>
+                </View>
+              )}
               {/* Laid out as a bar row is — label column, track, value column —
                   so each word sits over the point it names: the track's start,
                   its middle and its end. */}
@@ -924,6 +959,22 @@ const styles = StyleSheet.create({
   },
 
   // Percentile (savant) bars
+  headWithInfo: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  // The metrics notecard: a raised card under the heading.
+  metricsCard: {
+    backgroundColor: colors.raised,
+    borderRadius: radii.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing.lg,
+    paddingRight: spacing.xl + spacing.sm,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  metricsClose: { position: 'absolute', top: spacing.md, right: spacing.md },
+  metricRow: { gap: 2 },
+  metricName: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.ink },
+  metricMeaning: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.inkSecondary },
+  metricsFoot: { fontFamily: fonts.body, fontSize: 12, lineHeight: 17, color: colors.inkTertiary, marginTop: spacing.xs },
   sectionHead: {
     flexDirection: 'row',
     alignItems: 'center',
