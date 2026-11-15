@@ -47,7 +47,6 @@ export function NoComparisonYet({ title, body }: { title: string; body?: string 
 // ── Your average against Pressd's ─────────────────────────────────────────────
 
 export function ScoreVersus({ mine, theirs, mineLabel }: { mine: number | null; theirs: number | null; mineLabel: string }) {
-  const diff = mine != null && theirs != null ? mine - theirs : null
   const figure = (v: number | null) => (
     <p className="font-display m-0 text-[52px] font-bold leading-none tabular-nums" style={{ color: v != null ? songScoreColor(v) : 'var(--c-c8c0b4)' }}>
       {v != null ? v.toFixed(2) : '—'}
@@ -61,11 +60,6 @@ export function ScoreVersus({ mine, theirs, mineLabel }: { mine: number | null; 
       </div>
       <div className="pb-6 text-center">
         <p className="font-display m-0 text-[18px] text-(--c-a8998a)">vs.</p>
-        {diff != null && (
-          <p className="m-0 text-[13px] font-bold tabular-nums" style={{ color: diff >= 0 ? UP : 'var(--c-c0392b)' }}>
-            {diff >= 0 ? '+' : ''}{diff.toFixed(2)}
-          </p>
-        )}
       </div>
       <div>
         {figure(theirs)}
@@ -85,10 +79,11 @@ function selectGaps(gaps: SongGap[], perEnd = 5): SongGap[] {
   return [...signed.slice(0, perEnd), ...signed.slice(-perEnd)]
 }
 
-/** Every shared track, most-rated first — mobile's splits page. Ties fall back
- *  to the loudest disagreement. */
+/** Every shared track, as mobile's splits page lists them: by the gap,
+ *  descending — the songs you rate furthest above Pressd first, furthest below
+ *  last (Jack, November 2026; they were most-rated first). */
 function allGaps(gaps: SongGap[]): SongGap[] {
-  return [...gaps].sort((a, b) => b.raters - a.raters || Math.abs(b.diff) - Math.abs(a.diff))
+  return [...gaps].sort((a, b) => b.diff - a.diff)
 }
 
 function GapRows({ rows }: { rows: SongGap[] }) {
@@ -139,9 +134,8 @@ export function SongGapChart({ gaps, artist }: { gaps: SongGap[]; artist: string
   const preview = useMemo(() => selectGaps(gaps), [gaps])
   const summary = useMemo(() => {
     if (gaps.length === 0) return null
-    const mean = gaps.reduce((s, g) => s + g.diff, 0) / gaps.length
     const hottest = gaps.reduce((m, g) => (Math.abs(g.diff) > Math.abs(m.diff) ? g : m), gaps[0])
-    return { mean, hottest }
+    return { hottest }
   }, [gaps])
 
   if (preview.length === 0 || !summary) {
@@ -156,14 +150,10 @@ export function SongGapChart({ gaps, artist }: { gaps: SongGap[]; artist: string
   const rows = showAll ? allGaps(gaps) : preview
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-6">
+      {/* The hottest take alone: the average gap sat beside it until November
+          2026 (Jack's call). */}
+      <div className="mb-6">
         <div className="rise-in" style={stagger(0)}>
-          <p className="font-display m-0 text-[30px] font-bold leading-none tabular-nums" style={{ color: summary.mean >= 0 ? UP : DOWN }}>
-            {summary.mean >= 0 ? '+' : ''}{summary.mean.toFixed(2)}
-          </p>
-          <p className="m-0 mt-1.5 text-[12px] font-medium text-(--c-8a7f72)">Average gap vs Pressd</p>
-        </div>
-        <div className="max-w-[60%] text-right rise-in" style={stagger(1)}>
           <p className="font-display m-0 text-[30px] font-bold leading-tight" style={{ color: summary.hottest.diff >= 0 ? UP : DOWN }}>
             {summary.hottest.title}
           </p>

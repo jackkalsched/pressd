@@ -1294,6 +1294,10 @@ export interface ArtistDetail {
     status: string
     /** How many people's copies the row pools — 1 in a single library. */
     rater_count?: number
+    /** population='both' only: the record's Pressd average (every copy pooled,
+     *  yours included) and how many copies make it. */
+    pressd_score?: number | null
+    pressd_raters?: number
   }[]
   all_artists: {
     artist: string

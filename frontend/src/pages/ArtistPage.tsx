@@ -14,7 +14,7 @@ import {
 import CoverImg from '../components/CoverImg'
 import { Cover, COVER_LIFT } from '../components/covers'
 import { CoverWash, GREEN, PILL, RevealRow, SECTION_LABEL } from '../components/albumView'
-import { ScoreKdeCompare, ScoreVersus, SimilarArtistComparisons } from '../components/artistCompare'
+import { ScoreKdeCompare, ScoreVersus, SimilarArtistComparisons, SongGapChart } from '../components/artistCompare'
 import { songScoreColor } from '../types'
 import { stagger } from '../lib/format'
 import VinylSpinner from '../components/VinylSpinner'
@@ -266,7 +266,8 @@ export default function ArtistPage() {
   // a library's rows open that library's copy.
   // Pressd avg, for an artist short of what the userbase has in common.
   const thin = mode === 'pressd' && !!data?.small_sample
-  const albumHref = (id: number) => (mode === 'pressd' ? `/album/${id}/community` : `/album/${id}`)
+  // Pressd avg and Compare open a record's Pressd page; your own view, your copy.
+  const albumHref = (id: number) => (mode === 'mine' ? `/album/${id}` : `/album/${id}/community`)
 
   // Scores in the score colour, rates in bang green / skip red, as on the album
   // page. The "100 = avg" notes went in October 2026 with the album pages' look.
@@ -406,9 +407,14 @@ export default function ArtistPage() {
       </div>
       )}
 
-      {/* Compare goes from the two song averages straight into the two score
-          distributions; it has no percentile bars, and no "Where you split"
-          list since November 2026 (Jack's call). */}
+      {/* Compare answers one question — which songs do I hear differently — so
+          the gap chart takes the percentile bars' place there (removed for a
+          week in November 2026, then brought back on Jack's call). */}
+      {mode === 'compare' && (
+        <div className="mb-12">
+          <SongGapChart gaps={data.song_gaps ?? []} artist={data.artist} />
+        </div>
+      )}
       {mode !== 'compare' && !thin && <PercentilesSection data={stats} smallSample={data.small_sample} />}
 
       {/* Histogram — or, comparing, both distributions on one pair of axes. */}
@@ -519,6 +525,22 @@ export default function ArtistPage() {
                 {mode === 'pressd' && album.rater_count != null && ` · ${album.rater_count} ${album.rater_count === 1 ? 'rater' : 'raters'}`}
               </p>
             </div>
+            {mode === 'compare' ? (
+              // Yours against the record's Pressd average.
+              <div className="flex shrink-0 items-end gap-5">
+                {([[owner ? possessive(owner).toUpperCase() : 'YOU', album.score], ['PRESSD', album.pressd_score ?? null]] as const).map(([label, v]) => (
+                  <div key={label} className="text-right">
+                    <p
+                      className="font-display m-0 text-[22px] font-bold leading-none tabular-nums"
+                      style={{ color: v != null ? songScoreColor(v) : 'var(--c-c8c0b4)' }}
+                    >
+                      {v != null ? v.toFixed(2) : '—'}
+                    </p>
+                    <p className="m-0 mt-1 text-[10px] font-bold tracking-[0.14em] text-(--c-8a7f72)">{label}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
             <div className="text-right shrink-0">
               <p
                 className="font-display m-0 text-[22px] font-bold leading-none tabular-nums"
@@ -530,6 +552,7 @@ export default function ArtistPage() {
                 <p className="m-0 mt-1 text-(--c-8a7f72) text-[12px] tabular-nums">ext {album.avg_external.toFixed(2)}</p>
               )}
             </div>
+            )}
           </Link>
         )
         return (

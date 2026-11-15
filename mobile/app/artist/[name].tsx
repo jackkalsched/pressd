@@ -17,6 +17,7 @@ import { fetchArtistDetail, fetchAlbumColor, fetchArtistImage, fetchSimilarArtis
 import type { ArtistPopulation } from '@pressd/shared/api'
 import { useAuth } from '../../lib/auth'
 import ScoreHistogram from '../../components/ScoreHistogram'
+import SongGapChart from '../../components/SongGapChart'
 import ScoreKdeCompare from '../../components/ScoreKdeCompare'
 import SimilarArtistComparisons from '../../components/SimilarArtistComparisons'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, usePageRgb, useScoreColor, scoreColor, useColors } from '../../theme/tokens'
@@ -46,7 +47,6 @@ const SMALL_SAMPLE = 15
 const MARK_INSET_PCT = 3.4
 
 // Deficit red for the score comparison, matching the Social board's.
-const VS_DOWN = '#c0392b'
 
 // The ramp fades from the page colour at no opacity rather than the literal
 // 'transparent' keyword, which muddies through black on Android.
@@ -171,12 +171,12 @@ export default function ArtistPage() {
     pageRgb,
   )
 
-  // Pooled rows are one per record, so they open the record's community page;
-  // your own rows open your copy.
+  // Pressd avg's rows are one per record, and Compare's hold a record against
+  // Pressd, so both open the record's Pressd page; your own view, your copy.
   const openAlbum = (id: number) =>
     router.push({
       pathname: '/album/[id]',
-      params: mode === 'pressd' ? { id: String(id), community: '1' } : { id: String(id) },
+      params: mode === 'mine' ? { id: String(id) } : { id: String(id), community: '1' },
     })
 
   // Reaching this page by deep link or notification leaves nothing on the
@@ -381,9 +381,24 @@ export default function ArtistPage() {
             <ScoreVersus mine={data.avg_song_score} theirs={data.global?.avg_song_score ?? null} />
           )}
 
-          {/* Compare goes from the two song averages straight into the two
-              score distributions; it has no percentile bars, and no "Where
-              you split" list since November 2026 (Jack's call). */}
+          {/* Compare answers one question — which songs do I hear differently —
+              so the gap chart takes the percentile bars' place there (removed
+              for a week in November 2026, then brought back on Jack's call). */}
+          {mode === 'compare' && (
+            <>
+              <View style={styles.sectionSolo} />
+              <SongGapChart
+                gaps={data.song_gaps ?? []}
+                artist={data.artist}
+                onSeeAll={() =>
+                  router.push({
+                    pathname: '/splits/[name]',
+                    params: { name: encodeURIComponent(data.artist) },
+                  })
+                }
+              />
+            </>
+          )}
           {mode !== 'compare' && !thin && (
             <>
               <View style={styles.sectionHead}>
@@ -467,12 +482,14 @@ export default function ArtistPage() {
             label="RECORDS"
             albums={chronological.filter((a) => !a.is_ep)}
             pooled={mode === 'pressd'}
+            compare={mode === 'compare'}
             onOpen={openAlbum}
           />
           <RecordList
             label="EPS"
             albums={chronological.filter((a) => a.is_ep)}
             pooled={mode === 'pressd'}
+            compare={mode === 'compare'}
             onOpen={openAlbum}
           />
 
@@ -666,7 +683,6 @@ function StatCell({
  *  rather than percentiles — see the note at its call site for why the two +
  *  metrics can't be compared directly. */
 function ScoreVersus({ mine, theirs }: { mine: number | null; theirs: number | null }) {
-  const diff = mine != null && theirs != null ? mine - theirs : null
   return (
     <View style={styles.vsBlock}>
       <View style={styles.vsCol}>
@@ -682,16 +698,6 @@ function ScoreVersus({ mine, theirs }: { mine: number | null; theirs: number | n
 
       <View style={styles.vsMiddle}>
         <Text style={styles.vsWord}>vs.</Text>
-        {diff != null && (
-          <Text
-            style={[styles.vsDiff, { color: diff >= 0 ? colors.green : VS_DOWN }]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            maxFontSizeMultiplier={NUM_SCALE_CAP}
-          >
-            {diff >= 0 ? '+' : ''}{diff.toFixed(2)}
-          </Text>
-        )}
       </View>
 
       <View style={styles.vsCol}>
@@ -836,11 +842,13 @@ function PercentileBar({
 
 type ArtistAlbum = NonNullable<Awaited<ReturnType<typeof fetchArtistDetail>>>['albums'][number]
 
-function RecordList({ label, albums, pooled, onOpen }: {
+function RecordList({ label, albums, pooled, compare = false, onOpen }: {
   label: string
   albums: ArtistAlbum[]
   /** Pressd's pooled rows — each says how many people's copies it holds. */
   pooled: boolean
+  /** Compare: your score beside the record's Pressd average. */
+  compare?: boolean
   onOpen: (id: number) => void
 }) {
   if (albums.length === 0) return null
@@ -872,12 +880,28 @@ function RecordList({ label, albums, pooled, onOpen }: {
                 {pooled && a.rater_count != null ? ` · ${a.rater_count} ${a.rater_count === 1 ? 'rater' : 'raters'}` : ''}
               </Text>
             </View>
-            <Text
-              style={[styles.recordScore, { color: a.score != null ? scoreColor(a.score) : colors.inkMuted }]}
-              maxFontSizeMultiplier={NUM_SCALE_CAP}
-            >
-              {a.score != null ? a.score.toFixed(2) : '—'}
-            </Text>
+            {compare ? (
+              <View style={styles.recordPair}>
+                {([['YOU', a.score], ['PRESSD', a.pressd_score ?? null]] as const).map(([label, v]) => (
+                  <View key={label} style={styles.recordPairCol}>
+                    <Text
+                      style={[styles.recordScore, styles.recordPairScore, { color: v != null ? scoreColor(v) : colors.inkMuted }]}
+                      maxFontSizeMultiplier={NUM_SCALE_CAP}
+                    >
+                      {v != null ? v.toFixed(2) : '—'}
+                    </Text>
+                    <Text style={styles.recordPairLabel} maxFontSizeMultiplier={NUM_SCALE_CAP}>{label}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text
+                style={[styles.recordScore, { color: a.score != null ? scoreColor(a.score) : colors.inkMuted }]}
+                maxFontSizeMultiplier={NUM_SCALE_CAP}
+              >
+                {a.score != null ? a.score.toFixed(2) : '—'}
+              </Text>
+            )}
           </Pressable>
         ))}
       </View>
@@ -887,6 +911,11 @@ function RecordList({ label, albums, pooled, onOpen }: {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  // Compare's record scores: yours, then Pressd's.
+  recordPair: { flexDirection: 'row', gap: spacing.md },
+  recordPairCol: { alignItems: 'flex-end' },
+  recordPairScore: { fontSize: 18 },
+  recordPairLabel: { fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1.2, color: colors.inkMuted, marginTop: 2 },
   scrollContent: { flexGrow: 1 },
   center: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
 
@@ -1048,7 +1077,6 @@ const styles = StyleSheet.create({
   // Set in the display face like the scores it separates, but small and muted —
   // it's a conjunction, not a third value.
   vsWord: { fontFamily: fonts.display, fontSize: 15, color: colors.inkMuted },
-  vsDiff: { fontFamily: fonts.bodyBold, fontSize: 11 },
 
   // Web's bar: a thin warm track, the badge doing the reading.
   pctRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 9 },
