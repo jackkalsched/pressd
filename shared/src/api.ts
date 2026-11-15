@@ -793,6 +793,14 @@ export async function fetchBins(scope?: BinScope): Promise<BinCard[]> {
   return ((await res.json()) as Record<string, unknown>[]).map(transformBinCard)
 }
 
+/** One person's bins, for their profile's Bins tab: all of yours, or the
+ *  published ones of someone else's you may see. */
+export async function fetchUserBins(ownerId: number): Promise<BinCard[]> {
+  const res = await apiFetch(`${BASE()}/bins?owner=${ownerId}`)
+  if (!res.ok) throw new Error('Failed to load bins')
+  return ((await res.json()) as Record<string, unknown>[]).map(transformBinCard)
+}
+
 export async function fetchBin(slug: string): Promise<BinDetail> {
   const res = await apiFetch(`${BASE()}/bins/${encodeURIComponent(slug)}`)
   if (!res.ok) throw new Error('Failed to load bin')

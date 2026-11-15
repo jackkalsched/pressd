@@ -234,6 +234,7 @@ def _community(session: Session, user: PressUser) -> list[Bin]:
 @router.get("")
 def list_bins(
     scope: str = Query("curated", pattern="^(curated|mine|community|for_you)$"),
+    owner: int | None = Query(None),
     user: PressUser = Depends(current_user),
     session: Session = Depends(get_session),
 ):
@@ -241,8 +242,21 @@ def list_bins(
     `curated`: Pressd's. `mine`: the caller's own, any visibility, last edited
     first. `community`: other people's published bins, most popular first.
     `for_you`: For You's row — Pressd's first bin, then community bins at
-    random (re-drawn on every load), Pressd's next filling any gap."""
-    if scope == "mine":
+    random (re-drawn on every load), Pressd's next filling any gap.
+
+    `owner` (overrides `scope`): one person's bins, for the Bins tab on their
+    profile — your own, any visibility, as `mine`; anyone else's only as
+    `can_view` lets you see them (published, unhidden, not blocked or reported
+    by you), last edited first."""
+    if owner is not None and owner != user.id:
+        blocked, reported = blocked_ids(session, user.id), _reported(session, user.id)
+        bins = [b for b in session.exec(
+            select(Bin).where(Bin.kind == "user", Bin.owner_id == owner, Bin.visibility == "published",
+                              Bin.hidden_at.is_(None))
+            .order_by(Bin.updated_at.desc(), Bin.id.desc())
+        ).all() if ub.can_view(b.kind, b.owner_id, b.visibility, b.hidden_at, user.id, blocked, reported, b.id)]
+        return _cards(session, user, bins)
+    if owner is not None or scope == "mine":
         bins = list(session.exec(
             select(Bin).where(Bin.kind == "user", Bin.owner_id == user.id).order_by(Bin.updated_at.desc(), Bin.id.desc())
         ).all())

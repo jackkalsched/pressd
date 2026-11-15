@@ -579,7 +579,17 @@ button:not(:disabled):active {
 .slide-next { animation: slide-next 280ms cubic-bezier(0.33, 1, 0.68, 1) backwards; }
 .slide-prev { animation: slide-prev 280ms cubic-bezier(0.33, 1, 0.68, 1) backwards; }
 
+/* A button's or a row's wait (VinylSpinner at SMALL_MAX or below): three dots
+   in the button's own colour, pulsing in turn — the spinning record is for a
+   page's or a section's wait (Jack, November 2026). */
+@keyframes busy-dot {
+  0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); }
+  40%           { opacity: 1;    transform: scale(1); }
+}
+.busy-dot { animation: busy-dot 1s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
+  .busy-dot { animation: none; opacity: 0.6; }
   button:not(:disabled):active { transform: none; }
   .page-enter, .fade-in, .pop-in, .menu-in, .rise-in, .pop, .flash, .grow-x,
   .slide-next, .slide-prev { animation: none; }

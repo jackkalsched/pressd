@@ -99,7 +99,7 @@ export default function Join() {
 
         {loadingInvite ? (
           <div className="flex justify-center">
-            <VinylSpinner size={22} />
+            <VinylSpinner size={48} />
           </div>
         ) : inviteError ? (
           <div className="text-center">

@@ -900,7 +900,9 @@ bins and your own can't be reported): the bin leaves the reporter's lists at onc
 The count is never sent.
 
 **Endpoints** (`routers/bins.py`): `GET /bins?scope=curated|mine|community|for_you` (cards; community
-leaves out your own), `POST /bins`, `PATCH`/`DELETE /bins/{slug}`, `GET /bins/{slug}` (adds `owner`,
+leaves out your own; `owner=<id>` instead gives one person's — all of yours, or someone else's
+published ones `can_view` allows — for a profile's **Bins** tab, after Rankings on both platforms:
+`ProfileBins`, web and iPhone, with New bin on your own), `POST /bins`, `PATCH`/`DELETE /bins/{slug}`, `GET /bins/{slug}` (adds `owner`,
 `can_edit`, `description`, `ranked`), `POST /bins/{slug}/entries` (`album_id`, or a release),
 `PATCH`/`DELETE /bins/{slug}/entries/{id}` (note / remove), `PUT /bins/{slug}/order`
 (`validate_order`: exactly the bin's own ids), `POST`/`GET`/`DELETE /bins/{slug}/cover` (the GET is
@@ -2257,9 +2259,12 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   platform (`frontend/src/components/`, `mobile/components/`), drawn from
   the vinyl-loader design handoff of November 2026 (its numbers live in the code). Each spinner picks one of the
   handoff's 1b–1f at random when it appears — the record turning under a still light,
-  a tonearm, a pressing plate, grooves filling, the record out of a Pressd sleeve — except
-  at `SMALL_MAX` (28) or below, a button's or row's spinner, which is always 1b, and
-  under reduced motion, which is 1b standing still. Each is drawn at the handoff's
+  a tonearm, a pressing plate, grooves filling, the record out of a Pressd sleeve — and
+  under reduced motion is 1b standing still. **At `SMALL_MAX` (28) or below — a button's or
+  a row's wait, mobile's `'small'` included — it is no record at all** (Jack, November 2026:
+  the record is for a page's or a section's wait): three dots in the surrounding colour
+  (web `currentColor`, `busy-dot` in `index.css`; mobile the `color` prop, else muted ink),
+  pulsing in turn, still under reduced motion. A fixed `variant` keeps the record at any size. Each is drawn at the handoff's
   reference disc (120) and scaled into the `size` square, so a spinner's footprint never
   depends on its variant; `variant` fixes one. Web's keyframes are the handoff's, in
   `index.css` (`vl-*`); mobile runs each keyframe list as one `Animated` value
