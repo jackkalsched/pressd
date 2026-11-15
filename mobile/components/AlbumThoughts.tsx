@@ -11,6 +11,7 @@
 // PLAN_discussions.md §10, §4.1.
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, Lock, MessageCircle, MessageCirclePlus } from 'lucide-react-native'
 import { fetchThreadPreview, resolveThread } from '../lib/api'
@@ -25,7 +26,11 @@ export default function AlbumThoughts({
   hasReview,
   canWriteReview,
   onWriteReview,
+  lead,
 }: {
+  /** Someone else's copy with a review: their review, first, as a preview —
+   *  tapped, it opens in full. The room's previews leave that person out. */
+  lead?: { author: { id: number; name: string; avatarUrl?: string | null }; score: number | null; body: string }
   album: string
   artist: string
   hasReview: boolean
@@ -56,7 +61,8 @@ export default function AlbumThoughts({
     enabled: !!meta && locked,
     retry: false,
   })
-  const previews = locked ? (preview?.posts ?? []).slice(0, 3) : []
+  const previews = locked ? (preview?.posts ?? []).filter((p) => p.author.id !== lead?.author.id).slice(0, 3) : []
+  const [leadOpen, setLeadOpen] = useState(false)
   const openThread = () =>
     router.push({
       pathname: '/thread/[subject]',
@@ -73,7 +79,34 @@ export default function AlbumThoughts({
 
   return (
     <>
-      {previews.length > 0 && <View style={styles.previewsGap} />}
+      {(lead || previews.length > 0) && <View style={styles.previewsGap} />}
+      {lead && (
+        <Pressable
+          onPress={() => setLeadOpen((v) => !v)}
+          style={({ pressed }) => [styles.preview, { borderColor: tc.border }, pressed && { opacity: 0.6 }]}
+          accessibilityRole="button"
+          accessibilityHint={leadOpen ? 'Shows less' : 'Shows the whole review'}
+        >
+          <View style={styles.previewHead}>
+            <Pressable
+              onPress={() => openProfile(lead.author.id)}
+              hitSlop={6}
+              style={styles.previewWho}
+              accessibilityRole="link"
+              accessibilityLabel={`View ${lead.author.name}'s profile`}
+            >
+              <Avatar name={lead.author.name} avatarUrl={lead.author.avatarUrl} size={22} />
+              <Text style={styles.previewAuthor} numberOfLines={1}>{lead.author.name}</Text>
+            </Pressable>
+            {lead.score != null && (
+              <Text style={[styles.previewScore, { color: scoreColor(lead.score) }]} maxFontSizeMultiplier={NUM_SCALE_CAP}>
+                {lead.score.toFixed(2)}
+              </Text>
+            )}
+          </View>
+          <Text style={styles.previewBody} numberOfLines={leadOpen ? undefined : 3}>{lead.body}</Text>
+        </Pressable>
+      )}
       {previews.map((p) => (
         <Pressable
           key={p.id}
