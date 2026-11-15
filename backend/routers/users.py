@@ -722,6 +722,10 @@ def update_user(
     # it back on the first-run path, so there is nothing to unset.
     if data.get("tutorial_seen") and user.tutorial_seen_at is None:
         user.tutorial_seen_at = datetime.utcnow()
+    # The "What's new" just dismissed (or the one a new account's tutorial stands
+    # in for): a release id, short, set as given.
+    if isinstance(data.get("whats_new_seen"), str) and 0 < len(data["whats_new_seen"]) <= 32:
+        user.whats_new_seen = data["whats_new_seen"]
 
     # Favourites. An album or song has to be one this user has rated — the
     # picker only offers those, and accepting anything else would let a profile

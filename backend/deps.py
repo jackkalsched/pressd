@@ -47,6 +47,8 @@ def own_user(user: PressUser) -> dict:
         **public_user(user),
         "tutorial_seen": user.tutorial_seen_at is not None,
         "username_chosen": user.username_chosen_at is not None,
+        # The release whose "What's new" was dismissed; null owes the current one.
+        "whats_new_seen": user.whats_new_seen,
         # Owed until the prompt was answered or a number was added some other
         # way (Settings), so nobody is asked for a number they already gave.
         "phone_prompt_done": user.phone_prompt is not None or user.phone_hash is not None,

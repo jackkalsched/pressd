@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { addPhone, fetchMe, markTutorialSeen, removePhone, skipPhonePrompt } from '../api'
+import { WHATS_NEW } from '@pressd/shared/whatsNew'
 import { recentKey } from '@pressd/shared/recentSearches'
 
 export interface UserInfo {
@@ -19,6 +20,9 @@ export interface UserInfo {
   phonePromptDone?: boolean
   /** Own record only: the last four digits of the verified number on file. */
   phoneLast4?: string | null
+  /** Own record only, from GET /users/me: the release whose "What's new" was
+   *  dismissed on iPhone (shared/src/whatsNew.ts). Web shows no release notes. */
+  whatsNewSeen?: string | null
 }
 
 interface UserContextValue {
@@ -108,9 +112,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // may show the tutorial once more — not worth holding anyone here for.
   function completeTutorial() {
     if (!activeUser || activeUser.tutorialSeen !== false) return
-    setActiveUserState({ ...activeUser, tutorialSeen: true })
+    // The tutorial stands in for this release's "What's new" on iPhone
+    // (markTutorialSeen records both), so a new account isn't shown it there.
+    setActiveUserState({ ...activeUser, tutorialSeen: true, whatsNewSeen: WHATS_NEW.id })
     markTutorialSeen(activeUser.id).catch(() => {})
   }
+
 
   function signOut() {
     try { localStorage.removeItem('pressd_token') } catch { /* ignore */ }

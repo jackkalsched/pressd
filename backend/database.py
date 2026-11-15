@@ -303,6 +303,8 @@ def init_db():
             #    nobody's pick vanishes. A cleared shelf is stored as five nulls,
             #    never NULL, so this never refills it.
             "ALTER TABLE pressuser ADD COLUMN IF NOT EXISTS shelf TEXT",
+            # The "What's new" a person has dismissed, by release id; null owes it.
+            "ALTER TABLE pressuser ADD COLUMN IF NOT EXISTS whats_new_seen TEXT",
             "UPDATE pressuser SET shelf = '[' || favorite_album_id || ',null,null,null,null]' "
             "WHERE shelf IS NULL AND favorite_album_id IS NOT NULL",
             # ── A user bin's own picture (BinCover); null shows its entries' covers.

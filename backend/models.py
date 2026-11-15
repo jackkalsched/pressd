@@ -55,6 +55,11 @@ class PressUser(SQLModel, table=True):
     # the first-run username step is owed. Stamped for every account that
     # existed when it shipped, like tutorial_seen_at, so only new sign-ups see it.
     username_chosen_at: Optional[datetime] = None
+    # The release whose "What's new" the person has dismissed (shared/src/
+    # whatsNew.ts's id). Null — every account when it shipped — owes the current
+    # one; a new account's tutorial records it instead, so a sign-up isn't
+    # told what changed in an app they've only just met.
+    whats_new_seen: Optional[str] = None
 
     # Which pushes this person wants, one switch per kind (backend/push.py,
     # NOTIFY_KINDS). All on by default: the device-level permission is the
