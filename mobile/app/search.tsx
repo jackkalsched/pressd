@@ -24,7 +24,7 @@ import * as haptics from '../lib/haptics'
 import Avatar from '../components/Avatar'
 import CoverImage from '../components/CoverImage'
 import { BinMosaic } from '../components/BinCard'
-import VinylSpinner from '../components/VinylSpinner'
+import SearchSkeleton, { SkeletonRows } from '../components/SearchSkeleton'
 import TracklistLoader from '../components/TracklistLoader'
 import { colors, fonts, radii, spacing, useColors, scoreColor } from '../theme/tokens'
 
@@ -232,9 +232,7 @@ export default function SearchScreen() {
     return (
       <View style={styles.sectionHead}>
         <Text style={styles.sectionLabel}>{label}</Text>
-        {pending ? (
-          <VinylSpinner size="small" />
-        ) : more || isOpen ? (
+        {pending ? null : more || isOpen ? (
           <Pressable onPress={() => seeAll(g)} hitSlop={10}>
             <Text style={styles.seeAll}>{isOpen ? 'Show less' : 'See all'}</Text>
           </Pressable>
@@ -299,11 +297,8 @@ export default function SearchScreen() {
           )
         ) : (
           <>
-            {isLoading && !results && (
-              <View style={styles.centerNote}>
-                <VinylSpinner size={44} />
-              </View>
-            )}
+            {/* Skeleton rows in the results' shape until the first answer, not a spinner. */}
+            {isLoading && !results && <SearchSkeleton />}
             {isError && !isPlaceholderData && !results && <Text style={styles.note}>Search isn&rsquo;t answering. Try again.</Text>}
             {nothingOnPressd && <Text style={styles.note}>Nothing on Pressd matches &ldquo;{q}&rdquo;.</Text>}
 
@@ -374,6 +369,7 @@ export default function SearchScreen() {
               <View style={styles.section}>
                 {header('From the catalogs', 'catalog', fresh.length > SHOWN, catalogPending)}
                 {catalog.error && <Text style={styles.error}>{catalog.error}</Text>}
+                {catalogPending && catalogShown.length === 0 && <SkeletonRows count={3} />}
                 {catalogShown.map((r) => {
                   const done = catalog.shelved.includes(catalogKey(r))
                   return (

@@ -969,7 +969,7 @@ icon at the top right of For You's masthead, where the date was; pushed over the
 field focused, **Cancel** back. From two characters (200 ms debounce) it asks
 `searchAll` and draws People, Albums, Artists, Songs, then **From the catalogs**:
 `useAlbumSearch`'s hits minus every one `searchKnown` says Pressd has, held back until
-that check answers (a small spinner in the heading meanwhile). Each group shows four;
+that check answers (skeleton rows in the section meanwhile). Each group shows four;
 **See all** re-asks that one group (`searchAll(q, group)`) in place, **Show less** puts it
 back. Every row uses Add an album's row type (Plus Jakarta, no Playfair italic; scores in Playfair); albums and songs
 show the cover, artists their photo (`['artist-image', name]`, the artist page's cache),
@@ -2234,6 +2234,10 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   depends on its variant; `variant` fixes one. Web's keyframes are the handoff's, in
   `index.css` (`vl-*`); mobile runs each keyframe list as one `Animated` value
   (`useCycle`) with the same easing per segment. 1a, the old spinning light, is gone.
+  **The one exception is search** (both platforms' search screens, Jack, November 2026): it
+  shows skeleton rows in the results' own shape, pulsing (`SearchSkeleton` / `SkeletonRows`, one
+  per platform; still under reduced motion), until its first answer and while the catalogs are
+  checked, with no spinner in a heading or the field.
   Never `Loader2 animate-spin` on web or `ActivityIndicator` on mobile; mobile's
   takes `ActivityIndicator`'s props (`size` small/large/points, `color` ignored) and
   centres itself the same way. The drawing is duplicated across the two files; change both.

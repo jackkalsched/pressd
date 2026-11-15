@@ -20,7 +20,7 @@ import { BinMosaic } from '../components/BinCard'
 import Avatar from '../components/Avatar'
 import CoverImg from '../components/CoverImg'
 import TracklistLoader from '../components/TracklistLoader'
-import VinylSpinner from '../components/VinylSpinner'
+import SearchSkeleton, { SkeletonRows } from '../components/SearchSkeleton'
 import { stagger } from '../lib/format'
 
 const SHOWN = 4
@@ -127,7 +127,7 @@ export default function GlobalSearch() {
   }
 
   // ── Pressd ──
-  const { data: results, isLoading, isError, isPlaceholderData, isFetching } = useQuery({
+  const { data: results, isLoading, isError, isPlaceholderData } = useQuery({
     queryKey: ['search', userId, q],
     queryFn: () => searchAll(q),
     enabled: active && userId != null,
@@ -295,9 +295,7 @@ export default function GlobalSearch() {
     return (
       <div className="mb-1.5 flex min-h-6 items-center justify-between">
         <p className={SECTION_LABEL}>{label}</p>
-        {pending ? (
-          <VinylSpinner size={18} />
-        ) : more || isOpen ? (
+        {pending ? null : more || isOpen ? (
           <button
             type="button"
             onClick={() => seeAll(g)}
@@ -334,9 +332,7 @@ export default function GlobalSearch() {
               className="h-12 w-full rounded-xl border border-(--c-e2dbd0) bg-(--c-fff) pl-11 pr-11 text-[15px] text-(--c-1c1917) transition-colors placeholder:text-(--c-a8998a) focus:border-(--c-2d6a4f) focus:outline-none"
             />
             <div className="absolute right-3.5 top-1/2 flex -translate-y-1/2 items-center">
-              {active && isFetching ? (
-                <VinylSpinner size={18} />
-              ) : query.length > 0 ? (
+              {query.length > 0 ? (
                 <button
                   type="button"
                   onClick={() => setQuery('')}
@@ -379,11 +375,8 @@ export default function GlobalSearch() {
           )
         ) : (
           <>
-            {isLoading && !results && (
-              <div className="mt-16 flex justify-center">
-                <VinylSpinner size={44} />
-              </div>
-            )}
+            {/* Skeleton rows in the results' shape until the first answer, not a spinner. */}
+            {isLoading && !results && <SearchSkeleton />}
             {isError && !isPlaceholderData && !results && (
               <p className="mt-10 text-center text-[14px] text-(--c-8a7f72)">Search isn&rsquo;t answering. Try again.</p>
             )}
@@ -492,6 +485,9 @@ export default function GlobalSearch() {
               <section className="mt-10">
                 {head('FROM THE CATALOGS', 'catalog', fresh.length > SHOWN, catalogPending)}
                 {pickError && <p className="m-0 mb-1.5 text-[13px] text-(--c-c0392b)">{pickError}</p>}
+                {catalogPending && catalogShown.length === 0 && (
+                  <div className="-mx-3 grid grid-cols-1 gap-x-10 md:grid-cols-2"><SkeletonRows count={2} /><SkeletonRows count={2} /></div>
+                )}
                 <ul className="m-0 -mx-3 grid list-none grid-cols-1 gap-x-10 p-0 md:grid-cols-2">
                   {catalogShown.map((r, i) => {
                     const done = shelved.includes(catalogKey(r))
