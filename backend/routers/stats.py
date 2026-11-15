@@ -73,13 +73,22 @@ def summary(user_id: int = Depends(viewable_user_id), session: Session = Depends
         v = [x for x in vals if x is not None]
         return round(sum(v) / len(v), 2) if v else None
 
-    # Most loyal artist (most rated albums). A collaboration counts for each of
-    # its artists (backend/credits.py).
+    # Most rated artist: the most songs scored (Jack, November 2026 — it was the
+    # most rated albums, "Most Loyal Artist"). A song counts for whoever
+    # song_artists credits, so a collaboration counts for each of its artists
+    # (backend/credits.py).
+    song_albums = {a.id: a for a in session.exec(
+        select(Album).where(Album.user_id == user_id)
+        .where(Album.id.in_({s.album_id for s in all_songs}))
+    ).all()} if all_songs else {}
     artist_counts: dict[str, int] = defaultdict(int)
-    for a in rated:
-        for name in album_artists(a):
+    for s in all_songs:
+        alb = song_albums.get(s.album_id)
+        if alb is None:
+            continue
+        for name in song_artists(s.artist, alb):
             artist_counts[name] += 1
-    most_loyal = max(artist_counts.items(), key=lambda x: x[1], default=None)
+    most_rated = max(artist_counts.items(), key=lambda x: x[1], default=None)
 
     # Best genre (highest avg score, min 3 albums)
     genre_scores_map: dict[str, list[float]] = defaultdict(list)
@@ -123,7 +132,8 @@ def summary(user_id: int = Depends(viewable_user_id), session: Session = Depends
         "avg_replay": _avg([a.replay_value for a in rated]),
         "avg_production": _avg([a.production for a in rated]),
         "avg_distinctness": _avg([a.distinctness for a in rated]),
-        "most_rated_artist": {"name": most_loyal[0], "count": most_loyal[1]} if most_loyal else None,
+        # `count` is songs scored (it was albums before November 2026).
+        "most_rated_artist": {"name": most_rated[0], "count": most_rated[1]} if most_rated else None,
         "best_genre": {
             "genre": best_genre_entry[0],
             "avg_score": round(sum(best_genre_entry[1]) / len(best_genre_entry[1]), 2),

@@ -270,14 +270,22 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
 
           <div className={cardCls}>
             <div className="flex items-start justify-between mb-3">
-              <p className={labelCls}>Most Loyal Artist</p>
+              <p className={labelCls}>Most Rated Artist</p>
               <Heart size={15} className="text-(--c-c2b8ad) shrink-0 mt-0.5" strokeWidth={1.5} />
             </div>
-            <p className="font-metric text-(--c-1c1917) font-bold text-xl leading-snug line-clamp-2">
-              {summary?.most_rated_artist?.name ?? '—'}
-            </p>
+            {/* The artist with the most songs scored; the name opens their artist page. */}
+            {summary?.most_rated_artist ? (
+              <Link
+                to={`/artist/${encodeURIComponent(summary.most_rated_artist.name)}`}
+                className="font-metric block text-(--c-1c1917) font-bold text-xl leading-snug line-clamp-2 hover:text-(--c-2d6a4f) hover:underline underline-offset-2"
+              >
+                {summary.most_rated_artist.name}
+              </Link>
+            ) : (
+              <p className="font-metric text-(--c-1c1917) font-bold text-xl leading-snug">—</p>
+            )}
             {summary?.most_rated_artist && (
-              <p className="text-(--c-a8998a) text-sm mt-2">{summary.most_rated_artist.count} albums rated</p>
+              <p className="text-(--c-a8998a) text-sm mt-2">{summary.most_rated_artist.count.toLocaleString()} {summary.most_rated_artist.count === 1 ? 'song' : 'songs'} rated</p>
             )}
           </div>
 
