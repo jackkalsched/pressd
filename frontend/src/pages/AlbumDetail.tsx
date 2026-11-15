@@ -30,6 +30,7 @@ import RecommendModal from '../components/RecommendModal'
 import AddToBinMenu from '../components/AddToBinMenu'
 import CommentThread from '../components/CommentThread'
 import AlbumThoughts from '../components/AlbumThoughts'
+import Avatar from '../components/Avatar'
 import ShareCardModal from '../components/ShareCard'
 import AlbumCompare from '../components/albumCompare'
 import CoverImg from '../components/CoverImg'
@@ -429,11 +430,25 @@ export default function AlbumDetail() {
                 discussion sits in it, which can run past the bottom of the window
                 and be unreachable while pinned. */}
             <div className={reviewInRail || own ? '' : 'lg:sticky lg:top-8'}>
-              <div className="mx-auto w-full max-w-[380px] overflow-hidden rounded-[28px] shadow-[0_28px_60px_-28px_rgba(40,25,10,0.6)] pop-in">
-                {album.albumArtUrl ? (
-                  <CoverImg url={album.albumArtUrl} displayPx={380} loading="eager" alt="" className="block aspect-square w-full object-cover" />
-                ) : (
-                  <Cover artUrl={null} seed={album.artist} size={380} radius={0} fontSize={120} />
+              <div className="relative mx-auto w-full max-w-[380px]">
+                <div className="overflow-hidden rounded-[28px] shadow-[0_28px_60px_-28px_rgba(40,25,10,0.6)] pop-in">
+                  {album.albumArtUrl ? (
+                    <CoverImg url={album.albumArtUrl} displayPx={380} loading="eager" alt="" className="block aspect-square w-full object-cover" />
+                  ) : (
+                    <Cover artUrl={null} seed={album.artist} size={380} radius={0} fontSize={120} />
+                  )}
+                </div>
+                {/* Someone else's copy: their face on the record's corner, so the
+                    page reads as theirs at a glance. It opens their profile. */}
+                {!own && album.owner && (
+                  <Link
+                    to={`/u/${album.owner.id}`}
+                    title={`${album.owner.name}'s profile`}
+                    aria-label={`${album.owner.name}'s profile`}
+                    className="pop absolute -bottom-4 -right-3 rounded-full ring-4 ring-(--c-f9f8f6) shadow-[0_10px_24px_-10px_rgba(40,25,10,0.6)] transition-transform hover:scale-105"
+                  >
+                    <Avatar name={album.owner.name} avatarUrl={album.owner.avatarUrl} size={72} />
+                  </Link>
                 )}
               </div>
               <h1 className="font-display m-0 mt-6 text-[34px] font-bold leading-tight text-(--c-1c1917)">{album.albumName}</h1>
@@ -500,10 +515,11 @@ export default function AlbumDetail() {
                   <p className="font-display m-0 text-[64px] font-bold leading-none tabular-nums" style={{ color: songScoreColor(album.score) }}>
                     {album.score.toFixed(2)}
                   </p>
-                  <p className="m-0 mt-2 text-[11px] font-bold tracking-[0.16em] text-(--c-44403c)">
+                  <p className="m-0 mt-4 flex items-center gap-2.5 text-[11px] font-bold tracking-[0.16em] text-(--c-44403c)">
+                    {!own && album.owner && <Avatar name={album.owner.name} avatarUrl={album.owner.avatarUrl} size={22} />}
                     {own ? 'YOUR SCORE' : `${possessive(ownerName).toUpperCase()} SCORE`}
                   </p>
-                  {ratedOn && <p className="m-0 mt-0.5 text-[13px] text-(--c-8a7f72)">Rated {ratedOn}</p>}
+                  {ratedOn && <p className="m-0 mt-2 text-[13px] text-(--c-8a7f72)">Rated {ratedOn}</p>}
                 </>
               ) : album.predictedScore != null ? (
                 <>
