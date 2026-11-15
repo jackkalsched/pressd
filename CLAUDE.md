@@ -1272,7 +1272,12 @@ people appear only as `public_user`.
   theirs, or with each of yours on your own profile. 50 for a missing row; you, when
   you're in their list, first with `percent` null; the rest highest first, then by name.
   It runs the profile pill's live refresh (`mark_fresh=False`) over those friends, so the
-  list and the pills agree. Behind the **Friends** figure on both platforms: mobile's
+  list and the pills agree — **after the reply**: both endpoints answer from the stored pairs and hand
+  the recompute to a background task on its own session (`refresh_after_reply`, deduplicated per
+  caller and set of others), which the next open reads. Inline, a caller who'd rated since the night
+  reloaded their whole library on every profile and friends-list open (~2.7 s of a ~3 s list for a
+  6,000-song library, November 2026), since neither marks the caller fresh. The people sheet still
+  refreshes inline, and marks the caller fresh. Behind the **Friends** figure on both platforms: mobile's
   `FriendsSheet` (a bottom sheet in `PeopleSheet`'s manner, opened from `ProfileBanner`'s
   figure, which takes an `onPress`) and web's `FriendsDialog` (from `FriendProfile`'s stat
   row). A row opens that person's profile and shows their bio, one line, under the name.

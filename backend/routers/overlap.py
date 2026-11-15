@@ -38,14 +38,14 @@ from __future__ import annotations
 import json
 import random
 from datetime import datetime, timedelta, timezone
-from typing import Literal, Optional
+from typing import Callable, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import or_, update
 from sqlmodel import Session, select
 
-from ..database import get_session
+from ..database import engine, get_session
 from ..blocks import blocked_ids
 from ..deps import authorize_view, current_user, public_user
 from ..models import Album, Friendship, OverlapEvent, OverlapSheet, PressUser, Song, TasteOverlap
@@ -116,6 +116,44 @@ def _song(s) -> dict | None:
 
 # ---------------------------------------------------------------- the two reads
 
+# A live recompute a profile or friends list hands off, to run once its reply has
+# gone. It reloads the caller's whole library and the others' (2–3 s for a big
+# library over the Mac's link), and a profile or friends list doesn't mark the
+# caller fresh, so done inline it was paid on every open until the night's run —
+# the friends list took ~3 s where its own reads take ~0.5 s (November 2026). The
+# reply now serves the stored numbers; the recompute lands seconds later, and the
+# next open reads it. The people sheet still refreshes inline: it marks the
+# caller fresh, so it pays once.
+Later = Callable[[int, set[int]], None]
+
+# (caller, others) recomputes running now, so opening the same list twice in a
+# row doesn't start a second identical one.
+_running: set[tuple[int, frozenset[int]]] = set()
+
+
+def refresh_after_reply(me: int, others: set[int]) -> None:
+    """The handed-off recompute, on its own session: the request's is closed by
+    the time a background task runs."""
+    key = (me, frozenset(others))
+    if key in _running:
+        return
+    _running.add(key)
+    try:
+        with Session(engine) as session:
+            refresh_live(session, me, others, False)
+    except Exception as e:
+        print(f"[taste_live] background refresh failed for user {me}: {e}")
+    finally:
+        _running.discard(key)
+
+
+def _refresh_or_hand_off(store, me: int, others: set[int], later: Later | None) -> None:
+    if later is None:
+        _refresh(store, me, others, mark_fresh=False)
+    else:
+        later(me, others)
+
+
 def _refresh(store, me: int, others: set[int], mark_fresh: bool = True) -> None:
     """The live recompute, or the stored numbers when it fails: the session is rolled
     back, so the reads that follow run in a usable transaction."""
@@ -173,11 +211,11 @@ def build_sheet(store, me: int, sheet, album, rng: random.Random) -> dict | None
             "raters": len(raters), "people": rows}
 
 
-def profile_overlap(store, me: int, other: int) -> dict:
+def profile_overlap(store, me: int, other: int, later: Later | None = None) -> dict:
     if other == me:
         return {"percent": None, "reason": None, "connecting_album_id": None, "connecting_album": None,
                 "shared_records": [], "shared_count": 0}
-    _refresh(store, me, {other}, mark_fresh=False)
+    _refresh_or_hand_off(store, me, {other}, later)
     percent, reason = store.overlap_row(me, other) or (50.0, None)
     copy = None
     if reason and reason.get("subject_key"):
@@ -193,7 +231,7 @@ def profile_overlap(store, me: int, other: int) -> dict:
             "shared_records": [_album_brief(a) for a in shared[:SHARED_SHOWN]], "shared_count": len(shared)}
 
 
-def friends_overlap(store, me: int, owner: int) -> list[dict]:
+def friends_overlap(store, me: int, owner: int, later: Later | None = None) -> list[dict]:
     """A profile's friends list, each friend with the *viewer's* taste overlap
     with them — on your own profile, yours with each friend; on someone else's,
     yours with each of theirs. You, when you're in their list, come first with no
@@ -211,7 +249,7 @@ def friends_overlap(store, me: int, owner: int) -> list[dict]:
     ids = [u for u in store.friend_ids(owner) if u not in hidden]
     others = [u for u in ids if u != me]
     if others:
-        _refresh(store, me, set(others), mark_fresh=False)
+        _refresh_or_hand_off(store, me, set(others), later)
     percents = store.stored_percents(me, others)
     people = store.users(ids)
     rel = store.relationships(me) if others else {}
@@ -328,16 +366,19 @@ class Store:
 # ---------------------------------------------------------------- endpoints
 
 @router.get("/users/{user_id}/overlap")
-def get_overlap(user_id: int, user: PressUser = Depends(current_user), session: Session = Depends(get_session)):
+def get_overlap(user_id: int, background: BackgroundTasks, user: PressUser = Depends(current_user),
+                session: Session = Depends(get_session)):
     authorize_view(user, user_id, session)
-    return profile_overlap(Store(session), user.id, user_id)
+    return profile_overlap(Store(session), user.id, user_id,
+                           later=lambda me, others: background.add_task(refresh_after_reply, me, others))
 
 
 @router.get("/overlap/friends/{user_id}")
-def get_friends_overlap(user_id: int, user: PressUser = Depends(current_user),
+def get_friends_overlap(user_id: int, background: BackgroundTasks, user: PressUser = Depends(current_user),
                         session: Session = Depends(get_session)):
     authorize_view(user, user_id, session)
-    return friends_overlap(Store(session), user.id, user_id)
+    return friends_overlap(Store(session), user.id, user_id,
+                           later=lambda me, others: background.add_task(refresh_after_reply, me, others))
 
 
 @router.get("/overlap/sheet")
