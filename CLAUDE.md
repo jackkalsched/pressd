@@ -1076,7 +1076,9 @@ sidebar's name and the small-screen *Profile* button open it. The header: the ba
 strip, the avatar riding up over its edge, the name with "@handle" under it, the bio on its own line,
 the album-score distribution (`ScoreHistogram`, no axis) under the avatar, and a stat
 row between two rules in mobile's order: Avg score, Albums, Artists (distinct,
-case-folded), Songs and Friends. When it's you, the friend button becomes **Share profile** (your invite link,
+case-folded), Songs and Friends — each counting up from zero as the page loads, iPhone's
+`CountUp` ported line for line (`components/CountUp.tsx`: 1.3s, quintic ease-out, straight to
+the value under reduced motion). When it's you, the friend button becomes **Share profile** (your invite link,
 through the share sheet or the clipboard — a profile itself is behind sign-in), and the
 banner carries mobile's pencil and gear, opening `components/SettingsDialog.tsx` (which
 was the Edit Profile modal inside `Layout.tsx`) in `mode` `profile` — photo, banner,

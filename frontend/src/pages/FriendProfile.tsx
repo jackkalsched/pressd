@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Ban, Check, Clock, Link2, MapPin, MoreHorizontal, Pencil, Settings, UserMinus, UserPlus } from 'lucide-react'
 import { acceptFriendRequest, addFriend, blockUser, fetchFriendRequests, fetchFriends, fetchProfile, fetchSummary, fetchAlbums, fetchOverlap, getInviteLink, removeFriend, unblockUser } from '../api'
+import CountUp from '../components/CountUp'
 import { useUser } from '../context/UserContext'
 import Library from './Library'
 import { stagger } from '../lib/format'
@@ -443,7 +444,8 @@ export default function FriendProfile() {
           const figure = (
             <>
               <p className="font-display m-0 text-[30px] font-bold leading-none tabular-nums md:text-[36px]" style={{ color: st.color ?? 'var(--c-1c1917)' }}>
-                {st.value}
+                {/* Counts up from zero as the profile loads, as on iPhone. */}
+                <CountUp value={st.value} cacheKey={`${fid}:${st.label}`} />
               </p>
               <p className="m-0 mt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-(--c-a8998a)">{st.label}</p>
             </>
