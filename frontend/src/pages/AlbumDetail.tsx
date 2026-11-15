@@ -438,14 +438,14 @@ export default function AlbumDetail() {
                     <Cover artUrl={null} seed={album.artist} size={380} radius={0} fontSize={120} />
                   )}
                 </div>
-                {/* Someone else's copy: their face on the record's top-left corner, so the
+                {/* Someone else's copy: their face on the record's bottom-right corner, so the
                     page reads as theirs at a glance. It opens their profile. */}
                 {!own && album.owner && (
                   <Link
                     to={`/u/${album.owner.id}`}
                     title={`${album.owner.name}'s profile`}
                     aria-label={`${album.owner.name}'s profile`}
-                    className="pop absolute -top-4 -left-3 rounded-full ring-4 ring-(--c-f9f8f6) shadow-[0_10px_24px_-10px_rgba(40,25,10,0.6)] transition-transform hover:scale-105"
+                    className="pop absolute -bottom-4 -right-3 rounded-full ring-4 ring-(--c-f9f8f6) shadow-[0_10px_24px_-10px_rgba(40,25,10,0.6)] transition-transform hover:scale-105"
                   >
                     <Avatar name={album.owner.name} avatarUrl={album.owner.avatarUrl} size={72} />
                   </Link>
