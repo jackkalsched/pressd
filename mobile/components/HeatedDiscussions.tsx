@@ -17,17 +17,19 @@
 // The verdicts are the server's flags (discover.py: LOVED_MEAN, HATED_MEAN,
 // CONTROVERSIAL_SPREAD), so the two platforms can't disagree on what counts.
 import { useEffect, useState } from 'react'
-import { DynamicColorIOS, AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { DynamicColorIOS, AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { Angry, Laugh, Meh, Smile, Swords, type LucideIcon } from 'lucide-react-native'
 import { fetchHeated } from '../lib/api'
 import { type HeatedMood, type HeatedRecord } from '@pressd/shared/types'
-import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useScoreColor, scoreColor } from '../theme/tokens'
+import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useScoreColor, scoreColor, useIsDark } from '../theme/tokens'
 import CoverImage from './CoverImage'
+import AutoRail from './AutoRail'
 
-const CARD_W = 184
+// The cover's size: New & Popular's (its NewReleaseCard), since November 2026.
+const CARD_W = 128
 const GREEN = '#2d6a4f'
 const RED = '#c0392b'
 
@@ -77,13 +79,12 @@ export default function HeatedDiscussions() {
 
       {/* A horizontal scroller clips, and the glow spreads below the cover, so
           the row carries room at the bottom and the section gives it back. */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
+      {/* Drifts on its own until touched (AutoRail), as New & Popular does. */}
+      <AutoRail
         style={styles.rail}
         contentContainerStyle={styles.row}
-      >
-        {records.map((r, i) => (
+        gap={spacing.lg}
+        items={records.map((r, i) => (
           <Card
             key={r.subjectKey}
             record={r}
@@ -102,7 +103,7 @@ export default function HeatedDiscussions() {
             }
           />
         ))}
-      </ScrollView>
+      />
     </View>
   )
 }
@@ -178,6 +179,10 @@ function Card({ record: r, index, animate, onPress }: { record: HeatedRecord; in
  *  mean when the rail first appears, staggered card by card. */
 function RoomMeter({ mean, spread, index, animate }: { mean: number; spread: number; index: number; animate: boolean }) {
   const sc = useScoreColor()
+  const dark = useIsDark()
+  // The band is strongest at the room's mean and fades out towards its edges
+  // (November 2026: solid end to end, it read too loud, worst in dark mode).
+  const fade = (score: number, a: number) => sc(score).replace('hsl(', 'hsla(').replace(')', `, ${a})`)
   const pos = (s: number) => ((Math.min(10, Math.max(1, s)) - 1) / 9) * 100
   const lo = Math.max(1, mean - spread)
   const hi = Math.min(10, mean + spread)
@@ -211,6 +216,7 @@ function RoomMeter({ mean, spread, index, animate }: { mean: number; spread: num
               left: `${left}%`,
               width: `${width}%`,
               shadowColor: scoreColor(mean),
+              shadowOpacity: dark ? 0.25 : 0.5,
               // Array form: React Native misreads the string form's second value as z.
               transformOrigin: [`${Math.round(((pos(mean) - left) / width) * 100)}%`, '50%', 0],
               transform: [{ scaleX: grow }],
@@ -218,7 +224,8 @@ function RoomMeter({ mean, spread, index, animate }: { mean: number; spread: num
           ]}
         >
           <LinearGradient
-            colors={[sc(lo), sc(hi)]}
+            colors={[fade(lo, 0), fade(mean, dark ? 0.7 : 0.9), fade(hi, 0)]}
+            locations={[0, Math.min(0.95, Math.max(0.05, (pos(mean) - left) / width)), 1]}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}
             style={styles.meterFill}
@@ -227,7 +234,7 @@ function RoomMeter({ mean, spread, index, animate }: { mean: number; spread: num
         <View
           style={[
             styles.meterDot,
-            { left: `${pos(mean)}%`, borderColor: sc(mean), shadowColor: scoreColor(mean) },
+            { left: `${pos(mean)}%`, borderColor: sc(mean), shadowColor: scoreColor(mean), shadowOpacity: dark ? 0.35 : 0.9 },
           ]}
         />
       </View>
@@ -249,44 +256,44 @@ const styles = StyleSheet.create({
   // the way New & Popular does — cards run off the edge rather than stop short.
   // The bottom padding is the glow's room; the negative margin returns it.
   rail: { marginHorizontal: -spacing.lg, marginBottom: -spacing.md },
-  row: { paddingHorizontal: spacing.lg, gap: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.md },
+  row: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.md },
 
   card: { width: CARD_W },
   cardPressed: { transform: [{ scale: 0.98 }] },
 
   glow: {
     position: 'absolute',
-    left: 22,
-    right: 22,
+    left: 14,
+    right: 14,
     bottom: 4,
-    height: 30,
+    height: 22,
     flexDirection: 'row',
   },
   glowStop: {
     flex: 1,
-    borderRadius: 15,
+    borderRadius: 11,
     shadowOpacity: 0.9,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 16 },
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 12 },
   },
   coverShadow: {
-    borderRadius: 16,
+    borderRadius: radii.md,
     shadowColor: '#3c2d1e',
     shadowOpacity: 0.25,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 8 },
   },
-  art: { width: CARD_W, height: CARD_W, borderRadius: 16, backgroundColor: colors.inset },
+  art: { width: CARD_W, height: CARD_W, borderRadius: radii.md, backgroundColor: colors.inset },
   artFallback: { alignItems: 'center', justifyContent: 'center' },
-  artInitial: { fontFamily: fonts.display, fontSize: 56, color: colors.inkMuted },
+  artInitial: { fontFamily: fonts.display, fontSize: 40, color: colors.inkMuted },
 
   badge: {
     position: 'absolute',
-    left: 8,
-    top: 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    left: 6,
+    top: 6,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -334,7 +341,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 0 },
   },
-  meterMean: { fontFamily: fonts.display, fontSize: 17, fontVariant: ['tabular-nums'] },
+  meterMean: { fontFamily: fonts.display, fontSize: 15, fontVariant: ['tabular-nums'] },
 
   counts: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
   live: { flexDirection: 'row', alignItems: 'center', gap: 5 },

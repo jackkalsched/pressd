@@ -386,10 +386,7 @@ function AveragedView({
               <p className="font-display m-0 text-[64px] font-bold leading-none tabular-nums">
                 <PredictedScore value={data.predicted_score!} />
               </p>
-              <p className="m-0 mt-2 flex items-center gap-1 text-[11px] font-bold tracking-[0.16em] text-(--c-2d6a4f)">
-                <Star size={11} fill={GREEN} strokeWidth={0} /> FOR YOU
-              </p>
-              <p className="m-0 mt-0.5 text-[13px] text-(--c-8a7f72)">predicted</p>
+              <p className="m-0 mt-2 text-[13px] text-(--c-8a7f72)">predicted</p>
             </div>
           </>
         )}

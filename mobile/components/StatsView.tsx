@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
   bsCount: { fontFamily: fonts.bodySemiBold, fontSize: 11, letterSpacing: 0.6, color: colors.inkMuted },
 
   sectionLabel: {
-    fontFamily: fonts.bodyBold,
+    fontFamily: fonts.labelBold,
     fontSize: 11,
     letterSpacing: 1.2,
     color: colors.inkMuted,

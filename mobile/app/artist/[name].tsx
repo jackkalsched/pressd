@@ -1139,7 +1139,7 @@ const styles = StyleSheet.create({
 
   // Web's SECTION_LABEL: small caps, widely tracked, warm grey.
   sectionLabel: {
-    fontFamily: fonts.bodyBold,
+    fontFamily: fonts.labelBold,
     fontSize: 11,
     letterSpacing: 1.76,
     color: colors.inkMuted,

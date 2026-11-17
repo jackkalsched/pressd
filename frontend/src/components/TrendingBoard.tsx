@@ -19,8 +19,10 @@ export default function TrendingBoard({
   rows: TrendingAlbum[]
   onOpen: (albumId: number) => void
 }) {
+  // On the page itself, no tinted panel behind it (November 2026): the rows
+  // read as part of the page rather than a greyer box on it.
   return (
-    <ol className="m-0 list-none overflow-hidden rounded-[22px] bg-(--c-f2eee7)/70 p-1.5">
+    <ol className="m-0 list-none p-1.5">
       {rows.map((row, i) => (
         <li key={row.album_id} className="rise-in" style={{ '--i': i } as CSSProperties}>
           {i > 0 && <div className="mx-4 h-px bg-(--c-e8e1d6)" />}
@@ -36,8 +38,8 @@ export default function TrendingBoard({
               <Cover artUrl={row.album_art_url} seed={row.artist} size={58} radius={13} fontSize={24} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-title m-0 truncate text-[16px] font-bold text-(--c-1c1917)">{row.album_name}</p>
-              <p className="m-0 mt-0.5 truncate text-[12.5px] text-(--c-8a7f72)">{row.artist}</p>
+              <p className="font-title m-0 truncate text-[18px] font-bold text-(--c-1c1917)">{row.album_name}</p>
+              <p className="m-0 mt-0.5 truncate text-[14px] text-(--c-8a7f72)">{row.artist}</p>
             </div>
             <span className="hidden shrink-0 text-right text-[11.5px] text-(--c-8a7f72) tabular-nums sm:block" style={{ width: 118 }}>
               {row.rater_count} {row.rater_count === 1 ? 'rating' : 'ratings'}
@@ -45,7 +47,7 @@ export default function TrendingBoard({
             </span>
             {/* The bare figure on the score scale — no pill behind it (Jack, November 2026). */}
             {row.avg_score != null && (
-              <span className="font-display shrink-0 min-w-[46px] text-right text-[18px] font-bold tabular-nums" style={{ color: songScoreColor(row.avg_score) }}>
+              <span className="font-display shrink-0 min-w-[56px] text-right text-[22px] font-bold tabular-nums" style={{ color: songScoreColor(row.avg_score) }}>
                 {row.avg_score.toFixed(2)}
               </span>
             )}

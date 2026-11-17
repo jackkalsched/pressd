@@ -116,5 +116,5 @@ const styles = StyleSheet.create({
   newBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.xl },
   section: { gap: spacing.lg },
-  sectionLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.6, color: colors.inkMuted },
+  sectionLabel: { fontFamily: fonts.labelBold, fontSize: 11, letterSpacing: 1.6, color: colors.inkMuted },
 })

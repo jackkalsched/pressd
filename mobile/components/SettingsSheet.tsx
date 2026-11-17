@@ -1246,7 +1246,7 @@ const styles = StyleSheet.create({
   sheetTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.ink },
 
   sectionLabel: {
-    fontFamily: fonts.bodyBold,
+    fontFamily: fonts.labelBold,
     fontSize: 10,
     letterSpacing: 1,
     color: colors.inkMuted,

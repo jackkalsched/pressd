@@ -134,7 +134,8 @@ def trending(
     (album, artist) and rank the groups:
       - week: rated in the last 7 days, by number of distinct raters, then recency
       - all:  all-time, by number of distinct raters, then recency
-      - top:  all-time, by average score
+      - top:  all-time, by average score, among records MIN_CHART_RATERS["all"]
+              (5) people have rated
 
     The displayed `avg_score` is always the album's all-time average across the
     whole userbase; for the weekly view only the `rater_count` (and ranking) is
@@ -209,6 +210,10 @@ def trending(
     ]
 
     if period == "top":
+        # The best-rated of all time stands only on records enough people have
+        # rated — the all-time chart's bar (MIN_CHART_RATERS) — so one rave
+        # can't top it (November 2026).
+        rows = [r for r in rows if r["rater_count"] >= MIN_CHART_RATERS["all"]]
         rows.sort(key=lambda r: (r["avg_score"] or 0, r["rater_count"]), reverse=True)
     else:
         rows.sort(key=lambda r: (r["rater_count"], r["last_rated"] or ""), reverse=True)

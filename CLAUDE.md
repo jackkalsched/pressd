@@ -2191,7 +2191,7 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   ("PLAN_ml_worker_split §4", "PLAN_global_artist_clusters.md §3.3",
   "PLAN_discussions.md §2.3"). Read the relevant one before touching the pipeline it
   describes.
-- **Type (web moved first, November 2026; iPhone still on the old pair).** Web sets body text
+- **Type (November 2026, both platforms; web first).** Web sets body text
   in **Onest** (`--font-body`, Google Fonts); titles — page titles, album titles, names, the
   artist line under an album title, dialog headings — in **Allo**, sharp (`.font-title`:
   `--font-title`, the variable font self-hosted from `public/fonts/AlloVariable.woff2`, its
@@ -2205,16 +2205,34 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   wordmark only, Unbounded Bold the shelf's heading only. All are SIL OFL; their licences sit
   beside them in `public/fonts/`. Demo or personal-use fonts (Cardinel, Urban Shadow) were
   trialled and must never ship — `.gitignore` names them. The share card keeps Plus Jakarta Sans
-  (it's an image people post, and iPhone's matches). iPhone is still Playfair for titles and
-  scores and Plus Jakarta Sans for everything else (`fonts.display*`; `fonts.displayItalic`, a
-  loaded face, because iOS can't slant a custom font with `fontStyle`) until the web set is
-  carried over. A score shown in Rankings, the Library's cover badges and the rest goes through
-  `.font-display` so it gets the figures face.
+  (it's an image people post, and iPhone's matches). iPhone has the same set (`theme/tokens.ts` `fonts`), built as files
+  because iOS can't take a score's figures from one font and its words from another:
+  `display` / `displayBlack` are **Pressd Display** (`assets/fonts/PressdDisplay-*.ttf`, 700 /
+  800) — Allo instanced sharp at optical size 28 with Bricolage Grotesque 800's digits and number
+  punctuation merged in (fontTools; `PressdDisplay-README.txt`), and its figure-style features
+  (`tnum`, `onum`, `frac`, the digit alternates) dropped so no setting brings Allo's own digits
+  back; `body*` Onest (static weights); `label` / `labelBold` Paperlogy, on every `sectionLabel`
+  style; `displayRegular` (quotes, reviews) and `displayItalic` (an album named in a title) stay
+  Playfair (`fonts.displayItalic` a loaded face, because iOS can't slant a custom font). The
+  share card keeps Playfair and Plus Jakarta Sans through `fonts.share*` on both platforms; its
+  sheet's own bar and buttons follow the app. A score shown in Rankings, the Library's cover
+  badges and the rest goes through `.font-display` (web) / `fonts.display` (iPhone) so it gets
+  the figures face.
+- **A profile's tabs keep the page still** (both platforms, November 2026): the underline slides or
+  springs to the tab pressed (web and iPhone `UnderlineTabs`), and switching never moves the page —
+  iPhone's `lib/keepPlace.ts` (`useKeepPlace`) holds a floor under the list and scrolls back to the
+  offset once the new tab draws (Library's grid and the other tabs' list are different FlatLists, so
+  a switch rebuilds it); web's `FriendProfile` holds the tab area at its last height.
+- **Heated Discussions' room meter fades** (both platforms): the band is strongest at the room's
+  mean and fades to nothing at the spread's edges, its glow softer in dark (web `--meter-band` /
+  `--meter-glow`).
 - **Scores stand bare** (web, November 2026): `ScorePill` (`components/covers.tsx` — Charts,
   genre boards, For You's review cards) is the number in its score colour with no tinted cell,
   as Trending's are.
-- **A row of records can drift** (web): `components/AutoCarousel.tsx` — For You's New & Popular
-  scrolls itself and loops (the items drawn twice, the copy `inert`), easing to a stop when
+- **A row of records can drift** (both platforms): web's `components/AutoCarousel.tsx` and
+  iPhone's `components/AutoRail.tsx` (no arrows — the finger is the control; still on an
+  unfocused screen) — For You's New & Popular and Heated Discussions
+  scroll themselves and loops (the items drawn twice, the copy `inert`), easing to a stop when
   reached for (hover, touch, wheel, focus) and back up after; arrows glide one item at a time;
   a mouse can drag and throw it (a drag is never a click); the edges fade; still under reduced
   motion.
@@ -2348,8 +2366,10 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   `--predicted-0/1/2` pairs under `:root` / `:root.dark`, in `index.css`); an
   IntersectionObserver and `visibilitychange` pause it off screen and in a hidden tab,
   and under `prefers-reduced-motion` the gradient stands still with no sparkle. It
-  replaced the stroked hollow number on AlbumDetail's FOR YOU and CommunityAlbum's FOR
-  YOU, and draws a bin row's PREDICTED (`Figure`'s `predicted`) and For You's Ready to
+  replaced the stroked hollow number on AlbumDetail's and CommunityAlbum's predicted figure
+  ("predicted" under it; the ★ FOR YOU line went in November 2026) — on your own To Listen copy
+  with **Rate Now** (`RateNowButton`) at the row's right, centred on the figure, rolling to
+  "Begin Rating" on hover, in place of the top bar's Rate — and draws a bin row's PREDICTED (`Figure`'s `predicted`) and For You's Ready to
   rate `~7.59` under each card (no sparkle at that size), and Rate this next's featured card
   (`FeaturedNext`, SpotlightCard's look stood upright: the blurred cover as its colour, the
   cover tilted, PREDICTED over the figure at the foot beside its button; no "We think you'll rate

@@ -142,24 +142,44 @@ export function useScoreColor(): (score: number) => string {
   return (score: number) => songScoreColor(score, isDark)
 }
 
+// Type (November 2026, carried over from web): titles and scores in "Pressd
+// Display" — sharp Allo with Bricolage Grotesque 800's digits merged in
+// (assets/fonts/PressdDisplay-README.txt), since iOS can't take a score's
+// figures from one font and its words from another the way web's unicode-range
+// does; body text in Onest; the small spaced-caps labels in Paperlogy (`label`).
+// Quotes and reviews stay Playfair (`displayRegular`), as does an album named in
+// italic inside a title (`displayItalic`). The share card keeps its own faces
+// (`share*`): it's a picture people post, and web's matches.
 export const fonts = {
-  display: 'PlayfairDisplay_700Bold',
+  display: 'PressdDisplay_700',
   displayRegular: 'PlayfairDisplay_400Regular',
   // A real italic face: iOS can't slant a custom font, so fontStyle: 'italic'
   // on `display` draws it upright.
   displayItalic: 'PlayfairDisplay_700Bold_Italic',
   // Wide and heavy, for the shelf's name alone.
   wide: 'Unbounded_700Bold',
-  displayBlack: 'PlayfairDisplay_900Black',
+  displayBlack: 'PressdDisplay_800',
   // The Pressd wordmark itself — Clash Display, per the brand mark. Not a
   // general-purpose face: use display/body for everything else.
   wordmark: 'ClashDisplay_700Bold',
   wordmarkSemiBold: 'ClashDisplay_600SemiBold',
 
-  body: 'PlusJakartaSans_400Regular',
-  bodyMedium: 'PlusJakartaSans_500Medium',
-  bodySemiBold: 'PlusJakartaSans_600SemiBold',
-  bodyBold: 'PlusJakartaSans_700Bold',
+  body: 'Onest_400',
+  bodyMedium: 'Onest_500',
+  bodySemiBold: 'Onest_600',
+  bodyBold: 'Onest_700',
+
+  // The small spaced-caps section labels.
+  label: 'Paperlogy_600',
+  labelBold: 'Paperlogy_700',
+
+  // The share card's own faces, unchanged: Playfair and Plus Jakarta Sans.
+  shareDisplay: 'PlayfairDisplay_700Bold',
+  shareDisplayBlack: 'PlayfairDisplay_900Black',
+  shareBody: 'PlusJakartaSans_400Regular',
+  shareBodyMedium: 'PlusJakartaSans_500Medium',
+  shareBodySemiBold: 'PlusJakartaSans_600SemiBold',
+  shareBodyBold: 'PlusJakartaSans_700Bold',
 } as const
 
 export const radii = {

@@ -126,7 +126,7 @@ export default function CommentThread({
 
 const styles = StyleSheet.create({
   sectionLabel: {
-    fontFamily: fonts.bodyBold,
+    fontFamily: fonts.labelBold,
     fontSize: 11,
     letterSpacing: 1.2,
     color: colors.inkMuted,

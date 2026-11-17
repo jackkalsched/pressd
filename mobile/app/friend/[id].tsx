@@ -53,6 +53,9 @@ import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, useScoreColor 
 import CoverImage from '../../components/CoverImage'
 import { scrollToTop, useCompactBar } from '../../lib/scrollToTop'
 import ProfileBins from '../../components/ProfileBins'
+import UnderlineTabs from '../../components/UnderlineTabs'
+import { useKeepPlace } from '../../lib/keepPlace'
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 
 const GAP = 10
 
@@ -173,7 +176,11 @@ export default function FriendProfile() {
   // The compact title takes you back to the top (lib/scrollToTop); the bar
   // takes taps only while it shows.
   const bar = useCompactBar(70)
-  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true, listener: bar.track })
+  const place = useKeepPlace(listRef)
+  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+    useNativeDriver: true,
+    listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => { bar.track(e); place.track(e) },
+  })
 
   async function changeFriendship(change: () => Promise<unknown>) {
     if (friendBusy) return
@@ -344,7 +351,8 @@ export default function FriendProfile() {
         }
         numColumns={isGrid ? 3 : 1}
         columnWrapperStyle={isGrid ? { gap: GAP } : undefined}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, place.floor ? { minHeight: place.floor } : null]}
+        onContentSizeChange={place.onContentSizeChange}
         onScroll={onScroll}
         scrollEventThrottle={16}
         ListHeaderComponent={
@@ -405,14 +413,8 @@ export default function FriendProfile() {
             />
 
 
-            <View style={styles.tabBar}>
-              {TABS.map(({ key, label }) => (
-                <Pressable key={key} style={styles.tab} onPress={() => setTab(key)}>
-                  <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
-                  <View style={[styles.tabUnderline, tab === key && styles.tabUnderlineActive]} />
-                </Pressable>
-              ))}
-            </View>
+            {/* The underline springs between tabs, and the page stays put (useKeepPlace). */}
+            <UnderlineTabs tabs={TABS} value={tab} onChange={(k) => place.keep(() => setTab(k))} style={styles.tabBar} />
 
             {tab === 'stats' && <StatsView userId={fid} ownerName={person.name} />}
             {tab === 'bins' && <ProfileBins userId={fid} isSelf={false} name={person.name} />}

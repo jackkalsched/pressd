@@ -14,6 +14,9 @@
   /* Body text in Onest (Google Fonts, SIL OFL 1.1; November 2026); titles in
      sharp Allo (.font-title). */
   --font-body: 'Onest', 'Plus Jakarta Sans', system-ui, sans-serif;
+  /* Heated Discussions' room meter: the band's strength at the mean, and its glow. */
+  --meter-band: 90%;
+  --meter-glow: 60%;
   --font-title: 'Allo', 'Plus Jakarta Sans', system-ui, sans-serif;
   color-scheme: light;
   /* A score's colour (types.ts songScoreColor): the hue is the score's, the
@@ -188,6 +191,10 @@
   --c-fff7ed: #fff7ed;
 }
 
+:root.dark {
+  --meter-band: 70%;
+  --meter-glow: 25%;
+}
 :root.dark {
   color-scheme: dark;
   --score-s: 55%;

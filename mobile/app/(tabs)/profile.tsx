@@ -38,6 +38,9 @@ import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor, us
 import CoverImage from '../../components/CoverImage'
 import { scrollToTop, useCompactBar, useTabScrollToTop } from '../../lib/scrollToTop'
 import ProfileBins from '../../components/ProfileBins'
+import UnderlineTabs from '../../components/UnderlineTabs'
+import { useKeepPlace } from '../../lib/keepPlace'
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 
 const GAP = 10
 // The recommendation accent, shared with the Recommend control on album detail.
@@ -231,7 +234,11 @@ export default function Profile() {
   const scrollRef = useRef<unknown>(null)
   useTabScrollToTop(scrollRef)
   const bar = useCompactBar(70)
-  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true, listener: bar.track })
+  const place = useKeepPlace(scrollRef)
+  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+    useNativeDriver: true,
+    listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => { bar.track(e); place.track(e) },
+  })
 
   // Typing into the Library or Rankings search scrolls the field up under the
   // compact bar, so what you type stays in view above the keyboard. While it's
@@ -332,7 +339,8 @@ export default function Profile() {
         keyExtractor={(item: Album | ArtistRank) => ('id' in item ? String(item.id) : item.artist)}
         numColumns={isGrid ? 3 : 1}
         columnWrapperStyle={isGrid ? { gap: GAP } : undefined}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, place.floor ? { minHeight: place.floor } : null]}
+        onContentSizeChange={place.onContentSizeChange}
         onScroll={onScroll}
         scrollEventThrottle={16}
         refreshControl={
@@ -377,20 +385,8 @@ export default function Profile() {
             />
 
             {/* Library / Stats / Ratings — underline tabs, no segmented box. */}
-            <View style={styles.tabBar}>
-              {TABS.map(({ key, label }) => (
-                <Pressable key={key} style={styles.tab} onPress={() => setTab(key)}>
-                  <Text
-                    style={[styles.tabText, tab === key && styles.tabTextActive]}
-                    numberOfLines={1}
-                    maxFontSizeMultiplier={NUM_SCALE_CAP}
-                  >
-                    {label}
-                  </Text>
-                  <View style={[styles.tabUnderline, tab === key && styles.tabUnderlineActive]} />
-                </Pressable>
-              ))}
-            </View>
+            {/* The underline springs between tabs, and the page stays put (useKeepPlace). */}
+            <UnderlineTabs tabs={TABS} value={tab} onChange={(k) => place.keep(() => setTab(k))} style={styles.tabBar} />
 
             {/* Status filter + search (Library only) */}
             {tab === 'library' && (

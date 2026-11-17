@@ -1220,7 +1220,7 @@ const styles = StyleSheet.create({
   chipHint: { fontFamily: fonts.body, fontSize: 11, color: colors.inkTertiary, marginTop: spacing.sm, textAlign: 'center' },
 
   sectionLabel: {
-    fontFamily: fonts.bodyBold,
+    fontFamily: fonts.labelBold,
     fontSize: 11,
     letterSpacing: 1.2,
     color: colors.inkMuted,

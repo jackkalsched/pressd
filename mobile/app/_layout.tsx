@@ -79,6 +79,16 @@ function RootNavigator() {
     // Clash Display isn't on Google Fonts, so it ships as a local file
     // (Fontshare EULA permits app embedding — see assets/fonts/ClashDisplay-LICENSE.txt).
     ClashDisplay_700Bold: require('../assets/fonts/ClashDisplay-Bold.ttf'),
+    // Titles and scores, body and labels (theme/tokens.ts fonts; SIL OFL —
+    // assets/fonts/PressdDisplay-README.txt, Allo-OFL.txt, Paperlogy-OFL.txt).
+    PressdDisplay_700: require('../assets/fonts/PressdDisplay-Bold.ttf'),
+    PressdDisplay_800: require('../assets/fonts/PressdDisplay-ExtraBold.ttf'),
+    Onest_400: require('../assets/fonts/Onest-Regular.ttf'),
+    Onest_500: require('../assets/fonts/Onest-Medium.ttf'),
+    Onest_600: require('../assets/fonts/Onest-SemiBold.ttf'),
+    Onest_700: require('../assets/fonts/Onest-Bold.ttf'),
+    Paperlogy_600: require('../assets/fonts/Paperlogy-6SemiBold-latin.ttf'),
+    Paperlogy_700: require('../assets/fonts/Paperlogy-7Bold-latin.ttf'),
     ClashDisplay_600SemiBold: require('../assets/fonts/ClashDisplay-Semibold.ttf'),
   })
 

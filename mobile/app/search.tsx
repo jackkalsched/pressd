@@ -649,7 +649,7 @@ const styles = StyleSheet.create({
     minHeight: 24,
     marginBottom: spacing.xs,
   },
-  sectionLabel: { fontFamily: fonts.bodyBold, fontSize: 13, letterSpacing: 0.6, color: colors.ink },
+  sectionLabel: { fontFamily: fonts.labelBold, fontSize: 13, letterSpacing: 0.6, color: colors.ink },
   seeAll: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.green },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 6 },

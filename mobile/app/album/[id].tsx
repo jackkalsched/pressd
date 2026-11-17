@@ -2288,7 +2288,7 @@ const styles = StyleSheet.create({
   ctaText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: '#fff', textAlign: 'center' },
 
   sectionLabel: {
-    fontFamily: fonts.bodyBold,
+    fontFamily: fonts.labelBold,
     fontSize: 11,
     letterSpacing: 1.2,
     color: colors.inkTertiary,

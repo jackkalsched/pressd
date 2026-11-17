@@ -3,7 +3,7 @@
 // are pressers talking about" (userbase-wide top reviews for the day). No boxed
 // cards — sections are separated by whitespace and hairline rules.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Animated, Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, DynamicColorIOS, type ColorValue } from 'react-native'
+import { ActivityIndicator, Animated, AppState, Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, DynamicColorIOS, type ColorValue } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
@@ -52,6 +52,7 @@ import { useAuth } from '../../lib/auth'
 import { revealStyle } from '../../lib/scrollReveal'
 import { colors, fonts, radii, spacing, NUM_SCALE_CAP, useColors, scoreColor } from '../../theme/tokens'
 import CoverImage from '../../components/CoverImage'
+import AutoRail from '../../components/AutoRail'
 
 const WINDOW_H = Dimensions.get('window').height
 
@@ -222,14 +223,23 @@ export default function ForYou() {
   const unseenRec =
     newestRec && recTime(newestRec.recommendedAt) > seenTs ? newestRec : null
 
-  // Held for the rest of this session once it has been shown. Marking it seen
-  // writes the watermark forward, and without pinning the decision that write
-  // would re-render the page and pull the banner out from under the reader
-  // mid-scroll. It stays put until the app is next launched, which is what
-  // "the first time they open the app" means.
-  const shownRef = useRef<Album | null>(null)
-  if (unseenRec && !shownRef.current) shownRef.current = unseenRec
-  const bannerRec = shownRef.current
+  // Held for this visit once it has been shown. Marking it seen writes the
+  // watermark forward, and without pinning the decision that write would
+  // re-render the page and pull the banner out from under the reader
+  // mid-scroll. A visit ends when the app goes to the background — For You
+  // stays mounted across that, so pinning until a cold launch (as it did until
+  // November 2026) kept the banner up for days of opens; now the next open
+  // finds it marked and draws nothing.
+  const [visit, setVisit] = useState(0)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background') setVisit((v) => v + 1)
+    })
+    return () => sub.remove()
+  }, [])
+  const [pinned, setPinned] = useState<{ rec: Album; visit: number } | null>(null)
+  if (unseenRec && pinned?.visit !== visit) setPinned({ rec: unseenRec, visit })
+  const bannerRec = pinned?.visit === visit ? pinned.rec : null
 
   useEffect(() => {
     if (!bannerRec) return
@@ -551,17 +561,19 @@ export default function ForYou() {
                 </Pressable>
               }
             />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rail}>
-              {/* deezerId is null for releases that never matched Deezer, and
-                  more than one of those is normal — keying on it alone collides. */}
-              {newReleases.map((r) => (
+            {/* Drifts on its own until touched (AutoRail). deezerId is null for
+                releases that never matched Deezer, and more than one of those is
+                normal — keying on it alone collides. */}
+            <AutoRail
+              style={styles.rail}
+              items={newReleases.map((r) => (
                 <NewReleaseCard
                   key={r.deezerId ?? `${r.artist}::${r.albumName}`}
                   release={r}
                   onOpen={() => openRelease(r)}
                 />
               ))}
-            </ScrollView>
+            />
           </View>
         )}
 
@@ -821,17 +833,17 @@ function TrendRow({
         onPress={onPress}
       >
         <Text style={styles.rank}>{rank}</Text>
-        <Cover uri={item.album_art_url} seed={item.album_name} size={46} />
+        <Cover uri={item.album_art_url} seed={item.album_name} size={52} />
         <View style={styles.mediaText}>
-          <Text style={styles.rowTitle} numberOfLines={1}>{item.album_name}</Text>
-          <Text style={styles.rowSub} numberOfLines={1}>{item.artist}</Text>
+          <Text style={[styles.rowTitle, styles.trendTitle]} numberOfLines={1}>{item.album_name}</Text>
+          <Text style={[styles.rowSub, styles.trendArtist]} numberOfLines={1}>{item.artist}</Text>
           <Text style={styles.trendCount} numberOfLines={1}>
             {item.rater_count} {item.rater_count === 1 ? 'rating' : 'ratings'}{weekly ? ' this week' : ''}
           </Text>
         </View>
         {item.avg_score != null && (
           <View style={[styles.scorePill, { backgroundColor: scoreTint(item.avg_score) }]}>
-            <Text style={[styles.scorePillText, { color: scoreColor(item.avg_score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{item.avg_score.toFixed(2)}</Text>
+            <Text style={[styles.scorePillText, styles.trendScore, { color: scoreColor(item.avg_score) }]} numberOfLines={1} maxFontSizeMultiplier={NUM_SCALE_CAP}>{item.avg_score.toFixed(2)}</Text>
           </View>
         )}
       </Pressable>
@@ -889,7 +901,7 @@ const styles = StyleSheet.create({
 
   block: { marginTop: spacing.xxl },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
-  sectionLabel: { fontFamily: fonts.bodyBold, fontSize: 13, letterSpacing: 0.6, color: colors.ink },
+  sectionLabel: { fontFamily: fonts.labelBold, fontSize: 13, letterSpacing: 0.6, color: colors.ink },
   sectionMeta: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.inkTertiary },
   sectionMetaBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 3, paddingHorizontal: 9, borderRadius: radii.pill, backgroundColor: colors.greenSoft },
   sectionMetaBtnText: { fontFamily: fonts.bodySemiBold, fontSize: 12, color: colors.green },
@@ -937,7 +949,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   trendRowPressed: { opacity: 0.5 },
-  trendCount: { fontFamily: fonts.body, fontSize: 10, color: colors.inkMuted, marginTop: 3 },
+  trendCount: { fontFamily: fonts.body, fontSize: 11, color: colors.inkMuted, marginTop: 3 },
+  // Trending's rows a size up from the other lists (November 2026).
+  trendTitle: { fontFamily: fonts.display, fontSize: 17.5 },
+  trendArtist: { fontSize: 14 },
+  trendScore: { fontSize: 21 },
   rank: { fontFamily: fonts.display, fontSize: 16, color: colors.inkMuted, width: 20, textAlign: 'center' },
   scorePill: { borderRadius: radii.sm, paddingHorizontal: 10, paddingVertical: 5, minWidth: 54, alignItems: 'center' },
   scorePillText: { fontFamily: fonts.display, fontSize: 17 },

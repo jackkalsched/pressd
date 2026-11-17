@@ -45,6 +45,10 @@ export default function FriendProfile() {
   const queryClient = useQueryClient()
   const { activeUser, setViewingUser } = useUser()
   const [tab, setTab] = useState<Tab>('library')
+  // The tab area's height when the tab last changed: held as a floor so the
+  // page doesn't move under the reader (November 2026).
+  const [tabFloor, setTabFloor] = useState(0)
+  const tabBodyRef = useRef<HTMLDivElement>(null)
   const [busy, setBusy] = useState(false)
   // The banner's pencil and gear: Edit profile and Settings, one dialog in two modes.
   const [sheet, setSheet] = useState<SettingsMode | null>(null)
@@ -485,14 +489,25 @@ export default function FriendProfile() {
       {/* ── Tab switcher ─────────────────────────────────────────── */}
       {/* Library / Stats / Rankings / Bins — underline tabs, no segmented box, as on iPhone. */}
       <div ref={tabsRef} className="flex items-center border-t border-(--c-e8e2d9) pt-6 mb-6">
-        <UnderlineTabs tabs={tabs} value={tab} onChange={setTab} />
+        <UnderlineTabs
+          tabs={tabs}
+          value={tab}
+          onChange={(k) => {
+            // Hold the tab area at its current height so a shorter (or still
+            // loading) tab can't pull the page up under the reader.
+            setTabFloor(tabBodyRef.current?.offsetHeight ?? 0)
+            setTab(k)
+          }}
+        />
       </div>
 
       {/* ── Tab content (read-only, driven by viewing context) ───── */}
+      <div ref={tabBodyRef} style={tabFloor ? { minHeight: tabFloor } : undefined}>
       {tab === 'library' && <Library embedded />}
       {tab === 'stats' && <Stats embedded />}
       {tab === 'ratings' && <Ratings embedded />}
       {tab === 'bins' && person && <ProfileBins userId={fid} isSelf={isSelf} name={person.name} />}
+      </div>
       </div>
       {sheet && <SettingsDialog mode={sheet} onClose={() => setSheet(null)} />}
       {friendsOpen && person && (

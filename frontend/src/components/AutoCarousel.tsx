@@ -20,14 +20,15 @@ const SPEED = 28 // px per second, at full drift
 const EASE_MS = 420 // how long the drift takes to ease in or out
 const RESUME_MS = 1800
 const STEP_MS = 560 // an arrow's glide
-const GAP = 16 // gap-4, between items
 const FADE = 56 // px of fade at each edge
 
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
 
-export default function AutoCarousel({ items, className = '', arrowTop = '50%', label = 'items' }: {
+export default function AutoCarousel({ items, className = '', arrowTop = '50%', label = 'items', gap = 16 }: {
   items: ReactNode[]
   className?: string
+  /** px between items. */
+  gap?: number
   /** Where the arrows' centres sit, from the row's top (e.g. a cover's middle). */
   arrowTop?: number | string
   /** What the row holds, for the arrows' labels ("albums"). */
@@ -52,8 +53,15 @@ export default function AutoCarousel({ items, className = '', arrowTop = '50%', 
     let drag: { x: number; lastX: number; lastT: number; moved: boolean; v: number } | null = null
     let swallowClick = false
 
-    const half = () => el.scrollWidth / 2
-    const itemWidth = () => ((el.firstElementChild as HTMLElement | null)?.offsetWidth ?? 0) + GAP
+    // One copy's length: from the first item to the first item of the copy
+    // (padding on the row doesn't belong to the loop).
+    const n = items.length
+    const half = () => {
+      const first = el.children[0] as HTMLElement | undefined
+      const copy = el.children[n]?.firstElementChild as HTMLElement | null | undefined
+      return first && copy ? copy.offsetLeft - first.offsetLeft : el.scrollWidth / 2
+    }
+    const itemWidth = () => ((el.firstElementChild as HTMLElement | null)?.offsetWidth ?? 0) + gap
     const wrap = () => {
       const h = half()
       if (h <= 0) return
@@ -81,7 +89,7 @@ export default function AutoCarousel({ items, className = '', arrowTop = '50%', 
         vel = 0
         if (Math.abs(fling) <= 8) pause()
       } else {
-        const target = !reduce && held === 0 && now >= resumeAt && half() > el.clientWidth ? SPEED : 0
+        const target = !reduce && held === 0 && now >= resumeAt && el.scrollWidth / 2 > el.clientWidth ? SPEED : 0
         vel += (target - vel) * (1 - Math.exp(-dt / (EASE_MS / 3)))
         pos += (vel * dt) / 1000
       }
@@ -179,7 +187,7 @@ export default function AutoCarousel({ items, className = '', arrowTop = '50%', 
       el.removeEventListener('click', onClickCapture, true)
       el.removeEventListener('dragstart', onDragStart)
     }
-  }, [items.length])
+  }, [items.length, gap])
 
   const fade = `linear-gradient(to right, transparent, #000 ${FADE}px, #000 calc(100% - ${FADE}px), transparent)`
   const arrow = (dir: 1 | -1) => {
@@ -204,8 +212,8 @@ export default function AutoCarousel({ items, className = '', arrowTop = '50%', 
     <div className="group/carousel relative">
       <div
         ref={ref}
-        className={`flex gap-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${className}`}
-        style={{ maskImage: fade, WebkitMaskImage: fade }}
+        className={`flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${className}`}
+        style={{ gap, maskImage: fade, WebkitMaskImage: fade }}
       >
         {items}
         {/* The loop's second copy: for the eye only. */}

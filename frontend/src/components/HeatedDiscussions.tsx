@@ -27,6 +27,7 @@ import type { HeatedMood, HeatedRecord } from '../types'
 import { songScoreColor } from '../types'
 import { Cover, COVER_LIFT } from './covers'
 import { threadPath } from '../lib/threads'
+import AutoCarousel from './AutoCarousel'
 
 const SECTION_LABEL = 'font-label text-[11px] font-semibold uppercase tracking-[0.16em] text-(--c-a8998a) m-0'
 
@@ -79,12 +80,18 @@ export default function HeatedDiscussions() {
           spreads further still. So the track carries 20px of room top and
           bottom, and the scroller gives it back with a negative margin so the
           section's spacing is unchanged. */}
-      <div className="-mx-4 md:-mx-8 -my-5 overflow-x-auto">
-        <div className="flex gap-5 px-5 md:px-8 py-5">
-          {records.map((r, i) => (
+      <div className="-mx-4 md:-mx-8 -my-5">
+        {/* Drifts on its own until someone reaches for it (AutoCarousel), as
+            New & Popular does. */}
+        <AutoCarousel
+          label="discussion"
+          gap={20}
+          arrowTop={106}
+          className="px-5 md:px-8 py-5"
+          items={records.map((r, i) => (
             <Card key={r.subjectKey} record={r} index={i} />
           ))}
-        </div>
+        />
       </div>
     </section>
   )
@@ -97,7 +104,7 @@ function Card({ record: r, index }: { record: HeatedRecord; index: number }) {
   return (
     <Link
       to={threadPath('album', r.artist, r.albumName)}
-      className="rise-in group shrink-0 w-[184px] no-underline"
+      className="rise-in group shrink-0 w-[172px] no-underline"
       style={{ '--i': index } as CSSProperties}
       aria-label={`${r.albumName}${r.artist ? ` by ${r.artist}` : ''}: ${v.label.toLowerCase()}${r.meanScore != null ? `, room average ${r.meanScore.toFixed(2)}` : ''}, ${r.reviewCount} ${r.reviewCount === 1 ? 'review' : 'reviews'}`}
     >
@@ -111,7 +118,7 @@ function Card({ record: r, index }: { record: HeatedRecord; index: number }) {
           style={{ background: v.glow }}
         />
         <div className={`relative ${COVER_LIFT}`} style={{ willChange: 'transform' }}>
-          <Cover artUrl={r.albumArtUrl} seed={r.artist ?? r.albumName} size={184} radius={16} fontSize={56} />
+          <Cover artUrl={r.albumArtUrl} seed={r.artist ?? r.albumName} size={172} radius={16} fontSize={52} />
           {/* The verdict's word lives in the card's aria-label and the tooltip;
               the badge itself is just the face. */}
           <span
@@ -172,15 +179,17 @@ function RoomMeter({ mean, spread, index }: { mean: number; spread: number; inde
           style={{
             left: `${Math.max(0, left)}%`,
             width: `${Math.min(width, 100 - Math.max(0, left))}%`,
-            background: `linear-gradient(90deg, ${songScoreColor(lo)}, ${songScoreColor(hi)})`,
-            boxShadow: `0 0 12px 0 ${songScoreColor(mean)}`,
+            // Strongest at the room's mean, fading out towards the spread's
+            // edges (November 2026: solid end to end, it read too loud in dark).
+            background: `linear-gradient(90deg, color-mix(in srgb, ${songScoreColor(lo)} 0%, transparent), color-mix(in srgb, ${songScoreColor(mean)} var(--meter-band), transparent) ${Math.min(95, Math.max(5, ((pos(mean) - Math.max(0, left)) / width) * 100))}%, color-mix(in srgb, ${songScoreColor(hi)} 0%, transparent))`,
+            boxShadow: `0 0 12px 0 color-mix(in srgb, ${songScoreColor(mean)} var(--meter-glow), transparent)`,
             transformOrigin: `${((pos(mean) - Math.max(0, left)) / width) * 100}% 50%`,
             '--i': index,
           } as CSSProperties}
         />
         <div
           className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] bg-(--c-fff) transition-transform duration-300 ease-out group-hover:scale-110"
-          style={{ left: `${pos(mean)}%`, borderColor: songScoreColor(mean), boxShadow: `0 0 8px 1px ${songScoreColor(mean)}` }}
+          style={{ left: `${pos(mean)}%`, borderColor: songScoreColor(mean), boxShadow: `0 0 8px 1px color-mix(in srgb, ${songScoreColor(mean)} var(--meter-glow), transparent)` }}
         />
       </div>
       <span className="font-display text-[17px] font-bold tabular-nums" style={{ color: songScoreColor(mean) }}>

@@ -42,6 +42,7 @@ import { useTrackHighlight, trackParam } from '../lib/trackHighlight'
 import { stagger } from '../lib/format'
 import VinylSpinner from '../components/VinylSpinner'
 import PredictedScore from '../components/PredictedScore'
+import RateNowButton from '../components/RateNowButton'
 import { useTracklistFill } from '../lib/useTracklistFill'
 import { outLine } from '../lib/upcoming'
 import { tagBoardHref, type TagKind } from '../lib/tagLinks'
@@ -266,6 +267,8 @@ export default function AlbumDetail() {
   // Nothing is scored before the record is out, whatever songs it already has
   // (a pre-release listing is often only the singles), nor without songs.
   const canRate = hasSongs && !isUnreleased(album.releaseDate)
+  // Your own copy, ratable and not yet begun (To Listen): Rate Now sits beside the score.
+  const startable = own && canRate && album.status === 'to_listen'
   const subs = [album.subGenre1, album.subGenre2, album.subGenre3].filter(Boolean) as string[]
   // The track this rating rates highest: the tie-break pick when there was one.
   const topSong = album.topSongId != null
@@ -408,7 +411,8 @@ export default function AlbumDetail() {
             )}
             {/* Not out yet, or no songs: nothing to score until it is and they
                 arrive. */}
-            {own && canRate && (
+            {/* A record not yet started has the big Rate Now beside its score instead. */}
+            {own && canRate && !startable && (
               <button onClick={() => navigate(`/rate/${album.id}`)} className={PILL}>
                 <Pencil size={12} /> {rated ? 'Edit rating' : 'Rate'}
               </button>
@@ -526,17 +530,22 @@ export default function AlbumDetail() {
               ) : album.predictedScore != null ? (
                 <>
                   {/* The drifting predicted fill, as on the community page: estimated, not measured. */}
-                  <p className="font-display m-0 text-[64px] font-bold leading-none tabular-nums">
-                    <PredictedScore value={album.predictedScore} />
-                  </p>
-                  <p className="m-0 mt-2 flex items-center gap-1 text-[11px] font-bold tracking-[0.16em] text-(--c-2d6a4f)">
-                    <Star size={11} fill={GREEN} strokeWidth={0} /> {own ? 'FOR YOU' : `FOR ${ownerName.toUpperCase()}`}
-                  </p>
-                  <p className="m-0 mt-0.5 text-[13px] text-(--c-8a7f72)">predicted</p>
+                  <div className="flex items-center justify-between gap-6">
+                    {/* flex, so the inline-block figure sits on no line box: the
+                        line's descent would drop the row's centre below the digits'. */}
+                    <p className="font-display m-0 flex text-[64px] font-bold leading-none tabular-nums">
+                      <PredictedScore value={album.predictedScore} />
+                    </p>
+                    {startable && <RateNowButton onClick={() => navigate(`/rate/${album.id}`)} />}
+                  </div>
+                  <p className="m-0 mt-2 text-[13px] text-(--c-8a7f72)">predicted</p>
                 </>
               ) : (
                 <>
-                  <p className="font-display m-0 text-[64px] font-bold leading-none text-(--c-c8c0b4)">—</p>
+                  <div className="flex items-center justify-between gap-6">
+                    <p className="font-display m-0 flex text-[64px] font-bold leading-none text-(--c-c8c0b4)">—</p>
+                    {startable && <RateNowButton onClick={() => navigate(`/rate/${album.id}`)} />}
+                  </div>
                   <p className="m-0 mt-2 text-[11px] font-bold tracking-[0.16em] text-(--c-a8998a)">NOT RATED YET</p>
                 </>
               )}

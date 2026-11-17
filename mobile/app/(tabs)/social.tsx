@@ -1219,7 +1219,7 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontFamily: fonts.body, fontSize: 15, color: colors.ink },
   sectionLabel: {
-    fontFamily: fonts.bodyBold,
+    fontFamily: fonts.labelBold,
     fontSize: 11,
     letterSpacing: 1.2,
     color: colors.inkMuted,
