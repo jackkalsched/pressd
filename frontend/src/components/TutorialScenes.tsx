@@ -80,7 +80,7 @@ function tween(from: number, to: number, ms: number, on: (v: number) => void, al
 }
 
 const eyebrow = 'text-[9.5px] font-bold uppercase tracking-[0.12em] text-(--c-a8a29e) text-center'
-const titleCls = 'font-display text-[20px] font-bold text-(--c-1c1917) text-center truncate mt-0.5'
+const titleCls = 'font-title text-[20px] font-bold text-(--c-1c1917) text-center truncate mt-0.5'
 const metaCls = 'text-[11.5px] font-medium text-(--c-a8a29e) text-center mt-0.5'
 
 // ── 1. Front to back ────────────────────────────────────────────────────────
@@ -174,7 +174,7 @@ export function FrontToBackScene() {
         <p className={metaCls}>{t.time}</p>
         <p
           className="m-0 mt-2 text-center font-bold text-[40px] leading-none tabular-nums"
-          style={{ color: value != null ? songScoreColor(value) : 'var(--c-c8c0b4)', fontFamily: "'Playfair Display', serif" }}
+          style={{ color: value != null ? songScoreColor(value) : 'var(--c-c8c0b4)', fontFamily: "var(--font-figures), 'Playfair Display', serif" }}
         >
           {field || '—'}
         </p>
@@ -311,7 +311,7 @@ export function TheRecordScene() {
         className="mt-3 text-center transition-opacity duration-200"
         style={{ opacity: reduce || reveal ? 1 : 0 }}
       >
-        <p className="m-0 leading-none tabular-nums" style={{ fontFamily: "'Playfair Display', serif", fontWeight: 800, fontSize: 44, color: GREEN }}>
+        <p className="m-0 leading-none tabular-nums" style={{ fontFamily: "var(--font-figures), 'Playfair Display', serif", fontWeight: 800, fontSize: 44, color: GREEN }}>
           {(reduce ? ALBUM_SCORE : score).toFixed(2)}
         </p>
         <p className="m-0 mt-1 text-[9.5px] font-bold tracking-[0.14em] text-(--c-2d6a4f)">FINAL SCORE</p>

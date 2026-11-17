@@ -14,7 +14,7 @@ import {
 import CoverImg from '../components/CoverImg'
 import { Cover, COVER_LIFT } from '../components/covers'
 import { CoverWash, GREEN, PILL, RevealRow, SECTION_LABEL } from '../components/albumView'
-import { ScoreKdeCompare, ScoreVersus, SimilarArtistComparisons, SongGapChart } from '../components/artistCompare'
+import { HottestTake, ScoreKdeCompare, ScoreVersus, SimilarArtistComparisons, SongGapChart } from '../components/artistCompare'
 import { songScoreColor } from '../types'
 import { stagger } from '../lib/format'
 import VinylSpinner from '../components/VinylSpinner'
@@ -320,7 +320,7 @@ export default function ArtistPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-10">
         <div className="rise-in" style={stagger(0)}>
-          <h1 className="font-display m-0 text-[40px] font-bold leading-tight text-(--c-1c1917)">{data.artist}</h1>
+          <h1 className="font-title m-0 text-[40px] font-bold leading-tight text-(--c-1c1917)">{data.artist}</h1>
           {/* A library's page counts what it has rated; the pooled page leads
               with how much of Pressd's listening the artist accounts for. */}
           {mode === 'pressd' ? (
@@ -392,6 +392,7 @@ export default function ArtistPage() {
           mine={data.avg_song_score}
           theirs={data.global?.avg_song_score ?? null}
           mineLabel={owner ? `${possessive(owner).toUpperCase()} AVG SONG` : 'MY AVG SONG'}
+          aside={<HottestTake gaps={data.song_gaps ?? []} />}
         />
       ) : thin ? null : (
       <div className="flex flex-wrap gap-x-12 gap-y-6 mb-12">

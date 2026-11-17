@@ -20,7 +20,7 @@ export const PILL_ACTIVE =
   'inline-flex items-center gap-1.5 rounded-full border border-(--c-2d6a4f) bg-(--c-green-fill) px-3.5 py-1.5 text-[13px] font-semibold text-white'
 
 /** A small caps label over a group of numbers or rows. */
-export const SECTION_LABEL = 'm-0 text-[11px] font-bold tracking-[0.16em] text-(--c-a8998a)'
+export const SECTION_LABEL = 'font-label m-0 text-[11px] font-bold tracking-[0.16em] text-(--c-a8998a)'
 
 /** The record's colour, faintly, behind the top of the page. */
 export function CoverWash({ url }: { url: string | null | undefined }) {

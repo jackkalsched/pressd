@@ -171,7 +171,7 @@ function ChartsBoard({ params }: { params: URLSearchParams }) {
   return (
     <div className="p-4 md:p-8">
       <div className="flex items-end justify-between gap-5 flex-wrap mb-6">
-        <h1 className="font-display text-3xl font-bold text-(--c-111)">Charts</h1>
+        <h1 className="font-title text-3xl font-bold text-(--c-111)">Charts</h1>
         <span className="text-[11px] font-bold tracking-[0.14em] uppercase text-(--c-aaa)">
           {period === 'week' ? weekLabel() : 'All time'}
         </span>

@@ -184,7 +184,7 @@ export default function Thread() {
                   <p className="hidden lg:block text-[10.5px] font-bold uppercase tracking-[0.16em] text-(--c-a8998a) m-0 mb-1">
                     Discussion
                   </p>
-                  <h1 className="font-display text-xl lg:text-[28px] lg:leading-tight font-bold text-(--c-111) truncate lg:whitespace-normal m-0 transition-colors group-hover/rec:text-(--c-2d6a4f)">
+                  <h1 className="font-title text-xl lg:text-[28px] lg:leading-tight font-bold text-(--c-111) truncate lg:whitespace-normal m-0 transition-colors group-hover/rec:text-(--c-2d6a4f)">
                     {title}
                   </h1>
                   {!!meta?.subtitle && (
@@ -406,7 +406,7 @@ function LockedRoom({ subject, reason }: { subject: SubjectRef; reason: string |
 
       <div className={`flex flex-col items-center text-center gap-3 px-6 rounded-2xl border border-dashed border-(--c-e2dbd0) ${posts.length > 0 ? 'mt-6 py-10' : 'py-20 lg:py-32'}`}>
         <Lock size={28} className="text-(--c-c2b8ad)" />
-        <p className="font-display text-xl font-bold text-(--c-111) m-0">Not yet</p>
+        <p className="font-title text-xl font-bold text-(--c-111) m-0">Not yet</p>
         <p className="text-sm text-(--c-8a7f72) leading-relaxed max-w-sm m-0">
           {LOCKED_COPY[reason ?? ''] ?? 'This thread is not open to you yet.'}
         </p>

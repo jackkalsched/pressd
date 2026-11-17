@@ -2017,9 +2017,11 @@ for editing a review later, and both paths post into the thread through
    and `fetchSimilarArtistComparisons`), drawn from
    [artistCompare.tsx](frontend/src/components/artistCompare.tsx). Where you split was removed for
    a week in November 2026 and brought back (both Jack's calls). It has no heading and no average gap now: the
-   hottest take, then the songs by gap, highest first (the full list too; it was most-rated first),
+   hottest take — on web at the right end of the two averages' row (`HottestTake`, `ScoreVersus`'s
+   `aside`) — then the songs by gap, highest first (the full list too; it was most-rated first),
    and iPhone's full list is a bare page of bars under a back button. The two averages above it
-   carry no difference under their "vs.". Compare's record list shows each of your records' score beside
+    carry no difference under their "vs.". Web's split list labels its pair of numbers: YOU (bold,
+   score-coloured) and PRESSD (grey), as column heads beside YOU RATE LOWER / HIGHER. Compare's record list shows each of your records' score beside
    the record's Pressd average (`pressd_score` / `pressd_raters`, added to your rows from the pooled
    ones in `artist_detail`'s `both` branch), and a record opens its Pressd page, as in Pressd avg. Your own scope lists exactly your rated copies, one row each. In the
    Pressd scope an album row is one record rated by anyone,
@@ -2189,13 +2191,33 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   ("PLAN_ml_worker_split §4", "PLAN_global_artist_clusters.md §3.3",
   "PLAN_discussions.md §2.3"). Read the relevant one before touching the pipeline it
   describes.
-- **Both apps set type in the same two families.** Playfair Display for page
-  titles, album titles and scores (mobile `fonts.display*`, web `.font-display` —
-  the name means the same on both); Plus Jakarta Sans for everything else (the web
-  `body` face). A title that names an album keeps one face and sets the album in
-  Playfair italic (web `<i>` inside `.font-display`; mobile `fonts.displayItalic`, a
-  loaded face, because iOS can't slant a custom font with `fontStyle`). Clash Display is the wordmark only, and Unbounded Bold (mobile `fonts.wide`, web `.font-wide`) the shelf's heading only. Web used DM Sans until September
-  2026, share card included; don't bring a third face back.
+- **Type (web moved first, November 2026; iPhone still on the old pair).** Web sets body text
+  in **Onest** (`--font-body`, Google Fonts); titles — page titles, album titles, names, the
+  artist line under an album title, dialog headings — in **Allo**, sharp (`.font-title`:
+  `--font-title`, the variable font self-hosted from `public/fonts/AlloVariable.woff2`, its
+  roundness axis `ROND` 0, optical sizing on, tight tracking); **scores** in **Bricolage
+  Grotesque 800** (`--font-figures`, a Google Fonts subset to digits and number punctuation,
+  `public/fonts/BricolageGrotesque-800-figures.woff2`), loaded by `unicode-range` ahead of
+  Playfair in `.font-display`, so a score's figures are Bricolage while any words in that class
+  stay **Playfair** (quotes, reviews, notes, and an album named in italic inside a title,
+  `.font-title i`); the small spaced-caps section labels in **Paperlogy** (`.font-label`, three
+  weights subset to Western characters — the full files carry Korean); Clash Display the
+  wordmark only, Unbounded Bold the shelf's heading only. All are SIL OFL; their licences sit
+  beside them in `public/fonts/`. Demo or personal-use fonts (Cardinel, Urban Shadow) were
+  trialled and must never ship — `.gitignore` names them. The share card keeps Plus Jakarta Sans
+  (it's an image people post, and iPhone's matches). iPhone is still Playfair for titles and
+  scores and Plus Jakarta Sans for everything else (`fonts.display*`; `fonts.displayItalic`, a
+  loaded face, because iOS can't slant a custom font with `fontStyle`) until the web set is
+  carried over. A score shown in Rankings, the Library's cover badges and the rest goes through
+  `.font-display` so it gets the figures face.
+- **Scores stand bare** (web, November 2026): `ScorePill` (`components/covers.tsx` — Charts,
+  genre boards, For You's review cards) is the number in its score colour with no tinted cell,
+  as Trending's are.
+- **A row of records can drift** (web): `components/AutoCarousel.tsx` — For You's New & Popular
+  scrolls itself and loops (the items drawn twice, the copy `inert`), easing to a stop when
+  reached for (hover, touch, wheel, focus) and back up after; arrows glide one item at a time;
+  a mouse can drag and throw it (a drag is never a click); the edges fade; still under reduced
+  motion.
 - **A taste overlap is coloured on the score scale**: `overlapScore(percent)`
   (`shared/src/types.ts`) puts 0% at a 1 (red) and 100% at a 10 (green), and each
   platform's own score colour draws it (web `songScoreColor`, mobile `scoreColor`), so

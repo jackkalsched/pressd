@@ -37,7 +37,7 @@ export default function Bins() {
     <div className="mx-auto w-full max-w-[1600px] px-6 md:px-12 py-8 pb-24">
       {/* The search sits at the far right of the header, opening leftward. */}
       <div className="flex items-center gap-4">
-        <h1 className="m-0 font-display text-4xl font-bold text-(--c-1c1917)">Bins</h1>
+        <h1 className="m-0 font-title text-4xl font-bold text-(--c-1c1917)">Bins</h1>
         <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-3">
           {!!data?.length && (
             <BinSearch value={query} onChange={setQuery} placeholder="Search bins" className="w-full max-w-sm" />

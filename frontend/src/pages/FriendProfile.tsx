@@ -311,7 +311,7 @@ export default function FriendProfile() {
         <div className="min-w-0 flex-1 pt-4 md:pt-6">
           {/* Line height 1.2, not 1: `truncate` clips to the line box, and
               Playfair's descenders (the j, g, y) hang below a 1.0 line. */}
-          <h1 className="font-display m-0 truncate pb-[0.06em] text-[40px] font-bold leading-[1.2] tracking-tight text-(--c-1c1917) md:text-[56px]">
+          <h1 className="font-title m-0 truncate pb-[0.06em] text-[40px] font-bold leading-[1.2] tracking-tight text-(--c-1c1917) md:text-[56px]">
             {person.name}
           </h1>
           <p className="m-0 mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[15px] text-(--c-8a7f72)">
@@ -503,7 +503,7 @@ export default function FriendProfile() {
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm fade-in" onClick={busy ? undefined : () => setConfirmRemove(false)} />
           <div role="alertdialog" aria-modal="true" aria-labelledby="unfriend-title" className="relative w-full max-w-sm rounded-3xl bg-(--c-f9f8f6) p-6 text-center shadow-xl pop-in">
             <div className="mx-auto w-fit"><Avatar name={person.name} avatarUrl={person.avatarUrl} size={56} /></div>
-            <h2 id="unfriend-title" className="font-display m-0 mt-4 text-[22px] font-bold leading-snug text-(--c-1c1917)">
+            <h2 id="unfriend-title" className="font-title m-0 mt-4 text-[22px] font-bold leading-snug text-(--c-1c1917)">
               Remove {person.name} as a friend?
             </h2>
             <div className="mt-6 flex gap-2.5">

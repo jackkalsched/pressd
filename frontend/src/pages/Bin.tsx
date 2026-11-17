@@ -231,7 +231,7 @@ export default function Bin() {
         {/* Centred under the fan: the bare Pressd mark, the title, your progress. */}
         <div className="mx-auto mb-10 flex max-w-3xl flex-col items-center text-center">
           {data.kind === 'curated' && <span className="mb-1" title="A Pressd bin"><PressdMark size={48} /></span>}
-          <h1 className="m-0 font-display text-[40px] md:text-[52px] leading-[1.05] font-black text-(--c-1c1917)">{data.title}</h1>
+          <h1 className="m-0 font-title text-[40px] md:text-[52px] leading-[1.05] font-black text-(--c-1c1917)">{data.title}</h1>
           {data.kind === 'user' && (
             <p className="m-0 mt-3 flex items-center gap-2 text-[14px] text-(--c-57534e)">
               {data.owner ? (
@@ -438,7 +438,7 @@ function ReportDialog({ title, onCancel, onReport }: {
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm fade-in" onClick={busy ? undefined : onCancel} />
       <div role="dialog" aria-modal="true" aria-labelledby="report-bin-title" className="relative w-full max-w-md rounded-3xl bg-(--c-f9f8f6) p-6 shadow-xl pop-in">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 id="report-bin-title" className="m-0 font-display text-[22px] font-bold text-(--c-1c1917)">Report “{title}”?</h2>
+          <h2 id="report-bin-title" className="m-0 font-title text-[22px] font-bold text-(--c-1c1917)">Report “{title}”?</h2>
           <button onClick={onCancel} disabled={busy} aria-label="Close" className="text-(--c-a8998a) hover:text-(--c-57534e)">
             <X size={18} />
           </button>

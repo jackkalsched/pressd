@@ -107,7 +107,7 @@ export default function Join() {
           </div>
         ) : (
           <div className="bg-(--c-fff) border border-(--c-e2e2e2) rounded-2xl p-6 shadow-sm">
-            <h1 className="font-display text-(--c-111) font-bold text-xl mb-1">You've been invited</h1>
+            <h1 className="font-title text-(--c-111) font-bold text-xl mb-1">You've been invited</h1>
             <p className="text-(--c-777) text-sm mb-6">
               <span className="font-medium text-(--c-111)">{inviterName}</span> invited you to join Pressd.
               Sign in with Google to create your account or pick up where you left off.

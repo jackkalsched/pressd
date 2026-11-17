@@ -108,7 +108,7 @@ export default function PhoneDialog({ mode, onClose }: { mode: 'prompt' | 'setti
 
         {step === 'number' ? (
           <form onSubmit={submitNumber}>
-            <h2 id="phone-title" className="font-display m-0 mt-4 text-[28px] font-bold leading-tight text-(--c-1c1917)">
+            <h2 id="phone-title" className="font-title m-0 mt-4 text-[28px] font-bold leading-tight text-(--c-1c1917)">
               {prompt ? 'Add your phone number' : 'Phone number'}
             </h2>
             <p className="m-0 mt-2 text-[14.5px] leading-relaxed text-(--c-57534e)">
@@ -143,7 +143,7 @@ export default function PhoneDialog({ mode, onClose }: { mode: 'prompt' | 'setti
           </form>
         ) : (
           <form onSubmit={submitCode}>
-            <h2 id="phone-title" className="font-display m-0 mt-4 text-[28px] font-bold leading-tight text-(--c-1c1917)">
+            <h2 id="phone-title" className="font-title m-0 mt-4 text-[28px] font-bold leading-tight text-(--c-1c1917)">
               Enter the code
             </h2>
             <p className="m-0 mt-2 text-[14.5px] leading-relaxed text-(--c-57534e)">

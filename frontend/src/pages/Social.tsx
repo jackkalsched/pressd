@@ -787,7 +787,7 @@ export default function Social() {
   return (
     <div className="p-4 md:p-8">
       <div className="flex items-center justify-between gap-3 mb-6">
-        <h1 className="font-display text-3xl font-bold text-(--c-111)">Friends</h1>
+        <h1 className="font-title text-3xl font-bold text-(--c-111)">Friends</h1>
         <div className="flex items-center gap-2">
           <FindPeople />
           <FriendsMenu />

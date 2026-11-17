@@ -51,7 +51,7 @@ export default function Username() {
     <div className="min-h-screen bg-(--c-faf8f5) flex items-center justify-center px-4">
       <form onSubmit={save} className="page-enter w-full max-w-[420px] flex flex-col items-center">
         <p className="m-0 text-[11px] font-bold tracking-[0.18em] text-(--c-2d6a4f)">WELCOME TO PRESSD</p>
-        <h1 className="font-display m-0 mt-2 text-[34px] leading-[40px] md:text-[44px] md:leading-[50px] font-bold tracking-[-0.01em] text-(--c-1c1917) text-center">
+        <h1 className="font-title m-0 mt-2 text-[34px] leading-[40px] md:text-[44px] md:leading-[50px] font-bold tracking-[-0.01em] text-(--c-1c1917) text-center">
           Pick a username.
         </h1>
 

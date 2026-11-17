@@ -45,7 +45,7 @@ export default function TopSongTiebreak({
         <div className="w-9 h-9 rounded-full bg-(--c-2d6a4f)/10 flex items-center justify-center">
           <Star size={16} fill="var(--c-2d6a4f)" color="var(--c-2d6a4f)" strokeWidth={0} />
         </div>
-        <h2 className="font-display text-[26px] font-bold text-(--c-1c1917) mt-4 mb-0">It&rsquo;s a tie</h2>
+        <h2 className="font-title text-[26px] font-bold text-(--c-1c1917) mt-4 mb-0">It&rsquo;s a tie</h2>
         <p className="text-[14.5px] leading-[21px] text-(--c-78716c) mt-1.5 mb-4">
           You rated {countPhrase(songs.length)} a{' '}
           <span className="font-bold" style={{ color: songScoreColor(score) }}>{score.toFixed(1)}</span>.

@@ -112,7 +112,7 @@ export default function TagBoard() {
             {owner && <Avatar name={owner.name} avatarUrl={owner.avatar_url} size={56} />}
             <div className="min-w-0">
               <p className="m-0 mb-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-(--c-2d6a4f)">{kicker}</p>
-              <h1 className="m-0 font-display text-4xl md:text-5xl font-bold text-(--c-1c1917) tracking-tight">{tag}</h1>
+              <h1 className="m-0 font-title text-4xl md:text-5xl font-bold text-(--c-1c1917) tracking-tight">{tag}</h1>
             </div>
           </div>
           {data && data.count > 0 && (

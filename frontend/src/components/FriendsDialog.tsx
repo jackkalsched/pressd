@@ -73,7 +73,7 @@ export default function FriendsDialog({ userId, name, onClose }: {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-baseline gap-3">
-          <h2 className="font-display m-0 min-w-0 flex-1 truncate text-[24px] leading-tight text-(--c-1c1917)">
+          <h2 className="font-title m-0 min-w-0 flex-1 truncate text-[24px] leading-tight text-(--c-1c1917)">
             {mine ? 'Your friends' : `${name}'s friends`}
             {rows && <span className="ml-2.5 text-[18px] text-(--c-a8998a) tabular-nums">{rows.length}</span>}
           </h2>

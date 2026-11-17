@@ -3,7 +3,7 @@
 // the album pages' register (components/albumView.tsx). Mobile's full splits
 // page is the "See all" expansion here: the same rows in the same order, in
 // place rather than on a screen of their own.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronDown, Star } from 'lucide-react'
 import type { SimilarArtistComparison, SongGap } from '../api'
@@ -46,7 +46,13 @@ export function NoComparisonYet({ title, body }: { title: string; body?: string 
 
 // ── Your average against Pressd's ─────────────────────────────────────────────
 
-export function ScoreVersus({ mine, theirs, mineLabel }: { mine: number | null; theirs: number | null; mineLabel: string }) {
+export function ScoreVersus({ mine, theirs, mineLabel, aside }: {
+  mine: number | null
+  theirs: number | null
+  mineLabel: string
+  /** Carried at the row's right end, on the averages' baseline (the hottest take). */
+  aside?: ReactNode
+}) {
   const figure = (v: number | null) => (
     <p className="font-display m-0 text-[52px] font-bold leading-none tabular-nums" style={{ color: v != null ? songScoreColor(v) : 'var(--c-c8c0b4)' }}>
       {v != null ? v.toFixed(2) : '—'}
@@ -65,7 +71,23 @@ export function ScoreVersus({ mine, theirs, mineLabel }: { mine: number | null; 
         {figure(theirs)}
         <p className="m-0 mt-2 text-[11px] font-bold tracking-[0.16em] text-(--c-44403c)">PRESSD AVG SONG</p>
       </div>
+      {aside && <div className="ml-auto max-w-[45%] text-right">{aside}</div>}
     </div>
+  )
+}
+
+/** The song you and the userbase split on most, named — on the averages' line
+ *  (ScoreVersus's `aside`) since November 2026; it opened the split list before. */
+export function HottestTake({ gaps }: { gaps: SongGap[] }) {
+  if (gaps.length === 0) return null
+  const hottest = gaps.reduce((m, g) => (Math.abs(g.diff) > Math.abs(m.diff) ? g : m), gaps[0])
+  return (
+    <>
+      <p className="font-title m-0 text-[30px] font-bold leading-tight" style={{ color: hottest.diff >= 0 ? UP : DOWN }}>
+        {hottest.title}
+      </p>
+      <p className="m-0 mt-1.5 text-[12px] font-medium text-(--c-8a7f72)">Hottest take</p>
+    </>
   )
 }
 
@@ -118,8 +140,14 @@ function GapRows({ rows }: { rows: SongGap[] }) {
                   </span>
                 )}
               </div>
-              <span className="hidden w-24 shrink-0 text-right text-[12px] tabular-nums text-(--c-8a7f72) sm:block">
-                {r.mine.toFixed(1)} · {r.theirs.toFixed(1)}
+              {/* Your score and the Pressd average, under the YOU / PRESSD heads. */}
+              <span className="hidden w-28 shrink-0 items-baseline sm:flex">
+                <span className="font-display w-14 text-right text-[15px] font-bold tabular-nums" style={{ color: songScoreColor(r.mine) }}>
+                  {r.mine.toFixed(1)}
+                </span>
+                <span className="font-display w-14 text-right text-[13px] tabular-nums text-(--c-a8998a)">
+                  {r.theirs.toFixed(1)}
+                </span>
               </span>
             </div>
           </li>
@@ -132,13 +160,8 @@ function GapRows({ rows }: { rows: SongGap[] }) {
 export function SongGapChart({ gaps, artist }: { gaps: SongGap[]; artist: string }) {
   const [showAll, setShowAll] = useState(false)
   const preview = useMemo(() => selectGaps(gaps), [gaps])
-  const summary = useMemo(() => {
-    if (gaps.length === 0) return null
-    const hottest = gaps.reduce((m, g) => (Math.abs(g.diff) > Math.abs(m.diff) ? g : m), gaps[0])
-    return { hottest }
-  }, [gaps])
 
-  if (preview.length === 0 || !summary) {
+  if (preview.length === 0) {
     return (
       <NoComparisonYet
         title={`No one else has rated ${artist} yet — recommend an album to a friend to see a comparison!`}
@@ -150,17 +173,6 @@ export function SongGapChart({ gaps, artist }: { gaps: SongGap[]; artist: string
   const rows = showAll ? allGaps(gaps) : preview
   return (
     <div>
-      {/* The hottest take alone: the average gap sat beside it until November
-          2026 (Jack's call). */}
-      <div className="mb-6">
-        <div className="rise-in" style={stagger(0)}>
-          <p className="font-display m-0 text-[30px] font-bold leading-tight" style={{ color: summary.hottest.diff >= 0 ? UP : DOWN }}>
-            {summary.hottest.title}
-          </p>
-          <p className="m-0 mt-1.5 text-[12px] font-medium text-(--c-8a7f72)">Hottest take</p>
-        </div>
-      </div>
-
       {/* Laid out like a row, so the two labels sit over the plot column. */}
       <div className="mb-1 flex gap-4 text-[10px] font-bold tracking-[0.12em]">
         <span className="w-[38%] shrink-0" />
@@ -168,7 +180,10 @@ export function SongGapChart({ gaps, artist }: { gaps: SongGap[]; artist: string
           <span style={{ color: DOWN }}>◀ YOU RATE LOWER</span>
           <span style={{ color: UP }}>YOU RATE HIGHER ▶</span>
         </div>
-        <span className="hidden w-24 shrink-0 sm:block" />
+        <span className="hidden w-28 shrink-0 sm:flex">
+          <span className="w-14 text-right text-(--c-1c1917)">YOU</span>
+          <span className="w-14 text-right text-(--c-a8998a)">PRESSD</span>
+        </span>
       </div>
       <GapRows key={showAll ? 'all' : 'preview'} rows={rows} />
 

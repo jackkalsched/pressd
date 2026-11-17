@@ -71,7 +71,7 @@ export default function Library({ embedded = false }: { embedded?: boolean } = {
     <div className={embedded ? '' : 'p-4 md:p-8'}>
       {!embedded && (
         <div className="mb-6">
-          <h1 className="font-display text-3xl font-bold text-(--c-111)">
+          <h1 className="font-title text-3xl font-bold text-(--c-111)">
             {isViewingFriend ? `${viewingUser!.name}'s Library` : 'Library'}
           </h1>
         </div>

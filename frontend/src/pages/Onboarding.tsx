@@ -130,7 +130,7 @@ export default function Onboarding() {
           <p className="text-(--c-2d6a4f) text-[11px] font-bold uppercase tracking-[0.18em] text-center">
             Welcome to Pressd
           </p>
-          <h1 className="font-display text-(--c-1c1917) text-3xl md:text-4xl font-bold text-center leading-tight mt-2">
+          <h1 className="font-title text-(--c-1c1917) text-3xl md:text-4xl font-bold text-center leading-tight mt-2">
             Start with an album you know by heart.
           </h1>
           <p className="text-(--c-78716c) text-sm text-center mt-3 leading-relaxed">

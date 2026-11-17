@@ -14,7 +14,7 @@ export default function LegalPage({ children }: { children: ReactNode }) {
           min-height: 100vh;
           background: #f9f8f6;
           color: #1c1917;
-          font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+          font-family: var(--font-body);
         }
 
         .legal-nav {
@@ -40,7 +40,7 @@ export default function LegalPage({ children }: { children: ReactNode }) {
           letter-spacing: -0.4px;
         }
         .legal-back {
-          font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+          font-family: var(--font-body);
           font-size: 13.5px;
           font-weight: 600;
           color: #2d6a4f;
@@ -58,7 +58,7 @@ export default function LegalPage({ children }: { children: ReactNode }) {
           letter-spacing: -0.5px;
         }
         .legal .updated {
-          font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+          font-family: var(--font-body);
           font-size: 13.5px;
           color: #78716c;
           margin-top: 10px;
@@ -79,7 +79,7 @@ export default function LegalPage({ children }: { children: ReactNode }) {
           border-top: 1px solid #e8e2d9;
         }
         .legal h3 {
-          font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+          font-family: var(--font-body);
           font-weight: 700;
           font-size: 15px;
           margin-top: 24px;

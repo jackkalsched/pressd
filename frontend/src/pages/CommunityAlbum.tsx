@@ -104,7 +104,7 @@ export default function CommunityAlbum() {
   if (isError || !data) {
     return (
       <div className="min-h-screen bg-(--c-f9f8f6) flex flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="font-display m-0 text-2xl font-bold text-(--c-1c1917)">Couldn&rsquo;t load this album</p>
+        <p className="font-title m-0 text-2xl font-bold text-(--c-1c1917)">Couldn&rsquo;t load this album</p>
         <button onClick={leave} className="text-sm font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43)">Go back</button>
       </div>
     )
@@ -276,9 +276,9 @@ export default function CommunityAlbum() {
                   <Cover artUrl={null} seed={shown.artist} size={380} radius={0} fontSize={120} />
                 )}
               </div>
-              <h1 className="font-display m-0 mt-6 text-[34px] font-bold leading-tight text-(--c-1c1917)">{shown.album_name}</h1>
+              <h1 className="font-title m-0 mt-6 text-[34px] font-bold leading-tight text-(--c-1c1917)">{shown.album_name}</h1>
               <p className="m-0 mt-1.5 text-[15px] text-(--c-57534e)">
-                <Link to={`/artist/${encodeURIComponent(shown.artist)}?mode=pressd`} className="font-semibold text-(--c-1c1917) hover:text-(--c-2d6a4f) hover:underline underline-offset-2">
+                <Link to={`/artist/${encodeURIComponent(shown.artist)}?mode=pressd`} className="font-title font-bold text-(--c-1c1917) hover:text-(--c-2d6a4f) hover:underline underline-offset-2">
                   {shown.artist}
                 </Link>
                 {shown.year ? ` · ${shown.year}` : ''}

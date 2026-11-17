@@ -71,7 +71,7 @@ export function Cover({
       style={{
         width: size, height: size, borderRadius: radius, flexShrink: 0, background: coverGradient(hue),
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: 'rgba(255,255,255,.92)', fontFamily: "'Playfair Display', serif", fontWeight: 700,
+        color: 'rgba(255,255,255,.92)', fontFamily: "var(--font-figures), 'Playfair Display', serif", fontWeight: 700,
         fontSize: fontSize ?? Math.round(size * 0.34),
       }}
     >
@@ -84,16 +84,17 @@ export function ScorePill({ score, big, xl }: {
   score: number; big?: boolean; xl?: boolean
 }) {
   // xl: a review card's final score (For You), the card's headline number.
-  const [minWidth, padding, fontSize] = xl ? [60, '7px 12px', 21] : big ? [46, '6px 10px', 16] : [38, '3px 8px', 13]
+  // Bare since November 2026 — the number in its score colour, no tinted cell
+  // behind it, as Trending's are; a little larger to stand on its own.
+  const [minWidth, fontSize] = xl ? [56, 23] : big ? [44, 19] : [36, 15]
   return (
     <span
       className="tabular-nums"
       style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        minWidth, padding, borderRadius: xl ? 11 : 9,
-        background: scoreTint(score), color: songScoreColor(score),
+        minWidth, color: songScoreColor(score),
         // Scores are Playfair, as on iPhone (CLAUDE.md §12).
-        fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize, flexShrink: 0,
+        fontFamily: "var(--font-figures), 'Playfair Display', serif", fontWeight: 700, fontSize, flexShrink: 0,
       }}
     >
       {score.toFixed(2)}

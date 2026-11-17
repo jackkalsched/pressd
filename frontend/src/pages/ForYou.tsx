@@ -19,6 +19,7 @@ import VinylSpinner from '../components/VinylSpinner'
 import PredictedScore from '../components/PredictedScore'
 import BinCard from '../components/BinCard'
 import { threadPath } from '../lib/threads'
+import AutoCarousel from '../components/AutoCarousel'
 
 // ── small helpers ─────────────────────────────────────────────────────────────
 
@@ -56,7 +57,7 @@ function dayLabel(iso: string | null): string {
 
 // ── shared bits ───────────────────────────────────────────────────────────────
 
-const SECTION_LABEL = 'text-[11px] font-semibold uppercase tracking-[0.16em] text-(--c-a8998a) m-0'
+const SECTION_LABEL = 'font-label text-[11px] font-semibold uppercase tracking-[0.16em] text-(--c-a8998a) m-0'
 
 // ── page ──────────────────────────────────────────────────────────────────────
 
@@ -326,7 +327,7 @@ export default function ForYou() {
           {/* header */}
           <header className="mb-7 flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h1 className="m-0 text-[40px] leading-none font-black tracking-[0.01em]" style={{ fontFamily: "'Playfair Display', serif" }}>For You</h1>
+              <h1 className="font-title m-0 text-[40px] leading-none font-bold">For You</h1>
               <p className="mt-2.5 text-[15px] text-(--c-8a7f72)">
                 {greeting}{firstName ? `${greetingJoin}${firstName}` : ''}. Here&rsquo;s what&rsquo;s moving on Pressd this week.
               </p>
@@ -347,13 +348,13 @@ export default function ForYou() {
           {nothingYet && (
             <div className="flex items-center gap-4 rounded-[18px] border border-(--c-d7e6dd) p-5 mb-7" style={{ background: 'linear-gradient(100deg,var(--c-eef5f0),var(--c-faf8f5) 55%)' }}>
               <div className="flex-1">
-                <p className="m-0 font-bold text-[16px]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Rate your first album</p>
+                <p className="m-0 font-bold text-[16px]" style={{ fontFamily: 'var(--font-body)' }}>Rate your first album</p>
                 <p className="m-0 mt-1 text-[13px] text-(--c-8a7f72)">Add an album to start building your library.</p>
               </div>
               <button
                 onClick={() => navigate('/library')}
                 className="shrink-0 rounded-[11px] bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white px-5 py-2.5 text-[13px] font-bold transition-colors flex items-center gap-1.5"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                style={{ fontFamily: 'var(--font-body)' }}
               >
                 <Plus size={15} /> Add an album
               </button>
@@ -389,7 +390,7 @@ export default function ForYou() {
                   </p>
                   <p className="m-0 mt-1 text-[14px] text-(--c-57534e) tabular-nums">
                     {resume.done != null ? (
-                      <><span className="font-bold text-(--c-1c1917)">{resume.done}</span> of {resume.total} tracks</>
+                      <><span className="font-bold text-(--c-1c1917)">{resume.done}</span>/{resume.total} tracks rated</>
                     ) : (
                       <>{resume.total} tracks</>
                     )}
@@ -445,11 +446,15 @@ export default function ForYou() {
                 <h2 className={SECTION_LABEL}>New &amp; Popular</h2>
                 <button onClick={() => navigate('/upcoming')} className="text-[12px] font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43) flex items-center gap-1"><CalendarDays size={13} /> Upcoming <ArrowRight size={12} /></button>
               </div>
-              <div className="flex gap-4 overflow-x-auto pb-3.5 pt-1" style={{ scrollSnapType: 'x mandatory' }}>
-                {newReleases.map((r) => (
+              {/* Drifts on its own until someone reaches for it (AutoCarousel). */}
+              <AutoCarousel
+                label="album"
+                arrowTop={90}
+                className="pb-3.5 pt-1"
+                items={newReleases.map((r) => (
                   <NewReleaseCard key={r.deezerId} release={r} userId={userId} onRate={(id) => navigate(`/rate/${id}`)} onAdded={() => queryClient.invalidateQueries({ queryKey: ['albums'] })} />
                 ))}
-              </div>
+              />
             </section>
           )}
 
@@ -533,7 +538,7 @@ export default function ForYou() {
                           {a.recommendedByName ? 'RECOMMENDED' : 'IN QUEUE'}
                         </span>
                       </div>
-                      <p className="mt-2.5 mb-0 font-bold text-[14px] truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{a.albumName}</p>
+                      <p className="mt-2.5 mb-0 font-bold text-[14px] truncate" style={{ fontFamily: 'var(--font-body)' }}>{a.albumName}</p>
                       <p className="m-0 mt-0.5 text-[12px] text-(--c-8a7f72) truncate">{a.artist} · {a.year}</p>
                       <div className="mt-2 flex items-center gap-2">
                         {a.predictedScore != null ? (
@@ -668,7 +673,7 @@ function NewReleaseCard({
                 onClick={() => act('rate')}
                 disabled={!!pending}
                 className="w-[130px] py-2 rounded-[10px] bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                style={{ fontFamily: 'var(--font-body)' }}
               >
                 {pending === 'rate' ? <VinylSpinner size={15} /> : <Play size={12} fill="currentColor" />} Rate now
               </button>
@@ -676,7 +681,7 @@ function NewReleaseCard({
                 onClick={() => act('listen')}
                 disabled={!!pending}
                 className="w-[130px] py-2 rounded-[10px] bg-(--c-fff)/90 hover:bg-(--c-fff) text-(--c-1c1917) text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                style={{ fontFamily: 'var(--font-body)' }}
               >
                 {pending === 'listen' ? <VinylSpinner size={15} /> : <Plus size={14} />} To listen
               </button>
@@ -751,7 +756,7 @@ function FeaturedNext({
         </div>
         <div className="flex-1 min-w-0 pt-1">
           <p className="m-0 mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.16em] line-clamp-2" style={{ color: 'var(--spot-ink)' }}>{eyebrow}</p>
-          <p className="m-0 font-display text-[22px] font-bold leading-tight text-(--c-1c1917) line-clamp-3">{title}</p>
+          <p className="m-0 font-title text-[22px] font-bold leading-tight text-(--c-1c1917) line-clamp-3">{title}</p>
           <p className="m-0 mt-1.5 text-[13px] text-(--c-57534e) truncate">{sub}</p>
         </div>
       </div>
@@ -767,7 +772,7 @@ function FeaturedNext({
         {/* Looks like a button; the card around it is the one. */}
         <span
           className={`flex-1 py-3 rounded-full bg-(--c-green-fill) group-hover:bg-(--c-green-fill-hover) text-white text-[13.5px] font-bold transition-colors flex items-center justify-center gap-1.5 ${pending ? 'opacity-60' : ''}`}
-          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+          style={{ fontFamily: 'var(--font-body)' }}
         >
           {pending ? <VinylSpinner size={16} /> : null} {action}
           <ArrowRight size={14} className="transition-transform duration-300 ease-out group-hover:translate-x-1" />
@@ -890,7 +895,7 @@ function PickCard({
                 onClick={() => act('rate')}
                 disabled={!!pending}
                 className="w-[130px] py-2 rounded-[10px] bg-(--c-green-fill) hover:bg-(--c-green-fill-hover) text-white text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                style={{ fontFamily: 'var(--font-body)' }}
               >
                 {pending === 'rate' ? <VinylSpinner size={15} /> : <Play size={12} fill="currentColor" />} Rate now
               </button>
@@ -898,7 +903,7 @@ function PickCard({
                 onClick={() => act('listen')}
                 disabled={!!pending}
                 className="w-[130px] py-2 rounded-[10px] bg-(--c-fff)/90 hover:bg-(--c-fff) text-(--c-1c1917) text-[12.5px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                style={{ fontFamily: 'var(--font-body)' }}
               >
                 {pending === 'listen' ? <VinylSpinner size={15} /> : <Plus size={14} />} To listen
               </button>
@@ -911,7 +916,7 @@ function PickCard({
       <Link
         to={`/album/community?${new URLSearchParams({ name: pick.albumName, artist: pick.artist }).toString()}`}
         className="mt-2.5 mb-0 block font-bold text-[14px] truncate text-(--c-1c1917) hover:text-(--c-2d6a4f) hover:underline underline-offset-2"
-        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+        style={{ fontFamily: 'var(--font-body)' }}
       >
         {pick.albumName}
       </Link>
@@ -951,7 +956,7 @@ function TopReviewCard({ rv, onOpen, onOpenComments, onOpenAuthor, onLike }: {
           {rv.author.avatar_url ? (
             <img src={rv.author.avatar_url} alt="" style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }} />
           ) : (
-            <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: coverGradient(hueFromString(rv.author.name)), color: 'var(--c-fff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 15 }}>
+            <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: coverGradient(hueFromString(rv.author.name)), color: 'var(--c-fff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 15 }}>
               {rv.author.name[0].toUpperCase()}
             </div>
           )}
@@ -969,7 +974,7 @@ function TopReviewCard({ rv, onOpen, onOpenComments, onOpenAuthor, onLike }: {
           <Cover artUrl={rv.album_art_url} seed={rv.artist} size={64} radius={12} fontSize={24} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="m-0 font-bold text-[15px] group-hover/album:text-(--c-2d6a4f) group-hover/album:underline underline-offset-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{rv.album_name}</p>
+          <p className="m-0 font-bold text-[15px] group-hover/album:text-(--c-2d6a4f) group-hover/album:underline underline-offset-2" style={{ fontFamily: 'var(--font-body)' }}>{rv.album_name}</p>
           <p className="m-0 mt-0.5 mb-2 text-[12.5px] text-(--c-8a7f72)">{rv.artist}</p>
           <p className="m-0 text-[13.5px] leading-relaxed text-(--c-4a423a)" style={{ textWrap: 'pretty' } as React.CSSProperties}>&ldquo;{rv.review}&rdquo;</p>
           {(rv.top_song || rv.bottom_song) && (

@@ -79,7 +79,7 @@ export default function BannerCropper({
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm fade-in" onClick={saving ? undefined : onCancel} />
       <div role="dialog" aria-modal="true" aria-labelledby="crop-title" className={`relative w-full ${width > height ? 'max-w-2xl' : 'max-w-md'} rounded-3xl bg-(--c-f9f8f6) p-6 shadow-xl pop-in`}>
         <div className="mb-4 flex items-center justify-between">
-          <h2 id="crop-title" className="font-display m-0 text-[24px] font-bold text-(--c-1c1917)">{title}</h2>
+          <h2 id="crop-title" className="font-title m-0 text-[24px] font-bold text-(--c-1c1917)">{title}</h2>
           <button onClick={onCancel} disabled={saving} aria-label="Cancel" className="text-(--c-a8998a) hover:text-(--c-57534e)">
             <X size={18} />
           </button>

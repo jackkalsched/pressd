@@ -140,7 +140,7 @@ function ShelfDialog({ slot, profile, onClose }: { slot: number; profile: Profil
       <div role="dialog" aria-modal="true" aria-labelledby="shelf-title" className="relative flex max-h-[80vh] w-full max-w-lg flex-col rounded-3xl bg-(--c-f9f8f6) shadow-xl pop-in">
         <div className="px-6 pt-6">
           <div className="flex items-start justify-between gap-4">
-            <h2 id="shelf-title" className="font-display m-0 text-[24px] font-bold leading-tight text-(--c-1c1917)">Which record goes on your shelf?</h2>
+            <h2 id="shelf-title" className="font-title m-0 text-[24px] font-bold leading-tight text-(--c-1c1917)">Which record goes on your shelf?</h2>
             <button onClick={onClose} aria-label="Close" className="mt-1 text-(--c-a8998a) hover:text-(--c-57534e)"><X size={18} /></button>
           </div>
           <div className="mt-4 flex items-center gap-2 rounded-xl border border-(--c-e2dbd0) bg-(--c-fff) px-3 py-2.5">

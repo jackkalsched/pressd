@@ -99,7 +99,7 @@ export default function SpotlightCard({
           <p className="m-0 mb-1 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.16em]" style={{ color: t.ink }}>
             {eyebrow}
           </p>
-          <p className="m-0 font-display text-[22px] font-bold leading-tight text-(--c-1c1917) truncate">{title}</p>
+          <p className="m-0 font-title text-[22px] font-bold leading-tight text-(--c-1c1917) truncate">{title}</p>
           {children}
         </div>
 

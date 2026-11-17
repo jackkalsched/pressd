@@ -79,3 +79,8 @@ pressd_app_preview_*.png
 
 # brainstorming mockups
 .superpowers/
+
+# Cardinel is a demo font (Limitype) on trial locally — never commit or ship it without a licence.
+frontend/public/fonts/CardinelDemo.otf
+# Urban Shadow (Blankids Studio) is personal use only — local trial, never commit or ship it without a commercial licence.
+frontend/public/fonts/UrbanShadowSansSerif.otf

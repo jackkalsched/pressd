@@ -513,7 +513,7 @@ export default function RatingScreen() {
   if (album.userId !== userId) {
     return (
       <div className="min-h-screen bg-(--c-f9f8f6) flex flex-col items-center justify-center text-center px-6">
-        <p className="font-display text-2xl font-bold text-(--c-1c1917) m-0">This isn&rsquo;t your rating</p>
+        <p className="font-title text-2xl font-bold text-(--c-1c1917) m-0">This isn&rsquo;t your rating</p>
         <p className="text-sm text-(--c-78716c) mt-2 max-w-sm leading-relaxed">
           You can read {album.albumName} on its album page, but only its owner can score it.
         </p>
@@ -541,7 +541,7 @@ export default function RatingScreen() {
     }
     return (
       <div className="min-h-screen bg-(--c-f9f8f6) flex flex-col items-center justify-center text-center px-6">
-        <p className="font-display text-2xl font-bold text-(--c-1c1917) m-0">{out ? 'Not out yet' : 'No tracklist yet'}</p>
+        <p className="font-title text-2xl font-bold text-(--c-1c1917) m-0">{out ? 'Not out yet' : 'No tracklist yet'}</p>
         <p className="text-sm text-(--c-78716c) mt-2 max-w-sm leading-relaxed">
           {out
             ? `${album.albumName} comes out ${localDay(album.releaseDate!).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}. It's on your To Listen, ready to rate once it's out.`
@@ -722,7 +722,7 @@ export default function RatingScreen() {
                   <p className="m-0 text-center text-[11px] font-bold tracking-[0.16em] text-(--c-a8998a)">
                     TRACK {song.trackNumber ?? idx + 1}
                   </p>
-                  <h1 className="m-0 mt-2 text-center font-display text-[34px] md:text-[44px] leading-tight font-bold text-(--c-1c1917) break-words">
+                  <h1 className="m-0 mt-2 text-center font-title text-[34px] md:text-[44px] leading-tight font-bold text-(--c-1c1917) break-words">
                     {song.title}
                   </h1>
                   {runtime(song.durationMs) && (
@@ -806,7 +806,7 @@ export default function RatingScreen() {
               ) : phase === 'factors' ? (
                 <div key="factors" className="slide-next">
                   <p className="m-0 text-center text-[11px] font-bold tracking-[0.16em] text-(--c-a8998a)">{isEP ? 'FINISH' : 'THE ALBUM'}</p>
-                  <h1 className="m-0 mt-2 text-center font-display text-[34px] md:text-[44px] leading-tight font-bold text-(--c-1c1917)">
+                  <h1 className="m-0 mt-2 text-center font-title text-[34px] md:text-[44px] leading-tight font-bold text-(--c-1c1917)">
                     {album.albumName}
                   </h1>
                   <p className="m-0 mt-1.5 text-center text-[13px] font-medium text-(--c-a8998a)">
@@ -888,7 +888,7 @@ export default function RatingScreen() {
                    to say. An empty box submits the rating and posts nothing. */
                 <div key="review" className="slide-next">
                   <p className="m-0 text-center text-[11px] font-bold tracking-[0.16em] text-(--c-a8998a)">YOUR REVIEW</p>
-                  <h1 className="m-0 mt-2 text-center font-display text-[34px] md:text-[44px] leading-tight font-bold text-(--c-1c1917)">
+                  <h1 className="m-0 mt-2 text-center font-title text-[34px] md:text-[44px] leading-tight font-bold text-(--c-1c1917)">
                     {album.albumName}
                   </h1>
                   {previewScore != null && (
@@ -962,7 +962,7 @@ export default function RatingScreen() {
                   <div className="w-24 h-24 rounded-2xl bg-(--c-ece6dc) shrink-0" />
                 )}
                 <div className="min-w-0">
-                  <p className="m-0 font-display text-[22px] leading-tight font-bold text-(--c-1c1917) line-clamp-2">{album.albumName}</p>
+                  <p className="m-0 font-title text-[22px] leading-tight font-bold text-(--c-1c1917) line-clamp-2">{album.albumName}</p>
                   <p className="m-0 mt-1 text-[13.5px] text-(--c-8a7f72) truncate">
                     {[album.artist, ...album.extraArtists].join(', ')}{album.year ? ` · ${album.year}` : ''}
                   </p>
@@ -985,7 +985,7 @@ export default function RatingScreen() {
           <div className="absolute inset-0 bg-black/30 fade-in" onClick={() => setListOpen(false)} />
           <div className="relative w-full sm:max-w-md bg-(--c-faf8f5) rounded-t-3xl sm:rounded-3xl p-4 pb-6 max-h-[75vh] overflow-y-auto pop-in">
             <div className="flex items-center justify-between px-2 mb-2">
-              <p className="m-0 font-display text-[20px] font-bold text-(--c-1c1917)">Tracks</p>
+              <p className="m-0 font-title text-[20px] font-bold text-(--c-1c1917)">Tracks</p>
               <button onClick={() => setListOpen(false)} aria-label="Close" className="text-(--c-a8998a) hover:text-(--c-57534e)">
                 <X size={19} />
               </button>

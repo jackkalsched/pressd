@@ -512,7 +512,7 @@ function AddAlbumsDialog({ slug, inBin, onClose, onAdded }: {
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm fade-in" onClick={onClose} />
       <div role="dialog" aria-modal="true" aria-labelledby="add-albums-title" className="relative flex max-h-[85vh] w-full max-w-xl flex-col rounded-3xl bg-(--c-f9f8f6) p-6 shadow-xl pop-in">
         <div className="mb-4 flex items-center justify-between">
-          <h2 id="add-albums-title" className="m-0 font-display text-[24px] font-bold text-(--c-1c1917)">Add albums</h2>
+          <h2 id="add-albums-title" className="m-0 font-title text-[24px] font-bold text-(--c-1c1917)">Add albums</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="text-(--c-a8998a) hover:text-(--c-57534e)">
             <X size={18} />
           </button>
@@ -626,7 +626,7 @@ function ConfirmDelete({ title, onCancel, onConfirm }: { title: string; onCancel
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm fade-in" onClick={busy ? undefined : onCancel} />
       <div role="alertdialog" aria-modal="true" aria-labelledby="delete-bin-title" className="relative w-full max-w-sm rounded-3xl bg-(--c-f9f8f6) p-6 shadow-xl pop-in">
-        <h2 id="delete-bin-title" className="m-0 font-display text-[22px] font-bold text-(--c-1c1917)">Delete “{title}”?</h2>
+        <h2 id="delete-bin-title" className="m-0 font-title text-[22px] font-bold text-(--c-1c1917)">Delete “{title}”?</h2>
         {error && <p className="m-0 mt-3 text-[13px] text-(--c-b91c1c)">{error}</p>}
         <div className="mt-6 flex justify-end gap-2">
           <button type="button" onClick={onCancel} disabled={busy} className="h-11 rounded-full px-5 text-[14.5px] font-semibold text-(--c-78716c) hover:bg-(--c-efebe5)">

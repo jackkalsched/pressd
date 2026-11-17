@@ -83,7 +83,7 @@ export default function Upcoming() {
     dayRefs.current[date]?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
   }
 
-  const heading = <h1 className="m-0 font-display text-4xl font-bold text-(--c-1c1917)">Upcoming</h1>
+  const heading = <h1 className="m-0 font-title text-4xl font-bold text-(--c-1c1917)">Upcoming</h1>
 
   if (isLoading || isError || monthKeys.length === 0) {
     return (

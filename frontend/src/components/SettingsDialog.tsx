@@ -505,7 +505,7 @@ export default function SettingsDialog({ mode, onClose }: { mode: SettingsMode; 
         <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/40 fade-in" onClick={() => !deleting && setConfirmDelete(false)} />
           <div className="relative w-full max-w-sm rounded-2xl bg-(--c-fff) p-6 shadow-xl pop-in" role="alertdialog" aria-modal="true">
-            <p className="m-0 font-display text-[20px] font-bold text-(--c-1c1917)">Delete your account?</p>
+            <p className="m-0 font-title text-[20px] font-bold text-(--c-1c1917)">Delete your account?</p>
             <p className="m-0 mt-2 text-sm text-(--c-57534e)">
               Your ratings, reviews, library and friends are removed for good. This can’t be undone.
             </p>

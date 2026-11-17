@@ -175,7 +175,7 @@ export default function Stats({ embedded = false }: { embedded?: boolean } = {})
     <div className={embedded ? '' : 'min-h-screen bg-(--c-f9f8f6)'}>
       <div className={embedded ? '' : 'p-4 md:p-8'}>
         {!embedded && (
-          <h1 className="font-display text-4xl font-bold text-(--c-1c1917) mb-8 tracking-tight">
+          <h1 className="font-title text-4xl font-bold text-(--c-1c1917) mb-8 tracking-tight">
             {isViewingFriend ? `${viewingUser?.name}'s Stats` : 'Stats'}
           </h1>
         )}

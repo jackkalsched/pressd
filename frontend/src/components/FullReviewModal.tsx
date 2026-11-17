@@ -89,7 +89,7 @@ export default function FullReviewModal({ postId, onClose }: { postId: number; o
                   {data.score != null && (
                     <span
                       className="leading-none tabular-nums"
-                      style={{ fontFamily: "'Playfair Display', serif", fontWeight: 800, fontSize: 56, color: songScoreColor(data.score) }}
+                      style={{ fontFamily: "var(--font-figures), 'Playfair Display', serif", fontWeight: 800, fontSize: 56, color: songScoreColor(data.score) }}
                     >
                       {data.score.toFixed(2)}
                     </span>

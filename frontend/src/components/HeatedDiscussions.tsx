@@ -28,7 +28,7 @@ import { songScoreColor } from '../types'
 import { Cover, COVER_LIFT } from './covers'
 import { threadPath } from '../lib/threads'
 
-const SECTION_LABEL = 'text-[11px] font-semibold uppercase tracking-[0.16em] text-(--c-a8998a) m-0'
+const SECTION_LABEL = 'font-label text-[11px] font-semibold uppercase tracking-[0.16em] text-(--c-a8998a) m-0'
 
 const GREEN = 'var(--c-2d6a4f)'
 const RED = 'var(--c-c0392b)'

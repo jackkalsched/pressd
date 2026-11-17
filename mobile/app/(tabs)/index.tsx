@@ -474,7 +474,7 @@ export default function ForYou() {
                   {continueAlbum.artist}{continueAlbum.year ? ` · ${continueAlbum.year}` : ''}
                 </Text>
                 <Text style={styles.spotLine} numberOfLines={1}>
-                  <Text style={styles.spotStrong}>{resumeDone}</Text> of {resumeTotal} tracks
+                  <Text style={styles.spotStrong}>{resumeDone}</Text>/{resumeTotal} tracks rated
                 </Text>
               </SpotlightCard>
             )}

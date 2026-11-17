@@ -200,7 +200,7 @@ function ArtistRankingsTable({
               {cols.map(c => (
                 <td
                   key={c.key}
-                  className={`text-right tabular-nums px-4 py-2.5 text-xs font-semibold ${
+                  className={`font-display text-right tabular-nums px-4 py-2.5 text-xs font-semibold ${
                     sortKey === c.key ? 'text-(--c-2d6a4f)' : 'text-(--c-57534e)'
                   }`}
                 >
@@ -317,7 +317,7 @@ export default function Ratings({ embedded = false }: { embedded?: boolean } = {
         {/* Header */}
         {!embedded && (
           <div className="flex items-center justify-between mb-5">
-            <h1 className="font-display text-3xl font-bold text-(--c-1c1917)">Rankings</h1>
+            <h1 className="font-title text-3xl font-bold text-(--c-1c1917)">Rankings</h1>
             {tab === 'albums' && (
               <span className="text-(--c-a8998a) text-sm">{sorted.length} albums</span>
             )}
@@ -467,12 +467,12 @@ export default function Ratings({ embedded = false }: { embedded?: boolean } = {
                         </td>
                         <td className="py-3 px-4 text-(--c-78716c) text-sm tabular-nums">{album.year}</td>
                         <td className="py-3 px-4 text-right">
-                          <span className="text-(--c-2d6a4f) font-semibold text-sm tabular-nums">{album.score?.toFixed(2)}</span>
+                          <span className="font-display text-(--c-2d6a4f) font-semibold text-[15px] tabular-nums">{album.score?.toFixed(2)}</span>
                         </td>
-                        <td className="py-3 px-4 text-right text-(--c-78716c) text-sm tabular-nums">{album.theme ?? '—'}</td>
-                        <td className="py-3 px-4 text-right text-(--c-78716c) text-sm tabular-nums">{album.replayValue ?? '—'}</td>
-                        <td className="py-3 px-4 text-right text-(--c-78716c) text-sm tabular-nums">{album.production ?? '—'}</td>
-                        <td className="py-3 px-4 text-right text-(--c-78716c) text-sm tabular-nums">{album.distinctness ?? '—'}</td>
+                        <td className="font-display py-3 px-4 text-right text-(--c-78716c) text-sm tabular-nums">{album.theme ?? '—'}</td>
+                        <td className="font-display py-3 px-4 text-right text-(--c-78716c) text-sm tabular-nums">{album.replayValue ?? '—'}</td>
+                        <td className="font-display py-3 px-4 text-right text-(--c-78716c) text-sm tabular-nums">{album.production ?? '—'}</td>
+                        <td className="font-display py-3 px-4 text-right text-(--c-78716c) text-sm tabular-nums">{album.distinctness ?? '—'}</td>
                         <td className="py-3 px-4 text-(--c-a8998a) text-xs">{album.genre ?? '—'}</td>
                       </tr>
                     ))}

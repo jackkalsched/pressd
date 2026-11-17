@@ -147,7 +147,7 @@ export default function PeopleSheet({ data, onClose }: { data: PeopleSheetData; 
           <Cover artUrl={album.artUrl} seed={album.artist} size={64} radius={12} />
           {/* One face for the whole line, a title's: the album stands out by
               italics, not by switching family mid-sentence. */}
-          <h2 className="font-display m-0 min-w-0 flex-1 text-[22px] font-bold leading-snug text-(--c-1c1917) md:text-[26px]">
+          <h2 className="font-title m-0 min-w-0 flex-1 text-[22px] font-bold leading-snug text-(--c-1c1917) md:text-[26px]">
             {data.raters} {data.raters === 1 ? 'person' : 'people'} rated <i>{album.name}</i> too
           </h2>
           <button onClick={dismiss} aria-label="Close" className="self-start text-(--c-a8998a) transition-colors hover:text-(--c-57534e)">

@@ -36,7 +36,7 @@ export default function TrendingBoard({
               <Cover artUrl={row.album_art_url} seed={row.artist} size={58} radius={13} fontSize={24} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-display m-0 truncate text-[16px] font-bold text-(--c-1c1917)">{row.album_name}</p>
+              <p className="font-title m-0 truncate text-[16px] font-bold text-(--c-1c1917)">{row.album_name}</p>
               <p className="m-0 mt-0.5 truncate text-[12.5px] text-(--c-8a7f72)">{row.artist}</p>
             </div>
             <span className="hidden shrink-0 text-right text-[11.5px] text-(--c-8a7f72) tabular-nums sm:block" style={{ width: 118 }}>

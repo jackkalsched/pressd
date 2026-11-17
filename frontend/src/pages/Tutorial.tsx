@@ -141,7 +141,7 @@ export default function Tutorial() {
               <p className="hidden lg:block m-0 mb-3 text-[13px] font-semibold text-(--c-a8a29e) tabular-nums">
                 {page + 1} / {CARDS.length}
               </p>
-              <h1 className="font-display m-0 text-[34px] leading-[40px] lg:text-[52px] lg:leading-[58px] font-bold tracking-[-0.01em] text-(--c-1c1917)">{title}</h1>
+              <h1 className="font-title m-0 text-[34px] leading-[40px] lg:text-[52px] lg:leading-[58px] font-bold tracking-[-0.01em] text-(--c-1c1917)">{title}</h1>
               {/* Four lines' height, so the title holds still between cards. */}
               <p className="m-0 mt-2 lg:mt-4 text-[15.5px] leading-[23px] lg:text-[18px] lg:leading-[28px] text-(--c-78716c) min-h-[92px] lg:min-h-[112px] lg:max-w-[460px]">{body}</p>
               <div className="hidden lg:block mt-8 max-w-[460px]">{controls()}</div>

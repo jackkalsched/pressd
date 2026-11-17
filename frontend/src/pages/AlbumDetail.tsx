@@ -240,7 +240,7 @@ export default function AlbumDetail() {
   if (error || !album) {
     return (
       <div className="min-h-screen bg-(--c-f9f8f6) flex flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="font-display m-0 text-2xl font-bold text-(--c-1c1917)">Couldn&rsquo;t load this album</p>
+        <p className="font-title m-0 text-2xl font-bold text-(--c-1c1917)">Couldn&rsquo;t load this album</p>
         <button onClick={leave} className="text-sm font-semibold text-(--c-2d6a4f) hover:text-(--c-245c43)">Go back</button>
       </div>
     )
@@ -447,11 +447,11 @@ export default function AlbumDetail() {
                   </Link>
                 )}
               </div>
-              <h1 className="font-display m-0 mt-6 text-[34px] font-bold leading-tight text-(--c-1c1917)">{album.albumName}</h1>
+              <h1 className="font-title m-0 mt-6 text-[34px] font-bold leading-tight text-(--c-1c1917)">{album.albumName}</h1>
               <p className="m-0 mt-1.5 text-[15px] text-(--c-57534e)">
                 {artists.map((name, i, arr) => (
                   <span key={name}>
-                    <Link to={`/artist/${encodeURIComponent(name)}`} className="font-semibold text-(--c-1c1917) hover:text-(--c-2d6a4f) hover:underline underline-offset-2">
+                    <Link to={`/artist/${encodeURIComponent(name)}`} className="font-title font-bold text-(--c-1c1917) hover:text-(--c-2d6a4f) hover:underline underline-offset-2">
                       {name}
                     </Link>
                     {i < arr.length - 1 ? ', ' : ''}

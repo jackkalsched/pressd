@@ -186,7 +186,7 @@ export default function LandingPage() {
           background:
             radial-gradient(120% 90% at 78% 45%, #47775E 0%, #3E6B54 42%, #2F5341 100%);
           color: #F4F2EC;
-          font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+          font-family: var(--font-body);
           display: flex;
           flex-direction: column;
           overflow: hidden;

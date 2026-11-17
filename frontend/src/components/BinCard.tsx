@@ -66,7 +66,7 @@ export default function BinCard({ bin, size = 104 }: { bin: Bin; size?: number }
     >
       <BinMosaic covers={bin.covers} size={size} pressd={bin.kind === 'curated'} coverUrl={bin.coverUrl} />
       <div className="min-w-0 flex-1">
-        <p className="m-0 font-display text-[20px] leading-tight font-bold text-(--c-1c1917)">{bin.title}</p>
+        <p className="m-0 font-title text-[20px] leading-tight font-bold text-(--c-1c1917)">{bin.title}</p>
         {byline && <p className="m-0 mt-1 truncate text-[13px] font-medium text-(--c-57534e)">{byline}</p>}
         <div className="mt-3 flex items-center gap-2.5 max-w-[320px]">
           <BinProgressBar done={done} total={bin.progress.total} />
@@ -116,7 +116,7 @@ export function BinPoster({ bin }: { bin: Bin }) {
         </span>
       )}
       <div className="absolute inset-x-0 bottom-0 p-5 sm:p-6">
-        <p className="m-0 font-display text-[26px] sm:text-[28px] leading-[1.08] font-bold text-white line-clamp-3 [text-shadow:0_2px_14px_rgba(0,0,0,.45)]">{bin.title}</p>
+        <p className="m-0 font-title text-[26px] sm:text-[28px] leading-[1.08] font-bold text-white line-clamp-3 [text-shadow:0_2px_14px_rgba(0,0,0,.45)]">{bin.title}</p>
         {byline && <p className="m-0 mt-1.5 truncate text-[13px] font-medium text-white/75">{byline}</p>}
         <div className="mt-4 flex items-center gap-3">
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/20">

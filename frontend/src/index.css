@@ -11,6 +11,10 @@
    in index.html sets it before the first paint. The share card stays light: it
    is a picture people post, and keeps its literal colours. */
 :root {
+  /* Body text in Onest (Google Fonts, SIL OFL 1.1; November 2026); titles in
+     sharp Allo (.font-title). */
+  --font-body: 'Onest', 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-title: 'Allo', 'Plus Jakarta Sans', system-ui, sans-serif;
   color-scheme: light;
   /* A score's colour (types.ts songScoreColor): the hue is the score's, the
      saturation and lightness the page's. */
@@ -440,10 +444,22 @@ body {
   margin: 0;
   background-color: var(--c-fff);
   color: var(--c-111);
-  /* Mobile's body face (theme/tokens.ts fonts.body*). Web used DM Sans until
-     September 2026; the two apps now set text in the same two families. */
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  /* The body face, everywhere but the share card: --font-body (Onest). */
+  font-family: var(--font-body);
+
   -webkit-font-smoothing: antialiased;
+}
+
+/* Allo (Josh Puckett, SIL OFL 1.1 — fonts/Allo-OFL.txt), the variable font:
+   weight 100–900, optical size 9–32, roundness — the titles' face (.font-title),
+   sharp. Body text is Onest (--font-body). */
+@font-face {
+  font-family: 'Allo';
+  src: url('/fonts/AlloVariable.woff2') format('woff2-variations'),
+       url('/fonts/AlloVariable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
 }
 
 /* Clash Display isn't on Google Fonts, so it's self-hosted from /public/fonts
@@ -468,9 +484,52 @@ body {
 /* Mobile's fonts.display: page titles, album titles and scores are Playfair,
    everything else is the body face. The name means the same thing on both
    platforms; .font-metric is the older alias and reads identically. */
+/* The ratings' face (November 2026, after trialling Cardinel, BBH Sans Hegarty,
+   Paperlogy, Cross and Urban Shadow): Bricolage Grotesque at 800 (Google Fonts,
+   SIL OFL 1.1 — fonts/GoogleFonts-OFL-figures.txt), Google's subset to digits and
+   number punctuation. Loaded for those characters only (unicode-range), ahead of
+   Playfair, so every score set in .font-display draws its figures in it while any
+   words stay Playfair. */
+@font-face {
+  font-family: 'Figures Bricolage';
+  src: url('/fonts/BricolageGrotesque-800-figures.woff2') format('woff2');
+  font-display: swap;
+  unicode-range: U+0030-0039, U+002B-002E, U+0025, U+0023, U+002F, U+2013-2014;
+}
+:root { --font-figures: 'Figures Bricolage'; }
+
+/* TRIAL (November 2026): Paperlogy (PT&, SIL OFL 1.1 — fonts/Paperlogy-OFL.txt)
+   for the small spaced-caps labels (.font-label: For You's and the album pages'
+   section labels), three weights cut down to Western characters (the full files
+   carry Korean at 1.3 MB). */
+@font-face { font-family: 'Paperlogy'; src: url('/fonts/Paperlogy-5Medium-latin.woff2') format('woff2'); font-weight: 500; font-display: swap; }
+@font-face { font-family: 'Paperlogy'; src: url('/fonts/Paperlogy-6SemiBold-latin.woff2') format('woff2'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Paperlogy'; src: url('/fonts/Paperlogy-7Bold-latin.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+.font-label { font-family: 'Paperlogy', var(--font-body); }
+
 .font-display,
 .font-metric {
+  font-family: var(--font-figures), 'Playfair Display', Georgia, serif;
+  /* The figures' face is one weight (800): no faked bolder version of it
+     (Playfair's words have a real bold). */
+  font-synthesis-weight: none;
+}
+
+/* Titles (November 2026): page titles, album titles, names and dialog headings
+   — the element's own size and weight in Allo, sharp (roundness 0), its display
+   cut at large sizes through optical sizing, and tight tracking. Scores, quotes and review text stay in Playfair
+   (.font-display). An album named inside a title keeps the house rule: Playfair
+   italic, which reads against the sharp sans. */
+.font-title {
+  font-family: var(--font-title);
+  font-optical-sizing: auto;
+  font-variation-settings: 'ROND' 0;
+  letter-spacing: -0.025em;
+}
+.font-title i {
   font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  letter-spacing: 0;
 }
 
 /* Wide and heavy, for the shelf's name alone. */

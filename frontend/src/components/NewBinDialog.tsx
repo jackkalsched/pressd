@@ -77,7 +77,7 @@ export default function NewBinDialog({ onClose, onCreated }: {
         className="relative w-full max-w-md rounded-3xl bg-(--c-f9f8f6) p-6 shadow-xl pop-in"
       >
         <div className="mb-5 flex items-center justify-between">
-          <h2 id="new-bin-title" className="m-0 font-display text-[24px] font-bold text-(--c-1c1917)">New bin</h2>
+          <h2 id="new-bin-title" className="m-0 font-title text-[24px] font-bold text-(--c-1c1917)">New bin</h2>
           <button type="button" onClick={onClose} disabled={saving} aria-label="Close" className="text-(--c-a8998a) hover:text-(--c-57534e)">
             <X size={18} />
           </button>

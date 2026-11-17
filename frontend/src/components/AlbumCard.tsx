@@ -144,7 +144,7 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           {/* Score badge — the body face, bold, as iPhone's Library badges are. */}
           {album.score !== null && (
             <div
-              className="absolute top-2.5 right-2.5 text-[15px] font-bold tracking-tight tabular-nums leading-none px-3 py-1.5 rounded-full shadow-md select-none bg-(--c-fff)"
+              className="font-display absolute top-2.5 right-2.5 text-[15px] font-bold tracking-tight tabular-nums leading-none px-3 py-1.5 rounded-full shadow-md select-none bg-(--c-fff)"
               style={{
                 // The fixed 1–10 scale every score uses (red → green), not the
                 // owner's own spread: a 7 reads as a 7 in anyone's library.
@@ -159,7 +159,7 @@ export default function AlbumCard({ album, showActions = true }: Props) {
           {/* Predicted score badge */}
           {album.score === null && album.predictedScore !== null && (
             <div
-              className="absolute top-2.5 right-2.5 bg-black/50 backdrop-blur-md text-white/90 text-[15px] font-bold tracking-tight tabular-nums leading-none px-3 py-1.5 rounded-full shadow-lg select-none"
+              className="font-display absolute top-2.5 right-2.5 bg-black/50 backdrop-blur-md text-white/90 text-[15px] font-bold tracking-tight tabular-nums leading-none px-3 py-1.5 rounded-full shadow-lg select-none"
               title="Predicted score"
             >
               ~{album.predictedScore.toFixed(2)}
