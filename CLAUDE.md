@@ -1892,6 +1892,14 @@ backend: `/users/` rows carry only `id`, `name`, `avatar_url`, `bio`.
   songs it lacks. Every other copy is settled from the moment it has songs. So a catalog's later
   correction still never reaches a copy; that is now the rule, not a gap.
   `backend/repair_missing_songs.py` is a one-off Excel-sourced script, not a fix.
+  **The spreadsheet import numbered one block of user 1's copies by score, not by tracklist**
+  (ids 744–789: songs 1, 2, 3… from the highest score down). On 2026-11-18 a one-off pass gave
+  35 of them their real order: another copy of the record with catalog durations where one held
+  every track (by `track_id`), else Deezer / iTunes matched by recording key, then a close
+  spelling (a typo, a censored word, a dropped feature); songs the catalog's edition leaves off
+  go after it (Mellon Collie's last three, Man On The Moon's three bonus songs). Only song
+  numbers changed — no score, track or song was touched. Freudian (161) is in score order by
+  coincidence and was left alone.
 
 ### Parity — what web is still missing (audited 2026-09-23)
 
