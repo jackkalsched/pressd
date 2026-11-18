@@ -138,6 +138,26 @@ export function isUnreleased(releaseDate: string | null | undefined, now: Date =
   return releaseDate.slice(0, 10) > today
 }
 
+/** The friend's recommendation that leads Rate this next: the newest one sent
+ *  on today's local calendar day (Jack, November 2026). It leads only for the
+ *  day it arrives; after that it is one more record in To Listen, in the same
+ *  daily rotation as the rest, and keeps its "Recommended by" line whenever the
+ *  rotation lands on it. `recommended_at` is stored as naive UTC, so a time
+ *  with no zone is read as UTC. Used by both For You screens. */
+export function recommendedToday<T extends { recommendedByName?: string | null; recommendedAt: string | null }>(
+  toListen: T[],
+  now: Date = new Date(),
+): T | null {
+  const sameDay = (iso: string) => {
+    const d = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`)
+    return !Number.isNaN(d.getTime())
+      && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+  }
+  return toListen
+    .filter((a) => a.recommendedByName && a.recommendedAt && sameDay(a.recommendedAt))
+    .sort((a, b) => (b.recommendedAt ?? '').localeCompare(a.recommendedAt ?? ''))[0] ?? null
+}
+
 /** Every track sharing the album's highest score, in track order. One entry
  *  means no tie; two or more is what the tie-break dialog asks about. Mirrors
  *  tied_top_songs() in backend/scoring.py — keep the two in step. */

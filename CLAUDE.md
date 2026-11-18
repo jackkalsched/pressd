@@ -1918,7 +1918,8 @@ A thread you haven't rated (both platforms, November 2026) is no longer a bare l
 shows the room's top three reviews from `GET /threads/preview` (avatar, name, score, the
 clipped body held to four lines; read-only — no votes, replies, report or Full review),
 then the lock, `LOCKED_COPY` ("Rate this record to read every review and join the
-conversation.") and one button: **Rate now** / **Continue rating** on your copy of the
+conversation.") and one button — no box around it since November 2026: the reviews fade out into
+the page (a mask), and the lock sits centred in the room left under them — **Rate now** / **Continue rating** on your copy of the
 record, else **Rate now** on a copy cloned from `source` as Listening
 (`copyAlbumToLibrary`, the community page's path), or **Add to Library** (To Listen) when
 the record has no songs or isn't out; nothing when Pressd holds no copy. Web sets the
@@ -2232,10 +2233,14 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
 - **A row of records can drift** (both platforms): web's `components/AutoCarousel.tsx` and
   iPhone's `components/AutoRail.tsx` (no arrows — the finger is the control; still on an
   unfocused screen) — For You's New & Popular and Heated Discussions
-  scroll themselves and loops (the items drawn twice, the copy `inert`), easing to a stop when
-  reached for (hover, touch, wheel, focus) and back up after; arrows glide one item at a time;
-  a mouse can drag and throw it (a drag is never a click); the edges fade; still under reduced
-  motion.
+  scroll themselves and loop, with weight: thrown by a drag, a swipe or a trackpad, the row carries
+  on at the hand's speed, either way, and settles back to its drift over `SETTLE_MS` rather than
+  stopping. iPhone's slides a row by a transform with a horizontal-only `PanResponder`, never a
+  ScrollView moved by `scrollTo` — iOS keeps every touch from a ScrollView it thinks is still
+  scrolling, so no card could be tapped. The items are drawn twice (the copy `inert`); it eases to a stop when
+  reached for (hover, focus, a finger on it) and back up after; arrows glide one item at a time;
+  a mouse can drag and throw it (a drag is never a click); the edges fade (on iPhone `AutoRail`'s
+  `fade`, a `MaskedView` gradient — New & Popular's); still under reduced motion.
 - **A taste overlap is coloured on the score scale**: `overlapScore(percent)`
   (`shared/src/types.ts`) puts 0% at a 1 (red) and 100% at a 10 (green), and each
   platform's own score colour draws it (web `songScoreColor`, mobile `scoreColor`), so
@@ -2288,7 +2293,9 @@ environments I cannot see: that Render currently has `JWT_SECRET` and
   anyone reviewed, ranked by engagement (likes + replies, the thread post's) then recency
   (`/social/top-reviews`) — New & Popular, the picks countdown and Rate this next (web: the day's record as a
   featured card, then a row of the rest of the queue and picks, never the featured one twice — the
-  old Ready to rate and the right column's Rate this next, merged), Trending, Heated discussions, then Bins. Reviews sit high because reading them is what gets
+  old Ready to rate and the right column's Rate this next, merged; a friend's recommendation leads it only
+  on the local day it was sent — `recommendedToday`, `shared/src/types.ts` — and after that joins the
+  daily rotation with the rest of To Listen, still marked "Recommended by"), Trending, Heated discussions, then Bins. Reviews sit high because reading them is what gets
   people liking, replying and writing their own; change both screens together. Web's right
   column (Friends this week, on Pressd green — avatars from the feed, ratings with or without a
   review) is **floated** at `lg` (`railCards`, drawn again after the feed below `lg`), and every

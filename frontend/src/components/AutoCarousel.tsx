@@ -3,22 +3,26 @@
 // second copy hidden from assistive tech, so the scroll wraps from the end of
 // the first copy back to its start without a jump.
 //
-// Everything moves by easing, never by snapping:
-//   - the drift eases to a stop when the pointer is over the row, a finger
-//     touches it, it's scrolled by hand or focus lands inside, and eases back
-//     up RESUME_MS after all of that ends;
+// Everything moves by easing, never by snapping, and the row has weight
+// (November 2026):
+//   - the drift eases to a stop while the pointer is over the row or focus is
+//     inside, and back up after;
+//   - thrown — a mouse drag let go, a trackpad swipe, a finger on a touch
+//     screen — it carries on at the speed of the hand, either way, and settles
+//     back to the idle drift over SETTLE_MS rather than stopping dead;
 //   - the arrows glide the row one item at a time, landing on an item's edge;
-//   - with a mouse the row can be grabbed and dragged, and let go it coasts on
-//     with the speed it was thrown at (a drag never counts as a click).
+//   - a drag never counts as a click.
 // The edges fade, so items arrive and leave rather than being cut off. Under
 // reduced motion the row doesn't drift and the arrows jump; requestAnimationFrame
 // already stops in a background tab.
 import { useEffect, useRef, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
-const SPEED = 28 // px per second, at full drift
-const EASE_MS = 420 // how long the drift takes to ease in or out
-const RESUME_MS = 1800
+const SPEED = 28 // px per second, the idle drift
+const EASE_MS = 420 // rest ↔ idle drift
+const SETTLE_MS = 2100 // a throw → idle drift: the row's weight
+const MAX_THROW = 5000 // px per second
+const HAND_MS = 90 // the row is the hand's while it moved it this recently
 const STEP_MS = 560 // an arrow's glide
 const FADE = 56 // px of fade at each edge
 
@@ -43,13 +47,13 @@ export default function AutoCarousel({ items, className = '', arrowTop = '50%', 
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     let held = 0 // reasons it's held: hover, focus
-    let resumeAt = 0
     let pos = el.scrollLeft // a float, since scrollLeft rounds
-    let vel = 0 // the drift's current speed, eased toward SPEED or 0
+    let written = el.scrollLeft // what the row last set, as the browser rounded it
+    let vel = 0 // px/s: the row's current speed, settling toward its target
+    let hand = { until: 0, v: 0 } // a trackpad or touch scroll in progress, and its speed
     let last = performance.now()
     let frame = 0
     let tween: { from: number; to: number; start: number; dur: number } | null = null
-    let fling = 0 // px/s left over from a throw
     let drag: { x: number; lastX: number; lastT: number; moved: boolean; v: number } | null = null
     let swallowClick = false
 
@@ -68,33 +72,49 @@ export default function AutoCarousel({ items, className = '', arrowTop = '50%', 
       while (pos >= h) pos -= h
       while (pos < 0) pos += h
     }
-    const pause = () => { resumeAt = performance.now() + RESUME_MS }
+    const clampThrow = (v: number) => Math.max(-MAX_THROW, Math.min(MAX_THROW, v))
 
     const tick = (now: number) => {
       const dt = Math.min(64, now - last)
       last = now
-      // A hand on a trackpad moved it: carry on from there.
-      if (!tween && !drag && Math.abs(el.scrollLeft - pos) > 2) { pos = el.scrollLeft; pause() }
+      // A trackpad or a finger moved it (the browser's own scrolling, momentum
+      // included): follow it and measure the hand's speed, without writing back.
+      const moved = el.scrollLeft - written
+      if (!tween && !drag && Math.abs(moved) > 0.5 && dt > 0) {
+        const v = (moved / dt) * 1000
+        hand = { until: now + HAND_MS, v: now < hand.until ? hand.v * 0.5 + v * 0.5 : v }
+        pos = el.scrollLeft
+        // Past either end of the first copy, jump by one copy: the same view.
+        const h = half()
+        if (h > 0 && (pos >= h || pos <= 0)) { wrap(); el.scrollLeft = pos }
+        written = el.scrollLeft
+        frame = requestAnimationFrame(tick)
+        return
+      }
+      if (hand.until && now >= hand.until) {
+        // The hand let go: the row takes the throw.
+        vel = clampThrow(hand.v)
+        hand = { until: 0, v: 0 }
+      }
 
       if (tween) {
         const t = tween.dur ? Math.min(1, (now - tween.start) / tween.dur) : 1
         pos = tween.from + (tween.to - tween.from) * easeOutCubic(t)
-        if (t >= 1) { tween = null; pause() }
+        if (t >= 1) tween = null
         vel = 0
       } else if (drag) {
         vel = 0
-      } else if (Math.abs(fling) > 8) {
-        pos += (fling * dt) / 1000
-        fling *= Math.exp(-dt / 320)
-        vel = 0
-        if (Math.abs(fling) <= 8) pause()
       } else {
-        const target = !reduce && held === 0 && now >= resumeAt && el.scrollWidth / 2 > el.clientWidth ? SPEED : 0
-        vel += (target - vel) * (1 - Math.exp(-dt / (EASE_MS / 3)))
+        const target = !reduce && held === 0 && el.scrollWidth / 2 > el.clientWidth ? SPEED : 0
+        // Faster than the drift, or thrown backwards, it settles slowly; from
+        // rest it eases up quickly.
+        const tau = Math.abs(vel) > Math.abs(target) * 1.25 + 1 || vel * target < 0 ? SETTLE_MS / 3 : EASE_MS / 3
+        vel += (target - vel) * (1 - Math.exp(-dt / tau))
         pos += (vel * dt) / 1000
       }
       wrap()
       el.scrollLeft = pos
+      written = el.scrollLeft
       frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
@@ -102,7 +122,7 @@ export default function AutoCarousel({ items, className = '', arrowTop = '50%', 
     stepRef.current = (dir) => {
       const w = itemWidth()
       if (!w) return
-      fling = 0
+      vel = 0
       // Land on an item's edge: one along from where the row is headed (a
       // glide already under way, for quick repeated taps), from where it is.
       const base = tween ? tween.to : pos
@@ -118,13 +138,13 @@ export default function AutoCarousel({ items, className = '', arrowTop = '50%', 
     }
 
     const hold = () => { held += 1 }
-    const release = () => { held = Math.max(0, held - 1); pause() }
+    const release = () => { held = Math.max(0, held - 1) }
     const onPointerDown = (e: PointerEvent) => {
       if (e.pointerType !== 'mouse' || e.button !== 0) return
       if ((e.target as HTMLElement).closest('[data-carousel-arrow]')) return
       drag = { x: e.clientX, lastX: e.clientX, lastT: performance.now(), moved: false, v: 0 }
       tween = null
-      fling = 0
+      vel = 0
     }
     const onPointerMove = (e: PointerEvent) => {
       if (!drag) return
@@ -134,6 +154,7 @@ export default function AutoCarousel({ items, className = '', arrowTop = '50%', 
       pos -= dx
       wrap()
       el.scrollLeft = pos
+      written = el.scrollLeft
       // The throw's speed, smoothed over the last few moves.
       drag.v = drag.v * 0.6 + (-dx / dtm) * 1000 * 0.4
       drag.lastX = e.clientX
@@ -148,12 +169,12 @@ export default function AutoCarousel({ items, className = '', arrowTop = '50%', 
       if (!drag) return
       if (drag.moved) {
         swallowClick = true
-        fling = Math.max(-2400, Math.min(2400, drag.v))
+        // A hand that came to rest before letting go throws nothing.
+        vel = performance.now() - drag.lastT > 80 ? 0 : clampThrow(drag.v)
       }
       drag = null
       el.style.cursor = ''
       el.style.userSelect = ''
-      pause()
     }
     const onClickCapture = (e: MouseEvent) => {
       if (swallowClick) { e.preventDefault(); e.stopPropagation(); swallowClick = false }
@@ -164,9 +185,6 @@ export default function AutoCarousel({ items, className = '', arrowTop = '50%', 
     el.addEventListener('pointerleave', release)
     el.addEventListener('focusin', hold)
     el.addEventListener('focusout', release)
-    el.addEventListener('wheel', pause, { passive: true })
-    el.addEventListener('touchstart', pause, { passive: true })
-    el.addEventListener('touchmove', pause, { passive: true })
     el.addEventListener('pointerdown', onPointerDown)
     window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
@@ -178,9 +196,6 @@ export default function AutoCarousel({ items, className = '', arrowTop = '50%', 
       el.removeEventListener('pointerleave', release)
       el.removeEventListener('focusin', hold)
       el.removeEventListener('focusout', release)
-      el.removeEventListener('wheel', pause)
-      el.removeEventListener('touchstart', pause)
-      el.removeEventListener('touchmove', pause)
       el.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)

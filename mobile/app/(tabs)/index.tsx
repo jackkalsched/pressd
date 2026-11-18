@@ -24,7 +24,7 @@ import {
   type TopReview,
   type TrendingAlbum,
 } from '../../lib/api'
-import { MIN_RATED_ALBUMS, type Album } from '@pressd/shared/types'
+import { MIN_RATED_ALBUMS, recommendedToday, type Album } from '@pressd/shared/types'
 import AnchoredMenu from '../../components/AnchoredMenu'
 import RecommendationBanner from '../../components/RecommendationBanner'
 import PassItOnCell from '../../components/PassItOnCell'
@@ -55,15 +55,6 @@ import CoverImage from '../../components/CoverImage'
 import AutoRail from '../../components/AutoRail'
 
 const WINDOW_H = Dimensions.get('window').height
-
-// No terminal punctuation: this opens a sentence the subline finishes, rather
-// than standing as one of its own.
-function greeting(): string {
-  const h = new Date().getHours()
-  if (h < 12) return 'Good morning'
-  if (h < 18) return 'Good afternoon'
-  return 'Good evening'
-}
 
 // Light tint of a score's own hue (dark-red → dark-green), matching the web
 // ScorePill background; paired with scoreColor() for the text. On the dark page
@@ -286,12 +277,12 @@ export default function ForYou() {
   // exist whether or not you own the record.
   const dayIndex = Math.floor(Date.now() / 86_400_000)
   const daily = useMemo(() => {
-    // A friend asking still leads. That's a person waiting on an answer, not a
-    // model's guess, and it shouldn't queue behind the catalog.
-    if (recommended.length > 0) {
-      const pool = [...recommended].sort((a, b) => a.id - b.id)
-      return { queued: pool[dayIndex % pool.length], pick: null }
-    }
+    // A friend's recommendation leads on the day it arrives — a person waiting
+    // on an answer. From the next day it's one more record in the rotation
+    // below (still drawn with "Recommended by"), so one recommendation can't
+    // hold the slot for good (recommendedToday, shared/src/types.ts).
+    const fresh = recommendedToday(toListen)
+    if (fresh) return { queued: fresh, pick: null }
     const queued = [...toListen].sort((a, b) => a.id - b.id)
     const total = queued.length + picks.length
     if (total === 0) return { queued: null, pick: null }
@@ -301,7 +292,7 @@ export default function ForYou() {
     return i < queued.length
       ? { queued: queued[i], pick: null }
       : { queued: null, pick: picks[i - queued.length] }
-  }, [toListen, picks, recommended, dayIndex])
+  }, [toListen, picks, dayIndex])
 
   const suggestion = daily.queued
   const pick = daily.pick
@@ -385,7 +376,6 @@ export default function ForYou() {
     } catch { /* ignore */ }
   }
 
-  const firstName = user?.name?.split(' ')[0] ?? ''
   const reviews = topReviews?.reviews ?? []
 
   // Scroll-reactive masthead: the big title lifts + fades as you scroll, and a
@@ -441,9 +431,6 @@ export default function ForYou() {
               </Pressable>
             </View>
           </View>
-          <Text style={styles.sub}>
-            {greeting()}{firstName ? ` ${firstName}` : ''}, here&rsquo;s what&rsquo;s moving this week.
-          </Text>
         </Animated.View>
 
         {/* Above everything else on the page, and above "pick up where you left
@@ -566,6 +553,7 @@ export default function ForYou() {
                 normal — keying on it alone collides. */}
             <AutoRail
               style={styles.rail}
+              fade={spacing.lg * 2}
               items={newReleases.map((r) => (
                 <NewReleaseCard
                   key={r.deezerId ?? `${r.artist}::${r.albumName}`}
@@ -897,7 +885,6 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   title: { flexShrink: 0, fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: 0.5 },
-  sub: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.inkTertiary, marginTop: 4 },
 
   block: { marginTop: spacing.xxl },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },

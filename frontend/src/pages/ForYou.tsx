@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, ArrowRight, Heart, MessageCircle, Check, Play, Search, CalendarDays } from 'lucide-react'
 import { fetchAlbum, fetchAlbums, fetchFeed, toggleLike, LIKE_QUERY_KEYS, fetchNewReleases, fetchTrending, resolveDeezerAlbum, resolveReleaseByName, importAlbum, fetchPredictedPicks, fetchTopReviews, fetchRecommendSuggestion, fetchBins } from '../api'
 import type { NewRelease, PredictedPick, RecommendSuggestion, TopReview } from '../api'
-import { MIN_RATED_ALBUMS } from '../types'
+import { MIN_RATED_ALBUMS, recommendedToday } from '../types'
 import { Cover, ScorePill, hueFromString, coverGradient } from '../components/covers'
 import HeatedDiscussions from '../components/HeatedDiscussions'
 import PassItOnCell from '../components/PassItOnCell'
@@ -190,23 +190,17 @@ export default function ForYou() {
   // same record on both. The pool is deliberately not limited to the library:
   // the nightly worker predicts the whole catalog, so a user who queues nothing
   // still has something to be offered.
-  const recommended = useMemo(
-    () => toListen
-      .filter((a) => a.recommendedByName)
-      .sort((a, b) => (b.recommendedAt ?? '').localeCompare(a.recommendedAt ?? '')),
-    [toListen],
-  )
   // Derived from the render's own clock rather than a fresh Date.now(): the web
   // lint config enforces react-hooks purity, and this reuses the same `now` the
   // greeting reads so the whole page agrees on what day it is.
   const dayIndex = Math.floor(now.getTime() / 86400000)
+  const fresh = recommendedToday(toListen, now)
   const daily = useMemo(() => {
-    // A friend asking still leads. That's a person waiting on an answer, not a
-    // model's guess, and it shouldn't queue behind the catalog.
-    if (recommended.length > 0) {
-      const pool = [...recommended].sort((a, b) => a.id - b.id)
-      return { queued: pool[dayIndex % pool.length], pick: null }
-    }
+    // A friend's recommendation leads on the day it arrives — a person waiting
+    // on an answer. From the next day it's one more record in the rotation
+    // below (still drawn with "Recommended by"), so one recommendation can't
+    // hold the slot for good (recommendedToday, shared/src/types.ts).
+    if (fresh) return { queued: fresh, pick: null }
     const queued = [...toListen].sort((a, b) => a.id - b.id)
     const total = queued.length + picks.length
     if (total === 0) return { queued: null, pick: null }
@@ -216,7 +210,7 @@ export default function ForYou() {
     return i < queued.length
       ? { queued: queued[i], pick: null }
       : { queued: null, pick: picks[i - queued.length] }
-  }, [toListen, picks, recommended, dayIndex])
+  }, [toListen, picks, dayIndex, fresh])
   const suggestion = daily.queued
   const pick = daily.pick
   // The row beside the featured card leaves the featured record out.

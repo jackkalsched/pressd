@@ -361,7 +361,7 @@ function LockedRoom({ subject, reason }: { subject: SubjectRef; reason: string |
   }
 
   return (
-    <div>
+    <div className="flex min-h-[calc(100dvh-240px)] flex-col">
       {isLoading ? (
         <div className="flex justify-center py-10"><VinylSpinner size={44} /></div>
       ) : posts.length > 0 && (
@@ -369,7 +369,9 @@ function LockedRoom({ subject, reason }: { subject: SubjectRef; reason: string |
           <p className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-(--c-a8998a) m-0 mb-1">
             Top reviews
           </p>
-          <div className="grid gap-x-8 xl:grid-cols-3">
+          {/* The reviews fade into the page — the room goes on past what you can
+              read — and "Not yet" waits where they give out. */}
+          <div className="grid gap-x-8 xl:grid-cols-3 [mask-image:linear-gradient(to_bottom,#000_30%,transparent)]">
             {posts.map((p, i) => (
               <div
                 key={p.id}
@@ -404,7 +406,8 @@ function LockedRoom({ subject, reason }: { subject: SubjectRef; reason: string |
         </>
       )}
 
-      <div className={`flex flex-col items-center text-center gap-3 px-6 rounded-2xl border border-dashed border-(--c-e2dbd0) ${posts.length > 0 ? 'mt-6 py-10' : 'py-20 lg:py-32'}`}>
+      {/* It takes the room left under the reviews and centres itself in it. */}
+      <div className={`flex flex-1 flex-col items-center justify-center text-center gap-3 px-6 py-10 ${posts.length > 0 ? '-mt-6' : ''}`}>
         <Lock size={28} className="text-(--c-c2b8ad)" />
         <p className="font-title text-xl font-bold text-(--c-111) m-0">Not yet</p>
         <p className="text-sm text-(--c-8a7f72) leading-relaxed max-w-sm m-0">

@@ -10,6 +10,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
+import MaskedView from '@react-native-masked-view/masked-view'
+import { LinearGradient } from 'expo-linear-gradient'
 import * as Clipboard from 'expo-clipboard'
 import * as haptics from '../../lib/haptics'
 import { ArrowLeft, ChevronDown, ChevronUp, FileText, Lock, Send, Trash2, Triangle } from 'lucide-react-native'
@@ -395,6 +397,17 @@ function LockedRoom({
       ) : posts.length > 0 && (
         <>
           <Text style={styles.lockedHeading}>TOP REVIEWS</Text>
+          {/* The reviews fade into the page — the room goes on past what you can
+              read — and "Not yet" waits where they give out. */}
+          <MaskedView
+            maskElement={
+              <LinearGradient
+                style={StyleSheet.absoluteFill}
+                colors={['black', 'black', 'transparent']}
+                locations={[0, 0.35, 1]}
+              />
+            }
+          >
           {posts.map((p) => (
             <View key={p.id} style={[styles.post, { borderColor: tc.border }]}>
               <View style={styles.postHead}>
@@ -419,10 +432,11 @@ function LockedRoom({
               <Text style={styles.postBody} numberOfLines={4}>{p.body}</Text>
             </View>
           ))}
+          </MaskedView>
         </>
       )}
 
-      <View style={[styles.lockedBox, posts.length === 0 && !isLoading && styles.lockedBoxAlone, { borderColor: tc.border }]}>
+      <View style={[styles.lockedBox, posts.length > 0 && styles.lockedBoxUnder]}>
         <Lock size={28} color={tc.inkMuted} />
         <Text style={styles.lockedTitle}>Not yet</Text>
         <Text style={styles.lockedBody}>
@@ -929,18 +943,20 @@ const styles = StyleSheet.create({
 
   lockedTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   lockedBody: { fontFamily: fonts.body, fontSize: 14, color: colors.inkTertiary, textAlign: 'center', lineHeight: 21 },
-  lockedList: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
+  lockedList: { flexGrow: 1, paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   lockedHeading: {
     fontFamily: fonts.bodyBold, fontSize: 10.5, letterSpacing: 1.6, color: colors.inkTertiary,
     marginTop: spacing.sm,
   },
-  // Dashed, as web's: the room is there, the door is shut.
+  // No box (November 2026): the reviews above fade out into the page, and this
+  // sits where they give out, as web's does.
+  // It takes the room left under the reviews and centres itself in it.
   lockedBox: {
+    flexGrow: 1, justifyContent: 'center',
     alignItems: 'center', gap: spacing.md, marginTop: spacing.xl,
     paddingVertical: spacing.xl, paddingHorizontal: spacing.lg,
-    borderWidth: 1, borderStyle: 'dashed', borderRadius: radii.lg,
   },
-  lockedBoxAlone: { marginTop: spacing.xxl * 2 },
+  lockedBoxUnder: { marginTop: -spacing.xl },
   rateBtn: {
     marginTop: spacing.sm, minWidth: 150, height: 44, paddingHorizontal: spacing.xl,
     borderRadius: radii.pill, backgroundColor: colors.green,
